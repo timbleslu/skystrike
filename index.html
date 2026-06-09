@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SKYSTRIKE // ACE PROTOCOL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<canvas id="h2d"></canvas>
+
+<div id="hud">
+  <div class="panel tl">
+    <div class="barrow" id="hpbar"><span class="lab">HP</span><div class="meter hp"><div id="hpfill" style="width:100%"></div></div></div>
+    <div class="barrow"><span class="lab">SHD</span><div class="meter shd"><div id="shfill" style="width:100%"></div></div></div>
+    <div class="barrow"><span class="lab">THR</span><div class="meter thr"><div id="thrfill" style="width:60%"></div></div></div>
+  </div>
+  <div class="panel tr">
+    <div class="stat"><span class="lab">Score</span><b id="score">0</b></div>
+    <div class="stat"><span class="lab">R&amp;D</span><b id="tp">0</b></div>
+    <div class="stat"><span class="lab">Wave</span><b id="wave">0</b></div>
+    <div class="stat combo"><span class="lab">Combo</span><b id="combo"></b></div>
+  </div>
+  <div class="panel bl">
+    <div class="big"><b id="spd">0</b><span class="unit">Knots</span></div>
+    <div class="big"><b id="alt">0</b><span class="unit">Ft</span></div>
+  </div>
+  <div class="panel br">
+    <canvas id="radar" width="170" height="170"></canvas>
+    <div class="ammo">
+      <div><span class="lab">Gun</span><b id="bullets">800</b></div>
+      <div><span class="lab">Flares</span><b id="flares">10</b></div>
+      <div><span class="lab">Msl</span><b id="missiles">30</b></div>
+    </div>
+    <div id="special" class="special">ABILITY &#9656; READY</div>
+    <div id="wingStatus" class="special wing" style="display:none">&#9650; ESCORT</div>
+  </div>
+  <div id="wingSidebar"></div>
+  
+  <div id="btnPause" onclick="toggleManual()">|| PAUSE</div>
+  
+  <div id="warns">
+    <div id="w_pull" class="warn red big">&#9888; PULL UP &#9888;</div>
+    <div id="w_missile" class="warn orange big">&#9650; MISSILE ALERT &#9650;</div>
+    <div id="w_drone" class="warn red">&#9888; DRONE SWARM &#9888;</div>
+    <div id="w_highg" class="warn cyan">HIGH-G PULL</div>
+    <div id="w_stealth" class="warn green">STEALTH ACTIVE</div>
+    <div id="w_lock" class="warn yellow">&#9679; TARGET LOCKED</div>
+  </div>
+  <div id="bossbar"><div class="bosslabel">&#9670; BOSS</div><div class="bosstrack"><i id="bossfill"></i></div></div>
+  <div id="banner"></div>
+  <div id="hint">W/S PITCH &middot; Q/E ROLL &middot; A/D YAW &middot; SHIFT/CTRL THRUST &middot; CTRL+S HIGH-G &middot; SPACE GUN &middot; G MISSILE &middot; X FLARE &middot; F LOCK &middot; R SPECIAL &middot; C CAM &middot; V LOOK-BACK &middot; RMB TRACK</div>
+</div>
+
+<div id="touchControls">
+  <div class="joy-base" id="joyBase">
+    <div class="joy-stick" id="joyStick"></div>
+  </div>
+  <div class="t-btn" id="tb-gun">GUN</div>
+  <div class="t-btn" id="tb-msl">MSL</div>
+  <div class="t-btn" id="tb-flr">FLR</div>
+  <div class="t-btn" id="tb-spc">SPC</div>
+  <div class="t-btn" id="tb-thr">THR</div>
+  <div class="t-btn" id="tb-brk">BRK</div>
+  <div class="t-btn" id="tb-cam">CAM</div>
+  <div class="t-btn" id="tb-lck">LOCK</div>
+</div>
+
+<div id="vignette" class="overlay"></div>
+<div id="dmg" class="overlay"></div>
+<div id="flash" class="overlay"></div>
+<div id="crt" class="overlay"></div>
+
+<div id="hangar">
+  <div class="hwrap">
+    <h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1>
+    <p class="sub">// SELECT YOUR AIRCRAFT //</p>
+    <div id="hangarBest" style="display:none">BEST SCORE <b id="hangarBestVal">0</b></div>
+    <div id="diffsel">
+      <span class="dlab">DIFFICULTY</span>
+      <div class="dbtns">
+        <button class="dbtn" data-d="0">ROOKIE</button>
+        <button class="dbtn" data-d="1">VETERAN</button>
+        <button class="dbtn" data-d="2">ACE</button>
+      </div>
+      <div id="diffdesc" class="ddesc"></div>
+    </div>
+    <div id="todsel">
+      <span class="dlab">ENVIRONMENT</span>
+      <div class="dbtns">
+        <button class="dbtn tbtn" data-t="0">DAY</button>
+        <button class="dbtn tbtn" data-t="1">DUSK</button>
+        <button class="dbtn tbtn" data-t="2">NIGHT</button>
+      </div>
+    </div>
+    <div id="carousel">
+      <button id="jetPrev" class="navarrow" aria-label="Previous aircraft">&#10094;</button>
+      <div id="jetStage"><div id="jetCard" class="card cardbig"></div></div>
+      <button id="jetNext" class="navarrow" aria-label="Next aircraft">&#10095;</button>
+    </div>
+    <div id="jetNav">
+      <span id="jetCounter"></span>
+      <div id="jetDots"></div>
+    </div>
+    <div class="hbtns">
+      <button id="launch">&#9654; LAUNCH MISSION</button>
+      <button id="manualBtn" class="ghostbtn">&#9636; CONTROLS &amp; MANUAL</button>
+    </div>
+    <div class="controls">
+      <b>W</b>/<b>S</b> pitch &nbsp; <b>Q</b>/<b>E</b> roll &nbsp; <b>A</b>/<b>D</b> yaw (rudder) &nbsp; <b>SHIFT</b>/<b>CTRL</b> throttle/brake &nbsp; <b>CTRL+S</b> high-G turn<br>
+      <b>SPACE</b> gun &nbsp; <b>G</b> homing missile &nbsp; <b>X</b> flares &nbsp; <b>F</b> lock target &nbsp; <b>R</b> special ability &nbsp; <b>C</b> cycle camera &nbsp; <b>V</b> hold to look back &nbsp; <b>HOLD RMB</b> track target &nbsp; <b>H</b> manual<br>
+      <i>Touchscreen controls auto-detect and activate on mobile devices.</i>
+    </div>
+  </div>
+</div>
+
+<div id="gameover">
+  <div class="gowrap">
+    <h1>MISSION FAILED</h1>
+    <div class="gostats">SCORE <b id="go_score">0</b> &middot; WAVE <b id="go_wave">0</b> &middot; BEST <b id="go_best">0</b></div>
+    <div class="debrief">
+      <div><span>Kills</span><b id="go_kills">0</b></div>
+      <div><span>Accuracy</span><b id="go_acc">0%</b></div>
+      <div><span>Missiles</span><b id="go_msl">0</b></div>
+      <div><span>Time</span><b id="go_time">0:00</b></div>
+    </div>
+    <button id="redeploy">&#9654; REDEPLOY</button>
+  </div>
+</div>
+
+<div id="upgrade">
+  <div class="uwrap">
+    <div class="techhead">
+      <div>
+        <h2>R&amp;D TECH TREE</h2>
+        <p class="usub">// ONE TREE · PATH DOWN ANY BRANCH · UPGRADES PERSIST FOR THE RUN //</p>
+      </div>
+      <div class="rpbox"><span class="rplab">RESEARCH POINTS</span><b id="rpval">0</b></div>
+    </div>
+    <div id="techTabs">
+      <button class="tech-tab" data-tab="tech">TECH TREE</button>
+      <button class="tech-tab" data-tab="armory">ARMORY</button>
+    </div>
+    <div id="techgrid"></div>
+    <div class="techfoot">
+      <div id="techhint" class="techhint">Drag or scroll to explore the tree. Tap a lit node to research it &mdash; or just DEPLOY and spend nothing. The dashed RESERVE SQUADRON node can be bought over and over to grow &amp; up-armour your flight.</div>
+      <button id="techDeploy">&#9654; DEPLOY TO NEXT WAVE</button>
+    </div>
+  </div>
+</div>
+
+<div id="manual">
+  <div class="mwrap">
+    <h2>FLIGHT MANUAL</h2>
+    <p class="msub">// TACTICAL REFERENCE //</p>
+    <div class="mgrid">
+      <section>
+        <h3>Flight</h3>
+        <ul>
+          <li><b>W</b> / <b>S</b> &mdash; pitch down / up</li>
+          <li><b>Q</b> / <b>E</b> &mdash; roll left / right</li>
+          <li><b>A</b> / <b>D</b> &mdash; yaw (rudder)</li>
+          <li><b>SHIFT</b> / <b>CTRL</b> &mdash; throttle up / brake</li>
+          <li><b>CTRL + S</b> &mdash; high-G turn (tighter pitch, bleeds speed)</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Combat</h3>
+        <ul>
+          <li><b>SPACE</b> &mdash; cannon (now a finite magazine &mdash; watch the <em>GUN</em> count)</li>
+          <li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead &mdash; fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li>
+          <li><b>G</b> &mdash; fire missile (homes only with a full lock)</li>
+          <li><b>X</b> &mdash; drop flares (now reliably drag incoming missiles off you)</li>
+          <li><b>F</b> &mdash; designate / cycle lock target <em>(locking is manual by default &mdash; toggle Auto-Lock in Settings)</em></li>
+          <li><b>R</b> &mdash; special ability</li>
+          <li><b>C</b> cycle camera (incl. clear cockpit view) &middot; <b>V</b> hold to look back &middot; hold <b>RMB</b> track</li>
+          <li>Fly into glowing green <em>SUPPLY CRATES</em> to restock guns, missiles &amp; flares.</li>
+          <li><b>H</b> / <b>ESC</b> &mdash; open this manual (pauses)</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Target Lock</h3>
+        <p>By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.</p>
+      </section>
+      <section>
+        <h3>Aircraft Stats</h3>
+        <ul>
+          <li><b>SPD</b> &mdash; top speed</li>
+          <li><b>AGI</b> &mdash; turn rate / maneuverability</li>
+          <li><b>ACC</b> &mdash; acceleration &amp; throttle response</li>
+          <li><b>ARM</b> &mdash; hull integrity (hit points)</li>
+          <li><b>STL</b> &mdash; stealth: how well clouds &amp; active cloak hide you, and how readily incoming missiles lose your lock</li>
+          <li><b>FPW</b> &mdash; firepower: cannon damage &amp; missile loadout. <em>Each airframe also has a unique passive strength &amp; weakness &mdash; see its card.</em></li>
+        </ul>
+      </section>
+      <section>
+        <h3>HUD &amp; Radar</h3>
+        <ul>
+          <li>Red brackets + health bar mark enemies; brightest = nearest threat.</li>
+          <li>Edge arrows with distance point to off-screen contacts.</li>
+          <li>Radar is heading-up: dots = bearing, ticks = above/below you, yellow ring = locked target.</li>
+          <li>Heed <b>PULL UP</b>, <b>MISSILE</b> (pop flares), <b>HIGH-G</b>, <b>STEALTH</b>.</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Your Wingman</h3>
+        <ul>
+          <li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) &mdash; you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li>
+          <li>It draws enemy fire &mdash; hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li>
+          <li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s &mdash; they immediately acquire targets and attack. The F-47's passive makes all AI escorts and CCAs hit 25% harder.</li>
+        </ul>
+      </section>
+      <section>
+        <h3>Enemies &amp; Abilities</h3>
+        <ul>
+          <li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs &mdash; they now carry a real cannon magazine and a single missile, so expect to be shot at.</li>
+          <li><b>Crimson drones</b> &mdash; cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers &mdash; keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li>
+          <li><b>Gold ACE</b> &mdash; an elite with more ammo that shrugs off a single missile; wear it down.</li>
+          <li><b>Bombers</b> pack a heavy cannon, two missiles &amp; a few flares.</li>
+          <li><b>Orange turrets</b> are ground SAM sites (missiles only).</li>
+          <li><b>Magenta BOSS</b> (every 4th wave) now cycles <em>telegraphed</em> special attacks &mdash; radial MISSILE BARRAGE, deployed DRONE SWARMS, and a close-range SHOCKWAVE PULSE &mdash; then enrages at low health. Watch for the warning, then break away or pop countermeasures.</li>
+          <li>Enemy ammo still runs dry &mdash; a disarmed foe is just a target.</li>
+        </ul>
+      </section>
+      <section>
+        <h3>R&amp;D Tech Tree</h3>
+        <p>You earn <em>research points (RP)</em> &mdash; shown as <b>R&amp;D</b> on the HUD &mdash; only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> &mdash; a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all &mdash; press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.</p>
+      </section>
+      <section class="mset">
+        <h3>Settings</h3>
+        <div class="srow"><label for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
+        <div class="srow"><label for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
+        <div class="srow"><label for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
+        <div class="srow"><label for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
+        <div class="srow"><label for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
+        <div class="srow"><label for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
+      </section>
+    </div>
+    <div class="mbtns">
+      <button id="manualClose">&#9654; RESUME</button>
+      <button id="manualAbort" class="ghostbtn">&#10006; ABORT TO HANGAR</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/globals.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

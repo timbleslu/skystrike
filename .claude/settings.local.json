@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR>=530 && NR<=4066' skystrike.html)",
+      "Bash(awk 'NR>120')",
+      "Bash(awk 'NR>=1&&NR<=9{printf \"%d: %s\\\\n\",NR,$0}' skystrike.html)",
+      "Bash(awk 'NR>=294&&NR<=298{printf \"%d: %s\\\\n\",NR,$0}' skystrike.html)",
+      "Bash(awk 'NR>=4066{printf \"%d: %s\\\\n\",NR,$0}' skystrike.html)",
+      "Bash(mkdir -p js)",
+      "Bash(printf '/* SKYSTRIKE // ACE PROTOCOL — styles */\\\\n')",
+      "Bash(awk 'NR>=11 && NR<=293' skystrike.html)",
+      "Bash(printf '/* SKYSTRIKE — globals.js: constants, jet roster, tech tree, global state, math & vector helpers. Load 1st \\(after three.js\\). */\\\\n\\\\n')",
+      "Bash(awk 'NR>=532 && NR<=632' skystrike.html)",
+      "Bash(awk 'NR>=1 && NR<=9' skystrike.html)",
+      "Bash(printf '<link rel=\"stylesheet\" href=\"styles.css\">\\\\n')",
+      "Bash(awk 'NR>=295 && NR<=296' skystrike.html)",
+      "Bash(awk 'NR>=297 && NR<=529' skystrike.html)",
+      "Bash(printf '<script src=\"js/globals.js\"></script>\\\\n')",
+      "Bash(awk 'NR>=532 && NR<=4064' skystrike.html)",
+      "Bash(grep -v '^[[:space:]]*$')",
+      "Bash(grep -v '^/\\\\* SKYSTRIKE // ACE PROTOCOL — styles \\\\*/$' styles.css)",
+      "Bash(awk 'NR>=162 && NR<=240' js/globals.js)",
+      "mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+      "mcp__plugin_context-mode_context-mode__ctx_execute",
+      "Bash(claude update *)",
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "Bash(python3 -m http.server 8765)",
+      "Bash(lsof -ti:8765)",
+      "Bash(npx playwright *)",
+      "Read(//private/tmp/**)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node verify_tabs.mjs)",
+      "mcp__plugin_context-mode_context-mode__ctx_execute_file",
+      "mcp__plugin_context-mode_context-mode__ctx_stats",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'chore: initial commit of Skystrike before wave-spawn freeze fix *)",
+      "Bash(git checkout *)"
+    ]
+  }
+}

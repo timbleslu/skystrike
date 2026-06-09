@@ -1,0 +1,852 @@
+/* SKYSTRIKE — ui.js: camera, projection, gunsight, HUD/radar canvas, DOM HUD, tech-tree screen, hangar & game flow. Load 5th. */
+
+/* ---------------- camera ---------------- */
+function updateCamera(dt) {
+  const p = player.group, fwd = fwdOf(p, t1);
+  const trackCam = mouseRight && player.lockedTarget && player.lockedTarget.alive;
+  const lookBack = down('KeyV') && !trackCam;        // hold V to glance behind
+  const lbChanged = lookBack !== player._lbPrev;     // snap on transitions (don't sweep through the jet)
+  player._lbPrev = lookBack;
+
+  if (camMode === 2) {
+    // cockpit: hide our own airframe so the forward view is fully unobstructed
+    p.visible = false;
+    const local = t2.set(0, 1.3, -3.8).applyQuaternion(p.quaternion).add(p.position);
+    camera.position.copy(local);
+    if (lookBack) {
+      camera.lookAt(t3.copy(p.position).addScaledVector(fwd, -60));
+    } else if (trackCam) {
+      camera.lookAt(player.lockedTarget.group.position);
+    } else {
+      q1.copy(p.quaternion);
+      camera.quaternion.slerp(q1, 1 - Math.exp(-24 * dt));
+    }
+  } else {
+    // chase / close: airframe visible
+    p.visible = true;
+    const off = camMode === 0 ? t2.set(0, 7.5, 27) : t2.set(0, 4.6, 15);
+    if (lookBack) { off.z = -off.z * 0.82; off.y *= 0.8; }  // swing to the front, looking aft
+    const desired = off.applyQuaternion(p.quaternion).add(p.position);
+    const gh = terrainH(desired.x, desired.z) + 8; if (desired.y < gh) desired.y = gh;
+    let look;
+    if (trackCam) look = t3.copy(player.lockedTarget.group.position);
+    else if (lookBack) look = t3.copy(p.position).addScaledVector(fwd, -90);
+    else look = t3.copy(p.position).addScaledVector(fwd, 90);
+    if (lookBack || lbChanged) {
+      camera.position.copy(desired);
+      if (!player._look) player._look = look.clone(); else player._look.copy(look);
+    } else {
+      camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
+      if (!player._look) player._look = look.clone();
+      player._look.lerp(look, 1 - Math.exp(-13 * dt));
+    }
+    camera.lookAt(player._look);
+  }
+  if (player.shake > 0) {
+    camera.position.x += rand(-1, 1) * player.shake * 3;
+    camera.position.y += rand(-1, 1) * player.shake * 3;
+    camera.position.z += rand(-1, 1) * player.shake * 2;
+  }
+  camera.updateMatrixWorld();
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+}
+function cycleCamera() { camMode = (camMode + 1) % 3; audio.ui(); showBanner(CAM_NAMES[camMode] + ' CAM'); }
+
+/* ---------------- projection helper ---------------- */
+function projectPoint(pos) {
+  pp1.copy(pos).project(camera);
+  pp2.copy(pos).sub(camera.position);
+  pp3.set(0, 0, -1).applyQuaternion(camera.quaternion);
+  const behind = pp2.dot(pp3) < 0;
+  return { x: (pp1.x * 0.5 + 0.5) * W, y: (-pp1.y * 0.5 + 0.5) * H, behind };
+}
+
+/* ---------------- lead-computing gunsight (deflection pipper) ----------------
+   Picks the most plausible cannon target (near & well inside the forward cone),
+   solves the firing intercept at true round speed, and paints a pipper showing
+   exactly where to put the nose. Snaps green ("GUNS") when a gun solution exists. */
+function pickGunTarget() {
+  const fwd = fwdOf(player.group, t3), pp = player.group.position;
+  let best = null, bestScore = Infinity;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive) continue;
+    const to = t4.copy(e.group.position).sub(pp);
+    const dist = to.length();
+    if (dist < 1 || dist > 2600) continue;
+    const ang = fwd.dot(to) / dist;          // cos of angle off boresight
+    if (ang < 0.5) continue;                 // ~60-degree forward cone
+    const score = dist * (1.7 - ang);        // favour near & well-aligned contacts
+    if (score < bestScore) { bestScore = score; best = e; }
+  }
+  return best;
+}
+function drawGunPipper(ctx, e) {
+  if (!e) { player._gunSol = false; return; }
+  const pp = player.group.position;
+  const S = 1400 * (player.bulletSpeedMul || 1);
+  // rounds inherit 0.9 of the jet's velocity, so solve in that relative frame
+  const relV = t1.copy(e.vel || ZERO).addScaledVector(player.vel, -0.9);
+  const ip = interceptPoint(pp, e.group.position, relV, S) || e.group.position;
+  const sp = projectPoint(ip);
+  const dist = pp.distanceTo(e.group.position);
+  if (sp.behind) { player._gunSol = false; return; }
+
+  const fwd = fwdOf(player.group, t2);
+  const bsp = projectPoint(t3.copy(pp).addScaledVector(fwd, dist));   // boresight at target range
+  const tgtR = e.type === 'boss' ? 72 : e.type === 'ground' ? 17 : e.type === 'drone' ? 16 : 22;
+  const edge = projectPoint(t4.copy(ip).addScaledVector(rightOf(player.group, t5), tgtR));
+  const screenR = Math.max(8, Math.hypot(edge.x - sp.x, edge.y - sp.y));
+  const sep = bsp.behind ? 1e9 : Math.hypot(sp.x - bsp.x, sp.y - bsp.y);
+  const solution = sep < screenR * 1.15 && dist < 2300;
+
+  // correction line from boresight to the lead point
+  if (!bsp.behind && sep > 5) {
+    ctx.strokeStyle = 'rgba(120,255,220,0.25)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(bsp.x, bsp.y); ctx.lineTo(sp.x, sp.y); ctx.stroke();
+  }
+
+  const col = solution ? '90,255,150' : '255,210,80';
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(' + col + ',0.95)';
+  ctx.beginPath(); ctx.arc(sp.x, sp.y, 7, 0, TWO_PI); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(sp.x - 7, sp.y); ctx.lineTo(sp.x - 12, sp.y);
+  ctx.moveTo(sp.x + 7, sp.y); ctx.lineTo(sp.x + 12, sp.y);
+  ctx.moveTo(sp.x, sp.y - 7); ctx.lineTo(sp.x, sp.y - 12);
+  ctx.moveTo(sp.x, sp.y + 7); ctx.lineTo(sp.x, sp.y + 12);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(' + col + ',' + (solution ? 0.95 : 0.55) + ')';
+  ctx.beginPath(); ctx.arc(sp.x, sp.y, solution ? 3 : 2, 0, TWO_PI); ctx.fill();
+
+  ctx.font = '9px ' + HUDFONT; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(' + col + ',0.8)';
+  ctx.fillText(Math.round(dist), sp.x, sp.y + 20);
+
+  if (solution) {
+    const s = 13 + Math.sin(performance.now() * 0.02) * 2;
+    ctx.strokeStyle = 'rgba(90,255,150,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = 'rgba(90,255,150,0.95)'; ctx.fillText('GUNS', sp.x, sp.y - s - 6);
+    // "shoot now" cue ringing the central reticle
+    const cx = W / 2, cy = H / 2;
+    ctx.strokeStyle = 'rgba(90,255,150,' + (0.45 + 0.3 * Math.sin(performance.now() * 0.02)) + ')'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 11, 0, TWO_PI); ctx.stroke();
+  }
+  if (solution && !player._gunSol) audio.blip(1240, 0.04, 'sine', 0.05, 1560);   // soft tick on acquiring a gun solution
+  player._gunSol = solution;
+  ctx.lineWidth = 2;
+}
+
+/* ---------------- HUD canvas ---------------- */
+function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
+function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
+
+function drawHUD() {
+  const ctx = h2d, cx = W / 2, cy = H / 2;
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  drawHorizon(ctx, cx, cy);
+
+  ctx.strokeStyle = 'rgba(120,255,220,0.9)';
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, TWO_PI);
+  ctx.moveTo(cx - 15, cy); ctx.lineTo(cx - 7, cy); ctx.moveTo(cx + 7, cy); ctx.lineTo(cx + 15, cy); ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy - 7);
+  ctx.stroke();
+
+  const vd = t1.copy(player.vel);
+  if (vd.lengthSq() > 1) {
+    vd.normalize();
+    const fp = projectPoint(t2.copy(player.group.position).addScaledVector(vd, 1600));
+    if (!fp.behind) {
+      ctx.strokeStyle = 'rgba(0,255,170,0.9)';
+      ctx.beginPath(); ctx.arc(fp.x, fp.y, 6, 0, TWO_PI);
+      ctx.moveTo(fp.x - 6, fp.y); ctx.lineTo(fp.x - 15, fp.y); ctx.moveTo(fp.x + 6, fp.y); ctx.lineTo(fp.x + 15, fp.y); ctx.moveTo(fp.x, fp.y - 6); ctx.lineTo(fp.x, fp.y - 13);
+      ctx.stroke();
+    }
+  }
+
+  // lead-computing gunsight for the nearest forward gun target
+  if (gunLead && !player.noCannon) drawGunPipper(ctx, pickGunTarget());
+  else player._gunSol = false;
+
+  const lt = (player.lockTarget && player.lockTarget.alive) ? player.lockTarget : null;
+  if (lt) {
+    drawLockReticle(ctx, lt, player.lockProgress, player.lockedTarget === lt && player.lockProgress >= 1);
+  }
+
+  let near = null, nd = Infinity;
+  for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; const d = player.group.position.distanceToSquared(e.group.position); if (d < nd) { nd = d; near = e; } }
+  for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) drawEnemy(ctx, enemies[i], cx, cy, enemies[i] === near);
+
+  // supply-crate markers (diamond + range over any crate in view)
+  for (let i = 0; i < loots.length; i++) {
+    const l = loots[i]; if (l.kind !== 'crate') continue;
+    const sp = projectPoint(l.mesh.position);
+    if (sp.behind || sp.x < 0 || sp.x > W || sp.y < 0 || sp.y > H) continue;
+    const s = 9 + Math.sin(performance.now() * 0.006) * 2;
+    ctx.strokeStyle = 'rgba(70,255,200,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = 'rgba(70,255,200,0.85)'; ctx.font = '9px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText('SUPPLY ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7);
+  }
+  ctx.lineWidth = 2;
+
+  for (let i = hitMarkers.length - 1; i >= 0; i--) {
+    const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1); const s = 11 + (1 - a) * 9;
+    ctx.strokeStyle = 'rgba(255,255,255,' + a + ')'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx - s + 7, cy - s + 7);
+    ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx + s - 7, cy - s + 7);
+    ctx.moveTo(cx - s, cy + s); ctx.lineTo(cx - s + 7, cy + s - 7);
+    ctx.moveTo(cx + s, cy + s); ctx.lineTo(cx + s - 7, cy + s - 7);
+    ctx.stroke();
+    if (hm.t <= 0) hitMarkers.splice(i, 1);
+  }
+  ctx.lineWidth = 2;
+
+  for (let i = dmgNumbers.length - 1; i >= 0; i--) {
+    const d = dmgNumbers[i]; d.life -= lastDt; d.pos.y += (d.crit ? 42 : 30) * lastDt;
+    const p = projectPoint(d.pos);
+    if (!p.behind) {
+      const lifeMax = d.crit ? 1.1 : 0.9, a = clamp(d.life / lifeMax, 0, 1);
+      if (d.crit) { ctx.fillStyle = 'rgba(255,150,40,' + a + ')'; ctx.font = 'bold ' + (22 + (1 - a) * 12) + 'px ' + HUDFONT; }
+      else { ctx.fillStyle = 'rgba(255,230,120,' + a + ')'; ctx.font = 'bold ' + (16 + (1 - a) * 7) + 'px ' + HUDFONT; }
+      ctx.fillText(d.val, p.x, p.y);
+    }
+    if (d.life <= 0) dmgNumbers.splice(i, 1);
+  }
+
+  if (player.hurtT > 0 && player.hurtDir) {
+    player.hurtT -= lastDt;
+    const cr = t1.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    const cu = t2.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const cfw = t3.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    const dx = player.hurtDir.dot(cr), dy = player.hurtDir.dot(cu), dz = player.hurtDir.dot(cfw);
+    let ang2; const mag = Math.hypot(dx, dy);
+    if (dz < -0.2 && mag < 0.35) ang2 = Math.PI; else ang2 = Math.atan2(dx, dy);
+    const a = clamp(player.hurtT, 0, 1);
+    const rr = Math.min(cx, cy) * 0.72;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang2);
+    ctx.strokeStyle = 'rgba(255,55,55,' + (0.85 * a) + ')'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, 0, rr, -Math.PI / 2 - 0.36, -Math.PI / 2 + 0.36); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,80,80,' + (0.9 * a) + ')';
+    ctx.beginPath(); ctx.moveTo(0, -rr - 7); ctx.lineTo(-9, -rr + 9); ctx.lineTo(9, -rr + 9); ctx.closePath(); ctx.fill();
+    ctx.lineCap = 'butt'; ctx.restore();
+  }
+}
+
+function drawHorizon(ctx, cx, cy) {
+  const fwd = fwdOf(player.group, t1), up = upOf(player.group, t2), rgt = rightOf(player.group, t3);
+  const pitch = Math.asin(clamp(fwd.y, -1, 1));
+  const roll = Math.atan2(rgt.y, up.y);
+  const scale = 6.2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(roll);
+  ctx.translate(0, (pitch / DEG) * scale);
+  ctx.strokeStyle = 'rgba(0,255,190,0.55)'; ctx.lineWidth = 2; ctx.font = '11px ' + HUDFONT; ctx.fillStyle = 'rgba(0,255,190,0.6)';
+  ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(-70, 0); ctx.moveTo(70, 0); ctx.lineTo(260, 0);
+  ctx.moveTo(-70, 0); ctx.lineTo(-70, 9); ctx.moveTo(70, 0); ctx.lineTo(70, 9);
+  ctx.stroke();
+  ctx.lineWidth = 1.4;
+  for (let a = -40; a <= 40; a += 10) {
+    if (a === 0) continue;
+    const y = -a * scale;
+    const w = a > 0 ? 60 : 50;
+    ctx.beginPath();
+    ctx.moveTo(-w, y); ctx.lineTo(-30, y); ctx.moveTo(30, y); ctx.lineTo(w, y);
+    if (a < 0) { ctx.moveTo(-w, y); ctx.lineTo(-w, y - 6); ctx.moveTo(w, y); ctx.lineTo(w, y - 6); }
+    else { ctx.moveTo(-w, y); ctx.lineTo(-w, y + 6); ctx.moveTo(w, y); ctx.lineTo(w, y + 6); }
+    ctx.stroke();
+    ctx.textAlign = 'left'; ctx.fillText((a > 0 ? '+' : '') + a, w + 5, y);
+    ctx.textAlign = 'right'; ctx.fillText((a > 0 ? '+' : '') + a, -w - 5, y);
+  }
+  ctx.restore();
+  ctx.textAlign = 'center';
+}
+
+function drawLockReticle(ctx, tgt, progress, locked) {
+  const p = projectPoint(tgt.group.position);
+  if (p.behind) return;
+  const dist = player.group.position.distanceTo(tgt.group.position);
+  const base = clamp(120000 / Math.max(dist, 1), 34, 150);
+  const x = p.x, y = p.y, s = base * 0.45;
+  ctx.textAlign = 'center';
+  if (locked) {
+    ctx.strokeStyle = 'rgba(255,55,55,1)'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(x - s, y - s, s * 2, s * 2);
+    ctx.lineWidth = 2;
+    for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      ctx.beginPath(); ctx.moveTo(x + c[0] * s, y + c[1] * s); ctx.lineTo(x + c[0] * (s + 8), y + c[1] * s);
+      ctx.moveTo(x + c[0] * s, y + c[1] * s); ctx.lineTo(x + c[0] * s, y + c[1] * (s + 8)); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,55,55,0.95)';
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
+    const blink = (performance.now() % 600) < 400 ? 1 : 0.35;
+    ctx.fillStyle = 'rgba(255,70,70,' + blink + ')'; ctx.font = 'bold 13px ' + HUDFONT;
+    ctx.fillText('\u25C9 LOCKED', x, y - s - 11);
+  } else if (progress > 0.02) {
+    const o = base * (1.35 - progress * 0.9); // brackets converge as progress→1
+    const a = 0.5 + progress * 0.5;
+    ctx.strokeStyle = 'rgba(255,210,80,' + a + ')'; ctx.lineWidth = 2;
+    for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const px = x + c[0] * (s + o), py = y + c[1] * (s + o);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - c[0] * 11, py); ctx.moveTo(px, py); ctx.lineTo(px, py - c[1] * 11); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,210,80,0.85)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, base * 0.62, -Math.PI / 2, -Math.PI / 2 + progress * TWO_PI); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,210,80,0.95)'; ctx.font = '11px ' + HUDFONT;
+    ctx.fillText('LOCKING ' + Math.round(progress * 100) + '%', x, y + base * 0.62 + 14);
+  }
+}
+function drawEnemy(ctx, e, cx, cy, isNear) {
+  const pos = e.group.position;
+  const p = projectPoint(pos);
+  const dist = player.group.position.distanceTo(pos);
+  const boss = e.type === 'boss', grd = e.type === 'ground', drone = e.type === 'drone';
+  const locked = player.lockedTarget === e;
+  const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
+
+  if (drone) {                          // lightweight crimson diamond — swarms stay readable
+    if (!onScreen) return;
+    const s = clamp(60000 / Math.max(dist, 1), 9, 34), x = p.x, y = p.y;
+    ctx.strokeStyle = 'rgba(255,64,96,' + (locked || isNear ? 1 : 0.82) + ')'; ctx.lineWidth = locked ? 2.4 : 1.6;
+    ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,64,96,0.5)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TWO_PI); ctx.fill();
+    ctx.lineWidth = 2;
+    return;
+  }
+
+  const col = boss ? '255,80,220' : e.type === 'bomber' ? '255,176,96' : e.elite ? '255,210,77' : grd ? '255,165,55' : '255,80,80';
+
+  if (onScreen) {
+    const size = clamp(90000 / Math.max(dist, 1), 24, 110) * (boss ? 1.7 : 1);
+    const s = size / 2, x = p.x, y = p.y, c = Math.max(7, s * 0.32);
+    ctx.strokeStyle = 'rgba(' + col + ',' + (locked || isNear ? 1 : 0.85) + ')';
+    ctx.lineWidth = locked ? 3 : isNear ? 2.4 : 1.8;
+    ctx.beginPath();
+    ctx.moveTo(x - s, y - s + c); ctx.lineTo(x - s, y - s); ctx.lineTo(x - s + c, y - s);
+    ctx.moveTo(x + s - c, y - s); ctx.lineTo(x + s, y - s); ctx.lineTo(x + s, y - s + c);
+    ctx.moveTo(x + s, y + s - c); ctx.lineTo(x + s, y + s); ctx.lineTo(x + s - c, y + s);
+    ctx.moveTo(x - s + c, y + s); ctx.lineTo(x - s, y + s); ctx.lineTo(x - s, y + s - c);
+    ctx.stroke();
+    const hpFrac = clamp(e.hp / e.maxHp, 0, 1);
+    const bw = size, bx = x - s, by = y - s - 7;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, 3);
+    ctx.fillStyle = hpFrac > 0.5 ? 'rgba(70,255,140,0.9)' : hpFrac > 0.25 ? 'rgba(255,210,80,0.9)' : 'rgba(255,70,70,0.95)';
+    ctx.fillRect(bx, by, bw * hpFrac, 3);
+    ctx.fillStyle = 'rgba(' + col + ',0.95)'; ctx.font = '11px ' + HUDFONT;
+    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', x, y + s + 12);
+    if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u25C6 BOSS', x, by - 8); }
+    else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2691 BOMBER', x, by - 8); }
+    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || 'ACE'), x, by - 8); }
+    else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
+  } else {
+    let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
+    const rx = W / 2 - 64, ry = H / 2 - 64;
+    const ex = cx + Math.cos(ang) * rx, ey = cy + Math.sin(ang) * ry;
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+    const big = isNear ? 1.4 : 1;
+    ctx.fillStyle = 'rgba(' + col + ',' + (isNear ? 1 : 0.9) + ')';
+    ctx.beginPath(); ctx.moveTo(17 * big, 0); ctx.lineTo(-11 * big, -9 * big); ctx.lineTo(-11 * big, 9 * big); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(' + col + ',0.85)'; ctx.font = '10px ' + HUDFONT; ctx.textAlign = 'center';
+    const tx = cx + Math.cos(ang) * (rx - 22), ty = cy + Math.sin(ang) * (ry - 22);
+    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', tx, ty);
+  }
+}
+
+/* ---------------- radar ---------------- */
+function drawRadar() {
+  const ctx = radarCtx, w = radarCanvas.width, h = radarCanvas.height, cx = w / 2, cy = h / 2, R = w / 2 - 5;
+  ctx.clearRect(0, 0, w, h);
+
+  const fwd = fwdOf(player.group, t1);
+  const fx = fwd.x, fz = fwd.z, fl = Math.hypot(fx, fz) || 1;
+  const Fx = fx / fl, Fz = fz / fl, Rx = -Fz, Rz = Fx;
+  const range = 6500;
+
+  // forward FOV wedge
+  ctx.fillStyle = 'rgba(25,240,212,0.07)';
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); ctx.closePath(); ctx.fill();
+
+  // rings + crosshair
+  ctx.strokeStyle = 'rgba(25,240,212,0.22)'; ctx.lineWidth = 1;
+  for (let r = R / 3; r <= R + 0.5; r += R / 3) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
+
+  // sweep
+  const sweep = (performance.now() * 0.0011) % TWO_PI;
+  const grad = ctx.createLinearGradient(cx, cy, cx + Math.cos(sweep - Math.PI / 2) * R, cy + Math.sin(sweep - Math.PI / 2) * R);
+  grad.addColorStop(0, 'rgba(25,240,212,0.5)'); grad.addColorStop(1, 'rgba(25,240,212,0)');
+  ctx.strokeStyle = grad; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep - Math.PI / 2) * R, cy + Math.sin(sweep - Math.PI / 2) * R); ctx.stroke();
+
+  function plot(pos, r, g, b, sz, sq, ring) {
+    const dx = pos.x - player.group.position.x, dz = pos.z - player.group.position.z;
+    let ahead = dx * Fx + dz * Fz, right = dx * Rx + dz * Rz;
+    let px = right / range * R, py = -ahead / range * R;
+    const dlen = Math.hypot(px, py);
+    if (dlen > R) { px = px / dlen * R; py = py / dlen * R; }
+    const X = cx + px, Y = cy + py;
+    const dy = pos.y - player.group.position.y;
+    if (Math.abs(dy) > 120) { // altitude tick
+      ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',0.6)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X, Y + (dy > 0 ? -7 : 7)); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+    if (sq) ctx.fillRect(X - sz, Y - sz, sz * 2, sz * 2);
+    else { ctx.beginPath(); ctx.arc(X, Y, sz, 0, TWO_PI); ctx.fill(); }
+    if (ring) { ctx.strokeStyle = 'rgba(255,225,77,0.95)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, sz + 3, 0, TWO_PI); ctx.stroke(); }
+  }
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive || e.isInCloud) continue;
+    const lk = player.lockedTarget === e;
+    if (e.type === 'boss') plot(e.group.position, 255, 69, 200, 5, false, lk);
+    else if (e.type === 'bomber') plot(e.group.position, 255, 176, 96, 5, false, lk);
+    else if (e.type === 'drone') plot(e.group.position, 255, 64, 96, 3, false, lk);
+    else if (e.elite) plot(e.group.position, 255, 210, 77, 4, false, lk);
+    else if (e.type === 'ground') plot(e.group.position, 255, 165, 55, 4, true, lk);
+    else plot(e.group.position, 255, 80, 80, 4, false, lk);
+  }
+  for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) plot(missiles[i].mesh.position, 255, 255, 255, 2);
+  for (let i = 0; i < wingmen.length; i++) { if (wingmen[i].alive) plot(wingmen[i].group.position, 45, 255, 176, 4, true); }
+  for (let i = 0; i < loots.length; i++) { const isC = loots[i].kind === 'crate'; plot(loots[i].mesh.position, 70, 255, 190, isC ? 4 : 3, isC); }
+  ctx.fillStyle = '#19f0d4'; ctx.beginPath();
+  ctx.moveTo(cx, cy - 8); ctx.lineTo(cx - 6, cy + 6); ctx.lineTo(cx + 6, cy + 6); ctx.closePath(); ctx.fill();
+}
+
+/* ---------------- DOM HUD ---------------- */
+let el = {};
+function g(id) { return document.getElementById(id); }
+function cacheEl() {
+  el = {
+    hp: g('hpfill'), thr: g('thrfill'), shd: g('shfill'), spd: g('spd'), alt: g('alt'),
+    score: g('score'), wave: g('wave'), combo: g('combo'), tp: g('tp'),
+    flares: g('flares'), missiles: g('missiles'), bullets: g('bullets'), special: g('special'),
+    hpbar: g('hpbar'), banner: g('banner'), sidebar: g('wingSidebar'),
+    wPull: g('w_pull'), wMissile: g('w_missile'), wHighG: g('w_highg'), wStealth: g('w_stealth'), wLock: g('w_lock'), wDrone: g('w_drone'),
+    vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
+    bossbar: g('bossbar'), bossfill: g('bossfill'),
+  };
+}
+function tog(e, on) { e.classList.toggle('show', !!on); }
+
+let bannerT = 0;
+function showBanner(txt) { el.banner.textContent = txt; el.banner.classList.remove('show'); void el.banner.offsetWidth; el.banner.classList.add('show'); bannerT = 2.0; }
+
+function updateWingmanSidebar() {
+  if (!el.sidebar) return;
+  if (!wingmen.length) { el.sidebar.classList.remove('visible'); return; }
+  el.sidebar.classList.add('visible');
+  // Rebuild structure only when wingmen count changes; otherwise just patch text/style
+  if (el.sidebar.children.length !== wingmen.length) {
+    el.sidebar.innerHTML = '';
+    for (let i = 0; i < wingmen.length; i++) {
+      const row = document.createElement('div');
+      row.innerHTML = '<div class="wn"></div><div class="ws"></div><div class="whb"><div class="whf"></div></div>';
+      el.sidebar.appendChild(row);
+    }
+  }
+  const rows = el.sidebar.children;
+  for (let i = 0; i < wingmen.length; i++) {
+    const w = wingmen[i], row = rows[i];
+    row.className = 'wing-row' + (w.cca ? ' cca' : '') + (!w.alive ? ' down' : '');
+    const hp = w.alive ? clamp(w.hp / w.maxHp * 100, 0, 100) : 0;
+    let sub;
+    if (w.cca) sub = (w.jetName || '?') + ' · EXP ' + Math.max(0, Math.ceil(w.expire || 0)) + 's';
+    else if (!w.alive) sub = 'RTB ' + Math.max(0, Math.ceil(w.rtb)) + 's';
+    else sub = (w.jetName || '?') + (w.flares != null ? ' · ★' + w.flares : '');
+    row.children[0].textContent = w.name;
+    row.children[1].textContent = sub;
+    row.children[2].children[0].style.width = hp.toFixed(1) + '%';
+  }
+}
+function updateDom(dt) {
+  el.hp.style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
+  el.shd.style.width = clamp(player.shield / player.maxShield * 100, 0, 100) + '%';
+  el.thr.style.width = clamp(player.throttle * 100, 0, 100) + '%';
+  el.spd.textContent = Math.round(player.speed * 2.3);
+  el.alt.textContent = Math.round(Math.max(0, player.group.position.y) * 3.28);
+  el.score.textContent = player.score.toLocaleString();
+  if (el.tp) { el.tp.textContent = Math.floor(player.tp).toLocaleString(); el.tp.style.color = player.tp >= 120 ? '#ffe14d' : ''; }
+  el.wave.textContent = wave;
+  el.combo.textContent = player.combo > 1 ? 'x' + player.combo : '';
+  el.flares.textContent = player.flares;
+  el.missiles.textContent = player.missiles;
+  if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
+  else { el.bullets.textContent = player.bullets; el.bullets.style.color = player.bullets <= 80 ? '#ff8c2b' : ''; }
+  el.missiles.style.color = player.missiles <= 0 ? '#ff394b' : '';
+  if (player.special.cd <= 0) { el.special.textContent = player.jet.ability + ' \u25B8 READY'; el.special.classList.add('ready'); }
+  else { el.special.textContent = player.jet.ability + ' \u25B8 ' + Math.ceil(player.special.cd) + 's'; el.special.classList.remove('ready'); }
+  updateWingmanSidebar();
+  tog(el.wStealth, player.stealth);
+  tog(el.wHighG, player.highG);
+  tog(el.wPull, player.gpws);
+  tog(el.wMissile, missiles.some(m => m.enemy));
+  tog(el.wDrone, enemies.some(e => e.alive && e.type === 'drone'));
+  const lockedNow = !!(player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1);
+  const acquiringNow = !lockedNow && player.lockTarget && player.lockTarget.alive && player.lockProgress > 0.02;
+  tog(el.wLock, lockedNow || acquiringNow);
+  if (lockedNow) { el.wLock.textContent = '\u25C9 TARGET LOCKED'; el.wLock.style.color = '#ff5a5a'; }
+  else if (acquiringNow) { el.wLock.textContent = 'ACQUIRING ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffd24d'; }
+  el.hpbar.classList.toggle('low', player.hp / player.maxHp < 0.3);
+
+  let boss = null;
+  for (let i = 0; i < enemies.length; i++) { if (enemies[i].alive && enemies[i].type === 'boss') { boss = enemies[i]; break; } }
+  if (boss) { el.bossbar.classList.add('show'); el.bossfill.style.width = clamp(boss.hp / boss.maxHp * 100, 0, 100) + '%'; }
+  else el.bossbar.classList.remove('show');
+
+  if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) el.banner.classList.remove('show'); }
+
+  const gforce = clamp((Math.abs(player.pitchRate) + Math.abs(player.rollRate) * 0.4) / (player.stats.turnRate * 2.1), 0, 1);
+  let vig = gforce * 0.7; if (player.highG) vig = Math.max(vig, 0.92);
+  if (player.slow > 0) vig = Math.max(vig, 0.55);   // bullet-time vignette
+  el.vignette.style.opacity = vig.toFixed(3);
+  el.dmg.style.opacity = clamp(player.damageFlash / 0.5, 0, 1).toFixed(3);
+  if (empFlash > 0) { empFlash -= dt; el.flash.style.opacity = (empFlash * 0.5).toFixed(3); } else el.flash.style.opacity = '0';
+}
+
+/* ---------------- tech tree (between-wave R&D) ---------------- */
+let pendingUpgrades = null;   // retained no-op (legacy reset references)
+let techPanMoved = false;     // true while the player is dragging to pan the tree (suppresses the click)
+const TECH_COLW = 160, TECH_ROWH = 130, TECH_NODEW = 152, TECH_NODEH = 104, TECH_PAD = 28;
+let techTab = 'tech';
+function owns(id) { return player.tech.indexOf(id) >= 0; }
+function repeatCount(node) { return player.techRepeat[node.id] || 0; }
+function nodeCost(node) { return node.repeat ? node.cost + (node.costStep || 0) * repeatCount(node) : node.cost; }
+function nodeState(node) {
+  if (!node.repeat && owns(node.id)) return 'bought';
+  if (node.ok && !node.ok(player)) return 'na';
+  if (node.req && !owns(node.req)) return 'locked';
+  return player.tp >= nodeCost(node) ? 'avail' : 'cantafford';
+}
+function openTechScreen() {
+  if (!player) return;
+  techTab = 'tech';
+  document.querySelectorAll('.tech-tab').forEach(b => { b.classList.toggle('active', b.dataset.tab === 'tech'); b.onclick = () => switchTechTab(b.dataset.tab); });
+  renderTechTree(true);
+  choosingUpgrade = true; paused = true;
+  g('touchControls').classList.remove('show');
+  g('upgrade').classList.add('show');
+}
+function nodeXY(node) { return { left: TECH_PAD + node.x * TECH_COLW, top: TECH_PAD + node.y * TECH_ROWH }; }
+function renderTechTree(recenter) {
+  const rv = g('rpval'); if (rv) rv.textContent = Math.floor(player.tp).toLocaleString();
+  const grid = g('techgrid'); if (!grid) return;
+  const treeNodes = TECH_TREE.filter(n => !n.tab || n.tab === 'tech');
+  let maxX = 0, maxY = 0; for (const n of treeNodes) { if (n.x > maxX) maxX = n.x; if (n.y > maxY) maxY = n.y; }
+  const W = TECH_PAD * 2 + maxX * TECH_COLW + TECH_NODEW;
+  const H = TECH_PAD * 2 + maxY * TECH_ROWH + TECH_NODEH;
+  // connectors (SVG), drawn first so nodes sit on top
+  let svg = '<svg width="' + W + '" height="' + H + '">';
+  for (const n of treeNodes) {
+    if (!n.req) continue; const p = TECH_BY_ID[n.req]; if (!p) continue;
+    const a = nodeXY(p), b = nodeXY(n);
+    const px = a.left + TECH_NODEW / 2, pb = a.top + TECH_NODEH;
+    const cx = b.left + TECH_NODEW / 2, ct = b.top;
+    const midY = (pb + ct) / 2;
+    const lit = owns(n.req) && (n.repeat ? repeatCount(n) > 0 : owns(n.id));
+    const open = owns(n.req) && nodeState(n) !== 'locked';
+    const col = lit ? '#46ff8c' : open ? 'rgba(25,240,212,.55)' : 'rgba(91,138,134,.3)';
+    svg += '<path d="M' + px + ',' + pb + ' V' + midY + ' H' + cx + ' V' + ct + '" fill="none" stroke="' + col + '" stroke-width="' + (lit ? 3 : 2) + '"/>';
+  }
+  svg += '</svg>';
+  let nodes = '';
+  for (const n of treeNodes) {
+    const st = nodeState(n), p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
+    const cost = nodeCost(n);
+    const costTxt = n.id === 'core' ? 'CORE' : st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
+    const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
+    nodes += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
+      badge +
+      '<div class="tn-sym">' + n.sym + '</div>' +
+      '<div class="tn-name">' + n.name + '</div>' +
+      '<div class="tn-desc">' + n.desc + '</div>' +
+      '<span class="tn-cost">' + costTxt + '</span>' +
+    '</div>';
+  }
+  grid.innerHTML = '<div id="techcanvas" style="width:' + W + 'px;height:' + H + 'px">' + svg + nodes + '</div>';
+  // wire clicks for purchasable nodes
+  const cv = g('techcanvas');
+  cv.querySelectorAll('.tnode.avail').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } const id = el.getAttribute('data-id'); buyNode(TECH_BY_ID[id]); }));
+  if (recenter) {
+    const rootCX = TECH_PAD + 3 * TECH_COLW + TECH_NODEW / 2;
+    grid.scrollLeft = Math.max(0, rootCX - grid.clientWidth / 2);
+    grid.scrollTop = 0;
+  }
+}
+function renderArmory() {
+  if (!player) return;
+  const rv = g('rpval'); if (rv) rv.textContent = Math.floor(player.tp).toLocaleString();
+  const grid = g('techgrid'); if (!grid) return;
+  const hint = g('techhint');
+  if (hint) hint.textContent = 'Click any lit card to purchase. WEAPONS LOCKER, COMMAND AUTHORITY and TARGETING COMPUTER have no prerequisites \u2014 just spare RP.';
+  const armNodes = TECH_TREE.filter(n => n.tab === 'armory');
+  let html = '<div class="armory-grid">';
+  for (const n of armNodes) {
+    const st = nodeState(n), ac = FAM_C[n.fam] || '#ffe14d';
+    const cost = nodeCost(n);
+    const costTxt = st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
+    const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
+    html += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="--ac:' + ac + '">' +
+      badge +
+      '<div class="tn-sym">' + n.sym + '</div>' +
+      '<div class="tn-name">' + n.name + '</div>' +
+      '<div class="tn-desc">' + n.desc + '</div>' +
+      '<span class="tn-cost">' + costTxt + '</span>' +
+    '</div>';
+  }
+  html += '</div>';
+  grid.innerHTML = html;
+  grid.querySelectorAll('.tnode.avail').forEach(el => el.addEventListener('click', () => { const id = el.getAttribute('data-id'); buyNode(TECH_BY_ID[id]); }));
+}
+function switchTechTab(tab) {
+  techTab = tab;
+  document.querySelectorAll('.tech-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'armory') { renderArmory(); return; }
+  const hint = g('techhint');
+  if (hint) hint.textContent = 'Drag or scroll to explore the tree. Tap a lit node to research it \u2014 or just DEPLOY and spend nothing. The dashed RESERVE SQUADRON node can be bought over and over to grow & up-armour your flight.';
+  renderTechTree(true);
+}
+function buyNode(node) {
+  if (!choosingUpgrade || !player || !node) return;
+  if (nodeState(node) !== 'avail') { audio.ui(); return; }
+  const cost = nodeCost(node);
+  player.tp -= cost;
+  node.apply(player);
+  if (node.repeat) { player.techRepeat[node.id] = repeatCount(node) + 1; }
+  else { player.tech.push(node.id); player.upgrades.push(node.id); }
+  audio.power(); empFlash = 0.26;
+  showBanner('\u25C8 ' + node.name + ' RESEARCHED \u25C8');
+  techTab === 'armory' ? renderArmory() : renderTechTree(false);
+}
+function deployFromTech() {
+  if (!choosingUpgrade) return;
+  pendingUpgrades = null;
+  g('upgrade').classList.remove('show');
+  choosingUpgrade = false; paused = false;
+  if (clock) clock.getDelta();   // swallow the paused interval so dt doesn't spike
+  if (isTouchEnabled && state === 'playing') g('touchControls').classList.add('show');
+  betweenWaves = true; waveTimer = 1.4;   // short breather, then the next wave spawns
+  showBanner('WAVE ' + (wave + 1) + ' INBOUND'); audio.ui();
+}
+
+/* ---------------- hangar / flow ---------------- */
+function buildHangar() {
+  // ---- single-jet carousel selector ----
+  const dots = g('jetDots'); dots.innerHTML = '';
+  JETS.forEach((j, i) => {
+    const d = document.createElement('i'); d.title = j.name;
+    d.addEventListener('click', () => selectJet(i));
+    dots.appendChild(d);
+  });
+  g('jetPrev').addEventListener('click', () => cycleJet(-1));
+  g('jetNext').addEventListener('click', () => cycleJet(1));
+  g('jetCard').addEventListener('dblclick', () => startGame(selectedJet));
+
+  g('launch').addEventListener('click', () => startGame(selectedJet));
+  g('manualBtn').addEventListener('click', openManual);
+  g('manualClose').addEventListener('click', closeManual);
+  g('manualAbort').addEventListener('click', abortMission);
+  g('redeploy').addEventListener('click', returnToHangar);
+  const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
+  const tg = g('techgrid');
+  if (tg) {   // drag anywhere to pan the tech tree (scroll wheel & touch still work too)
+    let panning = false, sx = 0, sy = 0, sl = 0, stp = 0;
+    tg.addEventListener('pointerdown', e => { panning = true; techPanMoved = false; sx = e.clientX; sy = e.clientY; sl = tg.scrollLeft; stp = tg.scrollTop; });
+    tg.addEventListener('pointermove', e => { if (!panning) return; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.abs(dx) + Math.abs(dy) > 5) techPanMoved = true; tg.scrollLeft = sl - dx; tg.scrollTop = stp - dy; });
+    const endPan = () => { panning = false; };
+    tg.addEventListener('pointerup', endPan); tg.addEventListener('pointerleave', endPan); tg.addEventListener('pointercancel', endPan);
+  }
+  document.querySelectorAll('.dbtn[data-d]').forEach(b => b.addEventListener('click', () => setDifficulty(+b.dataset.d)));
+  setDifficulty(difficulty);
+  document.querySelectorAll('.tbtn').forEach(b => b.addEventListener('click', () => setTimeOfDay(+b.dataset.t)));
+  setTimeOfDay(timeOfDay);
+  const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
+  const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
+  const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
+  selectJet(selectedJet);
+  updateBest();
+}
+function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
+function renderJetCard(i) {
+  const j = JETS[i];
+  g('jetCard').innerHTML =
+    '<div class="cbgrid">' +
+      '<div class="cbhead">' +
+        '<div><div class="cname">' + j.name + '</div><div class="crole">' + j.role + '</div></div>' +
+        '<div class="cbtags"><div class="cgen">' + (j.gen || '') + '</div><div class="cability">\u25C8 ' + j.ability + '</div></div>' +
+      '</div>' +
+      '<div>' +
+        '<div class="cstats">' +
+          statBar('SPD', j.speed) + statBar('AGI', j.agility) + statBar('ACC', j.accel) +
+          statBar('ARM', j.armor) + statBar('STL', j.stealth) + statBar('FPW', j.firepower) +
+        '</div>' +
+        '<div class="cspecs">' +
+          '<div><span>Top Speed</span><b>' + j.topSpeed + '</b></div>' +
+          '<div><span>Ceiling</span><b>' + j.ceiling + '</b></div>' +
+          '<div><span>Cannon</span><b>' + j.cannon + '</b></div>' +
+        '</div>' +
+      '</div>' +
+      '<div>' +
+        '<div class="cspeclbl">SPECIAL \u2014 ' + j.ability + '</div>' +
+        '<div class="cabilitydesc">' + j.abilityDesc + '</div>' +
+        (j.passive ? '<div class="cpassivelbl">PASSIVE \u2014 ' + j.passive.split('\u2014')[0].trim() + '</div><div class="cpassivetext">' + j.passive + '</div>' : '') +
+      '</div>' +
+      '<div class="cblurb">' + j.desc + '</div>' +
+      '<div class="ccontext"><div class="cctlbl">// REAL-WORLD BRIEF //</div>' + j.context + '</div>' +
+    '</div>';
+}
+function setDifficulty(d) {
+  difficulty = clamp(d, 0, 2);
+  document.querySelectorAll('.dbtn[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === difficulty));
+  const dd = g('diffdesc'); if (dd) dd.textContent = DIFFS[difficulty].desc;
+  if (audio.on) audio.ui();
+  saveSettings();
+}
+function setTimeOfDay(t) {
+  applyTimeOfDay(t);
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('on', +b.dataset.t === timeOfDay));
+  if (audio.on) audio.ui();
+  saveSettings();
+}
+function openManual() { g('manual').classList.add('show'); paused = true; g('touchControls').classList.remove('show'); }
+function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
+function toggleManual() { if (g('manual').classList.contains('show')) closeManual(); else openManual(); }
+function abortMission() { closeManual(); if (state !== 'hangar') returnToHangar(); }
+function statBar(lbl, v) {
+  let s = '<div class="sb"><span>' + lbl + '</span><div class="bar">';
+  for (let k = 1; k <= 10; k++) s += '<i class="' + (k <= v ? 'on' : '') + '"></i>';
+  return s + '</div></div>';
+}
+function selectJet(i) {
+  selectedJet = i;
+  renderJetCard(i);
+  const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
+  const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
+  if (previewJet) scene.remove(previewJet);
+  previewJet = buildJet(JETS[i].color, JETS[i].accent, SHAPES[JETS[i].shape], true);
+  previewJet.position.set(0, 2.5, 0);
+  scene.add(previewJet);
+  audio.init(); audio.ui();
+  saveSettings();
+}
+function startGame(i) {
+  if (state !== 'hangar') return;
+  selectedJet = i; audio.init();
+  closeManual();
+  if (previewJet) { scene.remove(previewJet); previewJet = null; }
+  if (platform) { scene.remove(platform); platform = null; }
+  g('hangar').classList.add('hide');
+  
+  if (isTouchEnabled) g('touchControls').classList.add('show');
+
+  wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
+  createPlayer(i);
+  for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
+  clearWingmen();
+  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
+  hitMarkers.length = dmgNumbers.length = 0;
+  wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9;
+  if (_dewBeam) _dewBeam.visible = false;
+  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now() };
+  state = 'playing';
+  if (startWingman) spawnWingman();   // optional loyal escort (toggle in Settings)
+  showBanner('GET READY');
+}
+function gameOver() {
+  if (state !== 'playing') return;
+  state = 'dead';
+  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  explode(player.group.position, true);
+  player.group.visible = false;
+  clearWingmen();
+  if (h2d) h2d.clearRect(0, 0, W, H);
+  if (player.score > bestScore) { bestScore = player.score; saveBest(); }
+  g('go_score').textContent = player.score.toLocaleString();
+  g('go_wave').textContent = wave;
+  const secs = Math.max(0, Math.round((performance.now() - run.t0) / 1000));
+  const acc = run.shots > 0 ? Math.round(run.hits / run.shots * 100) : 0;
+  const dk = g('go_kills'); if (dk) dk.textContent = (run.kills + run.ground + run.boss);
+  const da = g('go_acc'); if (da) da.textContent = acc + '%';
+  const dm = g('go_msl'); if (dm) dm.textContent = run.missiles;
+  const dt2 = g('go_time'); if (dt2) dt2.textContent = (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2);
+  updateBest();
+  g('touchControls').classList.remove('show');
+  g('gameover').classList.add('show');
+}
+function updateBest() {
+  const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
+  const b = g('hangarBest'); if (b) { b.style.display = bestScore > 0 ? 'block' : 'none'; const v = g('hangarBestVal'); if (v) v.textContent = bestScore.toLocaleString(); }
+}
+// best score survives reloads when the file is opened locally (storage may be blocked in some sandboxes)
+function loadBest() {
+  try { const v = parseInt(localStorage.getItem('skystrike_best') || '0', 10); if (!isNaN(v) && v > bestScore) bestScore = v; } catch (e) {}
+}
+function saveBest() {
+  try { localStorage.setItem('skystrike_best', String(bestScore)); } catch (e) {}
+}
+// player settings (volume, toggles, last loadout) persist across reloads when storage is available
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('skystrike_settings') || '{}');
+    if (typeof s.volume === 'number') volume = clamp(s.volume, 0, 1);
+    if (typeof s.muted === 'boolean') muted = s.muted;
+    if (typeof s.invertY === 'boolean') invertY = s.invertY;
+    if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
+    if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
+    if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
+    if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
+    if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
+    if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
+  } catch (e) {}
+}
+function saveSettings() {
+  try {
+    localStorage.setItem('skystrike_settings', JSON.stringify({
+      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet
+    }));
+  } catch (e) {}
+}
+function clearArena() {
+  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
+  for (let i = 0; i < bullets.length; i++) scene.remove(bullets[i].mesh);
+  for (let i = 0; i < missiles.length; i++) scene.remove(missiles[i].mesh);
+  for (let i = 0; i < flares.length; i++) scene.remove(flares[i].mesh);
+  for (let i = 0; i < loots.length; i++) scene.remove(loots[i].mesh);
+  for (let i = 0; i < particles.length; i++) scene.remove(particles[i].mesh);
+  for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
+  clearWingmen();
+  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
+  BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
+  if (player && player.group) scene.remove(player.group);
+  player = null;
+  if (h2d) h2d.clearRect(0, 0, W, H);
+  if (radarCtx) radarCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
+  ['wPull', 'wMissile', 'wHighG', 'wStealth', 'wLock'].forEach(k => { if (el[k]) el[k].classList.remove('show'); });
+  if (el.vignette) el.vignette.style.opacity = '0';
+  if (el.dmg) el.dmg.style.opacity = '0';
+  if (el.flash) el.flash.style.opacity = '0';
+  if (el.bossbar) el.bossbar.classList.remove('show');
+  if (el.banner) el.banner.classList.remove('show');
+  choosingUpgrade = false; pendingUpgrades = null;
+  if (_dewBeam) _dewBeam.visible = false;
+  const up = g('upgrade'); if (up) up.classList.remove('show');
+}
+function returnToHangar() {
+  clearArena();
+  g('gameover').classList.remove('show');
+  g('touchControls').classList.remove('show');
+  makePlatform();
+  camMode = 0;
+  camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
+  state = 'hangar'; paused = false;
+  if (clock) clock.getDelta();
+  g('hangar').classList.remove('hide');
+  selectJet(selectedJet);
+  updateBest();
+}
