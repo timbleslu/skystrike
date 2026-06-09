@@ -123,6 +123,8 @@ let wingmen = [];   // AI escort jets that fly with the player
 const BPOOL = [];
 let hitMarkers = [], dmgNumbers = [];
 let wave = 0, betweenWaves = true, waveTimer = 2.6;
+let pendingSpawns = [];          // FIFO of zero-arg spawn closures, drained a few per frame to avoid wave-start hitch
+const SPAWN_PER_FRAME = 2;       // enemies actually built per frame after a wave is announced
 let camMode = 0;
 let paused = false;
 let bestScore = 0;
