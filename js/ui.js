@@ -609,9 +609,17 @@ function switchTechTab(tab) {
   if (hint) hint.textContent = 'Drag or scroll to explore the tree. Tap a lit node to research it \u2014 or just DEPLOY and spend nothing. The dashed RESERVE SQUADRON node can be bought over and over to grow & up-armour your flight.';
   renderTechTree(true);
 }
+const WING_NODES = new Set(['w1', 'w2', 'reserve']);
+let pendingWingNode = null;
+
 function buyNode(node) {
   if (!choosingUpgrade || !player || !node) return;
   if (nodeState(node) !== 'avail') { audio.ui(); return; }
+  if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
+  commitNode(node);
+}
+
+function commitNode(node) {
   const cost = nodeCost(node);
   player.tp -= cost;
   node.apply(player);
@@ -620,6 +628,31 @@ function buyNode(node) {
   audio.power(); empFlash = 0.26;
   showBanner('\u25C8 ' + node.name + ' RESEARCHED \u25C8');
   techTab === 'armory' ? renderArmory() : renderTechTree(false);
+}
+
+function openWingPicker(node) {
+  pendingWingNode = node;
+  const grid = g('wpGrid');
+  grid.innerHTML = JETS.map((j, i) =>
+    '<div class="wp-jet" data-i="' + i + '"><div class="wp-name">' + j.name + '</div><div class="wp-role">' + j.role + '</div></div>'
+  ).join('');
+  grid.querySelectorAll('.wp-jet').forEach(el =>
+    el.addEventListener('click', () => confirmWingPick(+el.getAttribute('data-i'))));
+  g('wingpick').classList.add('show');
+  audio.ui();
+}
+
+function confirmWingPick(i) {
+  const node = pendingWingNode;
+  closeWingPicker();
+  if (!node) return;
+  pendingWingShape = JETS[i].shape;
+  commitNode(node);
+}
+
+function closeWingPicker() {
+  pendingWingNode = null;
+  g('wingpick').classList.remove('show');
 }
 function deployFromTech() {
   if (!choosingUpgrade) return;
@@ -642,6 +675,7 @@ function buildHangar() {
     dots.appendChild(d);
   });
   g('jetPrev').addEventListener('click', () => cycleJet(-1));
+  g('wpCancel').addEventListener('click', () => { closeWingPicker(); audio.ui(); });
   g('jetNext').addEventListener('click', () => cycleJet(1));
   g('jetCard').addEventListener('dblclick', () => startGame(selectedJet));
 

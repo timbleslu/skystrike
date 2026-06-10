@@ -235,13 +235,13 @@ const TECH_TREE = [
   { id:'t4', x:9, y:5, req:'t3',  fam:'tac', tab:'armory', cost:880, sym:'\u272A', name:'APEX PREDATOR',     desc:'CAPSTONE \u2014 +25% score, execute threshold rises to 18%, and once per wave you SURVIVE a lethal blow at 40% HP.', apply:p=>{ p.scoreMul *= 1.25; p.cheatDeath = true; p.execThresh = Math.max(p.execThresh, 0.18); } },
 
   // ---- FLIGHT / ESCORTS (right of COMMAND) ----
-  { id:'w1', x:10, y:2, req:'cmd', fam:'wing', tab:'armory', cost:300, sym:'\u25B2', name:'WING COMMANDER',  desc:'Deploy a 2nd AI escort, then repair & up-armour the flight.', ok:()=>permWingmen() < 2, apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(); buffFlight(60); } },
-  { id:'w2', x:10, y:3, req:'w1',  fam:'wing', tab:'armory', cost:520, sym:'\u25B2', name:'SQUADRON',        desc:'Deploy a 3rd AI escort and heavily up-armour the flight.', ok:()=>permWingmen() < 3, apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(); buffFlight(80); } },
+  { id:'w1', x:10, y:2, req:'cmd', fam:'wing', tab:'armory', cost:300, sym:'\u25B2', name:'WING COMMANDER',  desc:'Deploy a 2nd AI escort, then repair & up-armour the flight.', ok:()=>permWingmen() < 2, apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(60); } },
+  { id:'w2', x:10, y:3, req:'w1',  fam:'wing', tab:'armory', cost:520, sym:'\u25B2', name:'SQUADRON',        desc:'Deploy a 3rd AI escort and heavily up-armour the flight.', ok:()=>permWingmen() < 3, apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(80); } },
   { id:'w3', x:10, y:4, req:'w2',  fam:'wing', tab:'armory', cost:820, sym:'\u2742', name:'FLEET COMMANDER', desc:'CAPSTONE \u2014 +25% score, escorts hit 60% harder, flight fully repaired.', apply:p=>{ p.scoreMul *= 1.25; wingDmgMul *= 1.6; buffFlight(40); } },
   // ---- the points sink: repeatable, scaling cost ----
   { id:'reserve', x:10, y:5, req:'w3', fam:'wing', tab:'armory', cost:400, costStep:240, repeat:true, sym:'\u22EF', name:'RESERVE SQUADRON',
     desc:'REPEATABLE \u2014 scramble another escort (up to ' + MAX_WINGMEN + ' in the air) and up-armour the whole flight. Cost rises each time. A bottomless place to pour spare RP.',
-    apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(); buffFlight(55); } },
+    apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(55); } },
 
   // ===== ARMORY items (shown as grid in the Armory tab) ==========================
   { id:'fa1', x:0, y:0, tab:'armory', req:null, fam:'sup', cost:300, sym:'⚙', name:'WEAPONS LOCKER',
