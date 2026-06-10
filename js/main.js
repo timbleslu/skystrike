@@ -345,10 +345,10 @@ function updateWingman(w, dt) {
   w.retargetCd -= dt;
   if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = nearestEnemyForWingman(w); w.retargetCd = 0.5; }
 
-  let desired = t2, engaging = false, aimGood = false;
+  let desired = t2, engaging = false, aimGood = false, td = Infinity;
   if (w.target && w.target.alive) {
     const tp = w.target.group.position;
-    const td = w.group.position.distanceTo(tp);
+    td = w.group.position.distanceTo(tp);
     if (td < 4400) {
       engaging = true;
       const lead = interceptPoint(w.group.position, tp, w.target.vel || ZERO, 1400);
