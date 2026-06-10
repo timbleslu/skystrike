@@ -700,6 +700,13 @@ function launchSector() {
   betweenWaves = true; waveTimer = 1.4;
   showBanner('SECTOR: ' + opSector); audio.ui();
 }
+function applyDepot() {
+  player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.35);
+  player.missiles = player.maxMissiles;
+  player.flares = player.maxFlares;
+  showBanner('⚙ DEPOT — REPAIRED & REARMED ⚙'); audio.power();
+  openOpMap();                       // straight back to the map for the next pick
+}
 function deployFromTech() {
   if (!choosingUpgrade) return;
   pendingUpgrades = null;
@@ -872,6 +879,11 @@ function gameOver() {
   player.group.visible = false;
   clearWingmen();
   if (h2d) h2d.clearRect(0, 0, W, H);
+  endRun('MISSION FAILED');
+}
+// shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title
+function endRun(title) {
+  const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
   if (player.score > bestScore) { bestScore = player.score; saveBest(); }
   g('go_score').textContent = player.score.toLocaleString();
   g('go_wave').textContent = wave;
@@ -884,6 +896,14 @@ function gameOver() {
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
+}
+function operationComplete() {
+  if (state !== 'playing') return;
+  state = 'dead';
+  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  player.score += 5000;
+  showBanner('★ OPERATION COMPLETE ★');
+  endRun('OPERATION COMPLETE');
 }
 function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();

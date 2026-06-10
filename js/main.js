@@ -535,6 +535,7 @@ function handleWaves(dt) {
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0) {
       betweenWaves = true; waveTimer = 4; showBanner('WAVE ' + wave + ' CLEAR');
+      if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       openTechScreen();   // open the R&D tech tree before the next wave
     }
   } else if (!choosingUpgrade) {
