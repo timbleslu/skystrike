@@ -28,7 +28,7 @@ A single named enemy ace persists across waves **and across runs**. He escapes w
 - Counter-traits: max **3**, one gained per escape, chosen by the player's **dominant habit** that run.
 - Mirrored special: **4 archetypes** mapped by shape, not one per roster jet.
 - Kill board (defeated rivals) renders in the **hangar**.
-- Rival is always on — no toggle (the toggle belongs to Ground War, feature 2).
+- Rival is a **settings toggle, ON by default** (`rivalEnabled`, persisted via `saveSettings` like `startWingman`). Toggled off: `rivalDue` always returns false (no rival spawns); persisted rival state and kill board are kept untouched and the kill board still renders. Toggle reads at wave start, so flipping it mid-run simply stops/starts future appearances.
 
 ## Design
 
