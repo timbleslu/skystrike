@@ -9,6 +9,7 @@ function nextWave() {
   if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner('\u26A0 BOSS INCOMING \u26A0'); }
   else showBanner('WAVE ' + wave);
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
+  if (rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < 0.5) {
     const dn = randInt(3, 4) + Math.floor(wave / 4);
@@ -36,6 +37,31 @@ function spawnAce() {
   for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(0xffd24d); eng[i].flame.material.color.setHex(0xffd24d); }
   e.marker.material.color.setHex(0xffd24d);
   showBanner('\u2605 ACE INBOUND \u2605');
+}
+function spawnRival() {
+  const ang = rand(0, TWO_PI), r = rand(2800, 4400);
+  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
+  const py = clamp(player.group.position.y + rand(-300, 600), terrainH(px, pz) + 450, 4300);
+  const e = createEnemy('fighter', new THREE.Vector3(px, py, pz), { shapePool: [rival.shape] });
+  e.elite = true; e.rival = true;
+  e.aceName = rival.jetName;
+  e.callsign = rival.name;
+  e.desprintUsed = false; e.sprintTimer = 0;
+  e.hp = e.maxHp = rivalHpFor(wave, rival.level);
+  e.turnRate = 1.55; e.gunRunCd = rand(1.2, 2.5);
+  e.bulletAmmo = 120; e.missileAmmo = 3; e.flareAmmo = 2;
+  e.rivalSpCd = 6;            // first special after 6s, then every 12s
+  e.fleeing = false;
+  // traits
+  if (rival.traits.indexOf('FLARE_WALL') !== -1) { e.flareAmmo = 4; e.flareWall = true; }
+  if (rival.traits.indexOf('SCISSORS') !== -1) { e.turnRate *= 1.25; }
+  if (rival.traits.indexOf('HEADHUNTER') !== -1) { e.headhunter = true; }
+  if (rival.traits.indexOf('VETERAN') !== -1) { e.hp = e.maxHp = Math.round(e.maxHp * 1.2); e.turnRate *= 1.1; }
+  if (e.group.userData.body) { e.group.userData.body.color.setHex(0xff5a2a); e.group.userData.body.emissive = new THREE.Color(0x551100); e.group.userData.body.emissiveIntensity = 1.0; }
+  const eng = e.group.userData.engines || [];
+  for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(0xff5a2a); eng[i].flame.material.color.setHex(0xff7a3a); }
+  e.marker.material.color.setHex(0xff5a2a);
+  showBanner('\u2620 RIVAL ON STATION \u2014 ' + rival.name + ' \u00b7 Lv' + rival.level + ' \u2620');
 }
 function spawnFighter() {
   const ang = rand(0, TWO_PI), r = rand(2600, 4600);
