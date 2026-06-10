@@ -23,8 +23,9 @@ function spawnAce() {
   const ang = rand(0, TWO_PI), r = rand(2800, 4400);
   const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
   const py = clamp(player.group.position.y + rand(-300, 600), terrainH(px, pz) + 450, 4300);
-  const e = createEnemy('fighter', new THREE.Vector3(px, py, pz), { shapePool: ACE_SHAPES });
+  const e = createEnemy('fighter', new THREE.Vector3(px, py, pz), { shapePool: aceShapePool() });
   e.elite = true;
+  e.aceName = jetNameForShape(e.shapeKey);
   e.callsign = genCallsign('ACE');
   e.desprintUsed = false; e.sprintTimer = 0;
   e.hp = e.maxHp = 170 + wave * 9;
@@ -167,8 +168,7 @@ function spawnBigRing(pos, color, maxK) {
 /* ---------------- AI wingman (loyal escort) ---------------- */
 const WING_NAMES = ['VIPER', 'GHOST', 'RAZOR', 'TALON', 'JESTER', 'COBRA', 'MAVERICK'];
 const WING_TEAL = 0x2dffb0;
-const WINGMAN_POOL = ['F22', 'EFT', 'RAFALE', 'FA18'];
-const CCA_POOL = ['F47', 'NGAD', 'J50'];
+function wingShape(temp, explicit) { return explicit || (temp ? 'CCAJET' : 'STD'); }
 function firstAliveWingman() { for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) return wingmen[i]; return null; }
 function buildWingman(cca, shape) {
   const body = cca ? 0x2a4c7a : 0x1f7d68, accent = cca ? 0x49b6ff : WING_TEAL, emis = cca ? 0x0a2347 : 0x05322a;
@@ -180,7 +180,7 @@ function buildWingman(cca, shape) {
 /* Spawn a visually distinct, aggressive CCA drone at a given world position (used by F-47 SWARM). */
 function spawnCCA(spawnPos) {
   if (!player) return null;
-  const ccaShape = CCA_POOL[(Math.random() * CCA_POOL.length) | 0];
+  const ccaShape = 'CCAJET';
   const mesh = buildJet(0x0d9cd4, 0x00ffee, SHAPES[ccaShape]);   // vivid electric-blue body, cyan accent
   mesh.scale.setScalar(0.82);
   if (mesh.userData.body) { mesh.userData.body.emissive = new THREE.Color(0x003a6e); mesh.userData.body.emissiveIntensity = 1.5; }
@@ -207,10 +207,10 @@ function wingmanSlot(side, out) {
   const r = rightOf(player.group, t3), f = fwdOf(player.group, tA);
   return out.copy(player.group.position).addScaledVector(r, 95 * side).addScaledVector(f, -70).addScaledVector(UPV, 16);
 }
-function spawnWingman(temp) {
+function spawnWingman(temp, explicit) {
   if (!player) return;
   const side = wingmen.length % 2 === 0 ? 1 : -1;
-  const wShape = temp ? CCA_POOL[(Math.random() * CCA_POOL.length) | 0] : WINGMAN_POOL[(Math.random() * WINGMAN_POOL.length) | 0];
+  const wShape = wingShape(temp, explicit);
   const mesh = buildWingman(temp, wShape);
   wingmanSlot(side, t1); mesh.position.copy(t1).addScaledVector(rightOf(player.group, t4), side * (temp ? rand(20, 60) : 0));
   mesh.quaternion.copy(player.group.quaternion);
@@ -222,7 +222,7 @@ function spawnWingman(temp) {
     hp: temp ? 80 : 130, maxHp: temp ? 80 : 130, alive: true, side: side,
     target: null, retargetCd: 0, fireCd: rand(0.2, 0.8), missileCd: rand(2, 5),
     rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: !!temp, expire: temp ? 15 : 0, cca: !!temp,
-    shape: wShape, jetName: wShape, flares: 3, sprintT: 0, priorityCd: 0, flareCd: 0,
+    shape: wShape, jetName: jetNameForShape(wShape), flares: 3, sprintT: 0, priorityCd: 0, flareCd: 0,
   });
   if (!temp) { showBanner('\u25B2 ' + wingmen[wingmen.length - 1].name + ' ON STATION \u25B2'); audio.ui(); }
 }

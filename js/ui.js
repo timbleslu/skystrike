@@ -337,7 +337,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', x, y + s + 12);
     if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u25C6 BOSS', x, by - 8); }
     else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2691 BOMBER', x, by - 8); }
-    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || 'ACE'), x, by - 8); }
+    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || 'ACE') + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
     else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
   } else {
     let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
@@ -757,7 +757,7 @@ function startGame(i) {
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now() };
   state = 'playing';
-  if (startWingman) spawnWingman();   // optional loyal escort (toggle in Settings)
+  if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner('GET READY');
 }
 function gameOver() {

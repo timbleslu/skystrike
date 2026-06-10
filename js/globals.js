@@ -165,6 +165,7 @@ let wingDmgMul = 1;   // FLEET COMMANDER capstone boosts escort firepower
    The CORE node is owned for free at the start of every run.
    `ok(p)` (optional) gates a node to relevant airframes; `repeat` marks the points-sink. */
 const MAX_WINGMEN = 6;                 // hard cap on escorts in the air
+let pendingWingShape = 'STD';          // airframe the next tech-tree wingman will fly (set by the picker)
 const FAM_C = { core:'#19f0d4', wpn:'#ffb347', gun:'#ff9a3c', msl:'#ff7a4d', mun:'#ff5024', def:'#5dffa0', arm:'#46ff8c', prop:'#37e0ff', ew:'#ff61cf', cmd:'#ffe14d', sc:'#ffd24d', tac:'#b76bff', wing:'#8ad0ff', sup:'#ffab61' };
 const TECH_TREE = [
   // ---- root ----
