@@ -1,5 +1,20 @@
 /* SKYSTRIKE — entities.js: jet/boss/ground/drone mesh construction, player & enemy creation, enemy AI updates & weapons. Load 3rd. */
 
+/* ---------------- geometry cache ----------------
+   Jet geometry is deterministic per (shape, hero). Triangulating LatheGeometry +
+   ExtrudeGeometry on every spawn caused the wave-start freeze, so build each shape's
+   geometry once and share it across all instances. Materials stay per-instance, so
+   runtime colour/emissive mutations are unaffected. Cached geometry is tagged
+   userData.shared so disposeGroup never frees geometry still used by living enemies.
+   A falsy key bypasses the cache (defensive — every SHAPES entry has an id). */
+const GEO_CACHE = new Map();
+function cacheGeo(key, factory) {
+  if (!key) return factory();
+  let g = GEO_CACHE.get(key);
+  if (!g) { g = factory(); g.userData.shared = true; GEO_CACHE.set(key, g); }
+  return g;
+}
+
 /* ---------------- jet meshes (high-poly parametric) ---------------- */
 /* extruded, swept wing/canard/stab built from a half-planform [span, chordZ] (chordZ<0 = forward) */
 function extrudeWing(pts, thick, mat, y, bevelSeg) {
@@ -121,6 +136,9 @@ const SHAPES = {
           vtail:{type:'single', base:4.5, tip:1.6, h:5.0, sweep:2.4, z:6.5},
           lerx:false, engines:2, gap:7, intake:'belly', wingspan:15 },
 };
+
+/* stable id per shape — used as the geometry-cache key prefix */
+Object.keys(SHAPES).forEach(k => { SHAPES[k].id = k; });
 
 /* per-airframe accuracy flags (stealth jets fly clean; others carry tip missiles) */
 ['F22', 'F35', 'J20', 'SU57', 'J36', 'F47', 'NGAD', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].clean = true; });
