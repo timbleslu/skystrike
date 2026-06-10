@@ -669,6 +669,37 @@ function closeWingPicker() {
   pendingWingNode = null;
   g('wingpick').classList.remove('show');
 }
+let opPicked = null;          // sector type picked on the map, pending launch
+function openOpMap() {
+  opPicked = null;
+  const wrap = g('opStages'); if (!wrap) return;
+  wrap.innerHTML = opMap.map((stage, si) =>
+    '<div class="op-stage">' + stage.map((s, i) => {
+      const cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
+      return '<div class="' + cls + '" data-s="' + si + '" data-i="' + i + '">' + s + '</div>';
+    }).join('') + '</div>'
+  ).join('');
+  wrap.querySelectorAll('.op-sector.pickable').forEach(el => el.addEventListener('click', () => {
+    wrap.querySelectorAll('.op-sector.chosen').forEach(c => c.classList.remove('chosen'));
+    el.classList.add('chosen');
+    opPicked = opMap[+el.getAttribute('data-s')][+el.getAttribute('data-i')];
+    g('opLaunch').disabled = false;
+  }));
+  g('opLaunch').disabled = true;
+  g('opmap').classList.add('show');
+  paused = true;
+  audio.ui();
+}
+function launchSector() {
+  if (!opPicked) return;
+  opSector = opPicked; opStage++;
+  g('opmap').classList.remove('show');
+  paused = false;
+  if (clock) clock.getDelta();
+  if (opSector === 'DEPOT') { applyDepot(); return; }
+  betweenWaves = true; waveTimer = 1.4;
+  showBanner('SECTOR: ' + opSector); audio.ui();
+}
 function deployFromTech() {
   if (!choosingUpgrade) return;
   pendingUpgrades = null;
@@ -697,6 +728,7 @@ function buildHangar() {
   });
   g('jetPrev').addEventListener('click', () => cycleJet(-1));
   g('wpCancel').addEventListener('click', () => { closeWingPicker(); audio.ui(); });
+  g('opLaunch').addEventListener('click', launchSector);
   g('jetNext').addEventListener('click', () => cycleJet(1));
   g('jetCard').addEventListener('dblclick', () => startGame(selectedJet));
 
