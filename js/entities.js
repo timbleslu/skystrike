@@ -627,6 +627,37 @@ function updateMarker(e) {
 
 function activeEnemyMissiles() { let n = 0; for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) n++; return n; }
 
+/* Rival escape run: burn straight away from the player, flare against locks, vanish past 5000u.
+   Returns true when the rival despawned (caller must stop processing the enemy this frame). */
+function updateRivalFlee(e, dt) {
+  const away = t1.copy(e.group.position).sub(player.group.position);
+  const dist = away.length();
+  away.multiplyScalar(1 / Math.max(dist, 0.001)); away.y = Math.max(away.y, 0.05); away.normalize();
+  dirToQuat(away, q1);
+  e.logicQuat.rotateTowards(q1, e.turnRate * 1.4 * dt);
+  const nf = fwdQ(e.logicQuat, t4);
+  e.group.quaternion.copy(e.logicQuat);
+  e.speed = lerp(e.speed, 360, dt * 2);
+  e.vel.copy(nf).multiplyScalar(e.speed);
+  e.group.position.addScaledVector(e.vel, dt);
+  e.flareCd -= dt;
+  if (e.flareCd <= 0 && e.flareAmmo > 0) {
+    for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e) { enemyFlares(e); e.flareCd = 1.6; break; } }
+  }
+  updateMarker(e);
+  if (dist > 5000) {
+    e.alive = false;
+    scene.remove(e.group); disposeGroup(e.group);
+    if (e.marker) scene.remove(e.marker);
+    if (player.lockedTarget === e) player.lockedTarget = null;
+    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    rivalEscaped({ missiles: run.pMissiles, gunKills: run.pGunKills, flares: run.pFlares, wingmen: wingmen.length });
+    showBanner('☠ ' + e.callsign + ' WITHDRAWS — HE WILL RETURN STRONGER ☠');
+    return true;
+  }
+  return false;
+}
+
 function updateEnemy(e, dt) {
   if (e.type === 'ground') { updateGround(e, dt); return; }
   if (e.type === 'drone') { updateDrone(e, dt); return; }
@@ -640,6 +671,8 @@ function updateEnemy(e, dt) {
   let incoming = false;
   for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { incoming = true; break; } }
   if (e.elite && !e.desprintUsed && e.hp / e.maxHp < 0.3) { e.desprintUsed = true; e.sprintTimer = 2.5; e.orbitSign *= -1; }
+  if (e.rival && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }
+  if (e.rival && e.fleeing) { if (updateRivalFlee(e, dt)) return; }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;

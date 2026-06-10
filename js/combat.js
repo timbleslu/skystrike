@@ -486,6 +486,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
   if (e.type === 'boss') { run.boss++; showBanner('\u25C6 BOSS DESTROYED \u25C6'); empFlash = 0.5; }
+  if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner('\u2620 RIVAL DOWN \u2014 +' + pay + ' RP \u2620'); }
   else if (e.type === 'ground') run.ground++;
   else if (e.type === 'bomber') { run.kills++; showBanner('\u2691 BOMBER DOWN \u2691'); }
   else run.kills++;
