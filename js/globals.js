@@ -15,6 +15,11 @@ const damp = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
 
 /* ---------------- jet roster ---------------- */
 const JETS = [
+  { id:'FT-1', shape:'STD', name:'FT-1 STANDARD', role:'Multirole Trainer', topSpeed:'Mach 1.4', ceiling:'48,000 ft', cannon:'20mm rotary', gen:'BASELINE',
+    speed:6, agility:6, accel:6, armor:6, stealth:4, firepower:6, color:0x8a96a4, accent:0x5fb0d0,
+    ability:null, abilityDesc:'', passive:null,
+    desc:'A plain, dependable airframe — no tricks, no special. The baseline every pilot learns on.',
+    context:'Generic trainer/multirole. A no-frills fourth-generation airframe with honest, middle-of-the-road handling and no signature weapon or party trick — the control against which the exotic jets in this hangar are measured.' },
   { id:'F-22', shape:'F22', name:'F-22 RAPTOR', role:'Air Superiority', topSpeed:'Mach 2.25', ceiling:'65,000 ft', cannon:'20mm M61A2', gen:'5th GEN',
     speed:8, agility:9, accel:9, armor:7, stealth:9, firepower:8, color:0x7fd8ff, accent:0x00ffe0,
     ability:'OVERDRIVE', abilityDesc:'Afterburner surge for 6s: +75% speed, +50% gun damage, and the cannon widens to a 4-round spread.',

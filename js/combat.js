@@ -574,7 +574,9 @@ function interceptPoint(shooter, tp, tv, bs) {
 }
 
 /* ---------------- special abilities ---------------- */
+function hasSpecial(jet) { return !!(jet && jet.ability); }
 function useSpecial() {
+  if (!hasSpecial(player.jet)) { audio.ui(); return; }
   if (player.special.cd > 0) { audio.ui(); return; }
   player.special.cd = player.special.max; audio.power();
   const id = player.jet.id;

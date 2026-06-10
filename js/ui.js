@@ -476,7 +476,8 @@ function updateDom(dt) {
   if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
   else { el.bullets.textContent = player.bullets; el.bullets.style.color = player.bullets <= 80 ? '#ff8c2b' : ''; }
   el.missiles.style.color = player.missiles <= 0 ? '#ff394b' : '';
-  if (player.special.cd <= 0) { el.special.textContent = player.jet.ability + ' \u25B8 READY'; el.special.classList.add('ready'); }
+  if (!hasSpecial(player.jet)) { el.special.textContent = 'NO SPECIAL'; el.special.classList.remove('ready'); }
+  else if (player.special.cd <= 0) { el.special.textContent = player.jet.ability + ' \u25B8 READY'; el.special.classList.add('ready'); }
   else { el.special.textContent = player.jet.ability + ' \u25B8 ' + Math.ceil(player.special.cd) + 's'; el.special.classList.remove('ready'); }
   updateWingmanSidebar();
   tog(el.wStealth, player.stealth);
@@ -678,7 +679,7 @@ function renderJetCard(i) {
     '<div class="cbgrid">' +
       '<div class="cbhead">' +
         '<div><div class="cname">' + j.name + '</div><div class="crole">' + j.role + '</div></div>' +
-        '<div class="cbtags"><div class="cgen">' + (j.gen || '') + '</div><div class="cability">\u25C8 ' + j.ability + '</div></div>' +
+        '<div class="cbtags"><div class="cgen">' + (j.gen || '') + '</div><div class="cability">\u25C8 ' + (j.ability || 'NO SPECIAL') + '</div></div>' +
       '</div>' +
       '<div>' +
         '<div class="cstats">' +
@@ -692,8 +693,8 @@ function renderJetCard(i) {
         '</div>' +
       '</div>' +
       '<div>' +
-        '<div class="cspeclbl">SPECIAL \u2014 ' + j.ability + '</div>' +
-        '<div class="cabilitydesc">' + j.abilityDesc + '</div>' +
+        (j.ability ? '<div class="cspeclbl">SPECIAL \u2014 ' + j.ability + '</div>' +
+        '<div class="cabilitydesc">' + j.abilityDesc + '</div>' : '<div class="cspeclbl">NO SPECIAL ABILITY</div>') +
         (j.passive ? '<div class="cpassivelbl">PASSIVE \u2014 ' + j.passive.split('\u2014')[0].trim() + '</div><div class="cpassivetext">' + j.passive + '</div>' : '') +
       '</div>' +
       '<div class="cblurb">' + j.desc + '</div>' +

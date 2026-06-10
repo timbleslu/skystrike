@@ -526,6 +526,7 @@ function createPlayer(idx) {
    advanced combat systems (crits, pierce, splash, point-defense, berserk, agility...). */
 function applyJetPassives(p, j) {
   switch (j.id) {
+    case 'FT-1': break;   // plain trainer — no passive identity
     case 'F-22': // PRECISION GUNS — twin cannon + standing crit chance
       p.gunDmgMul = 1.2; p.critChance = 0.1; break;
     case 'SU-57': // SUPERMANEUVER — vectored agility, fights harder hurt, lighter hull
