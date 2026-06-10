@@ -1,20 +1,56 @@
 /* SKYSTRIKE — main.js: wave/boss/wingman spawning, input & touch controls, main animation loop, boot. Load 6th (last). */
 
 /* ---------------- waves ---------------- */
+function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
+function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
 function nextWave() {
   wave++;
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
+  const strike = isStrikeWave(wave, groundWar);
+  strikeWaveActive = strike;
+  if (opMode && opSector) {
+    const plan = sectorPlan(opSector, wave);
+    strikeWaveActive = plan.ground;
+    showBanner(plan.boss ? '⚠ FINAL TARGET ⚠' : 'SECTOR: ' + opSector);
+    for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
+    for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
+    for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(spawnBomber);
+    if (plan.boss) pendingSpawns.push(spawnBoss);
+    if (plan.ground) {
+      pendingSpawns.push(() => spawnGroundKind('radar'));
+      pendingSpawns.push(() => spawnGroundKind('sam'));
+      pendingSpawns.push(() => spawnGroundKind('sam'));
+      pendingSpawns.push(() => spawnGroundKind('aaa'));
+      pendingSpawns.push(() => spawnGroundKind('aaa'));
+      for (let k = 0; k < 3; k++) pendingSpawns.push(() => spawnGroundKind('truck'));
+    }
+    if (plan.rival && rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    return;
+  }
+  if (strike) {
+    showBanner('\u2692 STRIKE WAVE \u2014 FLATTEN THE SITE \u2692');
+    pendingSpawns.push(() => spawnGroundKind('radar'));
+    pendingSpawns.push(() => spawnGroundKind('sam'));
+    pendingSpawns.push(() => spawnGroundKind('sam'));
+    pendingSpawns.push(() => spawnGroundKind('aaa'));
+    pendingSpawns.push(() => spawnGroundKind('aaa'));
+    for (let k = 0; k < 3; k++) pendingSpawns.push(() => spawnGroundKind('truck'));
+    for (let i = 0; i < 3; i++) pendingSpawns.push(spawnFighter);
+    return;
+  }
   const count = clamp(3 + wave + DIFFS[difficulty].count, 2, 10);
   for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
   if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner('\u26A0 BOSS INCOMING \u26A0'); }
   else showBanner('WAVE ' + wave);
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
+  if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < 0.5) {
     const dn = randInt(3, 4) + Math.floor(wave / 4);
     pendingSpawns.push(() => spawnDroneSwarm(dn));
   }
-  if (wave >= 2) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) pendingSpawns.push(spawnGround); }
+  if (groundSpawnsAllowed(wave, groundWar)) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) pendingSpawns.push(spawnGround); }
 }
 function processSpawnQueue(n) {
   for (let i = 0; i < n && pendingSpawns.length; i++) pendingSpawns.shift()();
@@ -36,6 +72,31 @@ function spawnAce() {
   for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(0xffd24d); eng[i].flame.material.color.setHex(0xffd24d); }
   e.marker.material.color.setHex(0xffd24d);
   showBanner('\u2605 ACE INBOUND \u2605');
+}
+function spawnRival() {
+  const ang = rand(0, TWO_PI), r = rand(2800, 4400);
+  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
+  const py = clamp(player.group.position.y + rand(-300, 600), terrainH(px, pz) + 450, 4300);
+  const e = createEnemy('fighter', new THREE.Vector3(px, py, pz), { shapePool: [rival.shape] });
+  e.elite = true; e.rival = true;
+  e.aceName = rival.jetName;
+  e.callsign = rival.name;
+  e.desprintUsed = false; e.sprintTimer = 0;
+  e.hp = e.maxHp = rivalHpFor(wave, rival.level);
+  e.turnRate = 1.55; e.gunRunCd = rand(1.2, 2.5);
+  e.bulletAmmo = 120; e.missileAmmo = 3; e.flareAmmo = 2;
+  e.rivalSpCd = 6;            // first special after 6s, then every 12s
+  e.fleeing = false;
+  // traits
+  if (rival.traits.indexOf('FLARE_WALL') !== -1) { e.flareAmmo = 4; e.flareWall = true; }
+  if (rival.traits.indexOf('SCISSORS') !== -1) { e.turnRate *= 1.25; }
+  if (rival.traits.indexOf('HEADHUNTER') !== -1) { e.headhunter = true; }
+  if (rival.traits.indexOf('VETERAN') !== -1) { e.hp = e.maxHp = Math.round(e.maxHp * 1.2); e.turnRate *= 1.1; }
+  if (e.group.userData.body) { e.group.userData.body.color.setHex(0xff5a2a); e.group.userData.body.emissive = new THREE.Color(0x551100); e.group.userData.body.emissiveIntensity = 1.0; }
+  const eng = e.group.userData.engines || [];
+  for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(0xff5a2a); eng[i].flame.material.color.setHex(0xff7a3a); }
+  e.marker.material.color.setHex(0xff5a2a);
+  showBanner('\u2620 RIVAL ON STATION \u2014 ' + rival.name + ' \u00b7 Lv' + rival.level + ' \u2620');
 }
 function spawnFighter() {
   const ang = rand(0, TWO_PI), r = rand(2600, 4600);
@@ -65,6 +126,11 @@ function spawnGround() {
   const ang = rand(0, TWO_PI), r = rand(1600, 4200);
   const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
   createEnemy('ground', new THREE.Vector3(px, terrainH(px, pz), pz));
+}
+function spawnGroundKind(gkind) {
+  const ang = rand(0, TWO_PI), r = rand(1400, 3000);
+  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
+  createEnemy('ground', new THREE.Vector3(px, terrainH(px, pz), pz), { gkind: gkind });
 }
 function spawnDroneSwarm(n, origin) {
   const base = origin ? origin.clone() : (() => {
@@ -463,12 +529,13 @@ function clearWingmen() {
 }
 
 function handleWaves(dt) {
-  const aliveCombat = enemies.some(e => e.alive && e.type !== 'ground' && e.type !== 'bomber');
+  const aliveCombat = enemies.some(e => e.alive && (strikeWaveActive ? e.type !== 'bomber' && e.gkind !== 'truck' : e.type !== 'ground' && e.type !== 'bomber'));
   if (!betweenWaves) {
     // Don't declare the wave clear until the queue is empty — otherwise the frames between
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0) {
       betweenWaves = true; waveTimer = 4; showBanner('WAVE ' + wave + ' CLEAR');
+      if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       openTechScreen();   // open the R&D tech tree before the next wave
     }
   } else if (!choosingUpgrade) {
@@ -604,5 +671,6 @@ initThree();
 cacheEl();
 loadBest();
 loadSettings();
+loadRival();
 buildHangar();
 animate();

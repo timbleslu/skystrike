@@ -51,7 +51,10 @@ function updateBullets(dt, ts) {
           if (b.passed && b.passed.indexOf(e) >= 0) continue;   // AP round already punched through this one
           const r = e.type === 'boss' ? 72 : e.type === 'ground' ? 17 : e.type === 'drone' ? 16 : 22;
           if (b.mesh.position.distanceToSquared(e.group.position) < r * r) {
-            damageEnemy(e, b.dmg, b.mesh.position, !b.ai, b.byCCA);
+            if (!b.ai) e._lastPlayerWp = 'gun';
+            let bDmg = b.dmg;
+            if (!b.ai && e.type === 'ground' && player.rktMul) bDmg *= player.rktMul;   // ROCKET PODS
+            damageEnemy(e, bDmg, b.mesh.position, !b.ai, b.byCCA);
             if (!b.ai) { spawnHitMarker(); run.hits++; if (lastCrit && player.critChain) critBlast(b.mesh.position); }
             if (!b.ai && b.pierce > 0) { b.pierce--; (b.passed || (b.passed = [])).push(e); }
             else dead = true;
@@ -90,7 +93,7 @@ function fireMissile() {
       if (player.splashRadius) { m.splash = player.splashRadius; m.splashDmg = player.splashDmg; }
     }
   }
-  player.missiles -= salvo; run.missiles += salvo;
+  player.missiles -= salvo; run.missiles += salvo; run.pMissiles += salvo;
   audio.missile();
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
@@ -159,14 +162,24 @@ function updateMissiles(dt, ts) {
       if (player.pointDefense && m.armed <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 810000 && Math.random() < player.pointDefense * sdt * 3.2) {
         explode(m.mesh.position, false); audio.blip(1500, 0.05, 'square', 0.07, 900); hit = true;
       }
-      if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) { damagePlayer(m.dmg, m.mesh.position); explode(m.mesh.position, true); hit = true; }
+      if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) {
+        let mDmg = m.dmg;
+        if (m.fromGround && player.bellyArmor) mDmg *= player.bellyArmor;   // BELLY ARMOR
+        damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
+      }
     } else {
       for (let k = 0; k < enemies.length; k++) {
         const e = enemies[k]; if (!e.alive) continue;
         const r = e.type === 'boss' ? 130 : e.type === 'bomber' ? 95 : e.type === 'drone' ? 50 : 60;
         if (m.mesh.position.distanceToSquared(e.group.position) < r * r) {
+          if (!m.ai) e._lastPlayerWp = 'missile';
           if (m.ambush && e.type !== 'boss') { killEnemy(e, !m.ai, m.byCCA); }
           else if (e.type === 'boss' || e.elite || e.type === 'bomber') { damageEnemy(e, m.dmg * 1.6, m.mesh.position, !m.ai, m.byCCA); }
+          else if (e.type === 'ground') {
+            let gDmg = m.dmg * 1.6;
+            if (!m.ai && player.agmMul) gDmg *= player.agmMul;   // AGM RAILS
+            damageEnemy(e, gDmg, m.mesh.position, !m.ai, m.byCCA);
+          }
           else { if (!m.ai) { player.combo++; player.comboTimer = 2.2; player.score += Math.round(60 * (player.scoreMul || 1)); } killEnemy(e, !m.ai, m.byCCA); }
           if (!m.ai) spawnHitMarker();
           explode(m.mesh.position, true);
@@ -187,6 +200,7 @@ function deployFlares() {
   if (player.flareCd > 0) return;
   if (player.flares <= 0) { audio.ui(); return; }
   player.flareCd = 0.45; player.flares--;
+  run.pFlares++;
   const back = fwdOf(player.group, t1).multiplyScalar(-1), up = upOf(player.group, t2);
   const count = 3 + (player.flarePro ? 2 : 0);   // SPECTRA airframes throw a denser cloud
   const fresh = [];
@@ -469,7 +483,7 @@ function killEnemy(e, byPlayer, byCCA) {
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
-  if (byPlayer) player.tp += (tpBase + (player.rpPerKill || 0)) * rpm;
+  if (byPlayer) { player.tp += (tpBase + (player.rpPerKill || 0)) * rpm; if (e._lastPlayerWp === 'gun') run.pGunKills++; }
   else if (byCCA) { player.tp += tpBase * 0.5 * rpm; run.escortKills++; }
   else if ((e.playerDmg || 0) > 0.5) player.tp += tpBase * TP.assistFrac * rpm;
   // field-upgrade payoffs
@@ -483,6 +497,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
   if (e.type === 'boss') { run.boss++; showBanner('\u25C6 BOSS DESTROYED \u25C6'); empFlash = 0.5; }
+  if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner('\u2620 RIVAL DOWN \u2014 +' + pay + ' RP \u2620'); run.kills++; }
   else if (e.type === 'ground') run.ground++;
   else if (e.type === 'bomber') { run.kills++; showBanner('\u2691 BOMBER DOWN \u2691'); }
   else run.kills++;
@@ -526,6 +541,7 @@ function cycleLock() {
   const cand = [];
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive) continue;
+    if (e._ghostT > 0) continue;   // GHOST special: rival cannot be cycled to while cloaked
     const to = t4.copy(e.group.position).sub(player.group.position); const d = to.length();
     if (d > 6500) continue; to.multiplyScalar(1 / d);
     const ang = Math.acos(clamp(fwd.dot(to), -1, 1));
@@ -546,6 +562,7 @@ function updateLockOn(dt) {
   }
   const tgt = player.lockTarget;
   if (!tgt || !tgt.alive) { player.lockProgress = 0; player.lockedTarget = null; return; }
+  if (tgt._ghostT > 0) { player.lockTarget = null; player.lockProgress = 0; player.lockedTarget = null; return; }   // GHOST: drop lock while cloaked
   const fwd = fwdOf(player.group, t3);
   const to = t4.copy(tgt.group.position).sub(player.group.position);
   const dist = to.length(); to.multiplyScalar(1 / Math.max(dist, 0.001));

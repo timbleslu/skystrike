@@ -455,6 +455,32 @@ function buildGround() {
   g.userData.turret = turret;
   return g;
 }
+function buildAAA() {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(8, 11, 5, 8), new THREE.MeshStandardMaterial({ color: 0x3c4434, flatShading: true, roughness: 1 }));
+  base.position.y = 2.5; g.add(base);
+  const barrels = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 13), new THREE.MeshStandardMaterial({ color: 0x55603f, emissive: 0x1a2008, flatShading: true }));
+  barrels.position.set(0, 7, -2); barrels.rotation.x = -0.5; g.add(barrels);
+  g.userData.turret = barrels;
+  return g;
+}
+function buildRadar() {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(10, 8, 10), new THREE.MeshStandardMaterial({ color: 0x4a5258, flatShading: true, roughness: 1 }));
+  base.position.y = 4; g.add(base);
+  const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 7, 3, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0x8a98a0, emissive: 0x0a2a30, flatShading: true, side: THREE.DoubleSide }));
+  dish.position.y = 11; dish.rotation.z = Math.PI / 3; g.add(dish);
+  g.userData.dish = dish;
+  return g;
+}
+function buildTruck() {
+  const g = new THREE.Group();
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(5, 3.5, 11), new THREE.MeshStandardMaterial({ color: 0x5a4a30, flatShading: true, roughness: 1 }));
+  bed.position.y = 2.6; g.add(bed);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 3.5), new THREE.MeshStandardMaterial({ color: 0x6a5a3a, flatShading: true }));
+  cab.position.set(0, 4.6, -4.6); g.add(cab);
+  return g;
+}
 
 /* ---------------- kamikaze drone ---------------- */
 function buildDrone() {
@@ -578,7 +604,11 @@ function createEnemy(type, pos, opts) {
   opts = opts || {};
   let mesh, hp, shapeKey;
   if (type === 'boss') { mesh = buildBoss(); hp = 1000 + wave * 70; }
-  else if (type === 'ground') { mesh = buildGround(); hp = 75; }
+  else if (type === 'ground') {
+    const gk = (opts && opts.gkind) || 'sam';
+    mesh = gk === 'aaa' ? buildAAA() : gk === 'radar' ? buildRadar() : gk === 'truck' ? buildTruck() : buildGround();
+    hp = gk === 'radar' ? 110 : gk === 'truck' ? 45 : gk === 'aaa' ? 90 : 75;
+  }
   else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 1.4; }
   else if (type === 'bomber') { mesh = buildJet(0x8a9468, 0xffb060, SHAPES.BOMBER); mesh.scale.setScalar(1.7); hp = 240 + wave * 8; }
   else {
@@ -601,6 +631,7 @@ function createEnemy(type, pos, opts) {
     marker: type === 'drone' ? null : makeMarker(type),
     callsign: type === 'fighter' ? genCallsign() : null,
     shapeKey: shapeKey || null,
+    gkind: (type === 'ground' && opts && opts.gkind) || (type === 'ground' ? 'sam' : null),
   };
   // ----- per-type ammunition loadouts -----
   //  regular fighter : limited cannon, 1 missile, no flares
@@ -609,7 +640,7 @@ function createEnemy(type, pos, opts) {
   //  ground turret   : missile-only SAM site
   if (type === 'boss')        { e.bulletAmmo = 600; e.missileAmmo = 24; e.flareAmmo = 10; }
   else if (type === 'bomber') { e.bulletAmmo = 90;  e.missileAmmo = 2;  e.flareAmmo = 4;  }
-  else if (type === 'ground') { e.bulletAmmo = 0;   e.missileAmmo = 4;  e.flareAmmo = 0;  }
+  else if (type === 'ground') { e.bulletAmmo = 0; e.missileAmmo = (!opts || !opts.gkind || opts.gkind === 'sam') ? 4 : 0; e.flareAmmo = 0; }
   else if (type === 'drone')  { e.bulletAmmo = 0;   e.missileAmmo = 0;  e.flareAmmo = 0;  }
   else                        { e.bulletAmmo = 42;  e.missileAmmo = 1;  e.flareAmmo = 0;  }
   if (e.marker) scene.add(e.marker);
@@ -627,6 +658,51 @@ function updateMarker(e) {
 
 function activeEnemyMissiles() { let n = 0; for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) n++; return n; }
 
+function fireRivalSpecial(e) {
+  const kind = rivalSpecialFor(e.shapeKey);
+  if (e.group.userData.body) { e.group.userData.body.emissiveIntensity = 2.2; setTimeout(() => { if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.0; }, 500); }
+  audio.power();
+  if (kind === 'OVERDRIVE') { e.sprintTimer = 4; }
+  else if (kind === 'VOLLEY') { e._volley = 3; e._volleyT = 0; }
+  else if (kind === 'FLARESTORM') { enemyFlares(e); enemyFlares(e); enemyFlares(e); }
+  else if (kind === 'GHOST') {
+    e._ghostT = 3;
+    if (player.lockedTarget === e) player.lockedTarget = null;
+    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+  }
+}
+
+/* Rival escape run: burn straight away from the player, flare against locks, vanish past 5000u.
+   Returns true when the rival despawned (caller must stop processing the enemy this frame). */
+function updateRivalFlee(e, dt) {
+  const away = t1.copy(e.group.position).sub(player.group.position);
+  const dist = away.length();
+  away.multiplyScalar(1 / Math.max(dist, 0.001)); away.y = Math.max(away.y, 0.05); away.normalize();
+  dirToQuat(away, q1);
+  e.logicQuat.rotateTowards(q1, e.turnRate * 1.4 * dt);
+  const nf = fwdQ(e.logicQuat, t4);
+  e.group.quaternion.copy(e.logicQuat);
+  e.speed = lerp(e.speed, 360, dt * 2);
+  e.vel.copy(nf).multiplyScalar(e.speed);
+  e.group.position.addScaledVector(e.vel, dt);
+  e.flareCd -= dt;
+  if (e.flareCd <= 0 && e.flareAmmo > 0) {
+    for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e) { enemyFlares(e); e.flareCd = 1.6; break; } }
+  }
+  updateMarker(e);
+  if (dist > 5000) {
+    e.alive = false;
+    scene.remove(e.group); disposeGroup(e.group);
+    if (e.marker) scene.remove(e.marker);
+    if (player.lockedTarget === e) player.lockedTarget = null;
+    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    rivalEscaped({ missiles: run.pMissiles, gunKills: run.pGunKills, flares: run.pFlares, wingmen: wingmen.length });
+    showBanner('☠ ' + e.callsign + ' WITHDRAWS — HE WILL RETURN STRONGER ☠');
+    return true;
+  }
+  return false;
+}
+
 function updateEnemy(e, dt) {
   if (e.type === 'ground') { updateGround(e, dt); return; }
   if (e.type === 'drone') { updateDrone(e, dt); return; }
@@ -640,6 +716,22 @@ function updateEnemy(e, dt) {
   let incoming = false;
   for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { incoming = true; break; } }
   if (e.elite && !e.desprintUsed && e.hp / e.maxHp < 0.3) { e.desprintUsed = true; e.sprintTimer = 2.5; e.orbitSign *= -1; }
+  if (e.rival && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }
+  if (e.rival && e.fleeing) { if (updateRivalFlee(e, dt)) return; }
+  if (e.rival && !e.fleeing) {
+    e.rivalSpCd -= dt;
+    if (e.rivalSpCd <= 0) { e.rivalSpCd = 12; fireRivalSpecial(e); }
+    if (e._volley > 0) {
+      e._volleyT -= dt;
+      if (e._volleyT <= 0 && e.missileAmmo > 0) {
+        const dir = t1.copy(player.group.position).sub(e.group.position).normalize();
+        spawnMissile(t2.copy(e.group.position), dir, null, true, 1);
+        e._volley--; e._volleyT = 0.3; audio.missile();
+      }
+    }
+    if (e._ghostT > 0) { e._ghostT -= dt; if (e.marker) e.marker.visible = e._ghostT <= 0; }
+    else if (e.marker && !e.marker.visible) e.marker.visible = true;
+  }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;
@@ -770,17 +862,43 @@ function updateBomber(e, dt) {
     showBanner('BOMBER ESCAPED');
   }
 }
+function radarUp() { for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.type === 'ground' && e.gkind === 'radar') return true; } return false; }
 function updateGround(e, dt) {
   if (e.group.userData.turret) e.group.lookAt(player.group.position);
   const d = e.group.position.distanceTo(player.group.position);
-  e.missileCd -= dt;
-  if (d < 3200 && !player.stealth && player.empBurst <= 0 && player.jammer <= 0 && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < 5) {
-    const dir = t1.copy(player.group.position).sub(e.group.position).normalize(); dir.y = Math.max(dir.y, 0.35); dir.normalize();
-    spawnMissile(t2.copy(e.group.position).setY(e.group.position.y + 9), dir, null, true, 1);
-    e.missileAmmo--; e.missileCd = rand(5, 9); audio.missile();
+  if (e.gkind === 'radar') {
+    if (e.group.userData.dish) e.group.userData.dish.rotation.y += dt * 1.2;
+  } else if (e.gkind === 'truck') {
+    if (!e.truckDir) { e.truckDir = new THREE.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(); }
+    e.group.position.addScaledVector(e.truckDir, dt * 28);
+    e.group.position.y = terrainH(e.group.position.x, e.group.position.z);
+  } else if (e.gkind === 'aaa') {
+    e.missileCd -= dt;          // reused as the flak timer
+    if (d < 1500 && player.group.position.y - e.group.position.y < 1100 && e.missileCd <= 0) {
+      e.missileCd = rand(1.1, 1.8);
+      flakBurst(e);
+    }
+  } else {   // 'sam' — original behavior, radar-boosted when a radar station is alive
+    const boosted = radarUp();
+    const range = boosted ? 4800 : 3200;
+    e.missileCd -= dt;
+    if (d < range && !player.stealth && player.empBurst <= 0 && player.jammer <= 0 && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < 5) {
+      const dir = t1.copy(player.group.position).sub(e.group.position).normalize(); dir.y = Math.max(dir.y, 0.35); dir.normalize();
+      spawnMissile(t2.copy(e.group.position).setY(e.group.position.y + 9), dir, null, true, 1);
+      missiles[missiles.length - 1].fromGround = true;
+      e.missileAmmo--; e.missileCd = rand(5, 9) * (boosted ? 0.7 : 1); audio.missile();
+    }
   }
   if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.1 : 0))); }
   updateMarker(e);
+}
+function flakBurst(e) {
+  // burst at a point near the player's predicted position; proximity damage, no homing
+  const aim = t1.copy(player.group.position).addScaledVector(player.vel, rand(0.4, 0.9));
+  aim.x += rand(-90, 90); aim.y += rand(-70, 70); aim.z += rand(-90, 90);
+  explode(aim, false);
+  const d2 = aim.distanceToSquared(player.group.position);
+  if (d2 < 120 * 120) damagePlayer(rand(5, 9) * (1 - Math.sqrt(d2) / 120), aim);
 }
 
 /* Kamikaze drones home straight in and detonate on contact. Fragile, but lethal in a pack.

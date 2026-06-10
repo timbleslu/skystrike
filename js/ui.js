@@ -337,6 +337,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', x, y + s + 12);
     if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u25C6 BOSS', x, by - 8); }
     else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2691 BOMBER', x, by - 8); }
+    else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 Lv' + rival.level, x, by - 8); }
     else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || 'ACE') + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
     else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
   } else {
@@ -515,10 +516,20 @@ let techTab = 'tech';
 function owns(id) { return player.tech.indexOf(id) >= 0; }
 function repeatCount(node) { return player.techRepeat[node.id] || 0; }
 function nodeCost(node) { return node.repeat ? node.cost + (node.costStep || 0) * repeatCount(node) : node.cost; }
+function reqSatisfied(node, ownsFn, byId, groundOn) {
+  let req = node.req;
+  while (req) {
+    const rn = byId[req];
+    if (!groundOn && rn && rn.ground) { req = rn.req; continue; }   // bypass hidden ground nodes
+    return ownsFn(req);
+  }
+  return true;
+}
 function nodeState(node) {
+  if (node.ground && !groundWar) return 'hidden';
   if (!node.repeat && owns(node.id)) return 'bought';
   if (node.ok && !node.ok(player)) return 'na';
-  if (node.req && !owns(node.req)) return 'locked';
+  if (!reqSatisfied(node, owns, TECH_BY_ID, groundWar)) return 'locked';
   return player.tp >= nodeCost(node) ? 'avail' : 'cantafford';
 }
 function openTechScreen() {
@@ -554,7 +565,9 @@ function renderTechTree(recenter) {
   svg += '</svg>';
   let nodes = '';
   for (const n of treeNodes) {
-    const st = nodeState(n), p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
+    const st = nodeState(n);
+    if (st === 'hidden') continue;
+    const p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
     const cost = nodeCost(n);
     const costTxt = n.id === 'core' ? 'CORE' : st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
@@ -585,7 +598,9 @@ function renderArmory() {
   const armNodes = TECH_TREE.filter(n => n.tab === 'armory');
   let html = '<div class="armory-grid">';
   for (const n of armNodes) {
-    const st = nodeState(n), ac = FAM_C[n.fam] || '#ffe14d';
+    const st = nodeState(n);
+    if (st === 'hidden') continue;
+    const ac = FAM_C[n.fam] || '#ffe14d';
     const cost = nodeCost(n);
     const costTxt = st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
@@ -654,6 +669,44 @@ function closeWingPicker() {
   pendingWingNode = null;
   g('wingpick').classList.remove('show');
 }
+let opPicked = null;          // sector type picked on the map, pending launch
+function openOpMap() {
+  opPicked = null;
+  const wrap = g('opStages'); if (!wrap) return;
+  wrap.innerHTML = opMap.map((stage, si) =>
+    '<div class="op-stage">' + stage.map((s, i) => {
+      const cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
+      return '<div class="' + cls + '" data-s="' + si + '" data-i="' + i + '">' + s + '</div>';
+    }).join('') + '</div>'
+  ).join('');
+  wrap.querySelectorAll('.op-sector.pickable').forEach(el => el.addEventListener('click', () => {
+    wrap.querySelectorAll('.op-sector.chosen').forEach(c => c.classList.remove('chosen'));
+    el.classList.add('chosen');
+    opPicked = opMap[+el.getAttribute('data-s')][+el.getAttribute('data-i')];
+    g('opLaunch').disabled = false;
+  }));
+  g('opLaunch').disabled = true;
+  g('opmap').classList.add('show');
+  paused = true;
+  audio.ui();
+}
+function launchSector() {
+  if (!opPicked) return;
+  opSector = opPicked; opStage++;
+  g('opmap').classList.remove('show');
+  paused = false;
+  if (clock) clock.getDelta();
+  if (opSector === 'DEPOT') { applyDepot(); return; }
+  betweenWaves = true; waveTimer = 1.4;
+  showBanner('SECTOR: ' + opSector); audio.ui();
+}
+function applyDepot() {
+  player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.35);
+  player.missiles = player.maxMissiles;
+  player.flares = player.maxFlares;
+  showBanner('⚙ DEPOT — REPAIRED & REARMED ⚙'); audio.power();
+  openOpMap();                       // straight back to the map for the next pick
+}
 function deployFromTech() {
   if (!choosingUpgrade) return;
   pendingUpgrades = null;
@@ -661,11 +714,21 @@ function deployFromTech() {
   choosingUpgrade = false; paused = false;
   if (clock) clock.getDelta();   // swallow the paused interval so dt doesn't spike
   if (isTouchEnabled && state === 'playing') g('touchControls').classList.add('show');
+  if (opMode && opMap) {
+    if (opStage >= opMap.length) return;          // FINAL already cleared; victory path owns the flow
+    openOpMap(); return;
+  }
   betweenWaves = true; waveTimer = 1.4;   // short breather, then the next wave spawns
   showBanner('WAVE ' + (wave + 1) + ' INBOUND'); audio.ui();
 }
 
 /* ---------------- hangar / flow ---------------- */
+function renderKillBoard() {
+  const list = g('rbList'); if (!list || !rival) return;
+  list.innerHTML = rival.board.length
+    ? rival.board.slice().reverse().map(b => '<div class="rb-row"><span>☠ ' + b.name + '</span><span>' + b.jetName + '</span><span>Lv' + b.level + ' · W' + b.wave + '</span></div>').join('')
+    : '<div class="rb-empty">NO RIVALS DOWNED</div>';
+}
 function buildHangar() {
   // ---- single-jet carousel selector ----
   const dots = g('jetDots'); dots.innerHTML = '';
@@ -676,6 +739,7 @@ function buildHangar() {
   });
   g('jetPrev').addEventListener('click', () => cycleJet(-1));
   g('wpCancel').addEventListener('click', () => { closeWingPicker(); audio.ui(); });
+  g('opLaunch').addEventListener('click', launchSector);
   g('jetNext').addEventListener('click', () => cycleJet(1));
   g('jetCard').addEventListener('dblclick', () => startGame(selectedJet));
 
@@ -697,14 +761,19 @@ function buildHangar() {
   setDifficulty(difficulty);
   document.querySelectorAll('.tbtn').forEach(b => b.addEventListener('click', () => setTimeOfDay(+b.dataset.t)));
   setTimeOfDay(timeOfDay);
+  document.querySelectorAll('.mbtn').forEach(b => b.addEventListener('click', () => setOpMode(+b.dataset.m)));
+  setOpMode(opMode ? 1 : 0);
   const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
   const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   selectJet(selectedJet);
   updateBest();
+  renderKillBoard();
 }
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
 function renderJetCard(i) {
@@ -748,6 +817,12 @@ function setTimeOfDay(t) {
   if (audio.on) audio.ui();
   saveSettings();
 }
+function setOpMode(m) {
+  opMode = !!m;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', (+b.dataset.m === 1) === opMode));
+  if (audio.on) audio.ui();
+  saveSettings();
+}
 function openManual() { g('manual').classList.add('show'); paused = true; g('touchControls').classList.remove('show'); }
 function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
 function toggleManual() { if (g('manual').classList.contains('show')) closeManual(); else openManual(); }
@@ -786,10 +861,12 @@ function startGame(i) {
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
-  wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9;
+  wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
+  opMap = null; opStage = 0; opSector = null;
+  if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now() };
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now(), pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
   state = 'playing';
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner('GET READY');
@@ -802,6 +879,11 @@ function gameOver() {
   player.group.visible = false;
   clearWingmen();
   if (h2d) h2d.clearRect(0, 0, W, H);
+  endRun('MISSION FAILED');
+}
+// shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title
+function endRun(title) {
+  const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
   if (player.score > bestScore) { bestScore = player.score; saveBest(); }
   g('go_score').textContent = player.score.toLocaleString();
   g('go_wave').textContent = wave;
@@ -814,6 +896,14 @@ function gameOver() {
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
+}
+function operationComplete() {
+  if (state !== 'playing') return;
+  state = 'dead';
+  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  player.score += 5000;
+  showBanner('★ OPERATION COMPLETE ★');
+  endRun('OPERATION COMPLETE');
 }
 function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
@@ -835,6 +925,9 @@ function loadSettings() {
     if (typeof s.invertY === 'boolean') invertY = s.invertY;
     if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
     if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
+    if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
+    if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
+    if (typeof s.opMode === 'boolean') opMode = s.opMode;
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
@@ -844,7 +937,7 @@ function loadSettings() {
 function saveSettings() {
   try {
     localStorage.setItem('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet
+      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode
     }));
   } catch (e) {}
 }
@@ -886,4 +979,5 @@ function returnToHangar() {
   g('hangar').classList.remove('hide');
   selectJet(selectedJet);
   updateBest();
+  renderKillBoard();
 }

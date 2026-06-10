@@ -97,6 +97,13 @@
         <button class="dbtn tbtn" data-t="2">NIGHT</button>
       </div>
     </div>
+    <div id="modesel">
+      <span class="dlab">MODE</span>
+      <div class="dbtns">
+        <button class="dbtn mbtn" data-m="0">ENDLESS</button>
+        <button class="dbtn mbtn" data-m="1">OPERATION</button>
+      </div>
+    </div>
     <div id="carousel">
       <button id="jetPrev" class="navarrow" aria-label="Previous aircraft">&#10094;</button>
       <div id="jetStage"><div id="jetCard" class="card cardbig"></div></div>
@@ -106,6 +113,7 @@
       <span id="jetCounter"></span>
       <div id="jetDots"></div>
     </div>
+    <div id="rivalBoard"><div class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
     <div class="hbtns">
       <button id="launch">&#9654; LAUNCH MISSION</button>
       <button id="manualBtn" class="ghostbtn">&#9636; CONTROLS &amp; MANUAL</button>
@@ -159,6 +167,15 @@
     <div class="wp-sub">// CHOOSE THE JET YOUR NEW ESCORT WILL FLY //</div>
     <div id="wpGrid" class="wp-grid"></div>
     <button id="wpCancel">CANCEL</button>
+  </div>
+</div>
+
+<div id="opmap">
+  <div class="op-box">
+    <div class="op-title">OPERATION MAP</div>
+    <div class="op-sub">// SELECT NEXT SECTOR //</div>
+    <div id="opStages" class="op-stages"></div>
+    <button id="opLaunch" disabled>&#9654; LAUNCH</button>
   </div>
 </div>
 
@@ -245,6 +262,8 @@
         <div class="srow"><label for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
         <div class="srow"><label for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
         <div class="srow"><label for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
+        <div class="srow"><label for="setRival">Nemesis rival ace (persistent named enemy)</label><input id="setRival" type="checkbox"></div>
+        <div class="srow"><label for="setGroundWar">Ground war (SAM/AAA sites, strike waves)</label><input id="setGroundWar" type="checkbox"></div>
         <div class="srow"><label for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
         <div class="srow"><label for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
       </section>
@@ -260,6 +279,8 @@
 <script src="js/globals.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/entities.js"></script>
+<script src="js/rival.js"></script>
+<script src="js/opmap.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

@@ -128,6 +128,7 @@ let wingmen = [];   // AI escort jets that fly with the player
 const BPOOL = [];
 let hitMarkers = [], dmgNumbers = [];
 let wave = 0, betweenWaves = true, waveTimer = 2.6;
+let strikeWaveActive = false;   // true while the current wave is a ground-war strike wave
 let pendingSpawns = [];          // FIFO of zero-arg spawn closures, drained a few per frame to avoid wave-start hitch
 const SPAWN_PER_FRAME = 2;       // enemies actually built per frame after a wave is announced
 let camMode = 0;
@@ -136,6 +137,9 @@ let bestScore = 0;
 let invertY = false, volume = 0.55, muted = false;
 let autoLock = false; // when off, the player must press F to designate a lock target
 let startWingman = true; // launch each sortie with a starting AI escort (toggle in Settings)
+let rivalEnabled = true;     // nemesis rival ace appearances (Settings toggle)
+let groundWar = true;        // ground units + strike waves (Settings toggle)
+let opMode = false;          // operation map mode vs endless (Hangar mode select)
 let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
 let choosingUpgrade = false; // true while the between-wave field-upgrade screen is open
 let difficulty = 1;
@@ -144,7 +148,7 @@ const DIFFS = [
   { key: 'VETERAN', dmg: 1.0, fire: 1.0,  missile: 1.0, count: 0,  hp: 1.0,  desc: 'The intended challenge.' },
   { key: 'ACE',     dmg: 1.5, fire: 0.72, missile: 0.7, count: 1,  hp: 0.85, desc: 'Lethal — more foes, faster guns, fragile hull.' },
 ];
-let run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: 0, escortKills: 0 };
+let run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: 0, escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
 
 /* per-airframe special-ability cooldown (seconds) */
 const SPECIAL_CD = {
@@ -166,7 +170,7 @@ let wingDmgMul = 1;   // FLEET COMMANDER capstone boosts escort firepower
    `ok(p)` (optional) gates a node to relevant airframes; `repeat` marks the points-sink. */
 const MAX_WINGMEN = 6;                 // hard cap on escorts in the air
 let pendingWingShape = 'STD';          // airframe the next tech-tree wingman will fly (set by the picker)
-const FAM_C = { core:'#19f0d4', wpn:'#ffb347', gun:'#ff9a3c', msl:'#ff7a4d', mun:'#ff5024', def:'#5dffa0', arm:'#46ff8c', prop:'#37e0ff', ew:'#ff61cf', cmd:'#ffe14d', sc:'#ffd24d', tac:'#b76bff', wing:'#8ad0ff', sup:'#ffab61' };
+const FAM_C = { core:'#19f0d4', wpn:'#ffb347', gun:'#ff9a3c', msl:'#ff7a4d', mun:'#ff5024', def:'#5dffa0', arm:'#46ff8c', prop:'#37e0ff', ew:'#ff61cf', cmd:'#ffe14d', sc:'#ffd24d', tac:'#b76bff', wing:'#8ad0ff', sup:'#ffab61', strike:'#ff4444' };
 const TECH_TREE = [
   // ---- root ----
   { id:'core', x:3, y:0, req:null, fam:'core', cost:0, sym:'\u2756', name:'CORE SYSTEMS', desc:'Boot the upgrade bus. (Owned from the start of every run.)', apply:()=>{} },
@@ -253,6 +257,17 @@ const TECH_TREE = [
   { id:'fa3', x:0, y:0, tab:'armory', req:null, fam:'sup', cost:450, sym:'⚡', name:'TARGETING COMPUTER',
     desc:'Combat AI pre-computes firing solutions — +25% crit chance, critical hits deal at least ×2.2 damage.',
     apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.25); p.critMul = Math.max(p.critMul, 2.2); } },
+
+  // ---- STRIKE branch (ground-war only) ----
+  { id:'agm1', x:12, y:2, req:'core', fam:'strike', tab:'armory', ground:true, cost:260, sym:'▼', name:'AGM RAILS',
+    desc:'Air-to-ground missile rails — +75% missile damage against ground targets.',
+    apply:p=>{ p.agmMul = 1.75; } },
+  { id:'rkt1', x:12, y:3, req:'agm1', fam:'strike', tab:'armory', ground:true, cost:300, sym:'▼', name:'ROCKET PODS',
+    desc:'Cannon fire fragments against soft ground targets — +100% gun damage vs ground.',
+    apply:p=>{ p.rktMul = 2; } },
+  { id:'bel1', x:12, y:4, req:'rkt1', fam:'strike', tab:'armory', ground:true, cost:280, sym:'▼', name:'BELLY ARMOR',
+    desc:'Hardened underside — −35% damage from ground-launched missiles.',
+    apply:p=>{ p.bellyArmor = 0.65; } },
 ];
 const TECH_BY_ID = {}; for (const n of TECH_TREE) TECH_BY_ID[n.id] = n;
 function permWingmen() { let n = 0; for (let i = 0; i < wingmen.length; i++) if (!wingmen[i].temp) n++; return n; }
