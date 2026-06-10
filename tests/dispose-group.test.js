@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 
-// --- Production helper under test (mirror of js/combat.js disposeGroup) ---
+// --- Production helper under test (mirror of js/engine.js disposeGroup) ---
 function disposeGroup(group) {
   group.traverse(o => {
     if (o.isMesh || o.isSprite) {
