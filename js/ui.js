@@ -790,7 +790,7 @@ function startGame(i) {
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9;
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now() };
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now(), pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
   state = 'playing';
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner('GET READY');

@@ -51,6 +51,7 @@ function updateBullets(dt, ts) {
           if (b.passed && b.passed.indexOf(e) >= 0) continue;   // AP round already punched through this one
           const r = e.type === 'boss' ? 72 : e.type === 'ground' ? 17 : e.type === 'drone' ? 16 : 22;
           if (b.mesh.position.distanceToSquared(e.group.position) < r * r) {
+            if (!b.ai) e._lastPlayerWp = 'gun';
             damageEnemy(e, b.dmg, b.mesh.position, !b.ai, b.byCCA);
             if (!b.ai) { spawnHitMarker(); run.hits++; if (lastCrit && player.critChain) critBlast(b.mesh.position); }
             if (!b.ai && b.pierce > 0) { b.pierce--; (b.passed || (b.passed = [])).push(e); }
@@ -90,7 +91,7 @@ function fireMissile() {
       if (player.splashRadius) { m.splash = player.splashRadius; m.splashDmg = player.splashDmg; }
     }
   }
-  player.missiles -= salvo; run.missiles += salvo;
+  player.missiles -= salvo; run.missiles += salvo; run.pMissiles += salvo;
   audio.missile();
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
@@ -165,6 +166,7 @@ function updateMissiles(dt, ts) {
         const e = enemies[k]; if (!e.alive) continue;
         const r = e.type === 'boss' ? 130 : e.type === 'bomber' ? 95 : e.type === 'drone' ? 50 : 60;
         if (m.mesh.position.distanceToSquared(e.group.position) < r * r) {
+          if (!m.ai) e._lastPlayerWp = 'missile';
           if (m.ambush && e.type !== 'boss') { killEnemy(e, !m.ai, m.byCCA); }
           else if (e.type === 'boss' || e.elite || e.type === 'bomber') { damageEnemy(e, m.dmg * 1.6, m.mesh.position, !m.ai, m.byCCA); }
           else { if (!m.ai) { player.combo++; player.comboTimer = 2.2; player.score += Math.round(60 * (player.scoreMul || 1)); } killEnemy(e, !m.ai, m.byCCA); }
@@ -187,6 +189,7 @@ function deployFlares() {
   if (player.flareCd > 0) return;
   if (player.flares <= 0) { audio.ui(); return; }
   player.flareCd = 0.45; player.flares--;
+  run.pFlares++;
   const back = fwdOf(player.group, t1).multiplyScalar(-1), up = upOf(player.group, t2);
   const count = 3 + (player.flarePro ? 2 : 0);   // SPECTRA airframes throw a denser cloud
   const fresh = [];
@@ -469,7 +472,7 @@ function killEnemy(e, byPlayer, byCCA) {
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
-  if (byPlayer) player.tp += (tpBase + (player.rpPerKill || 0)) * rpm;
+  if (byPlayer) { player.tp += (tpBase + (player.rpPerKill || 0)) * rpm; if (e._lastPlayerWp === 'gun') run.pGunKills++; }
   else if (byCCA) { player.tp += tpBase * 0.5 * rpm; run.escortKills++; }
   else if ((e.playerDmg || 0) > 0.5) player.tp += tpBase * TP.assistFrac * rpm;
   // field-upgrade payoffs
