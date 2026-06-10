@@ -52,7 +52,9 @@ function updateBullets(dt, ts) {
           const r = e.type === 'boss' ? 72 : e.type === 'ground' ? 17 : e.type === 'drone' ? 16 : 22;
           if (b.mesh.position.distanceToSquared(e.group.position) < r * r) {
             if (!b.ai) e._lastPlayerWp = 'gun';
-            damageEnemy(e, b.dmg, b.mesh.position, !b.ai, b.byCCA);
+            let bDmg = b.dmg;
+            if (!b.ai && e.type === 'ground' && player.rktMul) bDmg *= player.rktMul;   // ROCKET PODS
+            damageEnemy(e, bDmg, b.mesh.position, !b.ai, b.byCCA);
             if (!b.ai) { spawnHitMarker(); run.hits++; if (lastCrit && player.critChain) critBlast(b.mesh.position); }
             if (!b.ai && b.pierce > 0) { b.pierce--; (b.passed || (b.passed = [])).push(e); }
             else dead = true;
@@ -160,7 +162,11 @@ function updateMissiles(dt, ts) {
       if (player.pointDefense && m.armed <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 810000 && Math.random() < player.pointDefense * sdt * 3.2) {
         explode(m.mesh.position, false); audio.blip(1500, 0.05, 'square', 0.07, 900); hit = true;
       }
-      if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) { damagePlayer(m.dmg, m.mesh.position); explode(m.mesh.position, true); hit = true; }
+      if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) {
+        let mDmg = m.dmg;
+        if (m.fromGround && player.bellyArmor) mDmg *= player.bellyArmor;   // BELLY ARMOR
+        damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
+      }
     } else {
       for (let k = 0; k < enemies.length; k++) {
         const e = enemies[k]; if (!e.alive) continue;
@@ -169,6 +175,11 @@ function updateMissiles(dt, ts) {
           if (!m.ai) e._lastPlayerWp = 'missile';
           if (m.ambush && e.type !== 'boss') { killEnemy(e, !m.ai, m.byCCA); }
           else if (e.type === 'boss' || e.elite || e.type === 'bomber') { damageEnemy(e, m.dmg * 1.6, m.mesh.position, !m.ai, m.byCCA); }
+          else if (e.type === 'ground') {
+            let gDmg = m.dmg * 1.6;
+            if (!m.ai && player.agmMul) gDmg *= player.agmMul;   // AGM RAILS
+            damageEnemy(e, gDmg, m.mesh.position, !m.ai, m.byCCA);
+          }
           else { if (!m.ai) { player.combo++; player.comboTimer = 2.2; player.score += Math.round(60 * (player.scoreMul || 1)); } killEnemy(e, !m.ai, m.byCCA); }
           if (!m.ai) spawnHitMarker();
           explode(m.mesh.position, true);
