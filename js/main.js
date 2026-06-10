@@ -8,6 +8,26 @@ function nextWave() {
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
+  if (opMode && opSector) {
+    const plan = sectorPlan(opSector, wave);
+    strikeWaveActive = plan.ground;
+    showBanner(plan.boss ? '⚠ FINAL TARGET ⚠' : 'SECTOR: ' + opSector);
+    for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
+    for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
+    for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(spawnBomber);
+    if (plan.boss) pendingSpawns.push(spawnBoss);
+    if (plan.ground) {
+      pendingSpawns.push(() => spawnGroundKind('radar'));
+      pendingSpawns.push(() => spawnGroundKind('sam'));
+      pendingSpawns.push(() => spawnGroundKind('sam'));
+      pendingSpawns.push(() => spawnGroundKind('aaa'));
+      pendingSpawns.push(() => spawnGroundKind('aaa'));
+      for (let k = 0; k < 3; k++) pendingSpawns.push(() => spawnGroundKind('truck'));
+    }
+    if (plan.rival && rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    return;
+  }
   if (strike) {
     showBanner('\u2692 STRIKE WAVE \u2014 FLATTEN THE SITE \u2692');
     pendingSpawns.push(() => spawnGroundKind('radar'));

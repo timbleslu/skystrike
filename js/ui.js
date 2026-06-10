@@ -707,6 +707,10 @@ function deployFromTech() {
   choosingUpgrade = false; paused = false;
   if (clock) clock.getDelta();   // swallow the paused interval so dt doesn't spike
   if (isTouchEnabled && state === 'playing') g('touchControls').classList.add('show');
+  if (opMode && opMap) {
+    if (opStage >= opMap.length) return;          // FINAL already cleared; victory path owns the flow
+    openOpMap(); return;
+  }
   betweenWaves = true; waveTimer = 1.4;   // short breather, then the next wave spawns
   showBanner('WAVE ' + (wave + 1) + ' INBOUND'); audio.ui();
 }
@@ -851,6 +855,8 @@ function startGame(i) {
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
+  opMap = null; opStage = 0; opSector = null;
+  if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now(), pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
