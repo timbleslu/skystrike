@@ -604,5 +604,6 @@ initThree();
 cacheEl();
 loadBest();
 loadSettings();
+loadRival();
 buildHangar();
 animate();
