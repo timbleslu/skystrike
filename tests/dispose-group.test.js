@@ -3,45 +3,40 @@ const assert = require('assert');
 
 // --- Production helper under test (mirror of js/engine.js disposeGroup) ---
 function disposeGroup(group) {
+  if (!group) return;
   group.traverse(o => {
     if (o.isMesh || o.isSprite) {
-      if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+      if (o.geometry && o.geometry.dispose && !o.geometry.userData.shared) o.geometry.dispose();
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
-      for (const m of mats) if (m.dispose) m.dispose();   // note: do NOT dispose m.map (shared textures)
+      for (const m of mats) if (m && m.dispose) m.dispose();   // note: do NOT dispose m.map (shared textures)
     }
   });
 }
 
-// --- Minimal Three-like tree ---
-function node(props) {
-  return Object.assign({
-    children: [],
-    traverse(fn) { fn(this); for (const c of this.children) c.traverse(fn); },
-  }, props);
-}
-function disposable() { let n = 0; return { dispose() { n++; }, calls: () => n }; }
+// fakes
+const mkGeo = (shared) => ({ disposed: false, userData: shared ? { shared: true } : {}, dispose() { this.disposed = true; } });
+const mkMat = (withMap) => ({ disposed: false, map: withMap ? { disposed: false, dispose() { this.disposed = true; } } : null, dispose() { this.disposed = true; } });
+function mkGroup(children) { return { traverse(fn) { for (const c of children) fn(c); } }; }
 
-(function testDisposesGeoAndMatNotTexture() {
-  const geo = disposable(), tex = disposable();
-  const matWithMap = Object.assign(disposable(), { map: tex });
-  const mesh = node({ isMesh: true, geometry: geo, material: matWithMap });
-  const root = node({ children: [mesh] });
+// per-instance geometry IS disposed; shared geometry is NOT; materials always disposed; textures never
+const perInst = mkGeo(false), sharedG = mkGeo(true);
+const mat1 = mkMat(false), mat2 = mkMat(true);
+const group = mkGroup([
+  { isMesh: true, geometry: perInst, material: mat1 },
+  { isMesh: true, geometry: sharedG, material: mat2 },
+]);
+disposeGroup(group);
 
-  disposeGroup(root);
+assert.strictEqual(perInst.disposed, true, 'per-instance geometry must be disposed');
+assert.strictEqual(sharedG.disposed, false, 'shared geometry must NOT be disposed');
+assert.strictEqual(mat1.disposed, true, 'material must be disposed');
+assert.strictEqual(mat2.disposed, true, 'material with map must be disposed');
+assert.strictEqual(mat2.map.disposed, false, 'texture (map) must NOT be disposed');
+console.log('ok - disposeGroup skips shared geometry, frees per-instance geo + materials, spares textures');
 
-  assert.strictEqual(geo.calls(), 1, 'geometry disposed once');
-  assert.strictEqual(matWithMap.calls(), 1, 'material disposed once');
-  assert.strictEqual(tex.calls(), 0, 'texture (map) NOT disposed');
-  console.log('ok - disposes geometry + material, leaves textures');
-})();
-
-(function testMultiMaterialArray() {
-  const g = disposable(), m1 = disposable(), m2 = disposable();
-  const mesh = node({ isMesh: true, geometry: g, material: [m1, m2] });
-  disposeGroup(node({ children: [mesh] }));
-  assert.strictEqual(m1.calls(), 1, 'array material[0] disposed');
-  assert.strictEqual(m2.calls(), 1, 'array material[1] disposed');
-  console.log('ok - multi-material array');
-})();
-
-console.log('ALL PASS');
+// material array support
+const arrMat = [mkMat(false), mkMat(false)];
+const g2 = mkGroup([{ isSprite: true, geometry: mkGeo(false), material: arrMat }]);
+disposeGroup(g2);
+assert.ok(arrMat.every(m => m.disposed), 'all materials in an array must be disposed');
+console.log('ok - multi-material array');
