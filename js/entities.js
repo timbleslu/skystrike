@@ -627,6 +627,20 @@ function updateMarker(e) {
 
 function activeEnemyMissiles() { let n = 0; for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) n++; return n; }
 
+function fireRivalSpecial(e) {
+  const kind = rivalSpecialFor(e.shapeKey);
+  if (e.group.userData.body) { e.group.userData.body.emissiveIntensity = 2.2; setTimeout(() => { if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.0; }, 500); }
+  audio.power();
+  if (kind === 'OVERDRIVE') { e.sprintTimer = 4; }
+  else if (kind === 'VOLLEY') { e._volley = 3; e._volleyT = 0; }
+  else if (kind === 'FLARESTORM') { enemyFlares(e); enemyFlares(e); enemyFlares(e); }
+  else if (kind === 'GHOST') {
+    e._ghostT = 3;
+    if (player.lockedTarget === e) player.lockedTarget = null;
+    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+  }
+}
+
 /* Rival escape run: burn straight away from the player, flare against locks, vanish past 5000u.
    Returns true when the rival despawned (caller must stop processing the enemy this frame). */
 function updateRivalFlee(e, dt) {
@@ -673,6 +687,20 @@ function updateEnemy(e, dt) {
   if (e.elite && !e.desprintUsed && e.hp / e.maxHp < 0.3) { e.desprintUsed = true; e.sprintTimer = 2.5; e.orbitSign *= -1; }
   if (e.rival && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }
   if (e.rival && e.fleeing) { if (updateRivalFlee(e, dt)) return; }
+  if (e.rival && !e.fleeing) {
+    e.rivalSpCd -= dt;
+    if (e.rivalSpCd <= 0) { e.rivalSpCd = 12; fireRivalSpecial(e); }
+    if (e._volley > 0) {
+      e._volleyT -= dt;
+      if (e._volleyT <= 0 && e.missileAmmo > 0) {
+        const dir = t1.copy(player.group.position).sub(e.group.position).normalize();
+        spawnMissile(t2.copy(e.group.position), dir, null, true, 1);
+        e._volley--; e._volleyT = 0.3; audio.missile();
+      }
+    }
+    if (e._ghostT > 0) { e._ghostT -= dt; if (e.marker) e.marker.visible = e._ghostT <= 0; }
+    else if (e.marker && !e.marker.visible) e.marker.visible = true;
+  }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;

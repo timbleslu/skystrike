@@ -530,6 +530,7 @@ function cycleLock() {
   const cand = [];
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive) continue;
+    if (e._ghostT > 0) continue;   // GHOST special: rival cannot be cycled to while cloaked
     const to = t4.copy(e.group.position).sub(player.group.position); const d = to.length();
     if (d > 6500) continue; to.multiplyScalar(1 / d);
     const ang = Math.acos(clamp(fwd.dot(to), -1, 1));
@@ -550,6 +551,7 @@ function updateLockOn(dt) {
   }
   const tgt = player.lockTarget;
   if (!tgt || !tgt.alive) { player.lockProgress = 0; player.lockedTarget = null; return; }
+  if (tgt._ghostT > 0) { player.lockTarget = null; player.lockProgress = 0; player.lockedTarget = null; return; }   // GHOST: drop lock while cloaked
   const fwd = fwdOf(player.group, t3);
   const to = t4.copy(tgt.group.position).sub(player.group.position);
   const dist = to.length(); to.multiplyScalar(1 / Math.max(dist, 0.001));

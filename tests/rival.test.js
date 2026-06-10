@@ -52,4 +52,17 @@ assert.ok(!validRival(null) && !validRival({}) && !validRival({name:'X'}), 'garb
 const lvl9 = JSON.parse(JSON.stringify(fresh)); lvl9.level = 9;
 assert.ok(!validRival(lvl9), 'level out of range rejected');
 
+// mirror of js/rival.js rivalSpecialFor
+function rivalSpecialFor(shape) {
+  if (shape === 'J20' || shape === 'J35') return 'VOLLEY';
+  if (shape === 'NGAD' || shape === 'F47') return 'FLARESTORM';
+  if (shape === 'J50' || shape === 'SU57' || shape === 'SU75') return 'GHOST';
+  return 'OVERDRIVE';
+}
+assert.strictEqual(rivalSpecialFor('J20'), 'VOLLEY');
+assert.strictEqual(rivalSpecialFor('F47'), 'FLARESTORM');
+assert.strictEqual(rivalSpecialFor('SU57'), 'GHOST');
+assert.strictEqual(rivalSpecialFor('F22'), 'OVERDRIVE');
+assert.strictEqual(rivalSpecialFor('WHATEVER'), 'OVERDRIVE', 'unknown shapes default safely');
+
 console.log('ok - rival cadence, escalation, traits, persistence validate');
