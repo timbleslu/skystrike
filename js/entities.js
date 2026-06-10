@@ -17,27 +17,33 @@ function cacheGeo(key, factory) {
 
 /* ---------------- jet meshes (high-poly parametric) ---------------- */
 /* extruded, swept wing/canard/stab built from a half-planform [span, chordZ] (chordZ<0 = forward) */
-function extrudeWing(pts, thick, mat, y, bevelSeg) {
-  const sh = new THREE.Shape();
-  sh.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
-  sh.closePath();
+function extrudeWing(pts, thick, mat, y, bevelSeg, cacheKey) {
   const bs = bevelSeg || 1;
-  const geo = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.42, bevelSize: 0.22, bevelSegments: bs, steps: 1, curveSegments: bs > 1 ? 8 : 4 });
-  geo.translate(0, 0, -thick / 2); geo.rotateX(Math.PI / 2);
+  const geo = cacheGeo(cacheKey, () => {
+    const sh = new THREE.Shape();
+    sh.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
+    sh.closePath();
+    const g2 = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.42, bevelSize: 0.22, bevelSegments: bs, steps: 1, curveSegments: bs > 1 ? 8 : 4 });
+    g2.translate(0, 0, -thick / 2); g2.rotateX(Math.PI / 2);   // geometry-space transforms run once
+    return g2;
+  });
   const grp = new THREE.Group();
   const r = new THREE.Mesh(geo, mat);
   const l = new THREE.Mesh(geo, mat); l.scale.x = -1;
   grp.add(r, l); grp.position.y = y || 0; return grp;
 }
 /* swept vertical fin from {base,tip,h,sweep,thick} */
-function buildFin(p, mat, bevelSeg) {
-  const sh = new THREE.Shape();
-  sh.moveTo(0, 0); sh.lineTo(p.base, 0); sh.lineTo(p.sweep + p.tip, p.h); sh.lineTo(p.sweep, p.h); sh.closePath();
+function buildFin(p, mat, bevelSeg, cacheKey) {
   const th = p.thick || 0.3;
   const bs = bevelSeg || 1;
-  const geo = new THREE.ExtrudeGeometry(sh, { depth: th, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: bs, steps: 1, curveSegments: bs > 1 ? 6 : 3 });
-  geo.translate(0, 0, -th / 2); geo.rotateY(-Math.PI / 2);
+  const geo = cacheGeo(cacheKey, () => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0); sh.lineTo(p.base, 0); sh.lineTo(p.sweep + p.tip, p.h); sh.lineTo(p.sweep, p.h); sh.closePath();
+    const g2 = new THREE.ExtrudeGeometry(sh, { depth: th, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: bs, steps: 1, curveSegments: bs > 1 ? 6 : 3 });
+    g2.translate(0, 0, -th / 2); g2.rotateY(-Math.PI / 2);   // geometry-space transforms run once
+    return g2;
+  });
   return new THREE.Mesh(geo, mat);
 }
 /* compact AIM-9-style wingtip missile (built nose toward -Z), returned as a positioned group */
@@ -176,6 +182,9 @@ function buildJet(color, accent, cfg, hero) {
   cfg = cfg || SHAPES.ENEMY;
   const g = new THREE.Group();
   const bs = hero ? 3 : 1;
+  const SID = cfg.id || '';                 // '' => cacheGeo bypasses (no shared key)
+  const H = hero ? 1 : 0;
+  const gk = part => (SID ? SID + ':' + part + ':' + H : '');   // geometry cache key for this shape/part/hero
   const body  = new THREE.MeshStandardMaterial({ color, metalness: 0.42, roughness: 0.46, side: THREE.DoubleSide });
   const dark  = new THREE.MeshStandardMaterial({ color: 0x222a33, metalness: 0.6, roughness: 0.5, side: THREE.DoubleSide });
   const panel = new THREE.MeshStandardMaterial({ color: 0x171d25, metalness: 0.55, roughness: 0.6, side: THREE.DoubleSide });
@@ -199,7 +208,7 @@ function buildJet(color, accent, cfg, hero) {
   const TS = hero ? 10 : 3;
   for (let i = 1; i <= TS; i++) { const t = i / TS; prof.push(new THREE.Vector2(lerp(rR, rR * 0.6, t), zBody + (z1 - zBody) * t)); }
   const RING = hero ? 56 : 18;
-  const fgeo = new THREE.LatheGeometry(prof, RING); fgeo.rotateX(Math.PI / 2);
+  const fgeo = cacheGeo(gk('fuse'), () => { const lg = new THREE.LatheGeometry(prof, RING); lg.rotateX(Math.PI / 2); return lg; });
   const fuse = new THREE.Mesh(fgeo, body); fuse.scale.set(1, flat, 1); g.add(fuse);
 
   // panel-join scribe rings around the fuselage (hero only — adds surface detail)
@@ -266,13 +275,13 @@ function buildJet(color, accent, cfg, hero) {
   if (cfg.lerx) {
     const lz = cfg.wing[0][1];
     const lpts = [[0.75, lz + 0.4], [2.8, lz - 0.6], [0.75, lz - cfg.noseLen * 0.42]];
-    g.add(extrudeWing(lpts, 0.28, body, wy + 0.14, bs));
+    g.add(extrudeWing(lpts, 0.28, body, wy + 0.14, bs, gk('lerx')));
   }
 
   // ---- lifting surfaces ----
-  g.add(extrudeWing(cfg.wing, cfg.wingThick || 0.5, body, wy, bs));
-  if (cfg.canard) g.add(extrudeWing(cfg.canard, 0.34, body, cfg.canardY != null ? cfg.canardY : 0.12, bs));
-  if (cfg.htail) g.add(extrudeWing(cfg.htail, 0.36, body, cfg.htailY != null ? cfg.htailY : -0.1, bs));
+  g.add(extrudeWing(cfg.wing, cfg.wingThick || 0.5, body, wy, bs, gk('wing')));
+  if (cfg.canard) g.add(extrudeWing(cfg.canard, 0.34, body, cfg.canardY != null ? cfg.canardY : 0.12, bs, gk('canard')));
+  if (cfg.htail) g.add(extrudeWing(cfg.htail, 0.36, body, cfg.htailY != null ? cfg.htailY : -0.1, bs, gk('htail')));
 
   // control-surface seams (hero only) — elevons on the main wing & all-moving tail
   if (hero) {
@@ -295,7 +304,7 @@ function buildJet(color, accent, cfg, hero) {
     const baseY = fR * flat * 0.4;
     const finXs = vt.type === 'single' ? [0] : [-1, 1];
     for (const s of finXs) {
-      const f = buildFin(vt, body, bs);
+      const f = buildFin(vt, body, bs, gk('vtail'));
       const fz = vt.z != null ? vt.z : half - vt.base - (vt.type === 'single' ? 1 : 1.5);
       f.position.set(vt.type === 'single' ? 0 : s * vt.x, baseY, fz);
       if (vt.type !== 'single') f.rotation.z = -s * (vt.cant || 0.3);
@@ -314,7 +323,7 @@ function buildJet(color, accent, cfg, hero) {
   if (hero && cfg.ventral) {
     const vf = { base: 1.6, tip: 0.5, h: 1.8, sweep: 1.0, thick: 0.25 };
     for (const sx of [-1, 1]) {
-      const f = buildFin(vf, body, bs);
+      const f = buildFin(vf, body, bs, gk('ventral'));
       f.position.set(sx * rR * 0.7, -fR * flat * 0.45, half - 2.0);
       f.rotation.z = Math.PI + sx * 0.3;
       g.add(f);
