@@ -810,7 +810,7 @@ function startGame(i) {
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
-  wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9;
+  wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now(), pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };

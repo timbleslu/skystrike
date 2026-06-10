@@ -6,12 +6,25 @@ function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && 
 function nextWave() {
   wave++;
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
+  const strike = isStrikeWave(wave, groundWar);
+  strikeWaveActive = strike;
+  if (strike) {
+    showBanner('\u2692 STRIKE WAVE \u2014 FLATTEN THE SITE \u2692');
+    pendingSpawns.push(() => spawnGroundKind('radar'));
+    pendingSpawns.push(() => spawnGroundKind('sam'));
+    pendingSpawns.push(() => spawnGroundKind('sam'));
+    pendingSpawns.push(() => spawnGroundKind('aaa'));
+    pendingSpawns.push(() => spawnGroundKind('aaa'));
+    for (let k = 0; k < 3; k++) pendingSpawns.push(() => spawnGroundKind('truck'));
+    for (let i = 0; i < 3; i++) pendingSpawns.push(spawnFighter);
+    return;
+  }
   const count = clamp(3 + wave + DIFFS[difficulty].count, 2, 10);
   for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
   if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner('\u26A0 BOSS INCOMING \u26A0'); }
   else showBanner('WAVE ' + wave);
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
-  if (rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+  if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < 0.5) {
     const dn = randInt(3, 4) + Math.floor(wave / 4);
@@ -93,6 +106,11 @@ function spawnGround() {
   const ang = rand(0, TWO_PI), r = rand(1600, 4200);
   const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
   createEnemy('ground', new THREE.Vector3(px, terrainH(px, pz), pz));
+}
+function spawnGroundKind(gkind) {
+  const ang = rand(0, TWO_PI), r = rand(1400, 3000);
+  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
+  createEnemy('ground', new THREE.Vector3(px, terrainH(px, pz), pz), { gkind: gkind });
 }
 function spawnDroneSwarm(n, origin) {
   const base = origin ? origin.clone() : (() => {
@@ -491,7 +509,7 @@ function clearWingmen() {
 }
 
 function handleWaves(dt) {
-  const aliveCombat = enemies.some(e => e.alive && e.type !== 'ground' && e.type !== 'bomber');
+  const aliveCombat = enemies.some(e => e.alive && (strikeWaveActive ? e.type !== 'bomber' && e.gkind !== 'truck' : e.type !== 'ground' && e.type !== 'bomber'));
   if (!betweenWaves) {
     // Don't declare the wave clear until the queue is empty — otherwise the frames between
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
