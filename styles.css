@@ -311,3 +311,7 @@ canvas{display:block}
 #wingpick .wp-jet .wp-role{color:var(--cy);font-size:9px;opacity:.75;margin-top:3px}
 #wingpick #wpCancel{display:block;margin:18px auto 0;font-family:var(--mono);letter-spacing:2px;background:transparent;color:var(--cy);border:1px solid rgba(91,138,134,.5);padding:8px 22px;cursor:pointer}
 #wingpick #wpCancel:hover{border-color:var(--cy);color:#eafffb}
+#rivalBoard{margin:14px auto 0;max-width:520px;border:1px solid rgba(91,138,134,.3);padding:8px 14px;font-family:var(--mono)}
+#rivalBoard .rb-title{color:#ff5a2a;font-size:10px;letter-spacing:3px;text-align:center}
+#rivalBoard .rb-row{color:#9fb8c8;font-size:10px;letter-spacing:1px;display:flex;justify-content:space-between;margin-top:4px}
+#rivalBoard .rb-empty{color:#5b8a86;font-size:10px;text-align:center;margin-top:4px;opacity:.7}

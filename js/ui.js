@@ -337,6 +337,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', x, y + s + 12);
     if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u25C6 BOSS', x, by - 8); }
     else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2691 BOMBER', x, by - 8); }
+    else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 Lv' + rival.level, x, by - 8); }
     else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || 'ACE') + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
     else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
   } else {
@@ -666,6 +667,12 @@ function deployFromTech() {
 }
 
 /* ---------------- hangar / flow ---------------- */
+function renderKillBoard() {
+  const list = g('rbList'); if (!list || !rival) return;
+  list.innerHTML = rival.board.length
+    ? rival.board.slice().reverse().map(b => '<div class="rb-row"><span>☠ ' + b.name + '</span><span>' + b.jetName + '</span><span>Lv' + b.level + ' · W' + b.wave + '</span></div>').join('')
+    : '<div class="rb-empty">NO RIVALS DOWNED</div>';
+}
 function buildHangar() {
   // ---- single-jet carousel selector ----
   const dots = g('jetDots'); dots.innerHTML = '';
@@ -706,6 +713,7 @@ function buildHangar() {
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   selectJet(selectedJet);
   updateBest();
+  renderKillBoard();
 }
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
 function renderJetCard(i) {
@@ -888,4 +896,5 @@ function returnToHangar() {
   g('hangar').classList.remove('hide');
   selectJet(selectedJet);
   updateBest();
+  renderKillBoard();
 }
