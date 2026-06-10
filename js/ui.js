@@ -718,6 +718,8 @@ function buildHangar() {
   setDifficulty(difficulty);
   document.querySelectorAll('.tbtn').forEach(b => b.addEventListener('click', () => setTimeOfDay(+b.dataset.t)));
   setTimeOfDay(timeOfDay);
+  document.querySelectorAll('.mbtn').forEach(b => b.addEventListener('click', () => setOpMode(+b.dataset.m)));
+  setOpMode(opMode ? 1 : 0);
   const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
   const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
@@ -769,6 +771,12 @@ function setDifficulty(d) {
 function setTimeOfDay(t) {
   applyTimeOfDay(t);
   document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('on', +b.dataset.t === timeOfDay));
+  if (audio.on) audio.ui();
+  saveSettings();
+}
+function setOpMode(m) {
+  opMode = !!m;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', (+b.dataset.m === 1) === opMode));
   if (audio.on) audio.ui();
   saveSettings();
 }
@@ -861,6 +869,7 @@ function loadSettings() {
     if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
     if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
     if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
+    if (typeof s.opMode === 'boolean') opMode = s.opMode;
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
@@ -870,7 +879,7 @@ function loadSettings() {
 function saveSettings() {
   try {
     localStorage.setItem('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar
+      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode
     }));
   } catch (e) {}
 }

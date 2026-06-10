@@ -139,6 +139,7 @@ let autoLock = false; // when off, the player must press F to designate a lock t
 let startWingman = true; // launch each sortie with a starting AI escort (toggle in Settings)
 let rivalEnabled = true;     // nemesis rival ace appearances (Settings toggle)
 let groundWar = true;        // ground units + strike waves (Settings toggle)
+let opMode = false;          // operation map mode vs endless (Hangar mode select)
 let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
 let choosingUpgrade = false; // true while the between-wave field-upgrade screen is open
 let difficulty = 1;
