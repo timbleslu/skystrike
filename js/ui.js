@@ -709,6 +709,7 @@ function buildHangar() {
   const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   selectJet(selectedJet);
@@ -845,6 +846,7 @@ function loadSettings() {
     if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
     if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
     if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
+    if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
@@ -854,7 +856,7 @@ function loadSettings() {
 function saveSettings() {
   try {
     localStorage.setItem('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled
+      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar
     }));
   } catch (e) {}
 }

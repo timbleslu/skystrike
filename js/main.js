@@ -1,6 +1,8 @@
 /* SKYSTRIKE — main.js: wave/boss/wingman spawning, input & touch controls, main animation loop, boot. Load 6th (last). */
 
 /* ---------------- waves ---------------- */
+function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
+function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
 function nextWave() {
   wave++;
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
@@ -15,7 +17,7 @@ function nextWave() {
     const dn = randInt(3, 4) + Math.floor(wave / 4);
     pendingSpawns.push(() => spawnDroneSwarm(dn));
   }
-  if (wave >= 2) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) pendingSpawns.push(spawnGround); }
+  if (groundSpawnsAllowed(wave, groundWar)) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) pendingSpawns.push(spawnGround); }
 }
 function processSpawnQueue(n) {
   for (let i = 0; i < n && pendingSpawns.length; i++) pendingSpawns.shift()();
