@@ -319,13 +319,14 @@ function buildCrate() {
   return grp;
 }
 
-/* Free GPU geometry + materials of a removed object subtree. Leaves textures (.map) alone —
-   some are shared/cached (e.g. drone glow sprite), and disposing a shared texture breaks others. */
+/* Free GPU geometry + materials of a removed object subtree. Skips geometry tagged
+   userData.shared (cached jet geometry reused by living enemies) and textures (.map,
+   shared/cached e.g. the drone glow sprite) — disposing either would corrupt others. */
 function disposeGroup(group) {
   if (!group) return;
   group.traverse(o => {
     if (o.isMesh || o.isSprite) {
-      if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+      if (o.geometry && o.geometry.dispose && !o.geometry.userData.shared) o.geometry.dispose();
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
       for (const m of mats) if (m && m.dispose) m.dispose();
     }
