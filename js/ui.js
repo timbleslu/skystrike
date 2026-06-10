@@ -516,10 +516,20 @@ let techTab = 'tech';
 function owns(id) { return player.tech.indexOf(id) >= 0; }
 function repeatCount(node) { return player.techRepeat[node.id] || 0; }
 function nodeCost(node) { return node.repeat ? node.cost + (node.costStep || 0) * repeatCount(node) : node.cost; }
+function reqSatisfied(node, ownsFn, byId, groundOn) {
+  let req = node.req;
+  while (req) {
+    const rn = byId[req];
+    if (!groundOn && rn && rn.ground) { req = rn.req; continue; }   // bypass hidden ground nodes
+    return ownsFn(req);
+  }
+  return true;
+}
 function nodeState(node) {
+  if (node.ground && !groundWar) return 'hidden';
   if (!node.repeat && owns(node.id)) return 'bought';
   if (node.ok && !node.ok(player)) return 'na';
-  if (node.req && !owns(node.req)) return 'locked';
+  if (!reqSatisfied(node, owns, TECH_BY_ID, groundWar)) return 'locked';
   return player.tp >= nodeCost(node) ? 'avail' : 'cantafford';
 }
 function openTechScreen() {
@@ -555,7 +565,9 @@ function renderTechTree(recenter) {
   svg += '</svg>';
   let nodes = '';
   for (const n of treeNodes) {
-    const st = nodeState(n), p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
+    const st = nodeState(n);
+    if (st === 'hidden') continue;
+    const p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
     const cost = nodeCost(n);
     const costTxt = n.id === 'core' ? 'CORE' : st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
@@ -586,7 +598,9 @@ function renderArmory() {
   const armNodes = TECH_TREE.filter(n => n.tab === 'armory');
   let html = '<div class="armory-grid">';
   for (const n of armNodes) {
-    const st = nodeState(n), ac = FAM_C[n.fam] || '#ffe14d';
+    const st = nodeState(n);
+    if (st === 'hidden') continue;
+    const ac = FAM_C[n.fam] || '#ffe14d';
     const cost = nodeCost(n);
     const costTxt = st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
