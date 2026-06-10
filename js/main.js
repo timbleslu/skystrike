@@ -5,13 +5,19 @@ function nextWave() {
   wave++;
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
   const count = clamp(3 + wave + DIFFS[difficulty].count, 2, 10);
-  for (let i = 0; i < count; i++) spawnFighter();
-  if (wave % 4 === 0) { spawnBoss(); showBanner('\u26A0 BOSS INCOMING \u26A0'); }
+  for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
+  if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner('\u26A0 BOSS INCOMING \u26A0'); }
   else showBanner('WAVE ' + wave);
-  if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) spawnAce();
-  if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) spawnBomber();
-  if (wave >= 3 && wave % 4 !== 0 && Math.random() < 0.5) spawnDroneSwarm(randInt(3, 4) + Math.floor(wave / 4));
-  if (wave >= 2) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) spawnGround(); }
+  if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
+  if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
+  if (wave >= 3 && wave % 4 !== 0 && Math.random() < 0.5) {
+    const dn = randInt(3, 4) + Math.floor(wave / 4);
+    pendingSpawns.push(() => spawnDroneSwarm(dn));
+  }
+  if (wave >= 2) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) pendingSpawns.push(spawnGround); }
+}
+function processSpawnQueue(n) {
+  for (let i = 0; i < n && pendingSpawns.length; i++) pendingSpawns.shift()();
 }
 function spawnAce() {
   const ang = rand(0, TWO_PI), r = rand(2800, 4400);
@@ -459,7 +465,9 @@ function clearWingmen() {
 function handleWaves(dt) {
   const aliveCombat = enemies.some(e => e.alive && e.type !== 'ground' && e.type !== 'bomber');
   if (!betweenWaves) {
-    if (!aliveCombat && wave > 0) {
+    // Don't declare the wave clear until the queue is empty — otherwise the frames between
+    // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
+    if (!aliveCombat && pendingSpawns.length === 0 && wave > 0) {
       betweenWaves = true; waveTimer = 4; showBanner('WAVE ' + wave + ' CLEAR');
       openTechScreen();   // open the R&D tech tree before the next wave
     }
@@ -467,6 +475,7 @@ function handleWaves(dt) {
     waveTimer -= dt;
     if (waveTimer <= 0) { betweenWaves = false; nextWave(); }
   }
+  processSpawnQueue(SPAWN_PER_FRAME);   // build a few queued enemies this frame
 }
 
 /* ---------------- input ---------------- */

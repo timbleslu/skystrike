@@ -749,6 +749,7 @@ function startGame(i) {
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
+  pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9;
   if (_dewBeam) _dewBeam.visible = false;
@@ -822,6 +823,7 @@ function clearArena() {
   for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
+  pendingSpawns.length = 0;
   BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
   if (player && player.group) scene.remove(player.group);
   player = null;

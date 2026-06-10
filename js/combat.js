@@ -489,7 +489,8 @@ function killEnemy(e, byPlayer, byCCA) {
   if (e.type === 'drone') { if (Math.random() < 0.12) spawnLoot(e.group.position); }
   else if (e.type !== 'fighter' || e.elite || Math.random() < 0.5) spawnLoot(e.group.position);
   scene.remove(e.group);
-  if (e.marker) scene.remove(e.marker);
+  disposeGroup(e.group);
+  if (e.marker) scene.remove(e.marker);   // marker geometry/material may be shared — do not dispose it here
   if (player.lockedTarget === e) player.lockedTarget = null;
   if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
 

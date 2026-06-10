@@ -727,7 +727,7 @@ function updateBomber(e, dt) {
   for (let k = 0; k < missiles.length; k++) { const m = missiles[k]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { bInc = true; break; } }
   if (bInc) { e.flareCd -= dt; if (e.flareCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e.flareCd = 2.2; } }
   if (e.group.position.distanceToSquared(e.spawnPos) > 144000000) {
-    e.alive = false; scene.remove(e.group); if (e.marker) scene.remove(e.marker);
+    e.alive = false; scene.remove(e.group); disposeGroup(e.group); if (e.marker) scene.remove(e.marker);
     if (player.lockedTarget === e) player.lockedTarget = null;
     if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
     showBanner('BOMBER ESCAPED');
