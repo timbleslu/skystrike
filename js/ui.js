@@ -911,15 +911,15 @@ function updateBest() {
 }
 // best score survives reloads when the file is opened locally (storage may be blocked in some sandboxes)
 function loadBest() {
-  try { const v = parseInt(localStorage.getItem('skystrike_best') || '0', 10); if (!isNaN(v) && v > bestScore) bestScore = v; } catch (e) {}
+  try { const v = parseInt(store.get('skystrike_best') || '0', 10); if (!isNaN(v) && v > bestScore) bestScore = v; } catch (e) {}
 }
 function saveBest() {
-  try { localStorage.setItem('skystrike_best', String(bestScore)); } catch (e) {}
+  try { store.set('skystrike_best', String(bestScore)); } catch (e) {}
 }
 // player settings (volume, toggles, last loadout) persist across reloads when storage is available
 function loadSettings() {
   try {
-    const s = JSON.parse(localStorage.getItem('skystrike_settings') || '{}');
+    const s = JSON.parse(store.get('skystrike_settings') || '{}');
     if (typeof s.volume === 'number') volume = clamp(s.volume, 0, 1);
     if (typeof s.muted === 'boolean') muted = s.muted;
     if (typeof s.invertY === 'boolean') invertY = s.invertY;
@@ -936,7 +936,7 @@ function loadSettings() {
 }
 function saveSettings() {
   try {
-    localStorage.setItem('skystrike_settings', JSON.stringify({
+    store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode
     }));
   } catch (e) {}
