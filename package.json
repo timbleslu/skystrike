@@ -1,0 +1,10 @@
+{
+  "name": "skystrike",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SKYSTRIKE // ACE PROTOCOL — arcade jet combat (Three.js)",
+  "scripts": {
+    "test": "sh -c 'for f in tests/*.test.js; do node \"$f\" || exit 1; done; echo ALL TESTS PASS'",
+    "build:www": "sh scripts/build-www.sh"
+  }
+}
