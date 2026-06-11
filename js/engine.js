@@ -100,6 +100,10 @@ function initThree() {
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true });
+  // r128-equivalent rendering: keep linear output + legacy light intensities after the r159 upgrade
+  THREE.ColorManagement.enabled = false;
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+  renderer.useLegacyLights = true;
   renderer.setSize(W, H); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
   ambientLight = new THREE.AmbientLight(0x4a5e7a, 0.85); scene.add(ambientLight);

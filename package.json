@@ -6,5 +6,8 @@
   "scripts": {
     "test": "sh -c 'for f in tests/*.test.js; do node \"$f\" || exit 1; done; echo ALL TESTS PASS'",
     "build:www": "sh scripts/build-www.sh"
+  },
+  "devDependencies": {
+    "three": "^0.159.0"
   }
 }
