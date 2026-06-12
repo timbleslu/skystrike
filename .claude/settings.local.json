@@ -80,7 +80,8 @@
       "Bash(npx vercel *)",
       "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_teams",
       "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_projects",
-      "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_deployments"
+      "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_deployments",
+      "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__get_deployment"
     ]
   }
 }
