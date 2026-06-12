@@ -77,7 +77,10 @@
       "Bash(chmod +x scripts/build-www.sh)",
       "Bash(npm run *)",
       "Bash(npx cap *)",
-      "Bash(npx vercel *)"
+      "Bash(npx vercel *)",
+      "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_teams",
+      "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_projects",
+      "mcp__03eb66f3-a7a4-42cc-a28a-30429b5c5d74__list_deployments"
     ]
   }
 }
