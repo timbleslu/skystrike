@@ -230,7 +230,10 @@ function updateFlares(dt) {
     const f = flares[i]; f.life -= dt; f.vel.y -= 120 * dt; f.vel.multiplyScalar(1 - 0.5 * dt);
     f.mesh.position.addScaledVector(f.vel, dt);
     if (Math.random() < 0.6) spawnSmoke(f.mesh.position, 0xffcc66, 0.45);
-    if (f.life <= 0) { scene.remove(f.mesh); flares.splice(i, 1); }
+    if (f.life <= 0) {
+      if (f.owner === 'player' && player.flakFlares) missileSplash(f.mesh.position, player.flakFlares, 260, null);   // FLAK BLOOM — flares burn out as HE bursts
+      scene.remove(f.mesh); flares.splice(i, 1);
+    }
   }
 }
 
@@ -495,6 +498,7 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
   lastCrit = false;
   if (byPlayer) {
     if (player.alphaMul > 1 && e.hp >= e.maxHp - 0.5) amt *= player.alphaMul;            // MARKSMAN — alpha strike on a healthy target
+    if (player.comboDmg) amt *= 1 + Math.min(0.3, player.combo * player.comboDmg);       // RHYTHM OF WAR — combo feeds damage, capped at +30%
     if (player.critChance && Math.random() < player.critChance) { amt *= player.critMul; lastCrit = true; }   // CRITICAL OPTICS
   }
   e.hp -= amt; e.hitFlash = 0.12;
@@ -507,6 +511,7 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
   // EXECUTIONER — finish a wounded non-boss outright
   if (byPlayer && player.execThresh && e.type !== 'boss' && e.hp > 0 && e.hp <= e.maxHp * player.execThresh) {
     e.hp = 0; spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
+    if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
   }
   if (e.type === 'boss' && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.35) {
     e.enraged = true; e.turnRate *= 1.3; empFlash = 0.45; showBanner('\u26A0 BOSS ENRAGED \u26A0');
@@ -535,6 +540,8 @@ function killEnemy(e, byPlayer, byCCA) {
     if (player.vampShield && player.lifesteal > room) player.shield = Math.min(shieldCap, player.shield + (player.lifesteal - room) * player.vampShield);  // overheal bleeds into overshield
   }
   if (player.shieldOnKill) player.shield = Math.min(shieldCap, player.shield + player.shieldOnKill);
+  if (player.gunScavenge) player.bullets = Math.min(player.maxBullets, player.bullets + player.gunScavenge);   // BRASS SCAVENGER
+  if (byPlayer && player.slowOnKill) player.slow = Math.max(player.slow, player.slowOnKill);                   // KILL CLOCK — a beat of bullet-time
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
   if (e.type === 'boss') { run.boss++; showBanner('\u25C6 BOSS DESTROYED \u25C6'); empFlash = 0.5; }

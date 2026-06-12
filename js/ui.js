@@ -517,13 +517,17 @@ function owns(id) { return player.tech.indexOf(id) >= 0; }
 function repeatCount(node) { return player.techRepeat[node.id] || 0; }
 function nodeCost(node) { return node.repeat ? node.cost + (node.costStep || 0) * repeatCount(node) : node.cost; }
 function reqSatisfied(node, ownsFn, byId, groundOn) {
-  let req = node.req;
-  while (req) {
-    const rn = byId[req];
-    if (!groundOn && rn && rn.ground) { req = rn.req; continue; }   // bypass hidden ground nodes
-    return ownsFn(req);
-  }
-  return true;
+  // a single prerequisite is met if it's owned — or if it's a hidden ground node,
+  // in which case we look through it to its own prerequisites instead
+  const met = (id) => {
+    const rn = byId[id];
+    if (!groundOn && rn && rn.ground) return reqSatisfied(rn, ownsFn, byId, groundOn);   // bypass hidden ground nodes
+    return ownsFn(id);
+  };
+  if (node.reqAll && !node.reqAll.every(met)) return false;        // AND-gate: every listed node required
+  const req = node.req;
+  if (!req) return true;
+  return Array.isArray(req) ? req.some(met) : met(req);            // OR-gate: any one parent unlocks
 }
 function nodeState(node) {
   if (node.ground && !groundWar) return 'hidden';
@@ -552,15 +556,21 @@ function renderTechTree(recenter) {
   // connectors (SVG), drawn first so nodes sit on top
   let svg = '<svg width="' + W + '" height="' + H + '">';
   for (const n of treeNodes) {
-    if (!n.req) continue; const p = TECH_BY_ID[n.req]; if (!p) continue;
-    const a = nodeXY(p), b = nodeXY(n);
-    const px = a.left + TECH_NODEW / 2, pb = a.top + TECH_NODEH;
-    const cx = b.left + TECH_NODEW / 2, ct = b.top;
-    const midY = (pb + ct) / 2;
-    const lit = owns(n.req) && (n.repeat ? repeatCount(n) > 0 : owns(n.id));
-    const open = owns(n.req) && nodeState(n) !== 'locked';
-    const col = lit ? '#46ff8c' : open ? 'rgba(25,240,212,.55)' : 'rgba(91,138,134,.3)';
-    svg += '<path d="M' + px + ',' + pb + ' V' + midY + ' H' + cx + ' V' + ct + '" fill="none" stroke="' + col + '" stroke-width="' + (lit ? 3 : 2) + '"/>';
+    // draw an edge from every parent: `req` entries are OR-gates (solid), `reqAll` are AND-gates (dashed)
+    const orReqs = n.req ? (Array.isArray(n.req) ? n.req : [n.req]) : [];
+    const edges = orReqs.map(id => ({ id, and: false })).concat((n.reqAll || []).map(id => ({ id, and: true })));
+    for (const edge of edges) {
+      const p = TECH_BY_ID[edge.id]; if (!p) continue;
+      const a = nodeXY(p), b = nodeXY(n);
+      const px = a.left + TECH_NODEW / 2, pb = a.top + TECH_NODEH;
+      const cx = b.left + TECH_NODEW / 2, ct = b.top;
+      const midY = (pb + ct) / 2;
+      const lit = owns(edge.id) && (n.repeat ? repeatCount(n) > 0 : owns(n.id));
+      const open = owns(edge.id) && nodeState(n) !== 'locked';
+      const col = lit ? '#46ff8c' : open ? 'rgba(25,240,212,.55)' : 'rgba(91,138,134,.3)';
+      const dash = edge.and ? ' stroke-dasharray="7,5"' : '';
+      svg += '<path d="M' + px + ',' + pb + ' V' + midY + ' H' + cx + ' V' + ct + '" fill="none" stroke="' + col + '" stroke-width="' + (lit ? 3 : 2) + '"' + dash + '/>';
+    }
   }
   svg += '</svg>';
   let nodes = '';
