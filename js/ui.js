@@ -802,8 +802,7 @@ function initOnboarding() {
     store.set('skystrike_onboarded', '1');
     if (audio.on) audio.ui();
   });
-  if (store.get('skystrike_onboarded')) return;
-  if (store.get('skystrike_settings')) {     // returning player from before onboarding existed — don't bother them
+  if (isReturningPlayer) {     // already onboarded, or a returning player from before onboarding existed
     store.set('skystrike_onboarded', '1');
     return;
   }
