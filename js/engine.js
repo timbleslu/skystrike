@@ -184,33 +184,68 @@ function buildSky() {
 
 let terrainMesh;
 function buildTerrain() {
-  const SIZE = 26000, SEG = 176;
-  let geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+  // smooth-shaded indexed grid: analytic normals from the terrainH gradient,
+  // per-vertex height/slope colouring, shader-level fbm albedo detail
+  const SIZE = 26000, SEG = 220;
+  const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
-  geo = geo.toNonIndexed();
   const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, terrainH(pos.getX(i), pos.getZ(i)));
-  const cLow = new THREE.Color(0x143038), cMid = new THREE.Color(0x1f4a3a), cHigh = new THREE.Color(0x586d7e), cSnow = new THREE.Color(0xd2e4ef), cRock = new THREE.Color(0x3a444c);
-  const colors = []; const c = new THREE.Color();
-  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), nrm = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i += 3) {
-    const ay = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
-    let t = clamp((ay + 220) / 760, 0, 1);
+  const cLow = new THREE.Color(0x143038), cMid = new THREE.Color(0x1f4a3a), cHigh = new THREE.Color(0x586d7e), cSnow = new THREE.Color(0xd2e4ef);
+  const cRock = new THREE.Color(0x3a444c), cSand = new THREE.Color(0x6e6450);
+  const colors = new Float32Array(pos.count * 3), normals = new Float32Array(pos.count * 3);
+  const c = new THREE.Color(), E = 14;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), h = terrainH(x, z);
+    pos.setY(i, h);
+    // analytic normal via central differences
+    const dhx = (terrainH(x + E, z) - terrainH(x - E, z)) / (2 * E);
+    const dhz = (terrainH(x, z + E) - terrainH(x, z - E)) / (2 * E);
+    const inv = 1 / Math.hypot(dhx, 1, dhz);
+    normals[i * 3] = -dhx * inv; normals[i * 3 + 1] = inv; normals[i * 3 + 2] = -dhz * inv;
+    // height bands
+    const t = clamp((h + 220) / 760, 0, 1);
     if (t < 0.4) c.copy(cLow).lerp(cMid, t / 0.4);
     else if (t < 0.74) c.copy(cMid).lerp(cHigh, (t - 0.4) / 0.34);
     else c.copy(cHigh).lerp(cSnow, (t - 0.74) / 0.26);
-    // steep faces shed vegetation/snow and read as bare rock
-    vA.fromBufferAttribute(pos, i); vB.fromBufferAttribute(pos, i + 1); vC.fromBufferAttribute(pos, i + 2);
-    nrm.crossVectors(e1.subVectors(vB, vA), e2.subVectors(vC, vA)).normalize();
-    const steep = clamp((0.78 - Math.abs(nrm.y)) / 0.3, 0, 1);
+    // shoreline sand near sea level, bare rock on steep faces
+    if (h < 8) c.lerp(cSand, clamp((8 - h) / 26, 0, 1) * 0.8);
+    const steep = clamp((0.78 - inv) / 0.3, 0, 1);
     c.lerp(cRock, steep * 0.8);
-    const j = 1 + (Math.random() - 0.5) * 0.12;
-    for (let k = 0; k < 3; k++) colors.push(c.r * j, c.g * j, c.b * j);
+    const j = 1 + (Math.random() - 0.5) * 0.07;
+    colors[i * 3] = c.r * j; colors[i * 3 + 1] = c.g * j; colors[i * 3 + 2] = c.b * j;
   }
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  terrainMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, metalness: 0, roughness: 0.96 }));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.95 });
+  // two-scale world-space noise breaks up the per-vertex colour bands into ground texture
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(position, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', [
+        '#include <common>',
+        'varying vec3 vWPos;',
+        'float thash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+        'float tnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);',
+        '  return mix(mix(thash(i), thash(i+vec2(1,0)), u.x), mix(thash(i+vec2(0,1)), thash(i+vec2(1,1)), u.x), u.y); }',
+        'float tfbm(vec2 p){ return 0.55*tnoise(p) + 0.28*tnoise(p*2.7) + 0.17*tnoise(p*6.1); }',
+      ].join('\n'))
+      .replace('#include <color_fragment>', [
+        '#include <color_fragment>',
+        '{',
+        '  float macro  = tfbm(vWPos.xz * 0.0014);',   // broad vegetation/soil patches
+        '  float detail = tfbm(vWPos.xz * 0.035);',    // mid-scale ground breakup
+        '  float micro  = tnoise(vWPos.xz * 0.3);',    // fine grain up close
+        '  diffuseColor.rgb *= 0.80 + macro * 0.38;',
+        '  diffuseColor.rgb *= 0.88 + detail * 0.20;',
+        '  diffuseColor.rgb *= 0.95 + micro * 0.08;',
+        '}',
+      ].join('\n'));
+  };
+  terrainMesh = new THREE.Mesh(geo, mat);
   terrainMesh.receiveShadow = true;
+  terrainMesh.castShadow = true;   // ridgelines throw real shadows into the valleys
   scene.add(terrainMesh);
 }
 
