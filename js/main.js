@@ -396,6 +396,7 @@ function updateCCA(w, dt) {
 function updateWingmen(dt) {
   for (let i = wingmen.length - 1; i >= 0; i--) {
     const w = wingmen[i];
+    if (w.alive && w.group) animEngines(w.group, 0.85);
     if (w.temp) {
       w.expire -= dt;
       if (!w.alive || w.expire <= 0) {            // CCA expended or recalled to base — no respawn

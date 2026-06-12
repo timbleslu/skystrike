@@ -21,6 +21,46 @@ function markShadowCasters(g) {
   g.traverse(o => { if (o.isMesh && o.material && !o.material.transparent && o.material.blending !== THREE.AdditiveBlending) o.castShadow = true; });
 }
 
+/* object-space noise patch for airframe skins: subtle panel-grime albedo breakup +
+   roughness variation so sun glints streak across the hull instead of reading flat.
+   UV-free, so it works on lathe and extrude geometry alike; identical shader source
+   keeps one compiled program shared across every patched material. */
+function patchJetSurface(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vOPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvOPos = position;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', [
+        '#include <common>',
+        'varying vec3 vOPos;',
+        'float jhash(vec3 p){ return fract(sin(dot(p, vec3(17.1, 31.7, 53.7))) * 43758.5453); }',
+        'float jnoise(vec3 p){ vec3 i = floor(p); vec3 f = fract(p); vec3 u = f*f*(3.0-2.0*f);',
+        '  return mix(mix(mix(jhash(i), jhash(i+vec3(1,0,0)), u.x), mix(jhash(i+vec3(0,1,0)), jhash(i+vec3(1,1,0)), u.x), u.y),',
+        '             mix(mix(jhash(i+vec3(0,0,1)), jhash(i+vec3(1,0,1)), u.x), mix(jhash(i+vec3(0,1,1)), jhash(i+vec3(1,1,1)), u.x), u.y), u.z); }',
+      ].join('\n'))
+      .replace('#include <color_fragment>', [
+        '#include <color_fragment>',
+        'diffuseColor.rgb *= 0.93 + jnoise(vOPos * 0.55) * 0.10 + jnoise(vOPos * 2.3) * 0.04;',
+      ].join('\n'))
+      .replace('#include <roughnessmap_fragment>', [
+        '#include <roughnessmap_fragment>',
+        'roughnessFactor = clamp(roughnessFactor + (jnoise(vOPos * 1.7) - 0.5) * 0.22, 0.05, 1.0);',
+      ].join('\n'));
+  };
+}
+
+/* per-frame engine animation: afterburner flame stretches and flickers with throttle */
+function animEngines(group, thr) {
+  const eng = group.userData.engines; if (!eng) return;
+  for (let i = 0; i < eng.length; i++) {
+    const fl = 0.92 + Math.random() * 0.16;
+    eng[i].flame.scale.set(fl, fl, (0.55 + thr * 1.05) * fl);
+    eng[i].flame.material.opacity = (0.28 + thr * 0.42) * fl;
+    eng[i].glow.material.opacity = 0.35 + thr * 0.3;
+  }
+}
+
 /* ---------------- jet meshes (high-poly parametric) ---------------- */
 /* extruded, swept wing/canard/stab built from a half-planform [span, chordZ] (chordZ<0 = forward) */
 function extrudeWing(pts, thick, mat, y, bevelSeg, cacheKey) {
@@ -198,13 +238,14 @@ function buildJet(color, accent, cfg, hero) {
   const SID = cfg.id || '';                 // '' => cacheGeo bypasses (no shared key)
   const H = hero ? 1 : 0;
   const gk = part => (SID ? SID + ':' + part + ':' + H : '');   // geometry cache key for this shape/part/hero
-  const body  = new THREE.MeshStandardMaterial({ color, metalness: 0.42, roughness: 0.46, side: THREE.DoubleSide });
-  const dark  = new THREE.MeshStandardMaterial({ color: 0x222a33, metalness: 0.6, roughness: 0.5, side: THREE.DoubleSide });
+  const body  = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.38, envMapIntensity: 1.1, side: THREE.DoubleSide });
+  const dark  = new THREE.MeshStandardMaterial({ color: 0x222a33, metalness: 0.6, roughness: 0.5, envMapIntensity: 1.1, side: THREE.DoubleSide });
   const panel = new THREE.MeshStandardMaterial({ color: 0x171d25, metalness: 0.55, roughness: 0.6, side: THREE.DoubleSide });
-  const steel = new THREE.MeshStandardMaterial({ color: 0x6b7785, metalness: 0.85, roughness: 0.35 });
+  const steel = new THREE.MeshStandardMaterial({ color: 0x6b7785, metalness: 0.85, roughness: 0.3, envMapIntensity: 1.4 });
   const nozIn = new THREE.MeshStandardMaterial({ color: 0x0a0d11, metalness: 0.3, roughness: 0.75 });
   const sensor = new THREE.MeshStandardMaterial({ color: 0x1a2630, metalness: 0.55, roughness: 0.12, emissive: 0x0b1a26, emissiveIntensity: 0.5 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x213a52, metalness: 0.3, roughness: 0.08, emissive: 0x0a1622, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x213a52, metalness: 0.4, roughness: 0.04, emissive: 0x0a1622, envMapIntensity: 2.0, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+  patchJetSurface(body); patchJetSurface(dark);
   const L = cfg.len, half = L / 2, fR = cfg.frontR, rR = cfg.rearR, flat = cfg.flat || 0.62;
   const wy = (cfg.wingY != null ? cfg.wingY : -0.2);
 
@@ -730,6 +771,7 @@ function updateEnemy(e, dt) {
   const dist = toP.length();
   toP.multiplyScalar(1 / Math.max(dist, 0.001));
   const fwd = fwdQ(e.logicQuat, t3);
+  animEngines(e.group, clamp((e.speed || 480) / 700, 0.35, 1));
 
   const prev = e.state;
   let incoming = false;

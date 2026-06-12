@@ -106,6 +106,9 @@ function spawnMissile(pos, dir, target, enemy, dmgMul) {
   const glowColor = enemy ? 0xff6a2e : 0x38d6ff;
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: glowColor, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
   halo.scale.setScalar(enemy ? 48 : 42); mesh.add(halo);
+  // hot motor exhaust pinned to the tail
+  const exhaust = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd9a8, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
+  exhaust.position.z = 12; exhaust.scale.setScalar(15); mesh.add(exhaust);
   scene.add(mesh);
   const obj = {
     mesh, halo, vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
@@ -859,6 +862,7 @@ function updatePlayer(dt) {
     }
   }
 
+  animEngines(player.group, player.throttle);
   player._gpwsT -= dt; if (player.gpws && player._gpwsT <= 0) { audio.warn(); player._gpwsT = 0.5; }
   const incoming = missiles.some(m => m.enemy);
   player._missT -= dt; if (incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
