@@ -647,6 +647,7 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05); lastDt = dt;
   if (seaMat) seaMat.uniforms.time.value = clock.elapsedTime;
+  updateSunRig();
   if (paused) { renderer.render(scene, camera); return; }
 
   if (state === 'hangar') {

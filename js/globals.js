@@ -112,9 +112,10 @@ let scene, camera, renderer, clock, sun;
 let skyMat, sunDisc, ambientLight, hemiLight, starsMat, rimLight, haloA, haloB;
 let timeOfDay = 0;
 const TODS = [
-  { key: 'DAY',  top: 0x0a1c44, hor: 0x2a6a7a, bot: 0x1d4a63, fog: 0x0a1424, sun: 0xfff0d6, sunI: 1.5, amb: 0.58, hemi: 0.48, rim: 0.6, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0 },
-  { key: 'DUSK', top: 0x1a2150, hor: 0xe08a44, bot: 0x5a3340, fog: 0x2a1a28, sun: 0xffb060, sunI: 1.35, amb: 0.48, hemi: 0.4, rim: 0.55, stars: 0.35, disc: 0xffcf88, sunY: 0.32 },
-  { key: 'NIGHT', top: 0x02030f, hor: 0x0c1832, bot: 0x070d1c, fog: 0x05070f, sun: 0x9fb6ff, sunI: 0.7, amb: 0.36, hemi: 0.32, rim: 0.45, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6 },
+  // intensities are physical-light scaled (useLegacyLights = false ≈ legacy × π)
+  { key: 'DAY',  top: 0x0a1c44, hor: 0x2a6a7a, bot: 0x1d4a63, fog: 0x0a1424, sun: 0xfff0d6, sunI: 4.2, amb: 0.95, hemi: 0.75, rim: 1.25, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0 },
+  { key: 'DUSK', top: 0x1a2150, hor: 0xe08a44, bot: 0x5a3340, fog: 0x2a1a28, sun: 0xffb060, sunI: 3.6, amb: 0.7, hemi: 0.6, rim: 1.1, stars: 0.35, disc: 0xffcf88, sunY: 0.32 },
+  { key: 'NIGHT', top: 0x02030f, hor: 0x0c1832, bot: 0x070d1c, fog: 0x05070f, sun: 0x9fb6ff, sunI: 1.7, amb: 0.55, hemi: 0.5, rim: 0.95, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6 },
 ];
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;

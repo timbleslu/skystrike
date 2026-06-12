@@ -92,6 +92,9 @@ function terrainH(x, z) {
 
 /* ---------------- scene setup ---------------- */
 function initThree() {
+  // filmic pipeline: managed colors, sRGB output, ACES tone mapping, physically-scaled lights
+  THREE.ColorManagement.enabled = true;
+
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x070d18);
   scene.fog = new THREE.FogExp2(0x0a1424, 0.000058);
@@ -100,16 +103,26 @@ function initThree() {
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true });
-  // r128-equivalent rendering: keep linear output + legacy light intensities after the r159 upgrade
-  THREE.ColorManagement.enabled = false;
-  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-  renderer.useLegacyLights = true;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.useLegacyLights = false;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.setSize(W, H); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 
   ambientLight = new THREE.AmbientLight(0x4a5e7a, 0.85); scene.add(ambientLight);
   hemiLight = new THREE.HemisphereLight(0x9fc0ff, 0x21303f, 0.65); scene.add(hemiLight);
   sun = new THREE.DirectionalLight(0xfff0d6, 1.2);
   sun.position.set(0.5, 1.0, 0.35).multiplyScalar(2000); scene.add(sun);
+  // one tight shadow frustum that updateSunRig keeps centred on the player
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -650;
+  sun.shadow.camera.right = sun.shadow.camera.top = 650;
+  sun.shadow.camera.near = 50; sun.shadow.camera.far = 6000;
+  sun.shadow.bias = -0.0001; sun.shadow.normalBias = 2.5;
+  scene.add(sun.target);
   const rim = new THREE.DirectionalLight(0x77a8ff, 0.55);
   rim.position.set(-0.5, 0.35, -0.9).multiplyScalar(2000); scene.add(rim); rimLight = rim;
 
@@ -154,8 +167,10 @@ function buildSky() {
       '  float s = max(dot(d, sunDir), 0.0);',
       '  c += sunCol * (pow(s, 20.0) * 0.5 + pow(s, 3.0) * 0.16) * scatter;',
       // dense haze band hugging the horizon
-      '  c += hor * pow(1.0 - abs(h), 6.0) * 0.25;',
+      '  c += hor * pow(1.0 - abs(h), 6.0) * 0.18;',
       '  gl_FragColor = vec4(c, 1.0);',
+      '  #include <tonemapping_fragment>',
+      '  #include <colorspace_fragment>',
       '}',
     ].join('\n')
   });
@@ -193,6 +208,7 @@ function buildTerrain() {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   terrainMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, metalness: 0, roughness: 0.96 }));
+  terrainMesh.receiveShadow = true;
   scene.add(terrainMesh);
 }
 
@@ -272,6 +288,8 @@ function buildScenery() {
       '  float d = length(cameraPosition - vPos);',
       '  col = mix(col, fogCol, 1.0 - exp(-d * 0.000048));',
       '  gl_FragColor = vec4(col, 0.94);',
+      '  #include <tonemapping_fragment>',
+      '  #include <colorspace_fragment>',
       '}',
     ].join('\n'),
   });
@@ -318,6 +336,21 @@ function applyTimeOfDay(tod) {
   buildEnvMap();
 }
 
+/* Keep the sun rig centred on the action each frame: the shadow frustum tracks the
+   player, while the disc + halos stay pinned to the camera so the sun never drifts
+   as the player ranges across the map. Called once per frame from animate(). */
+function updateSunRig() {
+  if (!sun) return;
+  const T = TODS[timeOfDay];
+  t1.set(0.5, T.sunY, 0.35).normalize();
+  const focus = (player && player.group) ? player.group.position : camera.position;
+  sun.position.copy(focus).addScaledVector(t1, 2600);
+  sun.target.position.copy(focus);
+  if (sunDisc) sunDisc.position.copy(camera.position).addScaledVector(t1, 18000);
+  if (haloA) haloA.position.copy(camera.position).addScaledVector(t1, 17000);
+  if (haloB) haloB.position.copy(camera.position).addScaledVector(t1, 17000);
+}
+
 /* Low-res PMREM of the sky dome → scene.environment, so metallic surfaces (jets,
    missiles, sea foam) pick up real sky reflections. Rebuilt on time-of-day change. */
 let envRT = null;
@@ -356,7 +389,7 @@ function makePlatform() {
   platform = new THREE.Group();
   const disc = new THREE.Mesh(new THREE.CylinderGeometry(20, 23, 2.4, 36),
     new THREE.MeshStandardMaterial({ color: 0x0b1622, metalness: 0.45, roughness: 0.55, emissive: 0x06121e }));
-  disc.position.y = -3; platform.add(disc);
+  disc.position.y = -3; disc.receiveShadow = true; platform.add(disc);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(20, 0.5, 8, 40), new THREE.MeshBasicMaterial({ color: 0x19f0d4 }));
   ring.rotation.x = Math.PI / 2; ring.position.y = -1.7; platform.add(ring);
   scene.add(platform);

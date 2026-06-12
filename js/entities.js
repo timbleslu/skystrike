@@ -15,6 +15,12 @@ function cacheGeo(key, factory) {
   return g;
 }
 
+/* flag every opaque mesh in a built model as a shadow caster (glows, flames and
+   the tinted canopy stay non-casting so additive/transparent parts don't block light) */
+function markShadowCasters(g) {
+  g.traverse(o => { if (o.isMesh && o.material && !o.material.transparent && o.material.blending !== THREE.AdditiveBlending) o.castShadow = true; });
+}
+
 /* ---------------- jet meshes (high-poly parametric) ---------------- */
 /* extruded, swept wing/canard/stab built from a half-planform [span, chordZ] (chordZ<0 = forward) */
 function extrudeWing(pts, thick, mat, y, bevelSeg, cacheKey) {
@@ -434,6 +440,7 @@ function buildJet(color, accent, cfg, hero) {
     engines.push({ glow, flame });
   }
   g.userData.engines = engines; g.userData.body = body; g.userData.cfg = cfg;
+  markShadowCasters(g);
   return g;
 }
 function buildBoss() {
@@ -453,6 +460,7 @@ function buildGround() {
   const turret = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 6), new THREE.MeshStandardMaterial({ color: 0x7a5e2c, flatShading: true })); turret.position.y = 7; g.add(turret);
   const rail = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 11), new THREE.MeshStandardMaterial({ color: 0xff9a36, emissive: 0x331400, flatShading: true })); rail.position.set(0, 8, -3); g.add(rail);
   g.userData.turret = turret;
+  markShadowCasters(g);
   return g;
 }
 function buildAAA() {
@@ -462,6 +470,7 @@ function buildAAA() {
   const barrels = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 13), new THREE.MeshStandardMaterial({ color: 0x55603f, emissive: 0x1a2008, flatShading: true }));
   barrels.position.set(0, 7, -2); barrels.rotation.x = -0.5; g.add(barrels);
   g.userData.turret = barrels;
+  markShadowCasters(g);
   return g;
 }
 function buildRadar() {
@@ -471,6 +480,7 @@ function buildRadar() {
   const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 7, 3, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0x8a98a0, emissive: 0x0a2a30, flatShading: true, side: THREE.DoubleSide }));
   dish.position.y = 11; dish.rotation.z = Math.PI / 3; g.add(dish);
   g.userData.dish = dish;
+  markShadowCasters(g);
   return g;
 }
 function buildTruck() {
@@ -479,6 +489,7 @@ function buildTruck() {
   bed.position.y = 2.6; g.add(bed);
   const cab = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 3.5), new THREE.MeshStandardMaterial({ color: 0x6a5a3a, flatShading: true }));
   cab.position.set(0, 4.6, -4.6); g.add(cab);
+  markShadowCasters(g);
   return g;
 }
 
@@ -498,6 +509,7 @@ function buildDrone() {
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff3a2a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.9, depthWrite: false, fog: false }));
   glow.scale.setScalar(24); g.add(glow);
   g.userData.shell = shell; g.userData.core = core; g.userData.glow = glow;
+  markShadowCasters(g);
   return g;
 }
 
