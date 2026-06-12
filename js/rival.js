@@ -37,11 +37,11 @@ function genRival(board) {
 }
 function loadRival() {
   try {
-    const r = JSON.parse(localStorage.getItem(RIVAL_KEY) || 'null');
+    const r = JSON.parse(store.get(RIVAL_KEY) || 'null');
     rival = validRival(r) ? r : genRival(r && Array.isArray(r.board) ? r.board : []);
   } catch (e) { rival = genRival([]); }
 }
-function saveRival() { try { localStorage.setItem(RIVAL_KEY, JSON.stringify(rival)); } catch (e) {} }
+function saveRival() { try { store.set(RIVAL_KEY, JSON.stringify(rival)); } catch (e) {} }
 function rivalEscaped(profile) {
   rival.level = Math.min(5, rival.level + 1);
   rival.encounters++;

@@ -1,0 +1,6 @@
+{
+  "appId": "com.timbles.skystrike",
+  "appName": "Skystrike",
+  "webDir": "www",
+  "ios": { "contentInset": "never" }
+}

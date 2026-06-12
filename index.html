@@ -2,15 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>SKYSTRIKE // ACE PROTOCOL</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div id="vignette"></div>
 <canvas id="h2d"></canvas>
 
 <div id="hud">
@@ -174,6 +173,15 @@
   <div class="op-box">
     <div class="op-title">OPERATION MAP</div>
     <div class="op-sub">// SELECT NEXT SECTOR //</div>
+    <div class="op-info">Plot your own course through enemy territory: pick one highlighted sector per column, left to right. Each pick is the next wave you fly &mdash; clear it, spend your RP, then return here. Reach <b>FINAL</b> and destroy the boss to complete the operation.</div>
+    <div class="op-legend">
+      <span><b>FURBALL</b> fighter swarm &mdash; grows with depth</span>
+      <span><b>INTERCEPT</b> bombers &mdash; down them before they escape</span>
+      <span><b>STRIKE</b> fortified ground site + fleeing convoy</span>
+      <span><b>ELITE</b> ace squadron &mdash; your rival hunts here</span>
+      <span><b>DEPOT</b> repair &amp; full rearm, no combat</span>
+      <span><b>FINAL</b> the operation's boss target</span>
+    </div>
     <div id="opStages" class="op-stages"></div>
     <button id="opLaunch" disabled>&#9654; LAUNCH</button>
   </div>
@@ -275,7 +283,8 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="js/storage.js"></script>
 <script src="js/globals.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/entities.js"></script>

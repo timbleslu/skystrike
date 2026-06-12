@@ -16,26 +16,14 @@ function nextWave() {
     for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
     for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(spawnBomber);
     if (plan.boss) pendingSpawns.push(spawnBoss);
-    if (plan.ground) {
-      pendingSpawns.push(() => spawnGroundKind('radar'));
-      pendingSpawns.push(() => spawnGroundKind('sam'));
-      pendingSpawns.push(() => spawnGroundKind('sam'));
-      pendingSpawns.push(() => spawnGroundKind('aaa'));
-      pendingSpawns.push(() => spawnGroundKind('aaa'));
-      for (let k = 0; k < 3; k++) pendingSpawns.push(() => spawnGroundKind('truck'));
-    }
+    if (plan.ground) queueStrikeSite(wave);
     if (plan.rival && rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     return;
   }
   if (strike) {
     showBanner('\u2692 STRIKE WAVE \u2014 FLATTEN THE SITE \u2692');
-    pendingSpawns.push(() => spawnGroundKind('radar'));
-    pendingSpawns.push(() => spawnGroundKind('sam'));
-    pendingSpawns.push(() => spawnGroundKind('sam'));
-    pendingSpawns.push(() => spawnGroundKind('aaa'));
-    pendingSpawns.push(() => spawnGroundKind('aaa'));
-    for (let k = 0; k < 3; k++) pendingSpawns.push(() => spawnGroundKind('truck'));
+    queueStrikeSite(wave);
     for (let i = 0; i < 3; i++) pendingSpawns.push(spawnFighter);
     return;
   }
@@ -55,11 +43,26 @@ function nextWave() {
 function processSpawnQueue(n) {
   for (let i = 0; i < n && pendingSpawns.length; i++) pendingSpawns.shift()();
 }
-function spawnAce() {
-  const ang = rand(0, TWO_PI), r = rand(2800, 4400);
+/* Random spawn point on a ring around the player, altitude clamped to [terrain+minAGL, maxY]. */
+function airSpawnPos(rMin, rMax, yJitMin, yJitMax, minAGL, maxY) {
+  const ang = rand(0, TWO_PI), r = rand(rMin, rMax);
   const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
-  const py = clamp(player.group.position.y + rand(-300, 600), terrainH(px, pz) + 450, 4300);
-  const e = createEnemy('fighter', new THREE.Vector3(px, py, pz), { shapePool: aceShapePool() });
+  const py = clamp(player.group.position.y + rand(yJitMin, yJitMax), terrainH(px, pz) + minAGL, maxY);
+  return new THREE.Vector3(px, py, pz);
+}
+function groundSpawnPos(rMin, rMax) {
+  const ang = rand(0, TWO_PI), r = rand(rMin, rMax);
+  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
+  return new THREE.Vector3(px, terrainH(px, pz), pz);
+}
+function styleElite(e, bodyHex, emissiveHex, intensity, glowHex, flameHex) {
+  if (e.group.userData.body) { e.group.userData.body.color.setHex(bodyHex); e.group.userData.body.emissive = new THREE.Color(emissiveHex); e.group.userData.body.emissiveIntensity = intensity; }
+  const eng = e.group.userData.engines || [];
+  for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(glowHex); eng[i].flame.material.color.setHex(flameHex); }
+  e.marker.material.color.setHex(glowHex);
+}
+function spawnAce() {
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool() });
   e.elite = true;
   e.aceName = jetNameForShape(e.shapeKey);
   e.callsign = genCallsign('ACE');
@@ -67,17 +70,11 @@ function spawnAce() {
   e.hp = e.maxHp = 170 + wave * 9;
   e.turnRate = 1.5; e.gunRunCd = rand(1.5, 3);
   e.bulletAmmo = 75; e.missileAmmo = 2; e.flareAmmo = 1;
-  if (e.group.userData.body) { e.group.userData.body.color.setHex(0xffcf3a); e.group.userData.body.emissive = new THREE.Color(0x4a3300); e.group.userData.body.emissiveIntensity = 0.9; }
-  const eng = e.group.userData.engines || [];
-  for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(0xffd24d); eng[i].flame.material.color.setHex(0xffd24d); }
-  e.marker.material.color.setHex(0xffd24d);
+  styleElite(e, 0xffcf3a, 0x4a3300, 0.9, 0xffd24d, 0xffd24d);
   showBanner('\u2605 ACE INBOUND \u2605');
 }
 function spawnRival() {
-  const ang = rand(0, TWO_PI), r = rand(2800, 4400);
-  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
-  const py = clamp(player.group.position.y + rand(-300, 600), terrainH(px, pz) + 450, 4300);
-  const e = createEnemy('fighter', new THREE.Vector3(px, py, pz), { shapePool: [rival.shape] });
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape] });
   e.elite = true; e.rival = true;
   e.aceName = rival.jetName;
   e.callsign = rival.name;
@@ -92,24 +89,14 @@ function spawnRival() {
   if (rival.traits.indexOf('SCISSORS') !== -1) { e.turnRate *= 1.25; }
   if (rival.traits.indexOf('HEADHUNTER') !== -1) { e.headhunter = true; }
   if (rival.traits.indexOf('VETERAN') !== -1) { e.hp = e.maxHp = Math.round(e.maxHp * 1.2); e.turnRate *= 1.1; }
-  if (e.group.userData.body) { e.group.userData.body.color.setHex(0xff5a2a); e.group.userData.body.emissive = new THREE.Color(0x551100); e.group.userData.body.emissiveIntensity = 1.0; }
-  const eng = e.group.userData.engines || [];
-  for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(0xff5a2a); eng[i].flame.material.color.setHex(0xff7a3a); }
-  e.marker.material.color.setHex(0xff5a2a);
+  styleElite(e, 0xff5a2a, 0x551100, 1.0, 0xff5a2a, 0xff7a3a);
   showBanner('\u2620 RIVAL ON STATION \u2014 ' + rival.name + ' \u00b7 Lv' + rival.level + ' \u2620');
 }
 function spawnFighter() {
-  const ang = rand(0, TWO_PI), r = rand(2600, 4600);
-  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
-  const py = clamp(player.group.position.y + rand(-400, 650), terrainH(px, pz) + 400, 4200);
-  createEnemy('fighter', new THREE.Vector3(px, py, pz));
+  createEnemy('fighter', airSpawnPos(2600, 4600, -400, 650, 400, 4200));
 }
 function spawnBomber() {
-  const ang = rand(0, TWO_PI);
-  const sx = player.group.position.x + Math.cos(ang) * 5500;
-  const sz = player.group.position.z + Math.sin(ang) * 5500;
-  const sy = clamp(player.group.position.y + rand(-150, 500), terrainH(sx, sz) + 700, 4200);
-  const pos = new THREE.Vector3(sx, sy, sz);
+  const pos = airSpawnPos(5500, 5500, -150, 500, 700, 4200);
   const e = createEnemy('bomber', pos);
   e.speed = 150; e.turnRate = 0.5;
   e.spawnPos = pos.clone();
@@ -123,22 +110,39 @@ function spawnBoss() {
   createEnemy('boss', new THREE.Vector3(px, py, pz));
 }
 function spawnGround() {
-  const ang = rand(0, TWO_PI), r = rand(1600, 4200);
-  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
-  createEnemy('ground', new THREE.Vector3(px, terrainH(px, pz), pz));
+  createEnemy('ground', groundSpawnPos(1600, 4200));
 }
-function spawnGroundKind(gkind) {
-  const ang = rand(0, TWO_PI), r = rand(1400, 3000);
-  const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
-  createEnemy('ground', new THREE.Vector3(px, terrainH(px, pz), pz), { gkind: gkind });
+function spawnGroundAt(gkind, x, z) {
+  return createEnemy('ground', new THREE.Vector3(x, terrainH(x, z), z), { gkind: gkind });
+}
+/* Strike target spawns as a coherent fortified site instead of scattered turrets:
+   radar at the centre, a SAM/AAA ring around it, and a supply convoy already rolling
+   for the horizon — kill the radar to blind the SAMs, catch the trucks before they
+   escape, flatten everything for a site bonus (see killEnemy). Scales with wave. */
+function queueStrikeSite(w) {
+  const center = groundSpawnPos(2000, 3200);
+  const nSam = 2 + Math.min(2, Math.floor(w / 10));
+  const nAaa = 2 + Math.min(2, Math.floor(w / 12));
+  const nTruck = 3 + Math.min(3, Math.floor(w / 8));
+  pendingSpawns.push(() => spawnGroundAt('radar', center.x, center.z));
+  const ringN = nSam + nAaa;
+  for (let i = 0; i < ringN; i++) {
+    const kind = i < nSam ? 'sam' : 'aaa';
+    const ang = (i / ringN) * TWO_PI + rand(-0.25, 0.25), r = rand(340, 560);
+    pendingSpawns.push(() => spawnGroundAt(kind, center.x + Math.cos(ang) * r, center.z + Math.sin(ang) * r));
+  }
+  const cAng = rand(0, TWO_PI);
+  const cDir = new THREE.Vector3(Math.cos(cAng), 0, Math.sin(cAng));
+  for (let k = 0; k < nTruck; k++) {
+    const off = 700 + k * 120;
+    pendingSpawns.push(() => {
+      const e = spawnGroundAt('truck', center.x + cDir.x * off + rand(-45, 45), center.z + cDir.z * off + rand(-45, 45));
+      e.truckDir = cDir.clone(); e.convoy = true; e.convoySpeed = 46 + w * 0.6;
+    });
+  }
 }
 function spawnDroneSwarm(n, origin) {
-  const base = origin ? origin.clone() : (() => {
-    const ang = rand(0, TWO_PI), r = rand(2200, 3600);
-    const px = player.group.position.x + Math.cos(ang) * r, pz = player.group.position.z + Math.sin(ang) * r;
-    const py = clamp(player.group.position.y + rand(-200, 500), terrainH(px, pz) + 350, 4300);
-    return new THREE.Vector3(px, py, pz);
-  })();
+  const base = origin ? origin.clone() : airSpawnPos(2200, 3600, -200, 500, 350, 4300);
   for (let i = 0; i < n; i++) {
     const p = base.clone().add(new THREE.Vector3(rand(-220, 220), rand(-130, 130), rand(-220, 220)));
     const e = createEnemy('drone', p);
@@ -392,6 +396,7 @@ function updateCCA(w, dt) {
 function updateWingmen(dt) {
   for (let i = wingmen.length - 1; i >= 0; i--) {
     const w = wingmen[i];
+    if (w.alive && w.group) animEngines(w.group, 0.85);
     if (w.temp) {
       w.expire -= dt;
       if (!w.alive || w.expire <= 0) {            // CCA expended or recalled to base — no respawn
@@ -642,7 +647,10 @@ window.addEventListener('touchstart', function firstTouch() {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05); lastDt = dt;
+  if (seaMat) seaMat.uniforms.time.value = clock.elapsedTime;
+  updateSunRig();
   if (paused) { renderer.render(scene, camera); return; }
+  updateClouds(dt);
 
   if (state === 'hangar') {
     if (previewJet) { previewJet.rotation.y += dt * 0.5; previewJet.position.y = 2.5 + Math.sin(performance.now() * 0.0012) * 0.6; }
@@ -657,6 +665,7 @@ function animate() {
     handleWaves(dt);
     maybeSpawnCrate(dt);
     updateCamera(dt);
+    updatePlayerShadow();
     audio.setEngine(player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
     drawHUD(); drawRadar(); updateDom(dt);
   } else if (state === 'dead') {

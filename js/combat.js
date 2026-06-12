@@ -4,7 +4,7 @@
 function getBullet() {
   let b = BPOOL.pop();
   if (!b) b = { mesh: new THREE.Mesh(ASSET.bulletGeo, ASSET.bulletMat), vel: new THREE.Vector3(), life: 0, dmg: 0, enemy: false };
-  b.ai = false;
+  b.ai = false; b.oriented = false;
   scene.add(b.mesh); return b;
 }
 function recycleBullet(b) { scene.remove(b.mesh); BPOOL.push(b); }
@@ -30,6 +30,8 @@ function fireGun() {
   }
   const used = offs.length;
   player.bullets = Math.max(0, player.bullets - used);
+  const mz = player.group.userData.muzzle;
+  if (mz) { mz.visible = true; mz.scale.setScalar(rand(11, 18)); mz.material.rotation = rand(0, TWO_PI); player.muzzleT = 0.045; }
   player.shake = Math.max(player.shake, 0.12);
   audio.gun();
   run.shots += used;
@@ -39,6 +41,7 @@ function updateBullets(dt, ts) {
   ts = ts || 1;
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]; const sdt = b.enemy ? dt * ts : dt;
+    if (!b.oriented) { b.oriented = true; dirToQuat(t3.copy(b.vel).normalize(), b.mesh.quaternion); }   // align tracer with flight path
     b.life -= sdt; b.mesh.position.addScaledVector(b.vel, sdt);
     let dead = b.life <= 0;
     if (!dead) {
@@ -81,7 +84,7 @@ function fireMissile() {
   }
   const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul();
   player.missileCd = 0.55;
-  const salvo = Math.min(1 + (player.mslSwarm || 0), player.missiles);   // SWARM RACK looses extra birds
+  const salvo = 1 + (player.mslSwarm || 0);   // SWARM RACK looses extra birds — bonus birds are free, only 1 leaves the rack
   const baseDir = fwdOf(player.group, t1).clone();
   for (let s = 0; s < salvo; s++) {
     const dir = baseDir.clone();
@@ -93,19 +96,18 @@ function fireMissile() {
       if (player.splashRadius) { m.splash = player.splashRadius; m.splashDmg = player.splashDmg; }
     }
   }
-  player.missiles -= salvo; run.missiles += salvo; run.pMissiles += salvo;
+  player.missiles -= 1; run.missiles += salvo; run.pMissiles += salvo;
   audio.missile();
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
-  const mesh = new THREE.Mesh(ASSET.missileGeo, enemy ? ASSET.missileMatEnemy : ASSET.missileMatPlayer);
+  // shared-asset airframe with tracking halo + motor exhaust baked in (see buildMissileMesh)
+  const mesh = buildMissileMesh(enemy);
   mesh.position.copy(pos).addScaledVector(dir, 11);
-  // bright additive halo locked to the missile so it's easy to track at any range
-  const glowColor = enemy ? 0xff6a2e : 0x38d6ff;
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: glowColor, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
-  halo.scale.setScalar(enemy ? 48 : 42); mesh.add(halo);
   scene.add(mesh);
+  const glowColor = enemy ? 0xff6a2e : 0x38d6ff;
   const obj = {
-    mesh, halo, vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
+    mesh, halo: mesh.userData.halo, exhaust: mesh.userData.exhaust,
+    vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
     maxSpeed: enemy ? 880 : 1050, target, enemy, life: 7, dmg: (enemy ? 16 : 34) * (dmgMul || 1),
     armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: glowColor, hardHome: false, ambush: false,
   };
@@ -154,6 +156,7 @@ function updateMissiles(dt, ts) {
     dirToQuat(cur, m.mesh.quaternion);
 
     if (m.halo) m.halo.material.opacity = 0.7 + 0.3 * Math.sin(now * 0.02);
+    if (m.exhaust) m.exhaust.scale.setScalar(11 + 7 * (m.speed / m.maxSpeed) + rand(-1.6, 1.6));   // motor flare grows & flickers with burn
     m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor || (m.enemy ? 0xff6a2e : 0x38d6ff)); m.smokeT = 0.02; }
 
     let hit = false;
@@ -345,9 +348,22 @@ function updateLoot(dt) {
 /* ---------------- particles ---------------- */
 function explode(pos, big) {
   audio.explode(big);
-  const f = new THREE.Mesh(new THREE.SphereGeometry(big ? 18 : 9, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.9, fog: false }));
-  f.position.copy(pos); scene.add(f);
-  particles.push({ mesh: f, life: 0.5, max: 0.5, type: 'flash', grow: big ? 110 : 60 });
+  // white-hot core flash
+  const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff2cc, blending: THREE.AdditiveBlending, transparent: true, opacity: 1, depthWrite: false, fog: false }));
+  f.position.copy(pos); f.scale.setScalar(big ? 110 : 55); scene.add(f);
+  particles.push({ mesh: f, life: 0.22, max: 0.22, type: 'flash', grow: big ? 320 : 180 });
+  // additive fireball bloom — sells the blast at any distance
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a30, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false, fog: false }));
+  glow.position.copy(pos); glow.scale.setScalar(big ? 240 : 120); scene.add(glow);
+  particles.push({ mesh: glow, life: 0.55, max: 0.55, type: 'flash', grow: big ? 140 : 70 });
+  // churning fireball: textured flame sprites tumbling outward
+  const nf = big ? 7 : 4;
+  for (let i = 0; i < nf; i++) {
+    const fb = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex(), blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false, rotation: rand(0, TWO_PI) }));
+    fb.position.copy(pos).add(t1.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(big ? 16 : 7));
+    fb.scale.setScalar(rand(0.7, 1.3) * (big ? 95 : 48)); scene.add(fb);
+    particles.push({ mesh: fb, vel: new THREE.Vector3(rand(-26, 26), rand(-6, 44), rand(-26, 26)), life: rand(0.45, 0.8), max: 0.8, type: 'fire', grow: (big ? 70 : 42), rot: rand(-2.4, 2.4) });
+  }
   const n = big ? 24 : 13;
   for (let i = 0; i < n; i++) {
     const s = new THREE.Mesh(ASSET.sparkGeo, new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffaa33 : 0xff6633, transparent: true, fog: false }));
@@ -356,8 +372,8 @@ function explode(pos, big) {
     s.quaternion.copy(dirToQuat(v.clone().normalize(), q1)); scene.add(s);
     particles.push({ mesh: s, vel: v, life: rand(0.5, 1.1), max: 1.1, type: 'spark' });
   }
-  
-  // Physical debris chunks
+
+  // Physical debris chunks, trailing embers while hot
   const numDebris = big ? randInt(7, 14) : randInt(3, 7);
   for (let i = 0; i < numDebris; i++) {
     const m = new THREE.Mesh(ASSET.fragGeo, ASSET.fragMat);
@@ -365,17 +381,28 @@ function explode(pos, big) {
     const vel = new THREE.Vector3(rand(-1, 1), rand(-0.2, 1.5), rand(-1, 1)).normalize().multiplyScalar(rand(80, 220));
     m.rotation.set(rand(0, TWO_PI), rand(0, TWO_PI), rand(0, TWO_PI));
     scene.add(m);
-    particles.push({ mesh: m, vel, life: rand(1.5, 3.5), max: 3.5, type: 'debris' });
+    particles.push({ mesh: m, vel, life: rand(1.5, 3.5), max: 3.5, type: 'debris', emberT: 0 });
   }
 
-  for (let i = 0; i < (big ? 8 : 4); i++) spawnSmoke(pos, 0x2c2c2c, big ? 1.6 : 1);
+  for (let i = 0; i < (big ? 9 : 5); i++) spawnSmoke(pos, 0x20242a, big ? 2.6 : 1.5);
+  // ground strikes throw up a ring of dust hugging the deck
+  const gh = Math.max(terrainH(pos.x, pos.z), -10);
+  if (pos.y - gh < 30) {
+    for (let i = 0; i < (big ? 8 : 5); i++) {
+      const a = rand(0, TWO_PI), r = rand(10, big ? 60 : 34);
+      const d = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: 0x8a7a62, transparent: true, opacity: 0.55, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
+      d.position.set(pos.x + Math.cos(a) * r, gh + rand(4, 14), pos.z + Math.sin(a) * r);
+      d.scale.setScalar(rand(26, 54)); scene.add(d);
+      particles.push({ mesh: d, vel: new THREE.Vector3(Math.cos(a) * 28, rand(6, 16), Math.sin(a) * 28), life: rand(1.2, 2.0), max: 2.0, type: 'smokeS', grow: 30, rot: rand(-0.8, 0.8) });
+    }
+  }
   if (big) spawnShockwave(pos);
 }
 function spawnSmoke(pos, color, scl) {
-  const m = new THREE.Mesh(ASSET.smokeGeo, new THREE.MeshBasicMaterial({ color: color || 0x888888, transparent: true, opacity: 0.5, fog: false }));
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: color || 0x888888, transparent: true, opacity: 0.55, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
   m.position.copy(pos).add(t1.set(rand(-4, 4), rand(-4, 4), rand(-4, 4)));
-  m.scale.setScalar((scl || 1) * rand(6, 12)); scene.add(m);
-  particles.push({ mesh: m, vel: new THREE.Vector3(rand(-8, 8), rand(4, 16), rand(-8, 8)), life: rand(0.6, 1.3), max: 1.3, type: 'smoke', grow: 20 });
+  m.scale.setScalar((scl || 1) * rand(16, 26)); scene.add(m);
+  particles.push({ mesh: m, vel: new THREE.Vector3(rand(-8, 8), rand(8, 22), rand(-8, 8)), life: rand(1.0, 1.9), max: 1.9, type: 'smokeS', grow: 26, rot: rand(-1.2, 1.2) });
 }
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -387,12 +414,26 @@ function updateParticles(dt) {
     else if (p.type === 'ring') { const k = 1 + (1 - t) * (p.ringK || 46); p.mesh.scale.setScalar(k); p.mesh.material.opacity = t * 0.85; if (camera) p.mesh.lookAt(camera.position); }
     else if (p.type === 'trail') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.4; }
     else if (p.type === 'mcore') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.85; }
-    else if (p.type === 'debris') { 
+    else if (p.type === 'fire') {   // textured fireball: churn, swell, burn out fast
+        p.mesh.scale.addScalar(p.grow * dt);
+        p.mesh.material.rotation += p.rot * dt;
+        p.mesh.material.opacity = t * t * 0.95;
+        p.vel.multiplyScalar(1 - 1.2 * dt);
+    }
+    else if (p.type === 'smokeS') { // textured smoke: drift up, slow roll, long fade
+        p.mesh.scale.addScalar(p.grow * dt);
+        p.mesh.material.rotation += p.rot * dt;
+        p.mesh.material.opacity = t * 0.55;
+        p.vel.multiplyScalar(1 - 0.9 * dt);
+    }
+    else if (p.type === 'debris') {
         p.vel.y -= 150 * dt; // gravity
         p.vel.multiplyScalar(1 - 0.5 * dt); // drag
         p.mesh.rotation.x += dt * 3;
         p.mesh.rotation.y += dt * 4;
-        p.mesh.scale.setScalar(t * 1.2); 
+        p.mesh.scale.setScalar(t * 1.2);
+        p.emberT -= dt;     // hot fragments shed a glowing trail for the first half of their life
+        if (p.emberT <= 0 && t > 0.5) { spawnTrail(p.mesh.position, 0xff9540, 0.45); p.emberT = 0.07; }
     }
     else { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.5; if (p.vel) p.vel.multiplyScalar(1 - 1.5 * dt); }
     
@@ -498,7 +539,17 @@ function killEnemy(e, byPlayer, byCCA) {
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
   if (e.type === 'boss') { run.boss++; showBanner('\u25C6 BOSS DESTROYED \u25C6'); empFlash = 0.5; }
   if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner('\u2620 RIVAL DOWN \u2014 +' + pay + ' RP \u2620'); run.kills++; }
-  else if (e.type === 'ground') run.ground++;
+  else if (e.type === 'ground') {
+    run.ground++;
+    if (strikeWaveActive) {
+      if (e.gkind === 'radar') showBanner('◇ RADAR DOWN — SAM NET BLIND ◇');
+      if (!enemies.some(o => o.alive && o.type === 'ground')) {   // last site element down → payout
+        const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
+        player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
+        showBanner('⚒ SITE FLATTENED — +' + pay + ' RP ⚒'); audio.power(); empFlash = Math.max(empFlash, 0.4);
+      }
+    }
+  }
   else if (e.type === 'bomber') { run.kills++; showBanner('\u2691 BOMBER DOWN \u2691'); }
   else run.kills++;
   if (e.type === 'drone') { if (Math.random() < 0.12) spawnLoot(e.group.position); }
@@ -506,8 +557,7 @@ function killEnemy(e, byPlayer, byCCA) {
   scene.remove(e.group);
   disposeGroup(e.group);
   if (e.marker) scene.remove(e.marker);   // marker geometry/material may be shared — do not dispose it here
-  if (player.lockedTarget === e) player.lockedTarget = null;
-  if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+  clearLocks(e);
 
   player.killStreak++;
   if (player.killStreak > 0 && player.killStreak % 5 === 0) killStreakReward();
@@ -625,13 +675,15 @@ function useSpecial() {
 
   } else if (id === 'EFT') {
     // MISSILE SALVO — 6 hard-homing missiles, +40% damage, spread across the nearest threats
+    // SWARM RACK / HYDRA multiply the barrage just like a normal launch (x2 / x3)
+    const count = 6 * (1 + (player.mslSwarm || 0));
     const tg = enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position));
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < count; k++) {
       const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
       const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.4, 0.4)); dir.y += rand(-0.1, 0.18); dir.normalize();
       const m = spawnMissile(pp, dir, target, false, 1.4 * player.missileDmgMul); if (m && target) m.hardHome = true;
     }
-    showBanner('MISSILE SALVO'); audio.missile(); run.missiles += 6;
+    showBanner('MISSILE SALVO'); audio.missile(); run.missiles += count;
 
   } else if (id === 'RAFALE') {
     // SPECTRA JAMMER — 6s of total missile immunity: incoming go blind, enemies can't launch
@@ -651,9 +703,11 @@ function useSpecial() {
 
   } else if (id === 'J-36') {
     // ORDNANCE STORM — empty the bays: a 10-missile saturation barrage + a heavy ablative shield
+    // SWARM RACK / HYDRA multiply the storm just like a normal launch (x2 / x3)
+    const stormCount = 10 * (1 + (player.mslSwarm || 0));
     const tg = enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position));
     let fired = 0;
-    for (let k = 0; k < 10; k++) {
+    for (let k = 0; k < stormCount; k++) {
       const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
       const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.55, 0.55)); dir.y += rand(-0.12, 0.22); dir.normalize();
       const m = spawnMissile(pp, dir, target, false, 1.55 * player.missileDmgMul); if (m) { if (target) m.hardHome = true; fired++; }
@@ -708,6 +762,7 @@ function updatePlayer(dt) {
   if (player.vectorSurge > 0) player.vectorSurge -= dt;
   if (player.special.cd > 0) player.special.cd -= dt;
   if (player.damageFlash > 0) player.damageFlash -= dt;
+  if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
   if (player.shake > 0) player.shake -= dt;
   if (player.comboTimer > 0) { player.comboTimer -= dt; if (player.comboTimer <= 0) player.combo = 0; }
   if (player.shieldT > 0) player.shieldT -= dt;
@@ -775,6 +830,16 @@ function updatePlayer(dt) {
 
   player.stealth = player.stealthField > 0 || inCloud(player.group.position);
 
+  // wingtip vortices: condensation streamers whenever the airframe is pulling hard
+  if ((player.highG || Math.abs(player.pitchRate) > tb * 0.8) && player.speed > 240) {
+    player.vaporT = (player.vaporT || 0) - dt;
+    if (player.vaporT <= 0) {
+      player.vaporT = 0.022;
+      spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, 9), 0xcfe2f2, 0.3);
+      spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, -9), 0xcfe2f2, 0.3);
+    }
+  }
+
   const engs = player.group.userData.engines;
   if (engs) {
     const baseFl = 0.5 + player.throttle * 1.5 + (player.overdrive > 0 ? 2.4 : 0);
@@ -828,6 +893,7 @@ function updatePlayer(dt) {
     }
   }
 
+  animEngines(player.group, player.throttle);
   player._gpwsT -= dt; if (player.gpws && player._gpwsT <= 0) { audio.warn(); player._gpwsT = 0.5; }
   const incoming = missiles.some(m => m.enemy);
   player._missT -= dt; if (incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
