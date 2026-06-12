@@ -788,6 +788,28 @@ function buildHangar() {
   updateBest();
   renderKillBoard();
 }
+// first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
+function initOnboarding() {
+  document.querySelectorAll('.ob-lang').forEach(b => b.addEventListener('click', () => {
+    LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui();
+    g('langSelect').classList.remove('show');
+    g('onboard').classList.add('show');
+  }));
+  const oc = g('obContinue');
+  if (oc) oc.addEventListener('click', () => {
+    g('onboard').classList.remove('show');
+    onboarding = false;
+    store.set('skystrike_onboarded', '1');
+    if (audio.on) audio.ui();
+  });
+  if (store.get('skystrike_onboarded')) return;
+  if (store.get('skystrike_settings')) {     // returning player from before onboarding existed — don't bother them
+    store.set('skystrike_onboarded', '1');
+    return;
+  }
+  onboarding = true;
+  g('langSelect').classList.add('show');
+}
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
 function renderJetCard(i) {
   const j = JETS[i];

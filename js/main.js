@@ -558,6 +558,7 @@ addEventListener('keydown', e => {
     if (!e.repeat && (e.code === 'Enter' || e.code === 'Space' || e.code === 'Escape' || e.code === 'KeyR')) { e.preventDefault(); deployFromTech(); }
     return;
   }
+  if (onboarding) return;   // first-run language/brief screens capture all keyboard input
   if ((e.code === 'KeyH' || e.code === 'Escape') && !e.repeat) { toggleManual(); return; }
   if (state === 'hangar' && !paused && !e.repeat) {     // carousel: arrows browse jets, Enter launches
     if (e.code === 'ArrowLeft')  { e.preventDefault(); cycleJet(-1); return; }
@@ -682,4 +683,5 @@ loadBest();
 loadSettings();
 loadRival();
 buildHangar();
+initOnboarding();
 animate();

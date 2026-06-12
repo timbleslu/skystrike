@@ -120,6 +120,7 @@ const TODS = [
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';
+let onboarding = false;   // true while the first-run language-select / controls-brief screens are showing
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;
 
