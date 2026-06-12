@@ -10,11 +10,12 @@ Arcade jet combat game. Three.js (r159, vendored), single HTML page, no build st
 
 ## Architecture (read this, skip exploration)
 All code is browser globals — no imports/exports. Script load order in `index.html` defines availability:
-`vendor/three.min.js → storage.js → globals.js → engine.js → entities.js → rival.js → opmap.js → combat.js → ui.js → main.js`
+`vendor/three.min.js → storage.js → globals.js → i18n.js → engine.js → entities.js → rival.js → opmap.js → combat.js → ui.js → main.js`
 
 | File | Role |
 |---|---|
-| `js/globals.js` | Shared state (player, enemies, missiles, wave, run, tech), math helpers (`rand`, `clamp`, `damp`), `jetStats` per-airframe table; `TECH_TREE` lattice (`req` string OR array = any-of, `reqAll` = all-of; `reqSatisfied` lives in ui.js, mirrored in `tests/ground-war.test.js`) |
+| `js/globals.js` | Shared state (player, enemies, missiles, wave, run, tech), math helpers (`rand`, `clamp`, `damp`), `jetStats` per-airframe table; `TECH_TREE` lattice (`req` string OR array = any-of, `reqAll` = all-of; `reqSatisfied` lives in ui.js, mirrored in `tests/ground-war.test.js`); `controlSensitivity` (0.5–2.0 turn-rate multiplier, Settings slider) |
+| `js/i18n.js` | EN/ZH localization: `LANG`, `I18N` dict, `t(key)` for static strings, `jetText(jet, field)`/`techText(node, field)` for data-table strings (fall back to EN/object field if no ZH override) |
 | `js/engine.js` | Three.js scene/renderer/terrain (`terrainH`); filmic pipeline (sRGB + ACES, physical lights) + PCFSoft sun shadows (`updateSunRig` follows player, ticked in `animate`); sky/sea shaders (`skyMat`/`seaMat`, `applyTimeOfDay`), billboard cloud banks (`retintClouds`/`updateClouds`), shader-detailed smooth terrain (fbm via onBeforeCompile); canvas FX textures `glowTex`/`cloudPuffTex`/`fireTex`/`tracerTex`; shared ordnance assets (`buildAssets`: merged-geometry missile via `mergeGeos`, `buildMissileMesh(enemy)`, crossed-quad tracer streaks); `buildEnvMap` (PMREM sky → `scene.environment`), `updatePlayerShadow` blob shadow |
 | `js/entities.js` | `createEnemy`, jet mesh building (`buildJet`, cached; `loftFuselage` superellipse hull w/ chines + engine decks, `intakeDuctGeo`), per-type update fns (`updateEnemy/Bomber/Drone/Ground`), `clearLocks`, `disposeGroup`; `markShadowCasters`, `patchJetSurface` (hull noise + panel lines + two-tone), `animEngines` (throttle-driven afterburner: flame/core/shock-diamonds + `userData.heatMat` nozzle glow). Per-airframe SHAPES carry generic feature flags consumed by flag-blocks inside `buildJet` (e.g. `tailBoom`/`levcon`/`tunnel`/`stinger`/`nacelleSplit`/`chineRidge`/`sawtoothTE`/`tipRail`/`tipPivot`/`lambdaFairing`/`finFillet`/`finBoom`/`dorsalHump`/`dorsalIntake`/`buriedExhaust`/`noseSpike`/`hostileLights`/`facetNose`/`noCanopy`/`flyingWing`/`canardCant`+`canardDihedral`/`semiIntake`/`shoulderIntake`/`chinSplit`/`bigLerx`/`wingFold`/`bayDoors`/`bayWide`/`sawtoothDoors`/`spineGun`). Near-duplicate spec names are aliased to one impl in the post-SHAPES block (`chineLine`/`noseChineBlend`→`chineRidge`, `sawtooth`/`sawtoothDoors`→`sawtoothTE`, `tipRails`→`tipRail`). New intake styles: `'dorsal'` and `'none'` (fall-through). CCAJET stores its drone V-tails under `ccaVtail` (not `vtail`) to satisfy the plain-shapes test |
 | `js/combat.js` | Player update, weapons, missiles, damage, `killEnemy`, specials |
@@ -25,6 +26,7 @@ All code is browser globals — no imports/exports. Script load order in `index.
 | `js/storage.js` | ONLY place allowed to touch `localStorage` — enforced by `tests/storage.test.js`. Use `store.get/set/remove` |
 
 ## Hard rules
+- All new user-facing strings go through `t(key)` (static UI) or `jetText`/`techText` (JETS/TECH_TREE rows); add EN+ZH entries in `js/i18n.js`.
 - No direct `localStorage` outside `js/storage.js` (test-enforced).
 - No ES modules / `import` — globals only, respect load order.
 - Three.js is vendored; never re-add CDN script tags. r128-era API calls go through shims in `engine.js`.
@@ -43,6 +45,7 @@ All code is browser globals — no imports/exports. Script load order in `index.
 - Graphics overhaul COMPLETE (2026-06-12, merged as v1): filmic color pipeline, real-time sun shadows, billboard clouds, smooth shader-detailed terrain, textured fireball/smoke FX. High-poly ordnance/jet pass: lofted superellipse fuselages (stealth chines, blended engine decks), clearcoat hero paint + iridescent canopies, panel-line shader, slime lights, shock-diamond afterburners, merged-geometry missiles, gradient tracer streaks. All 3 TODs verified via `scripts/shot.mjs` + `scripts/beauty.mjs`. Pending: in-browser perf check on a real device (headless shots can't measure fps).
 - Tech tree v2 (2026-06-12): rebuilt as a woven lattice — OR-gate `req` arrays, AND-gate `reqAll` hybrids (dashed connectors), convergence spine at x3 (DATALINK→RHYTHM OF WAR→OVERLOAD COUPLING→SIPHON FIELD→OMEGA PROTOCOL), new mechanics in combat.js: `comboDmg`, `gunScavenge`, `slowOnKill`, `flakFlares`, `execBlast` (+ existing `shieldOnKill` now purchasable).
 - Jet visual redesign pass done (2026-06-12): all 17 SHAPES re-planformed for airframe accuracy (F-22 diamond wing + tail booms, Su-57 LEVCONs/tunnel/stinger/nacelle pods, J-20 dihedral canards + fin booms, F-35 fat hull, FA-18 trapezoid + LERX/wing-fold, J-36 double-delta flying wing, J-50 lambda + tip-pivots, BOMBER B-2 flying wing, CCAJET noCanopy drone, etc.). New generic reusable flag-blocks inside `buildJet` (see entities.js row). All tests green; verified via `scripts/shot.mjs` + `scripts/beauty.mjs` (F22/SU57/J36/J50 close-ups).
+- i18n + onboarding (2026-06-12): full EN/ZH localization via `js/i18n.js` (`t()`/`jetText()`/`techText()`); new first-run flow (Language Select → Controls/Instructions brief → hangar); Settings adds Language toggle + Control Sensitivity slider (`controlSensitivity`, applied to turn rate in combat.js). All tests pass.
 - Known open issue: reset-path material leak (see geometry cache notes).
 - Next up: scope a plan from `docs/working/superpowers/ideas/2026-06-11-feature-ideas-progression-content.md` (meta-progression/customization backlog).
 
