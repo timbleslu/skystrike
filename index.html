@@ -9,6 +9,7 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div id="vignette"></div>
 <canvas id="h2d"></canvas>
 
 <div id="hud">
@@ -172,6 +173,15 @@
   <div class="op-box">
     <div class="op-title">OPERATION MAP</div>
     <div class="op-sub">// SELECT NEXT SECTOR //</div>
+    <div class="op-info">Plot your own course through enemy territory: pick one highlighted sector per column, left to right. Each pick is the next wave you fly &mdash; clear it, spend your RP, then return here. Reach <b>FINAL</b> and destroy the boss to complete the operation.</div>
+    <div class="op-legend">
+      <span><b>FURBALL</b> fighter swarm &mdash; grows with depth</span>
+      <span><b>INTERCEPT</b> bombers &mdash; down them before they escape</span>
+      <span><b>STRIKE</b> fortified ground site + fleeing convoy</span>
+      <span><b>ELITE</b> ace squadron &mdash; your rival hunts here</span>
+      <span><b>DEPOT</b> repair &amp; full rearm, no combat</span>
+      <span><b>FINAL</b> the operation's boss target</span>
+    </div>
     <div id="opStages" class="op-stages"></div>
     <button id="opLaunch" disabled>&#9654; LAUNCH</button>
   </div>

@@ -4,7 +4,7 @@
 function getBullet() {
   let b = BPOOL.pop();
   if (!b) b = { mesh: new THREE.Mesh(ASSET.bulletGeo, ASSET.bulletMat), vel: new THREE.Vector3(), life: 0, dmg: 0, enemy: false };
-  b.ai = false;
+  b.ai = false; b.oriented = false;
   scene.add(b.mesh); return b;
 }
 function recycleBullet(b) { scene.remove(b.mesh); BPOOL.push(b); }
@@ -30,6 +30,8 @@ function fireGun() {
   }
   const used = offs.length;
   player.bullets = Math.max(0, player.bullets - used);
+  const mz = player.group.userData.muzzle;
+  if (mz) { mz.visible = true; mz.scale.setScalar(rand(11, 18)); mz.material.rotation = rand(0, TWO_PI); player.muzzleT = 0.045; }
   player.shake = Math.max(player.shake, 0.12);
   audio.gun();
   run.shots += used;
@@ -39,6 +41,7 @@ function updateBullets(dt, ts) {
   ts = ts || 1;
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]; const sdt = b.enemy ? dt * ts : dt;
+    if (!b.oriented) { b.oriented = true; dirToQuat(t3.copy(b.vel).normalize(), b.mesh.quaternion); }   // align tracer with flight path
     b.life -= sdt; b.mesh.position.addScaledVector(b.vel, sdt);
     let dead = b.life <= 0;
     if (!dead) {
@@ -81,7 +84,7 @@ function fireMissile() {
   }
   const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul();
   player.missileCd = 0.55;
-  const salvo = Math.min(1 + (player.mslSwarm || 0), player.missiles);   // SWARM RACK looses extra birds
+  const salvo = 1 + (player.mslSwarm || 0);   // SWARM RACK looses extra birds — bonus birds are free, only 1 leaves the rack
   const baseDir = fwdOf(player.group, t1).clone();
   for (let s = 0; s < salvo; s++) {
     const dir = baseDir.clone();
@@ -93,7 +96,7 @@ function fireMissile() {
       if (player.splashRadius) { m.splash = player.splashRadius; m.splashDmg = player.splashDmg; }
     }
   }
-  player.missiles -= salvo; run.missiles += salvo; run.pMissiles += salvo;
+  player.missiles -= 1; run.missiles += salvo; run.pMissiles += salvo;
   audio.missile();
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
@@ -348,6 +351,10 @@ function explode(pos, big) {
   const f = new THREE.Mesh(new THREE.SphereGeometry(big ? 18 : 9, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.9, fog: false }));
   f.position.copy(pos); scene.add(f);
   particles.push({ mesh: f, life: 0.5, max: 0.5, type: 'flash', grow: big ? 110 : 60 });
+  // additive fireball bloom — sells the blast at any distance
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a30, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false, fog: false }));
+  glow.position.copy(pos); glow.scale.setScalar(big ? 240 : 120); scene.add(glow);
+  particles.push({ mesh: glow, life: 0.55, max: 0.55, type: 'flash', grow: big ? 140 : 70 });
   const n = big ? 24 : 13;
   for (let i = 0; i < n; i++) {
     const s = new THREE.Mesh(ASSET.sparkGeo, new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffaa33 : 0xff6633, transparent: true, fog: false }));
@@ -498,7 +505,17 @@ function killEnemy(e, byPlayer, byCCA) {
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
   if (e.type === 'boss') { run.boss++; showBanner('\u25C6 BOSS DESTROYED \u25C6'); empFlash = 0.5; }
   if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner('\u2620 RIVAL DOWN \u2014 +' + pay + ' RP \u2620'); run.kills++; }
-  else if (e.type === 'ground') run.ground++;
+  else if (e.type === 'ground') {
+    run.ground++;
+    if (strikeWaveActive) {
+      if (e.gkind === 'radar') showBanner('◇ RADAR DOWN — SAM NET BLIND ◇');
+      if (!enemies.some(o => o.alive && o.type === 'ground')) {   // last site element down → payout
+        const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
+        player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
+        showBanner('⚒ SITE FLATTENED — +' + pay + ' RP ⚒'); audio.power(); empFlash = Math.max(empFlash, 0.4);
+      }
+    }
+  }
   else if (e.type === 'bomber') { run.kills++; showBanner('\u2691 BOMBER DOWN \u2691'); }
   else run.kills++;
   if (e.type === 'drone') { if (Math.random() < 0.12) spawnLoot(e.group.position); }
@@ -506,8 +523,7 @@ function killEnemy(e, byPlayer, byCCA) {
   scene.remove(e.group);
   disposeGroup(e.group);
   if (e.marker) scene.remove(e.marker);   // marker geometry/material may be shared — do not dispose it here
-  if (player.lockedTarget === e) player.lockedTarget = null;
-  if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+  clearLocks(e);
 
   player.killStreak++;
   if (player.killStreak > 0 && player.killStreak % 5 === 0) killStreakReward();
@@ -625,13 +641,15 @@ function useSpecial() {
 
   } else if (id === 'EFT') {
     // MISSILE SALVO — 6 hard-homing missiles, +40% damage, spread across the nearest threats
+    // SWARM RACK / HYDRA multiply the barrage just like a normal launch (x2 / x3)
+    const count = 6 * (1 + (player.mslSwarm || 0));
     const tg = enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position));
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < count; k++) {
       const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
       const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.4, 0.4)); dir.y += rand(-0.1, 0.18); dir.normalize();
       const m = spawnMissile(pp, dir, target, false, 1.4 * player.missileDmgMul); if (m && target) m.hardHome = true;
     }
-    showBanner('MISSILE SALVO'); audio.missile(); run.missiles += 6;
+    showBanner('MISSILE SALVO'); audio.missile(); run.missiles += count;
 
   } else if (id === 'RAFALE') {
     // SPECTRA JAMMER — 6s of total missile immunity: incoming go blind, enemies can't launch
@@ -651,9 +669,11 @@ function useSpecial() {
 
   } else if (id === 'J-36') {
     // ORDNANCE STORM — empty the bays: a 10-missile saturation barrage + a heavy ablative shield
+    // SWARM RACK / HYDRA multiply the storm just like a normal launch (x2 / x3)
+    const stormCount = 10 * (1 + (player.mslSwarm || 0));
     const tg = enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position));
     let fired = 0;
-    for (let k = 0; k < 10; k++) {
+    for (let k = 0; k < stormCount; k++) {
       const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
       const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.55, 0.55)); dir.y += rand(-0.12, 0.22); dir.normalize();
       const m = spawnMissile(pp, dir, target, false, 1.55 * player.missileDmgMul); if (m) { if (target) m.hardHome = true; fired++; }
@@ -708,6 +728,7 @@ function updatePlayer(dt) {
   if (player.vectorSurge > 0) player.vectorSurge -= dt;
   if (player.special.cd > 0) player.special.cd -= dt;
   if (player.damageFlash > 0) player.damageFlash -= dt;
+  if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
   if (player.shake > 0) player.shake -= dt;
   if (player.comboTimer > 0) { player.comboTimer -= dt; if (player.comboTimer <= 0) player.combo = 0; }
   if (player.shieldT > 0) player.shieldT -= dt;
@@ -774,6 +795,16 @@ function updatePlayer(dt) {
   if (player.group.position.y > 5200) player.group.position.y = 5200;
 
   player.stealth = player.stealthField > 0 || inCloud(player.group.position);
+
+  // wingtip vortices: condensation streamers whenever the airframe is pulling hard
+  if ((player.highG || Math.abs(player.pitchRate) > tb * 0.8) && player.speed > 240) {
+    player.vaporT = (player.vaporT || 0) - dt;
+    if (player.vaporT <= 0) {
+      player.vaporT = 0.022;
+      spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, 9), 0xcfe2f2, 0.3);
+      spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, -9), 0xcfe2f2, 0.3);
+    }
+  }
 
   const engs = player.group.userData.engines;
   if (engs) {

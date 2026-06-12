@@ -505,6 +505,10 @@ function buildDrone() {
 function createPlayer(idx) {
   const j = JETS[idx], st = jetStats(j);
   const mesh = buildJet(j.color, j.accent, SHAPES[j.shape], true); scene.add(mesh);
+  // muzzle flash: one persistent sprite at the nose, blinked on by fireGun
+  const muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd76a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
+  muzzle.position.set(0, 0, -14); muzzle.scale.setScalar(14); muzzle.visible = false; mesh.add(muzzle);
+  mesh.userData.muzzle = muzzle;
   const maxHp = Math.round(st.maxHp * DIFFS[difficulty].hp);
   const maxShield = Math.round(36 + j.armor * 3);
   player = {
@@ -658,6 +662,11 @@ function updateMarker(e) {
 
 function activeEnemyMissiles() { let n = 0; for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) n++; return n; }
 
+function clearLocks(e) {
+  if (player.lockedTarget === e) player.lockedTarget = null;
+  if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+}
+
 function fireRivalSpecial(e) {
   const kind = rivalSpecialFor(e.shapeKey);
   if (e.group.userData.body) { e.group.userData.body.emissiveIntensity = 2.2; setTimeout(() => { if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.0; }, 500); }
@@ -667,8 +676,7 @@ function fireRivalSpecial(e) {
   else if (kind === 'FLARESTORM') { enemyFlares(e); enemyFlares(e); enemyFlares(e); }
   else if (kind === 'GHOST') {
     e._ghostT = 3;
-    if (player.lockedTarget === e) player.lockedTarget = null;
-    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    clearLocks(e);
   }
 }
 
@@ -694,8 +702,7 @@ function updateRivalFlee(e, dt) {
     e.alive = false;
     scene.remove(e.group); disposeGroup(e.group);
     if (e.marker) scene.remove(e.marker);
-    if (player.lockedTarget === e) player.lockedTarget = null;
-    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    clearLocks(e);
     rivalEscaped({ missiles: run.pMissiles, gunKills: run.pGunKills, flares: run.pFlares, wingmen: wingmen.length });
     showBanner('☠ ' + e.callsign + ' WITHDRAWS — HE WILL RETURN STRONGER ☠');
     return true;
@@ -857,8 +864,7 @@ function updateBomber(e, dt) {
   if (bInc) { e.flareCd -= dt; if (e.flareCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e.flareCd = 2.2; } }
   if (e.group.position.distanceToSquared(e.spawnPos) > 144000000) {
     e.alive = false; scene.remove(e.group); disposeGroup(e.group); if (e.marker) scene.remove(e.marker);
-    if (player.lockedTarget === e) player.lockedTarget = null;
-    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    clearLocks(e);
     showBanner('BOMBER ESCAPED');
   }
 }
@@ -870,8 +876,14 @@ function updateGround(e, dt) {
     if (e.group.userData.dish) e.group.userData.dish.rotation.y += dt * 1.2;
   } else if (e.gkind === 'truck') {
     if (!e.truckDir) { e.truckDir = new THREE.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(); }
-    e.group.position.addScaledVector(e.truckDir, dt * 28);
+    e.group.position.addScaledVector(e.truckDir, dt * (e.convoy ? (e.convoySpeed || 46) : 28));
     e.group.position.y = terrainH(e.group.position.x, e.group.position.z);
+    if (e.convoy && d > 7800) {   // convoy truck outruns the radar — gone for good
+      e.alive = false; scene.remove(e.group); disposeGroup(e.group); if (e.marker) scene.remove(e.marker);
+      clearLocks(e);
+      showBanner('⚠ CONVOY TRUCK ESCAPED');
+      return;
+    }
   } else if (e.gkind === 'aaa') {
     e.missileCd -= dt;          // reused as the flak timer
     if (d < 1500 && player.group.position.y - e.group.position.y < 1100 && e.missileCd <= 0) {
@@ -944,16 +956,14 @@ function updateDrone(e, dt) {
   if (canSee && player.invuln <= 0 && dist < 36) {
     damagePlayer(16, e.group.position);
     e.alive = false; explode(e.group.position, false);
-    if (player.lockedTarget === e) player.lockedTarget = null;
-    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    clearLocks(e);
     return;
   }
   // self-destruct after a lifetime so they can never soft-lock a wave
   e.droneLife -= dt;
   if (e.droneLife <= 0) {
     e.alive = false; explode(e.group.position, false);
-    if (player.lockedTarget === e) player.lockedTarget = null;
-    if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+    clearLocks(e);
   }
 }
 function enemyFireGun(e, aimObj) {

@@ -112,9 +112,9 @@ let scene, camera, renderer, clock, sun;
 let skyMat, sunDisc, ambientLight, hemiLight, starsMat, rimLight, haloA, haloB;
 let timeOfDay = 0;
 const TODS = [
-  { key: 'DAY',  top: 0x0a1c44, hor: 0x2a6a7a, bot: 0x1d4a63, fog: 0x0a1424, sun: 0xfff0d6, sunI: 1.2, amb: 0.85, hemi: 0.65, rim: 0.55, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0 },
-  { key: 'DUSK', top: 0x1a2150, hor: 0xe08a44, bot: 0x5a3340, fog: 0x2a1a28, sun: 0xffb060, sunI: 1.05, amb: 0.7, hemi: 0.55, rim: 0.5, stars: 0.35, disc: 0xffcf88, sunY: 0.32 },
-  { key: 'NIGHT', top: 0x02030f, hor: 0x0c1832, bot: 0x070d1c, fog: 0x05070f, sun: 0x9fb6ff, sunI: 0.55, amb: 0.5, hemi: 0.42, rim: 0.4, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6 },
+  { key: 'DAY',  top: 0x0a1c44, hor: 0x2a6a7a, bot: 0x1d4a63, fog: 0x0a1424, sun: 0xfff0d6, sunI: 1.5, amb: 0.58, hemi: 0.48, rim: 0.6, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0 },
+  { key: 'DUSK', top: 0x1a2150, hor: 0xe08a44, bot: 0x5a3340, fog: 0x2a1a28, sun: 0xffb060, sunI: 1.35, amb: 0.48, hemi: 0.4, rim: 0.55, stars: 0.35, disc: 0xffcf88, sunY: 0.32 },
+  { key: 'NIGHT', top: 0x02030f, hor: 0x0c1832, bot: 0x070d1c, fog: 0x05070f, sun: 0x9fb6ff, sunI: 0.7, amb: 0.36, hemi: 0.32, rim: 0.45, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6 },
 ];
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
@@ -198,7 +198,7 @@ const TECH_TREE = [
   { id:'m2', x:2, y:3, req:'m1',  fam:'msl', cost:280, sym:'\u25D0', name:'AESA RADAR',        desc:'Missiles lock on 30% faster.',                                     apply:p=>{ p.lockSpeedMul *= 0.7; } },
   { id:'m3', x:2, y:4, req:'m2',  fam:'msl', cost:450, sym:'\u273A', name:'THERMOBARIC',       desc:'Missiles burst into a damaging blast on impact.',                  apply:p=>{ p.splashRadius = Math.max(p.splashRadius, 340); p.splashDmg += 24; } },
   { id:'m4', x:2, y:5, req:'m3',  fam:'msl', cost:620, sym:'\u293A', name:'AUTOLOADER',        desc:'40% chance a kill refunds a missile to the rack.',                 apply:p=>{ p.mslRefund += 0.4; } },
-  { id:'m5', x:2, y:6, req:'m4',  fam:'msl', cost:860, sym:'\u2630', name:'SWARM RACK',        desc:'Each launch looses an extra missile, and +6 to the rack.',         apply:p=>{ p.mslSwarm += 1; p.maxMissiles += 6; p.missiles = p.maxMissiles; } },
+  { id:'m5', x:2, y:6, req:'m4',  fam:'msl', cost:860, sym:'\u2630', name:'SWARM RACK',        desc:'Each launch looses an extra free missile (specials too), and +6 to the rack.',         apply:p=>{ p.mslSwarm += 1; p.maxMissiles += 6; p.missiles = p.maxMissiles; } },
   { id:'m6', x:2, y:7, req:'m5',  fam:'msl', cost:1150, sym:'\u2723', name:'HYDRA SYSTEM',     desc:'CAPSTONE \u2014 +30% missile damage, +1 more missile per launch, every bird hard-homes, and far bigger blasts.', apply:p=>{ p.missileDmgMul *= 1.3; p.mslSwarm += 1; p.mslHard = true; p.splashRadius = Math.max(p.splashRadius, 340) + 120; p.splashDmg += 22; } },
 
   // ===== AIRFRAME group ==========================================================

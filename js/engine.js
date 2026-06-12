@@ -138,9 +138,26 @@ function buildSky() {
   const geo = new THREE.SphereGeometry(22000, 24, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
-    uniforms: { top: { value: new THREE.Color(0x081230) }, bot: { value: new THREE.Color(0x1d4a63) }, hor: { value: new THREE.Color(0x2a6a7a) } },
+    uniforms: {
+      top: { value: new THREE.Color(0x081230) }, bot: { value: new THREE.Color(0x1d4a63) }, hor: { value: new THREE.Color(0x2a6a7a) },
+      sunDir: { value: new THREE.Vector3(0.5, 1.0, 0.35).normalize() }, sunCol: { value: new THREE.Color(0xfff3d0) }, scatter: { value: 1.0 },
+    },
     vertexShader: 'varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-    fragmentShader: 'varying vec3 vP; uniform vec3 top; uniform vec3 bot; uniform vec3 hor; void main(){ float h=normalize(vP).y; vec3 c = h>0.0 ? mix(hor,top,pow(h,0.55)) : mix(hor,bot,pow(-h,0.7)); gl_FragColor=vec4(c,1.0); }'
+    fragmentShader: [
+      'varying vec3 vP; uniform vec3 top; uniform vec3 bot; uniform vec3 hor;',
+      'uniform vec3 sunDir; uniform vec3 sunCol; uniform float scatter;',
+      'void main(){',
+      '  vec3 d = normalize(vP);',
+      '  float h = d.y;',
+      '  vec3 c = h>0.0 ? mix(hor,top,pow(h,0.55)) : mix(hor,bot,pow(-h,0.7));',
+      // atmospheric scatter: tight warm glow at the sun + a broad sky-wide tint
+      '  float s = max(dot(d, sunDir), 0.0);',
+      '  c += sunCol * (pow(s, 20.0) * 0.5 + pow(s, 3.0) * 0.16) * scatter;',
+      // dense haze band hugging the horizon
+      '  c += hor * pow(1.0 - abs(h), 6.0) * 0.25;',
+      '  gl_FragColor = vec4(c, 1.0);',
+      '}',
+    ].join('\n')
   });
   scene.add(new THREE.Mesh(geo, mat));
   skyMat = mat;
@@ -150,20 +167,26 @@ function buildSky() {
 
 let terrainMesh;
 function buildTerrain() {
-  const SIZE = 26000, SEG = 150;
+  const SIZE = 26000, SEG = 176;
   let geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
   geo = geo.toNonIndexed();
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) pos.setY(i, terrainH(pos.getX(i), pos.getZ(i)));
-  const cLow = new THREE.Color(0x143038), cMid = new THREE.Color(0x1f4a3a), cHigh = new THREE.Color(0x586d7e), cSnow = new THREE.Color(0xd2e4ef);
+  const cLow = new THREE.Color(0x143038), cMid = new THREE.Color(0x1f4a3a), cHigh = new THREE.Color(0x586d7e), cSnow = new THREE.Color(0xd2e4ef), cRock = new THREE.Color(0x3a444c);
   const colors = []; const c = new THREE.Color();
+  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), nrm = new THREE.Vector3();
   for (let i = 0; i < pos.count; i += 3) {
     const ay = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
     let t = clamp((ay + 220) / 760, 0, 1);
     if (t < 0.4) c.copy(cLow).lerp(cMid, t / 0.4);
     else if (t < 0.74) c.copy(cMid).lerp(cHigh, (t - 0.4) / 0.34);
     else c.copy(cHigh).lerp(cSnow, (t - 0.74) / 0.26);
+    // steep faces shed vegetation/snow and read as bare rock
+    vA.fromBufferAttribute(pos, i); vB.fromBufferAttribute(pos, i + 1); vC.fromBufferAttribute(pos, i + 2);
+    nrm.crossVectors(e1.subVectors(vB, vA), e2.subVectors(vC, vA)).normalize();
+    const steep = clamp((0.78 - Math.abs(nrm.y)) / 0.3, 0, 1);
+    c.lerp(cRock, steep * 0.8);
     const j = 1 + (Math.random() - 0.5) * 0.12;
     for (let k = 0; k < 3; k++) colors.push(c.r * j, c.g * j, c.b * j);
   }
@@ -176,7 +199,7 @@ function buildTerrain() {
 let cloudGeo, cloudMat;
 function buildClouds() {
   cloudGeo = new THREE.IcosahedronGeometry(1, 1);
-  cloudMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f6, flatShading: true, transparent: true, opacity: 0.5, roughness: 1, metalness: 0, depthWrite: false });
+  cloudMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f6, emissive: 0x90a4bd, emissiveIntensity: 0.32, flatShading: true, transparent: true, opacity: 0.5, roughness: 1, metalness: 0, depthWrite: false });
   for (let i = 0; i < 32; i++) {
     const g = new THREE.Group();
     const base = rand(190, 440);
@@ -189,6 +212,10 @@ function buildClouds() {
       m.renderOrder = 2;
       g.add(m);
     }
+    // soft additive halo wrapping the whole bank — blurs the hard poly edges into vapour
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xe8f1fa, transparent: true, opacity: 0.16, depthWrite: false }));
+    halo.scale.set(base * 3.2, base * 1.7, 1); halo.renderOrder = 1;
+    g.add(halo);
     g.position.set(rand(-10000, 10000), rand(680, 2700), rand(-10000, 10000));
     g.userData.radius = base * 1.55;
     scene.add(g); clouds.push(g);
@@ -199,16 +226,62 @@ function inCloud(pos) {
   return false;
 }
 
-let seaMesh;
+let seaMesh, seaMat;
 function buildScenery() {
-  seaMesh = new THREE.Mesh(new THREE.PlaneGeometry(70000, 70000, 1, 1),
-    new THREE.MeshStandardMaterial({ color: 0x0c2c3e, metalness: 0.35, roughness: 0.22, transparent: true, opacity: 0.92 }));
-  seaMesh.rotation.x = -Math.PI / 2; seaMesh.position.y = -10; scene.add(seaMesh);
+  // animated open water: GPU swell + fresnel + sun glint, fading into the fog with distance
+  const seaGeo = new THREE.PlaneGeometry(70000, 70000, 200, 200);
+  seaGeo.rotateX(-Math.PI / 2);
+  seaMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: {
+      time: { value: 0 },
+      sunDir: { value: new THREE.Vector3(0.5, 1.0, 0.35).normalize() },
+      sunCol: { value: new THREE.Color(0xfff3d0) },
+      deepCol: { value: new THREE.Color(0x0c2c3e) },
+      horCol: { value: new THREE.Color(0x2a6a7a) },
+      fogCol: { value: new THREE.Color(0x0a1424) },
+    },
+    vertexShader: [
+      'uniform float time;',
+      'varying vec3 vPos; varying vec3 vNrm;',
+      'float wave(vec2 p){',
+      '  return sin(p.x*0.0015 + time*0.8)*4.2 + sin(p.y*0.0021 - time*0.6)*3.2 + sin((p.x+p.y)*0.0034 + time*1.4)*1.9;',
+      '}',
+      'void main(){',
+      '  vec3 p = position;',
+      '  p.y += wave(p.xz);',
+      '  float e = 90.0;',
+      '  float hx = wave(p.xz + vec2(e,0.)) - wave(p.xz - vec2(e,0.));',
+      '  float hz = wave(p.xz + vec2(0.,e)) - wave(p.xz - vec2(0.,e));',
+      '  vNrm = normalize(vec3(-hx/(2.0*e)*60.0, 1.0, -hz/(2.0*e)*60.0));',
+      '  vPos = (modelMatrix * vec4(p, 1.0)).xyz;',
+      '  gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);',
+      '}',
+    ].join('\n'),
+    fragmentShader: [
+      'uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 deepCol; uniform vec3 horCol; uniform vec3 fogCol;',
+      'varying vec3 vPos; varying vec3 vNrm;',
+      'void main(){',
+      '  vec3 V = normalize(cameraPosition - vPos);',
+      '  vec3 N = normalize(vNrm);',
+      '  float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);',
+      '  vec3 col = mix(deepCol, horCol * 0.85, fres * 0.75);',
+      '  vec3 R = reflect(-sunDir, N);',
+      '  float rv = max(dot(R, V), 0.0);',
+      '  col += sunCol * (pow(rv, 260.0) * 1.5 + pow(rv, 16.0) * 0.16);',
+      '  float d = length(cameraPosition - vPos);',
+      '  col = mix(col, fogCol, 1.0 - exp(-d * 0.000048));',
+      '  gl_FragColor = vec4(col, 0.94);',
+      '}',
+    ].join('\n'),
+  });
+  seaMesh = new THREE.Mesh(seaGeo, seaMat);
+  seaMesh.position.y = -10; scene.add(seaMesh);
 
   const sv = [];
   for (let i = 0; i < 700; i++) { const d = new THREE.Vector3(rand(-1, 1), rand(0.06, 1), rand(-1, 1)).normalize().multiplyScalar(19000); sv.push(d.x, d.y, d.z); }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sv, 3));
-  starsMat = new THREE.PointsMaterial({ color: 0xcfe6ff, size: 32, sizeAttenuation: true, transparent: true, opacity: 0.85, fog: false, depthWrite: false });
+  starsMat = new THREE.PointsMaterial({ color: 0xcfe6ff, size: 36, sizeAttenuation: true, map: glowTex(), transparent: true, opacity: 0.85, fog: false, depthWrite: false, blending: THREE.AdditiveBlending });
   scene.add(new THREE.Points(sg, starsMat));
 
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff0c0, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false }));
@@ -219,7 +292,19 @@ function buildScenery() {
 function applyTimeOfDay(tod) {
   timeOfDay = clamp(tod, 0, 2);
   const T = TODS[timeOfDay];
-  if (skyMat) { skyMat.uniforms.top.value.setHex(T.top); skyMat.uniforms.hor.value.setHex(T.hor); skyMat.uniforms.bot.value.setHex(T.bot); }
+  if (skyMat) {
+    skyMat.uniforms.top.value.setHex(T.top); skyMat.uniforms.hor.value.setHex(T.hor); skyMat.uniforms.bot.value.setHex(T.bot);
+    skyMat.uniforms.sunDir.value.set(0.5, T.sunY, 0.35).normalize();
+    skyMat.uniforms.sunCol.value.setHex(T.disc);
+    skyMat.uniforms.scatter.value = 1.15 - T.stars * 0.8;   // strong by day/dusk, faint under stars
+  }
+  if (seaMat) {
+    seaMat.uniforms.sunDir.value.set(0.5, T.sunY, 0.35).normalize();
+    seaMat.uniforms.sunCol.value.setHex(T.disc);
+    seaMat.uniforms.horCol.value.setHex(T.hor);
+    seaMat.uniforms.fogCol.value.setHex(T.fog);
+    seaMat.uniforms.deepCol.value.setHex(T.bot).multiplyScalar(0.5);
+  }
   if (scene) { if (scene.fog) scene.fog.color.setHex(T.fog); scene.background.setHex(T.fog); }
   if (sun) { sun.color.setHex(T.sun); sun.intensity = T.sunI; sun.position.set(0.5, T.sunY, 0.35).setLength(2000); }
   if (sunDisc) { sunDisc.material.color.setHex(T.disc); sunDisc.position.copy(sun.position).setLength(18000); }
@@ -230,6 +315,41 @@ function applyTimeOfDay(tod) {
   const f = 1 - T.stars * 0.8;
   if (haloA) { haloA.position.copy(sun.position).setLength(17000); haloA.material.opacity = 0.6 * f; }
   if (haloB) { haloB.position.copy(sun.position).setLength(17000); haloB.material.opacity = 0.32 * f; }
+  buildEnvMap();
+}
+
+/* Low-res PMREM of the sky dome → scene.environment, so metallic surfaces (jets,
+   missiles, sea foam) pick up real sky reflections. Rebuilt on time-of-day change. */
+let envRT = null;
+function buildEnvMap() {
+  if (!renderer || !skyMat) return;
+  const pm = new THREE.PMREMGenerator(renderer);
+  const es = new THREE.Scene();
+  es.add(new THREE.Mesh(new THREE.SphereGeometry(100, 24, 16), skyMat));
+  if (envRT) envRT.dispose();
+  envRT = pm.fromScene(es, 0.04);
+  scene.environment = envRT.texture;
+  pm.dispose();
+}
+
+/* soft blob shadow that pins the player to the deck during low-level flight */
+let playerShadow = null;
+function makePlayerShadow() {
+  playerShadow = new THREE.Mesh(new THREE.CircleGeometry(13, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
+  playerShadow.rotation.x = -Math.PI / 2; playerShadow.visible = false; scene.add(playerShadow);
+}
+function updatePlayerShadow() {
+  if (!playerShadow) makePlayerShadow();
+  if (!player || !player.group || state !== 'playing') { playerShadow.visible = false; return; }
+  const p = player.group.position;
+  const gh = Math.max(terrainH(p.x, p.z), -10);   // shadow falls on terrain or the sea surface
+  const agl = p.y - gh;
+  if (agl > 700 || agl < 0) { playerShadow.visible = false; return; }
+  playerShadow.visible = true;
+  playerShadow.position.set(p.x, gh + 2.5, p.z);
+  playerShadow.material.opacity = 0.32 * (1 - agl / 700);
+  playerShadow.scale.setScalar(1 + agl * 0.0035);
 }
 
 function makePlatform() {
@@ -245,9 +365,10 @@ function makePlatform() {
 /* ---------------- shared assets ---------------- */
 const ASSET = {};
 function buildAssets() {
-  ASSET.bulletGeo = new THREE.SphereGeometry(2.4, 6, 4);
-  ASSET.bulletMat = new THREE.MeshBasicMaterial({ color: 0xfff090, fog: false });
-  ASSET.ebulletMat = new THREE.MeshBasicMaterial({ color: 0xff5440, fog: false });
+  // tracer rounds: stretched additive shards oriented along their velocity (see updateBullets)
+  ASSET.bulletGeo = new THREE.BoxGeometry(1.7, 1.7, 19);
+  ASSET.bulletMat = new THREE.MeshBasicMaterial({ color: 0xffe9a0, fog: false, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+  ASSET.ebulletMat = new THREE.MeshBasicMaterial({ color: 0xff6a50, fog: false, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
   ASSET.missileGeo = new THREE.ConeGeometry(3.4, 22, 8); ASSET.missileGeo.rotateX(-Math.PI / 2);
   ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xeaffff, emissive: 0x2ec8ff, emissiveIntensity: 1.5, flatShading: true });
   ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0xfff0e6, emissive: 0xff5a22, emissiveIntensity: 1.7, flatShading: true });
