@@ -649,6 +649,7 @@ function animate() {
   if (seaMat) seaMat.uniforms.time.value = clock.elapsedTime;
   updateSunRig();
   if (paused) { renderer.render(scene, camera); return; }
+  updateClouds(dt);
 
   if (state === 'hangar') {
     if (previewJet) { previewJet.rotation.y += dt * 0.5; previewJet.position.y = 2.5 + Math.sin(performance.now() * 0.0012) * 0.6; }

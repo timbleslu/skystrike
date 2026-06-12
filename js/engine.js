@@ -168,6 +168,8 @@ function buildSky() {
       '  c += sunCol * (pow(s, 20.0) * 0.5 + pow(s, 3.0) * 0.16) * scatter;',
       // dense haze band hugging the horizon
       '  c += hor * pow(1.0 - abs(h), 6.0) * 0.18;',
+      // blue-noise-ish dither so the smooth gradient never bands
+      '  c += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 160.0;',
       '  gl_FragColor = vec4(c, 1.0);',
       '  #include <tonemapping_fragment>',
       '  #include <colorspace_fragment>',
@@ -212,29 +214,82 @@ function buildTerrain() {
   scene.add(terrainMesh);
 }
 
-let cloudGeo, cloudMat;
+/* fbm-eroded puff texture — soft radial falloff with noisy edges, baked once */
+let CLOUDTEX = null;
+function cloudPuffTex() {
+  if (CLOUDTEX) return CLOUDTEX;
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), img = x.createImageData(S, S);
+  const N = 48, L = []; for (let i = 0; i < (N + 1) * (N + 1); i++) L.push(Math.random());
+  const val = (u, v, sc) => {
+    const gu = Math.min(u * sc, N - 0.001), gv = Math.min(v * sc, N - 0.001);
+    const iu = Math.floor(gu), iv = Math.floor(gv), fu = gu - iu, fv = gv - iv;
+    const su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv);
+    const a = L[iv * (N + 1) + iu], b = L[iv * (N + 1) + iu + 1], d = L[(iv + 1) * (N + 1) + iu], e = L[(iv + 1) * (N + 1) + iu + 1];
+    return lerp(lerp(a, b, su), lerp(d, e, su), sv);
+  };
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const u = i / S, v = j / S;
+    const r = Math.hypot(u - 0.5, v - 0.5) * 2;
+    const n = 0.55 * val(u, v, 6) + 0.3 * val(u, v, 13) + 0.15 * val(u, v, 27);
+    const body = clamp((1 - r) * 1.5, 0, 1);
+    const a = Math.pow(body, 1.5) * clamp(n * 2.2 - 0.45, 0, 1);
+    const k = (j * S + i) * 4, lum = 215 + n * 40;
+    img.data[k] = lum; img.data[k + 1] = lum; img.data[k + 2] = lum; img.data[k + 3] = a * 255;
+  }
+  x.putImageData(img, 0, 0);
+  CLOUDTEX = new THREE.CanvasTexture(c);
+  return CLOUDTEX;
+}
+
+/* volumetric-style cloud banks: clusters of softly-lit billboard puffs.
+   Top puffs tint toward the sun, bottoms toward the fog (retintClouds, per TOD).
+   updateClouds drifts the banks with the wind and slowly churns each puff. */
 function buildClouds() {
-  cloudGeo = new THREE.IcosahedronGeometry(1, 1);
-  cloudMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f6, emissive: 0x90a4bd, emissiveIntensity: 0.32, flatShading: true, transparent: true, opacity: 0.5, roughness: 1, metalness: 0, depthWrite: false });
-  for (let i = 0; i < 32; i++) {
+  const tex = cloudPuffTex();
+  for (let i = 0; i < 30; i++) {
     const g = new THREE.Group();
-    const base = rand(190, 440);
-    const n = randInt(5, 9);
+    const base = rand(220, 480);
+    const n = randInt(6, 10);
     for (let p = 0; p < n; p++) {
-      const m = new THREE.Mesh(cloudGeo, cloudMat);
-      m.position.set(rand(-1, 1) * base * 1.2, rand(-0.3, 0.3) * base, rand(-1, 1) * base * 1.2);
-      const s = rand(0.5, 1.1) * base;
-      m.scale.set(s, s * rand(0.5, 0.7), s);
-      m.renderOrder = 2;
-      g.add(m);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, opacity: rand(0.5, 0.72), depthWrite: false,
+        rotation: rand(0, TWO_PI),
+      }));
+      sp.position.set(rand(-1, 1) * base * 1.25, rand(-0.32, 0.42) * base, rand(-1, 1) * base * 1.25);
+      const s = rand(0.9, 1.7) * base;
+      sp.scale.set(s * rand(1.1, 1.5), s * rand(0.55, 0.75), 1);
+      sp.renderOrder = 2;
+      sp.userData.shade = clamp(sp.position.y / base + 0.5, 0, 1);   // 0 = belly, 1 = sunlit crown
+      sp.userData.spin = rand(-0.02, 0.02);
+      g.add(sp);
     }
-    // soft additive halo wrapping the whole bank — blurs the hard poly edges into vapour
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xe8f1fa, transparent: true, opacity: 0.16, depthWrite: false }));
-    halo.scale.set(base * 3.2, base * 1.7, 1); halo.renderOrder = 1;
-    g.add(halo);
     g.position.set(rand(-10000, 10000), rand(680, 2700), rand(-10000, 10000));
     g.userData.radius = base * 1.55;
     scene.add(g); clouds.push(g);
+  }
+}
+/* re-light every puff for the active time of day (called from applyTimeOfDay) */
+function retintClouds(T) {
+  const lit = new THREE.Color(0xffffff).lerp(new THREE.Color(T.disc), 0.3);
+  const shade = new THREE.Color(T.fog).lerp(lit, 0.38);
+  const tmp = new THREE.Color();
+  for (let i = 0; i < clouds.length; i++) {
+    const kids = clouds[i].children;
+    for (let k = 0; k < kids.length; k++) {
+      tmp.copy(shade).lerp(lit, kids[k].userData.shade);
+      kids[k].material.color.copy(tmp);
+    }
+  }
+}
+/* slow wind drift (wrapping across the map) + per-puff churn */
+function updateClouds(dt) {
+  for (let i = 0; i < clouds.length; i++) {
+    const g = clouds[i];
+    g.position.x += 14 * dt;
+    if (g.position.x > 13000) g.position.x = -13000;
+    const kids = g.children;
+    for (let k = 0; k < kids.length; k++) kids[k].material.rotation += kids[k].userData.spin * dt;
   }
 }
 function inCloud(pos) {
@@ -330,6 +385,7 @@ function applyTimeOfDay(tod) {
   if (hemiLight) hemiLight.intensity = T.hemi;
   if (rimLight) rimLight.intensity = T.rim;
   if (starsMat) starsMat.opacity = T.stars;
+  retintClouds(T);
   const f = 1 - T.stars * 0.8;
   if (haloA) { haloA.position.copy(sun.position).setLength(17000); haloA.material.opacity = 0.6 * f; }
   if (haloB) { haloB.position.copy(sun.position).setLength(17000); haloB.material.opacity = 0.32 * f; }
