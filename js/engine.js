@@ -488,15 +488,90 @@ function makePlatform() {
 
 /* ---------------- shared assets ---------------- */
 const ASSET = {};
+
+/* merge same-attribute BufferGeometries into one non-indexed geometry so a
+   multi-part model (missile hull + fins + nose) renders as a single draw call */
+function mergeGeos(geos) {
+  const parts = geos.map(g => { const ng = g.index ? g.toNonIndexed() : g; if (ng !== g) g.dispose(); return ng; });
+  let n = 0; for (const g of parts) n += g.attributes.position.count;
+  const out = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'uv']) {
+    const item = parts[0].attributes[name].itemSize;
+    const arr = new Float32Array(n * item);
+    let o = 0;
+    for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes[name].array.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(arr, item));
+  }
+  for (const g of parts) g.dispose();
+  return out;
+}
+
+/* swept missile fin: extruded trapezoid in the (radial, chord) plane, radiating +X.
+   rootR = radial start, span = radial extent, chord = root chord, at z station zF. */
+function missileFinGeo(rootR, span, chord, sweep, zF) {
+  const sh = new THREE.Shape();
+  sh.moveTo(0, 0); sh.lineTo(span, sweep); sh.lineTo(span, sweep + chord * 0.32); sh.lineTo(0, chord); sh.closePath();
+  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2, steps: 1, curveSegments: 4 });
+  g.translate(0, 0, -0.06); g.rotateX(Math.PI / 2);   // shape-y (chord) -> +Z, thickness -> Y
+  g.translate(rootR, 0, zF);
+  return g;
+}
+
 function buildAssets() {
-  // tracer rounds: stretched additive shards oriented along their velocity (see updateBullets)
-  ASSET.bulletGeo = new THREE.BoxGeometry(1.7, 1.7, 19);
-  ASSET.bulletMat = new THREE.MeshBasicMaterial({ color: 0xffe9a0, fog: false, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-  ASSET.ebulletMat = new THREE.MeshBasicMaterial({ color: 0xff6a50, fog: false, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
-  ASSET.missileGeo = new THREE.ConeGeometry(3.4, 22, 8); ASSET.missileGeo.rotateX(-Math.PI / 2);
-  ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xeaffff, emissive: 0x2ec8ff, emissiveIntensity: 1.5, flatShading: true });
-  ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0xfff0e6, emissive: 0xff5a22, emissiveIntensity: 1.7, flatShading: true });
-  ASSET.missileMat = ASSET.missileMatEnemy;
+  // tracer rounds: crossed gradient-streak quads oriented along velocity (see updateBullets).
+  // Head (hot end) sits at -Z to match dirToQuat's forward convention.
+  {
+    const L = 26, Wd = 3.4, pos = [], uvs = [], idx = [];
+    for (let ax = 0; ax < 2; ax++) {
+      const o = pos.length / 3;
+      for (const [w, z, u] of [[-1, -L / 2, 0], [1, -L / 2, 0], [1, L / 2, 1], [-1, L / 2, 1]]) {
+        pos.push(ax ? 0 : w * Wd / 2, ax ? w * Wd / 2 : 0, z);
+        uvs.push(u, w * 0.5 + 0.5);
+      }
+      idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
+    }
+    ASSET.bulletGeo = new THREE.BufferGeometry();
+    ASSET.bulletGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    ASSET.bulletGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    ASSET.bulletGeo.setIndex(idx);
+  }
+  ASSET.bulletMat = new THREE.MeshBasicMaterial({ map: tracerTex(), color: 0xffe9a0, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  ASSET.ebulletMat = new THREE.MeshBasicMaterial({ map: tracerTex(), color: 0xff6a50, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+
+  // ---- missile: slender high-poly airframe, nose toward -Z (tip z=-12, exhaust z=+12) ----
+  // hull (one merged draw call): ogive nose, body tube, boattail, 4 tail fins + 4 canards
+  {
+    const R = 1.05, prof = [];
+    for (let i = 0; i <= 20; i++) { const t = i / 20; prof.push(new THREE.Vector2(Math.max(0.001, R * Math.pow(t, 0.62)), -5.5 * (1 - t))); }
+    const nose = new THREE.LatheGeometry(prof, 24); nose.rotateX(Math.PI / 2); nose.translate(0, 0, -6.5);
+    // lathe spins about +Y; after rotateX(PI/2) the profile's -Y (tip) lands at -Z
+    const body = new THREE.CylinderGeometry(R, R, 15.5, 24, 1, true); body.rotateX(Math.PI / 2); body.translate(0, 0, 1.25);
+    const tail = new THREE.CylinderGeometry(R, R * 0.74, 2.2, 24, 1, true); tail.rotateX(Math.PI / 2); tail.translate(0, 0, 10.1);
+    const fins = [];
+    for (let k = 0; k < 4; k++) {
+      const a = k * Math.PI / 2 + Math.PI / 4;
+      const f = missileFinGeo(0.85, 2.3, 2.9, 1.65, 7.7); f.rotateZ(a); fins.push(f);
+      const c = missileFinGeo(0.85, 1.35, 1.5, 0.95, -5.4); c.rotateZ(a); fins.push(c);
+    }
+    ASSET.missileHullGeo = mergeGeos([nose, body, tail].concat(fins));
+    // trim (second draw call): seeker tip, two accent paint bands, exhaust disc
+    const seeker = new THREE.SphereGeometry(0.36, 14, 10); seeker.translate(0, 0, -11.75);
+    const band1 = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); band1.rotateX(Math.PI / 2); band1.translate(0, 0, -5.6);
+    const band2 = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); band2.rotateX(Math.PI / 2); band2.translate(0, 0, 6.6);
+    const exDisc = new THREE.CircleGeometry(0.62, 16); exDisc.translate(0, 0, 11.22);
+    ASSET.missileTrimGeo = mergeGeos([seeker, band1, band2, exDisc]);
+  }
+  ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xdfe6ec, metalness: 0.62, roughness: 0.3, envMapIntensity: 1.35 });
+  ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0x3a4148, metalness: 0.6, roughness: 0.42, envMapIntensity: 1.2, emissive: 0x331108, emissiveIntensity: 0.6 });
+  ASSET.missileTrimPlayer = new THREE.MeshStandardMaterial({ color: 0x101820, emissive: 0x2ec8ff, emissiveIntensity: 2.2, metalness: 0.4, roughness: 0.3 });
+  ASSET.missileTrimEnemy  = new THREE.MeshStandardMaterial({ color: 0x180e0a, emissive: 0xff5a22, emissiveIntensity: 2.4, metalness: 0.4, roughness: 0.3 });
+  ASSET.mslHaloPlayer = new THREE.SpriteMaterial({ map: glowTex(), color: 0x38d6ff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
+  ASSET.mslHaloEnemy  = new THREE.SpriteMaterial({ map: glowTex(), color: 0xff6a2e, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
+  ASSET.mslExhaust    = new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd9a8, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, depthWrite: false, fog: false });
+  // every missile shares these — tag so disposeGroup (boss/tip-missile teardown) never frees them
+  [ASSET.missileHullGeo, ASSET.missileTrimGeo].forEach(g => { g.userData.shared = true; });
+  [ASSET.missileMatPlayer, ASSET.missileMatEnemy, ASSET.missileTrimPlayer, ASSET.missileTrimEnemy,
+   ASSET.mslHaloPlayer, ASSET.mslHaloEnemy, ASSET.mslExhaust].forEach(m => { m.userData.shared = true; });
   ASSET.flareGeo = new THREE.SphereGeometry(3.2, 5, 4);
   ASSET.flareMat = new THREE.MeshBasicMaterial({ color: 0xffb33a, fog: false });
   ASSET.sparkGeo = new THREE.BoxGeometry(1.6, 1.6, 5);
@@ -509,6 +584,21 @@ function buildAssets() {
   ASSET.crateEdgeGeo = new THREE.EdgesGeometry(ASSET.crateBoxGeo);
   ASSET.crateRingGeo = new THREE.TorusGeometry(15, 1.1, 8, 24);
   ASSET.crateBeamGeo = new THREE.CylinderGeometry(3, 3, 900, 6, 1, true);
+}
+
+/* assemble a flight-ready missile from the shared assets: hull + emissive trim +
+   tracking halo + motor exhaust. Everything is shared, so teardown is plain
+   scene.remove — nothing per-instance to dispose. */
+function buildMissileMesh(enemy) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(ASSET.missileHullGeo, enemy ? ASSET.missileMatEnemy : ASSET.missileMatPlayer));
+  g.add(new THREE.Mesh(ASSET.missileTrimGeo, enemy ? ASSET.missileTrimEnemy : ASSET.missileTrimPlayer));
+  const halo = new THREE.Sprite(enemy ? ASSET.mslHaloEnemy : ASSET.mslHaloPlayer);
+  halo.scale.setScalar(enemy ? 46 : 40); g.add(halo);
+  const exhaust = new THREE.Sprite(ASSET.mslExhaust);
+  exhaust.position.z = 12.2; exhaust.scale.setScalar(15); g.add(exhaust);
+  g.userData.halo = halo; g.userData.exhaust = exhaust;
+  return g;
 }
 
 /* radial glow sprite texture (shared) */
@@ -524,6 +614,28 @@ function glowTex() {
   grd.addColorStop(1, 'rgba(255,255,255,0)');
   x.fillStyle = grd; x.fillRect(0, 0, 64, 64);
   GLOWTEX = new THREE.CanvasTexture(c); return GLOWTEX;
+}
+/* anamorphic tracer streak: hot round head fading down a tapering tail.
+   Near-white core so the material color tints the falloff, not the peak. */
+let TRACERTEX = null;
+function tracerTex() {
+  if (TRACERTEX) return TRACERTEX;
+  const W2 = 256, H2 = 64, c = document.createElement('canvas'); c.width = W2; c.height = H2;
+  const x = c.getContext('2d'), img = x.createImageData(W2, H2);
+  for (let j = 0; j < H2; j++) for (let i = 0; i < W2; i++) {
+    const u = i / (W2 - 1), v = j / (H2 - 1);
+    const head = Math.exp(-Math.pow(u * 4.2, 2));                       // bright bulb at u=0
+    const tail = Math.pow(Math.max(0, 1 - u), 1.6) * 0.85;              // long falling tail
+    const lat = Math.exp(-Math.pow((v - 0.5) * (3.4 + u * 5.0), 2));    // narrows toward the tail
+    const e = clamp((head + tail) * lat, 0, 1);
+    const k = (j * W2 + i) * 4;
+    img.data[k]     = 255 * Math.min(1, e * 1.25);
+    img.data[k + 1] = 255 * Math.min(1, e * 1.1);
+    img.data[k + 2] = 255 * Math.min(1, e * 0.8);
+    img.data[k + 3] = 255 * e;
+  }
+  x.putImageData(img, 0, 0);
+  TRACERTEX = new THREE.CanvasTexture(c); return TRACERTEX;
 }
 /* fiery blast texture: noisy radial heat ramp (white core → orange → red edge) */
 let FIRETEX = null;
@@ -597,16 +709,17 @@ function buildCrate() {
   return grp;
 }
 
-/* Free GPU geometry + materials of a removed object subtree. Skips geometry tagged
-   userData.shared (cached jet geometry reused by living enemies) and textures (.map,
-   shared/cached e.g. the drone glow sprite) — disposing either would corrupt others. */
+/* Free GPU geometry + materials of a removed object subtree. Skips geometry AND
+   materials tagged userData.shared (cached jet geometry, pooled missile assets)
+   plus textures (.map, shared/cached e.g. the drone glow sprite) — disposing any
+   of these would corrupt other live objects. */
 function disposeGroup(group) {
   if (!group) return;
   group.traverse(o => {
     if (o.isMesh || o.isSprite) {
       if (o.geometry && o.geometry.dispose && !o.geometry.userData.shared) o.geometry.dispose();
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
-      for (const m of mats) if (m && m.dispose) m.dispose();
+      for (const m of mats) if (m && m.dispose && !(m.userData && m.userData.shared)) m.dispose();
     }
   });
 }

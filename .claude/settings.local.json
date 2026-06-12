@@ -76,7 +76,8 @@
       "Bash(file *.woff2)",
       "Bash(chmod +x scripts/build-www.sh)",
       "Bash(npm run *)",
-      "Bash(npx cap *)"
+      "Bash(npx cap *)",
+      "Bash(npx vercel *)"
     ]
   }
 }

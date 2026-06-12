@@ -100,18 +100,14 @@ function fireMissile() {
   audio.missile();
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
-  const mesh = new THREE.Mesh(ASSET.missileGeo, enemy ? ASSET.missileMatEnemy : ASSET.missileMatPlayer);
+  // shared-asset airframe with tracking halo + motor exhaust baked in (see buildMissileMesh)
+  const mesh = buildMissileMesh(enemy);
   mesh.position.copy(pos).addScaledVector(dir, 11);
-  // bright additive halo locked to the missile so it's easy to track at any range
-  const glowColor = enemy ? 0xff6a2e : 0x38d6ff;
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: glowColor, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
-  halo.scale.setScalar(enemy ? 48 : 42); mesh.add(halo);
-  // hot motor exhaust pinned to the tail
-  const exhaust = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd9a8, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
-  exhaust.position.z = 12; exhaust.scale.setScalar(15); mesh.add(exhaust);
   scene.add(mesh);
+  const glowColor = enemy ? 0xff6a2e : 0x38d6ff;
   const obj = {
-    mesh, halo, vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
+    mesh, halo: mesh.userData.halo, exhaust: mesh.userData.exhaust,
+    vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
     maxSpeed: enemy ? 880 : 1050, target, enemy, life: 7, dmg: (enemy ? 16 : 34) * (dmgMul || 1),
     armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: glowColor, hardHome: false, ambush: false,
   };
@@ -160,6 +156,7 @@ function updateMissiles(dt, ts) {
     dirToQuat(cur, m.mesh.quaternion);
 
     if (m.halo) m.halo.material.opacity = 0.7 + 0.3 * Math.sin(now * 0.02);
+    if (m.exhaust) m.exhaust.scale.setScalar(11 + 7 * (m.speed / m.maxSpeed) + rand(-1.6, 1.6));   // motor flare grows & flickers with burn
     m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor || (m.enemy ? 0xff6a2e : 0x38d6ff)); m.smokeT = 0.02; }
 
     let hit = false;
