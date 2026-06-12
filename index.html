@@ -14,26 +14,26 @@
 
 <div id="hud">
   <div class="panel tl">
-    <div class="barrow" id="hpbar"><span class="lab">HP</span><div class="meter hp"><div id="hpfill" style="width:100%"></div></div></div>
-    <div class="barrow"><span class="lab">SHD</span><div class="meter shd"><div id="shfill" style="width:100%"></div></div></div>
-    <div class="barrow"><span class="lab">THR</span><div class="meter thr"><div id="thrfill" style="width:60%"></div></div></div>
+    <div class="barrow" id="hpbar"><span class="lab" id="lblHp">HP</span><div class="meter hp"><div id="hpfill" style="width:100%"></div></div></div>
+    <div class="barrow"><span class="lab" id="lblShd">SHD</span><div class="meter shd"><div id="shfill" style="width:100%"></div></div></div>
+    <div class="barrow"><span class="lab" id="lblThr">THR</span><div class="meter thr"><div id="thrfill" style="width:60%"></div></div></div>
   </div>
   <div class="panel tr">
-    <div class="stat"><span class="lab">Score</span><b id="score">0</b></div>
-    <div class="stat"><span class="lab">R&amp;D</span><b id="tp">0</b></div>
-    <div class="stat"><span class="lab">Wave</span><b id="wave">0</b></div>
-    <div class="stat combo"><span class="lab">Combo</span><b id="combo"></b></div>
+    <div class="stat"><span class="lab" id="lblScore">Score</span><b id="score">0</b></div>
+    <div class="stat"><span class="lab" id="lblRd">R&amp;D</span><b id="tp">0</b></div>
+    <div class="stat"><span class="lab" id="lblWave">Wave</span><b id="wave">0</b></div>
+    <div class="stat combo"><span class="lab" id="lblCombo">Combo</span><b id="combo"></b></div>
   </div>
   <div class="panel bl">
-    <div class="big"><b id="spd">0</b><span class="unit">Knots</span></div>
-    <div class="big"><b id="alt">0</b><span class="unit">Ft</span></div>
+    <div class="big"><b id="spd">0</b><span class="unit" id="lblSpd">Knots</span></div>
+    <div class="big"><b id="alt">0</b><span class="unit" id="lblAlt">Ft</span></div>
   </div>
   <div class="panel br">
     <canvas id="radar" width="170" height="170"></canvas>
     <div class="ammo">
-      <div><span class="lab">Gun</span><b id="bullets">800</b></div>
-      <div><span class="lab">Flares</span><b id="flares">10</b></div>
-      <div><span class="lab">Msl</span><b id="missiles">30</b></div>
+      <div><span class="lab" id="lblGun">Gun</span><b id="bullets">800</b></div>
+      <div><span class="lab" id="lblFlares">Flares</span><b id="flares">10</b></div>
+      <div><span class="lab" id="lblMsl">Msl</span><b id="missiles">30</b></div>
     </div>
     <div id="special" class="special">ABILITY &#9656; READY</div>
     <div id="wingStatus" class="special wing" style="display:none">&#9650; ESCORT</div>
@@ -77,30 +77,30 @@
 <div id="hangar">
   <div class="hwrap">
     <h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1>
-    <p class="sub">// SELECT YOUR AIRCRAFT //</p>
-    <div id="hangarBest" style="display:none">BEST SCORE <b id="hangarBestVal">0</b></div>
+    <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
+    <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
     <div id="diffsel">
-      <span class="dlab">DIFFICULTY</span>
+      <span id="lblDiff" class="dlab">DIFFICULTY</span>
       <div class="dbtns">
-        <button class="dbtn" data-d="0">ROOKIE</button>
-        <button class="dbtn" data-d="1">VETERAN</button>
-        <button class="dbtn" data-d="2">ACE</button>
+        <button class="dbtn" data-d="0" id="dbtn0">ROOKIE</button>
+        <button class="dbtn" data-d="1" id="dbtn1">VETERAN</button>
+        <button class="dbtn" data-d="2" id="dbtn2">ACE</button>
       </div>
       <div id="diffdesc" class="ddesc"></div>
     </div>
     <div id="todsel">
-      <span class="dlab">ENVIRONMENT</span>
+      <span id="lblEnv" class="dlab">ENVIRONMENT</span>
       <div class="dbtns">
-        <button class="dbtn tbtn" data-t="0">DAY</button>
-        <button class="dbtn tbtn" data-t="1">DUSK</button>
-        <button class="dbtn tbtn" data-t="2">NIGHT</button>
+        <button class="dbtn tbtn" data-t="0" id="tbtn0">DAY</button>
+        <button class="dbtn tbtn" data-t="1" id="tbtn1">DUSK</button>
+        <button class="dbtn tbtn" data-t="2" id="tbtn2">NIGHT</button>
       </div>
     </div>
     <div id="modesel">
-      <span class="dlab">MODE</span>
+      <span id="lblMode" class="dlab">MODE</span>
       <div class="dbtns">
-        <button class="dbtn mbtn" data-m="0">ENDLESS</button>
-        <button class="dbtn mbtn" data-m="1">OPERATION</button>
+        <button class="dbtn mbtn" data-m="0" id="mbtnEndless">ENDLESS</button>
+        <button class="dbtn mbtn" data-m="1" id="mbtnOperation">OPERATION</button>
       </div>
     </div>
     <div id="carousel">
@@ -112,15 +112,15 @@
       <span id="jetCounter"></span>
       <div id="jetDots"></div>
     </div>
-    <div id="rivalBoard"><div class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
+    <div id="rivalBoard"><div id="rbTitle" class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
     <div class="hbtns">
       <button id="launch">&#9654; LAUNCH MISSION</button>
       <button id="manualBtn" class="ghostbtn">&#9636; CONTROLS &amp; MANUAL</button>
     </div>
     <div class="controls">
-      <b>W</b>/<b>S</b> pitch &nbsp; <b>Q</b>/<b>E</b> roll &nbsp; <b>A</b>/<b>D</b> yaw (rudder) &nbsp; <b>SHIFT</b>/<b>CTRL</b> throttle/brake &nbsp; <b>CTRL+S</b> high-G turn<br>
-      <b>SPACE</b> gun &nbsp; <b>G</b> homing missile &nbsp; <b>X</b> flares &nbsp; <b>F</b> lock target &nbsp; <b>R</b> special ability &nbsp; <b>C</b> cycle camera &nbsp; <b>V</b> hold to look back &nbsp; <b>HOLD RMB</b> track target &nbsp; <b>H</b> manual<br>
-      <i>Touchscreen controls auto-detect and activate on mobile devices.</i>
+      <span id="hangarCtl1"></span><br>
+      <span id="hangarCtl2"></span><br>
+      <i id="hangarCtl3"></i>
     </div>
   </div>
 </div>
@@ -128,12 +128,12 @@
 <div id="gameover">
   <div class="gowrap">
     <h1>MISSION FAILED</h1>
-    <div class="gostats">SCORE <b id="go_score">0</b> &middot; WAVE <b id="go_wave">0</b> &middot; BEST <b id="go_best">0</b></div>
+    <div class="gostats"><span id="goLblScore">SCORE</span> <b id="go_score">0</b> &middot; <span id="goLblWave">WAVE</span> <b id="go_wave">0</b> &middot; <span id="goLblBest">BEST</span> <b id="go_best">0</b></div>
     <div class="debrief">
-      <div><span>Kills</span><b id="go_kills">0</b></div>
-      <div><span>Accuracy</span><b id="go_acc">0%</b></div>
-      <div><span>Missiles</span><b id="go_msl">0</b></div>
-      <div><span>Time</span><b id="go_time">0:00</b></div>
+      <div><span id="goLblKills">Kills</span><b id="go_kills">0</b></div>
+      <div><span id="goLblAcc">Accuracy</span><b id="go_acc">0%</b></div>
+      <div><span id="goLblMsl">Missiles</span><b id="go_msl">0</b></div>
+      <div><span id="goLblTime">Time</span><b id="go_time">0:00</b></div>
     </div>
     <button id="redeploy">&#9654; REDEPLOY</button>
   </div>
@@ -143,10 +143,10 @@
   <div class="uwrap">
     <div class="techhead">
       <div>
-        <h2>R&amp;D TECH TREE</h2>
-        <p class="usub">// ONE TREE · PATH DOWN ANY BRANCH · UPGRADES PERSIST FOR THE RUN //</p>
+        <h2 id="techHeadTitle">R&amp;D TECH TREE</h2>
+        <p id="techHeadSub" class="usub">// ONE TREE · PATH DOWN ANY BRANCH · UPGRADES PERSIST FOR THE RUN //</p>
       </div>
-      <div class="rpbox"><span class="rplab">RESEARCH POINTS</span><b id="rpval">0</b></div>
+      <div class="rpbox"><span class="rplab" id="rplab">RESEARCH POINTS</span><b id="rpval">0</b></div>
     </div>
     <div id="techTabs">
       <button class="tech-tab" data-tab="tech">TECH TREE</button>
@@ -162,8 +162,8 @@
 
 <div id="wingpick">
   <div class="wp-box">
-    <div class="wp-title">SELECT WINGMAN AIRFRAME</div>
-    <div class="wp-sub">// CHOOSE THE JET YOUR NEW ESCORT WILL FLY //</div>
+    <div class="wp-title" id="wpTitle">SELECT WINGMAN AIRFRAME</div>
+    <div class="wp-sub" id="wpSub">// CHOOSE THE JET YOUR NEW ESCORT WILL FLY //</div>
     <div id="wpGrid" class="wp-grid"></div>
     <button id="wpCancel">CANCEL</button>
   </div>
@@ -171,9 +171,9 @@
 
 <div id="opmap">
   <div class="op-box">
-    <div class="op-title">OPERATION MAP</div>
-    <div class="op-sub">// SELECT NEXT SECTOR //</div>
-    <div class="op-info">Plot your own course through enemy territory: pick one highlighted sector per column, left to right. Each pick is the next wave you fly &mdash; clear it, spend your RP, then return here. Reach <b>FINAL</b> and destroy the boss to complete the operation.</div>
+    <div class="op-title" id="opTitle">OPERATION MAP</div>
+    <div class="op-sub" id="opSub">// SELECT NEXT SECTOR //</div>
+    <div class="op-info" id="opInfo">Plot your own course through enemy territory: pick one highlighted sector per column, left to right. Each pick is the next wave you fly &mdash; clear it, spend your RP, then return here. Reach <b>FINAL</b> and destroy the boss to complete the operation.</div>
     <div class="op-legend">
       <span><b>FURBALL</b> fighter swarm &mdash; grows with depth</span>
       <span><b>INTERCEPT</b> bombers &mdash; down them before they escape</span>
@@ -189,11 +189,11 @@
 
 <div id="manual">
   <div class="mwrap">
-    <h2>FLIGHT MANUAL</h2>
-    <p class="msub">// TACTICAL REFERENCE //</p>
+    <h2 id="manTitle">FLIGHT MANUAL</h2>
+    <p id="manSub" class="msub">// TACTICAL REFERENCE //</p>
     <div class="mgrid">
       <section>
-        <h3>Flight</h3>
+        <h3 id="manH_Flight">Flight</h3>
         <ul>
           <li><b>W</b> / <b>S</b> &mdash; pitch down / up</li>
           <li><b>Q</b> / <b>E</b> &mdash; roll left / right</li>
@@ -203,7 +203,7 @@
         </ul>
       </section>
       <section>
-        <h3>Combat</h3>
+        <h3 id="manH_Combat">Combat</h3>
         <ul>
           <li><b>SPACE</b> &mdash; cannon (now a finite magazine &mdash; watch the <em>GUN</em> count)</li>
           <li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead &mdash; fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li>
@@ -217,11 +217,11 @@
         </ul>
       </section>
       <section>
-        <h3>Target Lock</h3>
+        <h3 id="manH_Lock">Target Lock</h3>
         <p>By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.</p>
       </section>
       <section>
-        <h3>Aircraft Stats</h3>
+        <h3 id="manH_Stats">Aircraft Stats</h3>
         <ul>
           <li><b>SPD</b> &mdash; top speed</li>
           <li><b>AGI</b> &mdash; turn rate / maneuverability</li>
@@ -232,7 +232,7 @@
         </ul>
       </section>
       <section>
-        <h3>HUD &amp; Radar</h3>
+        <h3 id="manH_Hud">HUD &amp; Radar</h3>
         <ul>
           <li>Red brackets + health bar mark enemies; brightest = nearest threat.</li>
           <li>Edge arrows with distance point to off-screen contacts.</li>
@@ -241,7 +241,7 @@
         </ul>
       </section>
       <section>
-        <h3>Your Wingman</h3>
+        <h3 id="manH_Wingman">Your Wingman</h3>
         <ul>
           <li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) &mdash; you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li>
           <li>It draws enemy fire &mdash; hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li>
@@ -249,7 +249,7 @@
         </ul>
       </section>
       <section>
-        <h3>Enemies &amp; Abilities</h3>
+        <h3 id="manH_Enemies">Enemies &amp; Abilities</h3>
         <ul>
           <li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs &mdash; they now carry a real cannon magazine and a single missile, so expect to be shot at.</li>
           <li><b>Crimson drones</b> &mdash; cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers &mdash; keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li>
@@ -261,19 +261,21 @@
         </ul>
       </section>
       <section>
-        <h3>R&amp;D Tech Tree</h3>
+        <h3 id="manH_Tech">R&amp;D Tech Tree</h3>
         <p>You earn <em>research points (RP)</em> &mdash; shown as <b>R&amp;D</b> on the HUD &mdash; only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> &mdash; a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all &mdash; press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.</p>
       </section>
       <section class="mset">
-        <h3>Settings</h3>
-        <div class="srow"><label for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
-        <div class="srow"><label for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
-        <div class="srow"><label for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
-        <div class="srow"><label for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
-        <div class="srow"><label for="setRival">Nemesis rival ace (persistent named enemy)</label><input id="setRival" type="checkbox"></div>
-        <div class="srow"><label for="setGroundWar">Ground war (SAM/AAA sites, strike waves)</label><input id="setGroundWar" type="checkbox"></div>
-        <div class="srow"><label for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
-        <div class="srow"><label for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
+        <h3 id="manH_Settings">Settings</h3>
+        <div class="srow"><label id="lblLang">Language</label><div class="langtog"><button id="setLangEN" class="langbtn" data-lang="EN">English</button><button id="setLangZH" class="langbtn" data-lang="ZH">简体中文</button></div></div>
+        <div class="srow"><label id="lblSens" for="setSens">Control sensitivity</label><input id="setSens" type="range" min="50" max="200" value="100"></div>
+        <div class="srow"><label id="lblVol" for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
+        <div class="srow"><label id="lblInvert" for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
+        <div class="srow"><label id="lblAutoLock" for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
+        <div class="srow"><label id="lblWingman" for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
+        <div class="srow"><label id="lblRival" for="setRival">Nemesis rival ace (persistent named enemy)</label><input id="setRival" type="checkbox"></div>
+        <div class="srow"><label id="lblGroundWar" for="setGroundWar">Ground war (SAM/AAA sites, strike waves)</label><input id="setGroundWar" type="checkbox"></div>
+        <div class="srow"><label id="lblGunLead" for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
+        <div class="srow"><label id="lblMute" for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
       </section>
     </div>
     <div class="mbtns">
@@ -283,9 +285,37 @@
   </div>
 </div>
 
+<div id="langSelect">
+  <div class="obwrap">
+    <h1 class="ob-h1">SKYSTRIKE</h1>
+    <p id="langTitle" class="ob-sub">SELECT LANGUAGE</p>
+    <p id="langSub" class="ob-sub2">// 选择语言 //</p>
+    <div class="ob-langbtns">
+      <button class="ob-lang" data-lang="EN">English 🇬🇧</button>
+      <button class="ob-lang" data-lang="ZH">简体中文 🇨🇳</button>
+    </div>
+  </div>
+</div>
+
+<div id="onboard">
+  <div class="obwrap">
+    <h2 id="obTitle" class="ob-h2">CONTROLS</h2>
+    <p id="obSub" class="ob-sub2">// PRE-FLIGHT BRIEF //</p>
+    <div class="ob-grid">
+      <div class="ob-card"><h3 id="obFlightH">FLIGHT</h3><p id="obFlightK"></p></div>
+      <div class="ob-card"><h3 id="obCombatH">COMBAT</h3><p id="obCombatK"></p></div>
+      <div class="ob-card"><h3 id="obViewH">VIEW</h3><p id="obViewK"></p></div>
+    </div>
+    <p id="obTouch" class="ob-note"></p>
+    <p id="obMore" class="ob-note"></p>
+    <button id="obContinue" class="ob-continue">▶ CONTINUE</button>
+  </div>
+</div>
+
 <script src="vendor/three.min.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/globals.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/rival.js"></script>

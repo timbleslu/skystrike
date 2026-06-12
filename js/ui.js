@@ -781,6 +781,9 @@ function buildHangar() {
   const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
+  const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { controlSensitivity = clamp(ss.value / 100, 0.5, 2.0); saveSettings(); }); }
+  document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', () => { if (LANG === b.dataset.lang) return; LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui(); }));
+  applyLang();
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();
@@ -939,15 +942,96 @@ function loadSettings() {
     if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
     if (typeof s.opMode === 'boolean') opMode = s.opMode;
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
+    if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
+    if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
     if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
   } catch (e) {}
 }
+// retranslate all static DOM text + re-render dynamic panels for the current LANG
+function setTxt(id, str) { const e = g(id); if (e) e.textContent = str; }
+function applyLang() {
+  // language-select / onboarding screens
+  setTxt('langTitle', t('lang.title')); setTxt('langSub', t('lang.sub'));
+  setTxt('obTitle', t('onboard.title')); setTxt('obSub', t('onboard.sub'));
+  setTxt('obFlightH', t('onboard.flight')); setTxt('obFlightK', t('onboard.flightKeys'));
+  setTxt('obCombatH', t('onboard.combat')); setTxt('obCombatK', t('onboard.combatKeys'));
+  setTxt('obViewH', t('onboard.view')); setTxt('obViewK', t('onboard.viewKeys'));
+  setTxt('obTouch', t('onboard.touch')); setTxt('obMore', t('onboard.more'));
+  setTxt('obContinue', t('onboard.continue'));
+  // hangar
+  setTxt('hangarSub', t('hangar.sub')); setTxt('hangarBestLbl', t('hangar.best'));
+  setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment')); setTxt('lblMode', t('hangar.mode'));
+  setTxt('mbtnEndless', t('hangar.endless')); setTxt('mbtnOperation', t('hangar.operation'));
+  setTxt('rbTitle', t('hangar.rivalBoard'));
+  setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
+  setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
+  setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
+  setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
+  // hangar inline controls (3 lines)
+  const c1 = g('hangarCtl1'); if (c1) c1.textContent = t('hangar.controls1');
+  const c2 = g('hangarCtl2'); if (c2) c2.textContent = t('hangar.controls2');
+  const c3 = g('hangarCtl3'); if (c3) c3.textContent = t('hangar.controls3');
+  // game over labels
+  setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
+  setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
+  setTxt('redeploy', t('go.redeploy'));
+  // tech tree shell
+  setTxt('rplab', t('tech.researchPoints'));
+  const th = g('techHeadTitle'); if (th) th.textContent = t('tech.title');
+  const ts = g('techHeadSub'); if (ts) ts.textContent = t('tech.sub');
+  document.querySelectorAll('.tech-tab').forEach(b => { b.textContent = b.dataset.tab === 'armory' ? t('tech.tabArmory') : t('tech.tabTech'); });
+  setTxt('techDeploy', t('tech.deploy'));
+  const hint = g('techhint'); if (hint) hint.textContent = techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree');
+  // wing picker
+  const wt = g('wpTitle'); if (wt) wt.textContent = t('wing.title');
+  const wsx = g('wpSub'); if (wsx) wsx.textContent = t('wing.sub');
+  setTxt('wpCancel', t('wing.cancel'));
+  // operation map
+  const ot = g('opTitle'); if (ot) ot.textContent = t('op.title');
+  const osb = g('opSub'); if (osb) osb.textContent = t('op.sub');
+  const oi = g('opInfo'); if (oi) oi.textContent = t('op.info');
+  setTxt('opLaunch', '▶ ' + t('op.launch').replace('▶ ', ''));
+  setTxt('opLaunch', t('op.launch'));
+  applyOpLegend();
+  // hud panel labels
+  setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
+  setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); setTxt('lblWave', t('hud.wave')); setTxt('lblCombo', t('hud.combo'));
+  setTxt('lblSpd', t('hud.knots')); setTxt('lblAlt', t('hud.ft'));
+  setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));
+  // manual
+  setTxt('manTitle', t('manual.title')); setTxt('manSub', t('manual.sub'));
+  setTxt('manualClose', t('manual.resume')); setTxt('manualAbort', t('manual.abort'));
+  setTxt('manH_Flight', t('manual.hFlight')); setTxt('manH_Combat', t('manual.hCombat'));
+  setTxt('manH_Lock', t('manual.hLock')); setTxt('manH_Stats', t('manual.hStats'));
+  setTxt('manH_Hud', t('manual.hHud')); setTxt('manH_Wingman', t('manual.hWingman'));
+  setTxt('manH_Enemies', t('manual.hEnemies')); setTxt('manH_Tech', t('manual.hTech'));
+  setTxt('manH_Settings', t('manual.hSettings'));
+  // settings labels
+  setTxt('lblLang', t('set.language')); setTxt('lblSens', t('set.sensitivity'));
+  setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert'));
+  setTxt('lblAutoLock', t('set.autoLock')); setTxt('lblWingman', t('set.wingman'));
+  setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
+  setTxt('lblGunLead', t('set.gunLead')); setTxt('lblMute', t('set.mute'));
+  setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
+  document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
+  // re-render dynamic panels that bake text in
+  if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
+  renderKillBoard();
+}
+function applyOpLegend() {
+  const map = { FURBALL: 'op.legFurball', INTERCEPT: 'op.legIntercept', STRIKE: 'op.legStrike', ELITE: 'op.legElite', DEPOT: 'op.legDepot', FINAL: 'op.legFinal' };
+  const order = ['FURBALL', 'INTERCEPT', 'STRIKE', 'ELITE', 'DEPOT', 'FINAL'];
+  const leg = document.querySelector('#opmap .op-legend');
+  if (!leg) return;
+  leg.innerHTML = order.map(k => '<span><b>' + t('op.' + k) + '</b> ' + t(map[k]) + '</span>').join('');
+}
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode
+      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
+      lang: LANG, controlSensitivity
     }));
   } catch (e) {}
 }

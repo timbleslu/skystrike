@@ -795,7 +795,7 @@ function updatePlayer(dt) {
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;
   player.highG = brake && (down('KeyS') || (isTouchEnabled && touchInput.y > 0.5));
 
-  const tb = st.turnRate * (player.turnMul || 1) * (player.vectorSurge > 0 ? 1.85 : 1);   // PROPULSION agility + VECTOR SURGE supermaneuver
+  const tb = st.turnRate * controlSensitivity * (player.turnMul || 1) * (player.vectorSurge > 0 ? 1.85 : 1);   // sensitivity + PROPULSION agility + VECTOR SURGE supermaneuver
   const tgtPitch = pitchIn * tb * (player.highG ? 2.0 : 1.0);
   const tgtRoll = rollIn * tb * 1.6;
   const tgtYaw = yawIn * tb * 0.5;
