@@ -677,6 +677,11 @@ function createPlayer(idx) {
     berserk: 0,                                       // TACTICS: bonus damage that grows as HP falls
     execThresh: 0,                                    // TACTICS: instantly finish low-HP non-boss foes
     rpPerKill: 0,                                     // COMMAND: flat research bounty per kill
+    comboDmg: 0,                                      // RHYTHM OF WAR: bonus damage per combo point (capped)
+    gunScavenge: 0,                                   // BRASS SCAVENGER: cannon rounds recovered per kill
+    slowOnKill: 0,                                    // KILL CLOCK / OMEGA: seconds of bullet-time per kill
+    flakFlares: 0,                                    // FLAK BLOOM: flares detonate for this damage on burnout
+    execBlast: 0,                                     // HEADSMAN: executions detonate for this damage
     cheatDeath: false, _cheatUsed: false,             // TACTICS capstone: survive one lethal blow per wave
     tp: 0, tech: ['core'], techRepeat: {}, rpMul: 1,   // research points + purchased nodes (root owned free)
     special: { cd: 0, max: SPECIAL_CD[j.id] || 15 },

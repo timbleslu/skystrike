@@ -163,10 +163,12 @@ const SPECIAL_CD = {
 const TP = { dmg: 0.5, fighter: 55, drone: 12, ground: 28, bomber: 150, ace: 140, boss: 380, assistFrac: 0.4 };
 let wingDmgMul = 1;   // FLEET COMMANDER capstone boosts escort firepower
 
-/* ---------------- TECH TREE (one connected tree) ----------------
-   A single research tree grown from a CORE root. Every node lists its parent (`req`)
-   and a grid position (`x` column, `y` row) so the screen can draw the branches and
-   you scroll around to path down whichever branch you like. Purchases persist for the run.
+/* ---------------- TECH TREE (one connected lattice) ----------------
+   A single research lattice grown from a CORE root. Every node lists its parent(s):
+   `req` may be a single id or an ARRAY (owning ANY one unlocks the node — an OR-gate
+   that lets branches weave into each other), and `reqAll` is an array of ids that must
+   ALL be owned (an AND-gate for hybrid nodes that fuse two branches). Grid position
+   (`x` column, `y` row) drives the on-screen layout. Purchases persist for the run.
    The CORE node is owned for free at the start of every run.
    `ok(p)` (optional) gates a node to relevant airframes; `repeat` marks the points-sink. */
 const MAX_WINGMEN = 6;                 // hard cap on escorts in the air
@@ -184,9 +186,10 @@ const TECH_TREE = [
   // ---- GUNNERY (cannon line, far left) ----
   { id:'g1', x:0, y:2, req:'wpn', fam:'gun', cost:150, sym:'\u25C9', name:'HEAVY ROUNDS',     desc:'+25% cannon damage.',                                              ok:p=>!p.noCannon, apply:p=>{ p.gunDmgMul *= 1.25; } },
   { id:'g2', x:0, y:3, req:'g1',  fam:'gun', cost:280, sym:'\u25A4', name:'RAPID FEED',        desc:'+22% cannon rate of fire.',                                        ok:p=>!p.noCannon, apply:p=>{ p.fireRateMul *= 0.78; } },
-  { id:'g3', x:0, y:4, req:'g2',  fam:'gun', cost:450, sym:'\u2261', name:'AP PENETRATORS',    desc:'Rounds punch THROUGH one extra target, and fly faster.',           ok:p=>!p.noCannon, apply:p=>{ p.pierce += 1; p.bulletSpeedMul *= 1.2; } },
+  { id:'g3', x:0, y:4, req:['g2','u2'], fam:'gun', cost:450, sym:'\u2261', name:'AP PENETRATORS', desc:'Rounds punch THROUGH one extra target, and fly faster. (Reached via Gunnery OR Munitions.)', ok:p=>!p.noCannon, apply:p=>{ p.pierce += 1; p.bulletSpeedMul *= 1.2; } },
   { id:'g4', x:0, y:5, req:'g3',  fam:'gun', cost:640, sym:'\u25CE', name:'CRITICAL OPTICS',   desc:'+20% chance to land a critical hit for ×1.8 damage.',              ok:p=>!p.noCannon, apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.2); p.critMul = Math.max(p.critMul, 1.8); } },
   { id:'g5', x:0, y:6, req:'g4',  fam:'gun', cost:980, sym:'\u2726', name:'GAUSS DRIVER',      desc:'CAPSTONE \u2014 +45% cannon damage, +1 pierce, hypervelocity rounds, and critical hits now DETONATE on impact.', ok:p=>!p.noCannon, apply:p=>{ p.gunDmgMul *= 1.45; p.pierce += 1; p.bulletSpeedMul *= 1.2; p.critChance = Math.min(0.6, p.critChance + 0.05); p.critChain = true; } },
+  { id:'sv', x:1, y:6, req:['g3','u3'], fam:'gun', cost:560, sym:'\u267b', name:'BRASS SCAVENGER', desc:'BRIDGE \u2014 every kill recovers 40 cannon rounds from the wreckage, and +10% cannon damage. (Gunnery OR Munitions.)', ok:p=>!p.noCannon, apply:p=>{ p.gunScavenge += 40; p.gunDmgMul *= 1.1; } },
 
   // ---- MUNITIONS (kill-cascade line, centre-left, under the WEAPONS trunk) ----
   { id:'u1', x:1, y:2, req:'wpn', fam:'mun', cost:170, sym:'\u229B', name:'SMART FUZING',      desc:'Every kill cooks off in a small blast, damaging nearby foes.',     apply:p=>{ p.chainRadius = Math.max(p.chainRadius, 150); p.chainDmg += 24; } },
@@ -197,16 +200,33 @@ const TECH_TREE = [
   // ---- MISSILES (ordnance line, centre) ----
   { id:'m1', x:2, y:2, req:'wpn', fam:'msl', cost:150, sym:'\u27B9', name:'HE WARHEADS',       desc:'+28% missile damage.',                                             apply:p=>{ p.missileDmgMul *= 1.28; } },
   { id:'m2', x:2, y:3, req:'m1',  fam:'msl', cost:280, sym:'\u25D0', name:'AESA RADAR',        desc:'Missiles lock on 30% faster.',                                     apply:p=>{ p.lockSpeedMul *= 0.7; } },
-  { id:'m3', x:2, y:4, req:'m2',  fam:'msl', cost:450, sym:'\u273A', name:'THERMOBARIC',       desc:'Missiles burst into a damaging blast on impact.',                  apply:p=>{ p.splashRadius = Math.max(p.splashRadius, 340); p.splashDmg += 24; } },
+  { id:'m3', x:2, y:4, req:['m2','u2'], fam:'msl', cost:450, sym:'\u273A', name:'THERMOBARIC', desc:'Missiles burst into a damaging blast on impact. (Reached via Missiles OR Munitions.)', apply:p=>{ p.splashRadius = Math.max(p.splashRadius, 340); p.splashDmg += 24; } },
   { id:'m4', x:2, y:5, req:'m3',  fam:'msl', cost:620, sym:'\u293A', name:'AUTOLOADER',        desc:'40% chance a kill refunds a missile to the rack.',                 apply:p=>{ p.mslRefund += 0.4; } },
   { id:'m5', x:2, y:6, req:'m4',  fam:'msl', cost:860, sym:'\u2630', name:'SWARM RACK',        desc:'Each launch looses an extra free missile (specials too), and +6 to the rack.',         apply:p=>{ p.mslSwarm += 1; p.maxMissiles += 6; p.missiles = p.maxMissiles; } },
   { id:'m6', x:2, y:7, req:'m5',  fam:'msl', cost:1150, sym:'\u2723', name:'HYDRA SYSTEM',     desc:'CAPSTONE \u2014 +30% missile damage, +1 more missile per launch, every bird hard-homes, and far bigger blasts.', apply:p=>{ p.missileDmgMul *= 1.3; p.mslSwarm += 1; p.mslHard = true; p.splashRadius = Math.max(p.splashRadius, 340) + 120; p.splashDmg += 22; } },
+
+  // ---- CONVERGENCE SPINE (x3, under the CORE) — hybrid nodes that fuse branches ----
+  { id:'dl', x:3, y:3, req:['m1','p1'], fam:'tac', cost:260, sym:'⌖', name:'DATALINK ARRAY',
+    desc:'BRIDGE — sensor fusion across the airframe: missiles lock 20% faster AND +6% top speed. (Missiles OR Propulsion.)',
+    apply:p=>{ p.lockSpeedMul *= 0.8; p.speedMul *= 1.06; } },
+  { id:'cm', x:3, y:4, req:'dl', fam:'tac', cost:420, sym:'♫', name:'RHYTHM OF WAR',
+    desc:'Combat flow state — every point of COMBO adds +2% damage, up to +30%. Keep the hits coming.',
+    apply:p=>{ p.comboDmg = Math.max(p.comboDmg, 0.02); } },
+  { id:'oc', x:3, y:5, reqAll:['u2','a2'], fam:'mun', cost:520, sym:'⧉', name:'OVERLOAD COUPLING',
+    desc:'FUSION — requires OVERPRESSURE + AEGIS PLATING. Wires the shield into the warload: +18 max shield, and a shield-break pulse hits harder.',
+    apply:p=>{ p.maxShield += 18; p.shield = Math.min(p.maxShield, p.shield + 18); p.reactive = Math.max(p.reactive, 50); } },
+  { id:'sk', x:3, y:6, req:['a3','e3'], fam:'arm', cost:540, sym:'⚭', name:'SIPHON FIELD',
+    desc:'BRIDGE — harvest the static of a dying machine: every kill restores 6 shield. (Armour OR EW.)',
+    apply:p=>{ p.shieldOnKill += 6; } },
+  { id:'omega', x:3, y:8, reqAll:['m6','a6'], fam:'core', cost:2000, sym:'Ω', name:'OMEGA PROTOCOL',
+    desc:'ULTRA-CAPSTONE — requires HYDRA SYSTEM + JUGGERNAUT. The airframe transcends: +15% ALL damage, +8% damage reduction, +1 missile per launch, and every kill bends time for a moment.',
+    apply:p=>{ p.gunDmgMul *= 1.15; p.missileDmgMul *= 1.15; p.dmgReduce = clamp(p.dmgReduce + 0.08, 0, 0.75); p.mslSwarm += 1; p.slowOnKill = Math.max(p.slowOnKill, 0.7); } },
 
   // ===== AIRFRAME group ==========================================================
   // ---- ARMOUR (survivability line, left of AIRFRAME) ----
   { id:'a1', x:4, y:2, req:'def', fam:'arm', cost:150, sym:'\u25A3', name:'REINFORCED HULL',   desc:'+35 max HP and fully repair the airframe.',                        apply:p=>{ p.maxHp += 35; p.hp = p.maxHp; } },
   { id:'a2', x:4, y:3, req:'a1',  fam:'arm', cost:280, sym:'\u25D2', name:'AEGIS PLATING',     desc:'+22 max shield, +40% shield regen, recharged now.',                apply:p=>{ p.maxShield += 22; p.shield = p.maxShield; p.shieldRegenMul *= 1.4; } },
-  { id:'a3', x:4, y:4, req:'a2',  fam:'arm', cost:450, sym:'\u271A', name:'GUARDIAN SYSTEM',   desc:'Take 18% less damage from all sources.',                           apply:p=>{ p.dmgReduce = clamp(p.dmgReduce + 0.18, 0, 0.6); } },
+  { id:'a3', x:4, y:4, req:['a2','p2'], fam:'arm', cost:450, sym:'\u271A', name:'GUARDIAN SYSTEM', desc:'Take 18% less damage from all sources. (Reached via Armour OR Propulsion.)', apply:p=>{ p.dmgReduce = clamp(p.dmgReduce + 0.18, 0, 0.6); } },
   { id:'a4', x:4, y:5, req:'a3',  fam:'arm', cost:620, sym:'\u271B', name:'NANITE REPAIR',     desc:'Repair 7 HP every time you destroy something.',                    apply:p=>{ p.lifesteal += 7; } },
   { id:'a5', x:4, y:6, req:'a4',  fam:'arm', cost:860, sym:'\u29BF', name:'REACTIVE ARMOUR',   desc:'When your shield breaks it DETONATES \u2014 concussing foes and blinding incoming missiles.', apply:p=>{ p.reactive = Math.max(p.reactive, 70); } },
   { id:'a6', x:4, y:7, req:'a5',  fam:'arm', cost:1150, sym:'\u2756', name:'JUGGERNAUT',       desc:'CAPSTONE \u2014 +50 max HP, another 12% damage reduction, and overhealing now banks as bonus OVERSHIELD.', apply:p=>{ p.maxHp += 50; p.hp = p.maxHp; p.dmgReduce = clamp(p.dmgReduce + 0.12, 0, 0.7); p.vampShield = Math.max(p.vampShield, 0.5); p.overshieldCap += 60; } },
@@ -215,12 +235,18 @@ const TECH_TREE = [
   { id:'p1', x:5, y:2, req:'def', fam:'prop', cost:170, sym:'\u2191', name:'THRUST VECTORING', desc:'+12% turn rate \u2014 tighter, faster turns.',                     apply:p=>{ p.turnMul *= 1.12; } },
   { id:'p2', x:5, y:3, req:'p1',  fam:'prop', cost:300, sym:'\u25C7', name:'ADAPTIVE INTAKES', desc:'+14% top speed.',                                                  apply:p=>{ p.speedMul *= 1.14; } },
   { id:'p3', x:5, y:4, req:'p2',  fam:'prop', cost:480, sym:'\u2742', name:'ENERGY MANEUVER',  desc:'+12% turn rate and +8% top speed.',                                apply:p=>{ p.turnMul *= 1.12; p.speedMul *= 1.08; } },
-  { id:'p4', x:5, y:5, req:'p3',  fam:'prop', cost:820, sym:'\u27A4', name:'SUPERCRUISE',      desc:'CAPSTONE \u2014 +18% speed, +12% turn, and a constant 6% damage reduction from sheer energy.', apply:p=>{ p.speedMul *= 1.18; p.turnMul *= 1.12; p.dmgReduce = clamp(p.dmgReduce + 0.06, 0, 0.7); } },
+  { id:'tk', x:5, y:5, req:['p3','e3'], fam:'tac', cost:600, sym:'\u29D6', name:'KILL CLOCK',
+    desc:'BRIDGE \u2014 reflex injection on confirmed kill: the world slows for a beat every time you down something. (Propulsion OR EW.)',
+    apply:p=>{ p.slowOnKill = Math.max(p.slowOnKill, 0.6); } },
+  { id:'p4', x:5, y:6, req:'p3',  fam:'prop', cost:820, sym:'\u27A4', name:'SUPERCRUISE',      desc:'CAPSTONE \u2014 +18% speed, +12% turn, and a constant 6% damage reduction from sheer energy.', apply:p=>{ p.speedMul *= 1.18; p.turnMul *= 1.12; p.dmgReduce = clamp(p.dmgReduce + 0.06, 0, 0.7); } },
 
   // ---- ELECTRONIC WARFARE (defence/utility line, right of AIRFRAME) ----
   { id:'e1', x:6, y:2, req:'def', fam:'ew', cost:140, sym:'\u2734', name:'DECOY POD',          desc:'+4 max flares (refilled) and they burn longer.',                   apply:p=>{ p.maxFlares += 4; p.flares = p.maxFlares; p.flarePro = 1; } },
   { id:'e2', x:6, y:3, req:'e1',  fam:'ew', cost:270, sym:'\u25CC', name:'RCS COATING',        desc:'Incoming missiles lose your lock far more often.',                 apply:p=>{ p.mslEvade = clamp(p.mslEvade + 0.22, 0, 0.9); } },
-  { id:'e3', x:6, y:4, req:'e2',  fam:'ew', cost:430, sym:'\u21BB', name:'OVERCLOCK',          desc:'Special ability recharges 25% faster.',                            apply:p=>{ p.special.max *= 0.75; } },
+  { id:'e3', x:6, y:4, req:['e2','p2'], fam:'ew', cost:430, sym:'\u21BB', name:'OVERCLOCK',    desc:'Special ability recharges 25% faster. (Reached via EW OR Propulsion.)',            apply:p=>{ p.special.max *= 0.75; } },
+  { id:'fk', x:7, y:3, req:'e1', fam:'ew', cost:380, sym:'\u2749', name:'FLAK BLOOM',
+    desc:'Flares are re-cored with HE \u2014 each one DETONATES as a flak burst when it burns out, shredding anything nearby. +2 max flares.',
+    apply:p=>{ p.flakFlares = Math.max(p.flakFlares, 45); p.maxFlares += 2; p.flares = p.maxFlares; } },
   { id:'e4', x:6, y:5, req:'e3',  fam:'ew', cost:620, sym:'\u2737', name:'POINT-DEFENSE LASER', desc:'An auto-laser swats incoming missiles that stray too close.',     apply:p=>{ p.pointDefense = Math.max(p.pointDefense, 0.5); } },
   { id:'e5', x:6, y:6, req:'e4',  fam:'ew', cost:840, sym:'\u29BF', name:'TRACTOR FIELD',      desc:'Supply pickups are drawn toward you from range.',                  apply:p=>{ p.lootMagnet += 420; } },
   { id:'e6', x:6, y:7, req:'e5',  fam:'ew', cost:1120, sym:'\u2742', name:'GHOST PROTOCOL',    desc:'CAPSTONE \u2014 missiles rarely hold lock, special recharges another 20% faster, and the point-defense laser fires far more aggressively.', apply:p=>{ p.mslEvade = clamp(p.mslEvade + 0.3, 0, 0.95); p.special.max *= 0.8; p.pointDefense += 0.45; } },
@@ -237,6 +263,12 @@ const TECH_TREE = [
   { id:'t1', x:9, y:2, req:'cmd', fam:'tac', tab:'armory', cost:180, sym:'\u2316', name:'MARKSMAN',          desc:'+20% damage to any target still at full health \u2014 reward the alpha strike.', apply:p=>{ p.alphaMul = Math.max(p.alphaMul, 1.2); } },
   { id:'t2', x:9, y:3, req:'t1',  fam:'tac', tab:'armory', cost:320, sym:'\u21AF', name:'ADRENALINE',        desc:'The lower your HP, the harder you hit \u2014 up to +35% damage near death.', apply:p=>{ p.berserk = Math.max(p.berserk, 0.35); } },
   { id:'t3', x:9, y:4, req:'t2',  fam:'tac', tab:'armory', cost:500, sym:'\u25BC', name:'EXECUTIONER',       desc:'Instantly destroy any non-boss dropped below 12% health.',         apply:p=>{ p.execThresh = Math.max(p.execThresh, 0.12); } },
+  { id:'xb', x:9, y:6, req:'t3', fam:'tac', tab:'armory', cost:650, sym:'\u2604', name:'HEADSMAN',
+    desc:'Executions detonate the victim \u2014 each EXECUTE throws a concussive blast into everything nearby.',
+    apply:p=>{ p.execBlast = Math.max(p.execBlast, 60); } },
+  { id:'intel', x:8, y:7, req:['s2','t1'], fam:'sc', tab:'armory', cost:420, sym:'\u2709', name:'SPOILS OF WAR',
+    desc:'BRIDGE \u2014 battlefield intelligence harvest: +4 RP bounty per kill and kills repair 3 HP. (Economy OR Tactics.)',
+    apply:p=>{ p.rpPerKill += 4; p.lifesteal += 3; } },
   { id:'t4', x:9, y:5, req:'t3',  fam:'tac', tab:'armory', cost:880, sym:'\u272A', name:'APEX PREDATOR',     desc:'CAPSTONE \u2014 +25% score, execute threshold rises to 18%, and once per wave you SURVIVE a lethal blow at 40% HP.', apply:p=>{ p.scoreMul *= 1.25; p.cheatDeath = true; p.execThresh = Math.max(p.execThresh, 0.18); } },
 
   // ---- FLIGHT / ESCORTS (right of COMMAND) ----
@@ -258,6 +290,9 @@ const TECH_TREE = [
   { id:'fa3', x:0, y:0, tab:'armory', req:null, fam:'sup', cost:450, sym:'⚡', name:'TARGETING COMPUTER',
     desc:'Combat AI pre-computes firing solutions — +25% crit chance, critical hits deal at least ×2.2 damage.',
     apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.25); p.critMul = Math.max(p.critMul, 2.2); } },
+  { id:'fa4', x:0, y:0, tab:'armory', req:null, fam:'sup', cost:500, sym:'☒', name:'BLACK MARKET STOCKPILE',
+    desc:'Off-the-books logistics — +6 max flares, +10 max missiles, +400 max cannon rounds, everything restocked now.',
+    apply:p=>{ p.maxFlares += 6; p.flares = p.maxFlares; p.maxMissiles += 10; p.missiles = p.maxMissiles; p.maxBullets += 400; p.bullets = p.maxBullets; } },
 
   // ---- STRIKE branch (ground-war only) ----
   { id:'agm1', x:12, y:2, req:'core', fam:'strike', tab:'armory', ground:true, cost:260, sym:'▼', name:'AGM RAILS',
