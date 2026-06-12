@@ -478,8 +478,8 @@ function updateDom(dt) {
   else { el.bullets.textContent = player.bullets; el.bullets.style.color = player.bullets <= 80 ? '#ff8c2b' : ''; }
   el.missiles.style.color = player.missiles <= 0 ? '#ff394b' : '';
   if (!hasSpecial(player.jet)) { el.special.textContent = 'NO SPECIAL'; el.special.classList.remove('ready'); }
-  else if (player.special.cd <= 0) { el.special.textContent = player.jet.ability + ' \u25B8 READY'; el.special.classList.add('ready'); }
-  else { el.special.textContent = player.jet.ability + ' \u25B8 ' + Math.ceil(player.special.cd) + 's'; el.special.classList.remove('ready'); }
+  else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 READY'; el.special.classList.add('ready'); }
+  else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + 's'; el.special.classList.remove('ready'); }
   updateWingmanSidebar();
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
@@ -584,8 +584,8 @@ function renderTechTree(recenter) {
     nodes += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
       badge +
       '<div class="tn-sym">' + n.sym + '</div>' +
-      '<div class="tn-name">' + n.name + '</div>' +
-      '<div class="tn-desc">' + n.desc + '</div>' +
+      '<div class="tn-name">' + techText(n, 'name') + '</div>' +
+      '<div class="tn-desc">' + techText(n, 'desc') + '</div>' +
       '<span class="tn-cost">' + costTxt + '</span>' +
     '</div>';
   }
@@ -617,8 +617,8 @@ function renderArmory() {
     html += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="--ac:' + ac + '">' +
       badge +
       '<div class="tn-sym">' + n.sym + '</div>' +
-      '<div class="tn-name">' + n.name + '</div>' +
-      '<div class="tn-desc">' + n.desc + '</div>' +
+      '<div class="tn-name">' + techText(n, 'name') + '</div>' +
+      '<div class="tn-desc">' + techText(n, 'desc') + '</div>' +
       '<span class="tn-cost">' + costTxt + '</span>' +
     '</div>';
   }
@@ -651,7 +651,7 @@ function commitNode(node) {
   if (node.repeat) { player.techRepeat[node.id] = repeatCount(node) + 1; }
   else { player.tech.push(node.id); player.upgrades.push(node.id); }
   audio.power(); empFlash = 0.26;
-  showBanner('\u25C8 ' + node.name + ' RESEARCHED \u25C8');
+  showBanner('\u25C8 ' + techText(node, 'name') + ' RESEARCHED \u25C8');
   techTab === 'armory' ? renderArmory() : renderTechTree(false);
 }
 
@@ -659,7 +659,7 @@ function openWingPicker(node) {
   pendingWingNode = node;
   const grid = g('wpGrid');
   grid.innerHTML = JETS.map((j, i) =>
-    '<div class="wp-jet" data-i="' + i + '"><div class="wp-name">' + j.name + '</div><div class="wp-role">' + j.role + '</div></div>'
+    '<div class="wp-jet" data-i="' + i + '"><div class="wp-name">' + jetText(j, 'name') + '</div><div class="wp-role">' + jetText(j, 'role') + '</div></div>'
   ).join('');
   grid.querySelectorAll('.wp-jet').forEach(el =>
     el.addEventListener('click', () => confirmWingPick(+el.getAttribute('data-i'))));
@@ -743,7 +743,7 @@ function buildHangar() {
   // ---- single-jet carousel selector ----
   const dots = g('jetDots'); dots.innerHTML = '';
   JETS.forEach((j, i) => {
-    const d = document.createElement('i'); d.title = j.name;
+    const d = document.createElement('i'); d.title = jetText(j, 'name');
     d.addEventListener('click', () => selectJet(i));
     dots.appendChild(d);
   });
@@ -794,27 +794,27 @@ function renderJetCard(i) {
   g('jetCard').innerHTML =
     '<div class="cbgrid">' +
       '<div class="cbhead">' +
-        '<div><div class="cname">' + j.name + '</div><div class="crole">' + j.role + '</div></div>' +
-        '<div class="cbtags"><div class="cgen">' + (j.gen || '') + '</div><div class="cability">\u25C8 ' + (j.ability || 'NO SPECIAL') + '</div></div>' +
+        '<div><div class="cname">' + jetText(j, 'name') + '</div><div class="crole">' + jetText(j, 'role') + '</div></div>' +
+        '<div class="cbtags"><div class="cgen">' + (j.gen || '') + '</div><div class="cability">\u25C8 ' + (j.ability ? jetText(j, 'ability') : t('card.noSpecial')) + '</div></div>' +
       '</div>' +
       '<div>' +
         '<div class="cstats">' +
-          statBar('SPD', j.speed) + statBar('AGI', j.agility) + statBar('ACC', j.accel) +
-          statBar('ARM', j.armor) + statBar('STL', j.stealth) + statBar('FPW', j.firepower) +
+          statBar(t('stat.SPD'), j.speed) + statBar(t('stat.AGI'), j.agility) + statBar(t('stat.ACC'), j.accel) +
+          statBar(t('stat.ARM'), j.armor) + statBar(t('stat.STL'), j.stealth) + statBar(t('stat.FPW'), j.firepower) +
         '</div>' +
         '<div class="cspecs">' +
-          '<div><span>Top Speed</span><b>' + j.topSpeed + '</b></div>' +
-          '<div><span>Ceiling</span><b>' + j.ceiling + '</b></div>' +
-          '<div><span>Cannon</span><b>' + j.cannon + '</b></div>' +
+          '<div><span>' + t('card.topSpeed') + '</span><b>' + j.topSpeed + '</b></div>' +
+          '<div><span>' + t('card.ceiling') + '</span><b>' + j.ceiling + '</b></div>' +
+          '<div><span>' + t('card.cannon') + '</span><b>' + j.cannon + '</b></div>' +
         '</div>' +
       '</div>' +
       '<div>' +
-        (j.ability ? '<div class="cspeclbl">SPECIAL \u2014 ' + j.ability + '</div>' +
-        '<div class="cabilitydesc">' + j.abilityDesc + '</div>' : '<div class="cspeclbl">NO SPECIAL ABILITY</div>') +
-        (j.passive ? '<div class="cpassivelbl">PASSIVE \u2014 ' + j.passive.split('\u2014')[0].trim() + '</div><div class="cpassivetext">' + j.passive + '</div>' : '') +
+        (j.ability ? '<div class="cspeclbl">' + t('card.special') + ' \u2014 ' + jetText(j, 'ability') + '</div>' +
+        '<div class="cabilitydesc">' + jetText(j, 'abilityDesc') + '</div>' : '<div class="cspeclbl">' + t('card.noSpecialAbility') + '</div>') +
+        (j.passive ? '<div class="cpassivelbl">' + t('card.passive') + ' \u2014 ' + jetText(j, 'passive').split('\u2014')[0].trim() + '</div><div class="cpassivetext">' + jetText(j, 'passive') + '</div>' : '') +
       '</div>' +
-      '<div class="cblurb">' + j.desc + '</div>' +
-      '<div class="ccontext"><div class="cctlbl">// REAL-WORLD BRIEF //</div>' + j.context + '</div>' +
+      '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
+      '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
     '</div>';
 }
 function setDifficulty(d) {
@@ -1018,6 +1018,7 @@ function applyLang() {
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
   // re-render dynamic panels that bake text in
   if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
+  if (typeof selectedJet === 'number') renderJetCard(selectedJet);
   renderKillBoard();
 }
 function applyOpLegend() {
