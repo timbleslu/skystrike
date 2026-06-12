@@ -37,9 +37,11 @@ await page.evaluate((t) => { applyTimeOfDay(t); startGame(selectedJet); }, tod);
 await page.waitForTimeout(4000);
 await page.screenshot({ path: `${prefix}-flight.png` });
 
-// fire missiles + gun for effects shot
+// fire missiles + gun + a staged explosion for effects shot
 await page.evaluate(() => { player.missiles = 99; fireMissile(); });
-await page.waitForTimeout(600);
+await page.waitForTimeout(450);
+await page.evaluate(() => { explode(player.group.position.clone().add(new THREE.Vector3(25, 8, -70)), true); });
+await page.waitForTimeout(180);
 await page.screenshot({ path: `${prefix}-fx.png` });
 
 // look down at terrain

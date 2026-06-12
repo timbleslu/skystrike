@@ -525,6 +525,35 @@ function glowTex() {
   x.fillStyle = grd; x.fillRect(0, 0, 64, 64);
   GLOWTEX = new THREE.CanvasTexture(c); return GLOWTEX;
 }
+/* fiery blast texture: noisy radial heat ramp (white core → orange → red edge) */
+let FIRETEX = null;
+function fireTex() {
+  if (FIRETEX) return FIRETEX;
+  const S = 128, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), img = x.createImageData(S, S);
+  const N = 24, L = []; for (let i = 0; i < (N + 1) * (N + 1); i++) L.push(Math.random());
+  const val = (u, v, sc) => {
+    const gu = Math.min(u * sc, N - 0.001), gv = Math.min(v * sc, N - 0.001);
+    const iu = Math.floor(gu), iv = Math.floor(gv), fu = gu - iu, fv = gv - iv;
+    const su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv);
+    return lerp(lerp(L[iv * (N + 1) + iu], L[iv * (N + 1) + iu + 1], su), lerp(L[(iv + 1) * (N + 1) + iu], L[(iv + 1) * (N + 1) + iu + 1], su), sv);
+  };
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const u = i / S, v = j / S;
+    const r = Math.hypot(u - 0.5, v - 0.5) * 2;
+    const n = 0.6 * val(u, v, 5) + 0.4 * val(u, v, 11);
+    const heat = clamp(1 - r * 1.12 + (n - 0.5) * 0.6, 0, 1);
+    const k = (j * S + i) * 4;
+    img.data[k]     = Math.min(255, heat * 640);
+    img.data[k + 1] = clamp(heat * 1.9 - 0.32, 0, 1) * 255;
+    img.data[k + 2] = clamp(heat * 2.1 - 1.3, 0, 1) * 255;
+    img.data[k + 3] = Math.pow(heat, 1.1) * 255;
+  }
+  x.putImageData(img, 0, 0);
+  FIRETEX = new THREE.CanvasTexture(c);
+  return FIRETEX;
+}
+
 function makeMarker(type) {
   const color = type === 'boss' ? 0xff39c8 : type === 'ground' ? 0xffa033 : 0xff4040;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, blending: THREE.AdditiveBlending, depthTest: true, depthWrite: false, transparent: true, opacity: 0.85 }));
@@ -532,24 +561,24 @@ function makeMarker(type) {
 }
 function spawnTrail(pos, color, op) {
   if (particles.length > 540) return;
-  const m = new THREE.Mesh(ASSET.smokeGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op || 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: true }));
-  m.position.copy(pos); m.scale.setScalar(rand(3, 5)); scene.add(m);
-  particles.push({ mesh: m, vel: null, life: 0.85, max: 0.85, type: 'trail', grow: 7 });
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, transparent: true, opacity: op || 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: true }));
+  m.position.copy(pos); m.scale.setScalar(rand(6, 10)); scene.add(m);
+  particles.push({ mesh: m, vel: null, life: 0.85, max: 0.85, type: 'trail', grow: 9 });
 }
 function spawnShockwave(pos) {
   const ring = new THREE.Mesh(new THREE.RingGeometry(2, 3.6, 30), new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0.85, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
   ring.position.copy(pos); ring.lookAt(camera.position); scene.add(ring);
   particles.push({ mesh: ring, vel: null, life: 0.6, max: 0.6, type: 'ring' });
 }
-/* fat, glowing missile exhaust — bright core puff + expanding pale smoke so the trail reads clearly */
+/* fat, glowing missile exhaust — bright core puff + expanding textured smoke so the trail reads clearly */
 function spawnMissileTrail(pos, color) {
   if (particles.length > 620) return;
-  const core = new THREE.Mesh(ASSET.smokeGeo, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  core.position.copy(pos); core.scale.setScalar(rand(5, 7.5)); scene.add(core);
-  particles.push({ mesh: core, vel: null, life: 0.5, max: 0.5, type: 'mcore', grow: 12 });
-  const puff = new THREE.Mesh(ASSET.smokeGeo, new THREE.MeshBasicMaterial({ color: 0xe6edf4, transparent: true, opacity: 0.5, depthWrite: false, fog: true }));
-  puff.position.copy(pos); puff.scale.setScalar(rand(6, 9)); scene.add(puff);
-  particles.push({ mesh: puff, vel: new THREE.Vector3(rand(-4, 4), rand(-2, 4), rand(-4, 4)), life: rand(0.7, 1.1), max: 1.1, type: 'smoke', grow: 26 });
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  core.position.copy(pos); core.scale.setScalar(rand(9, 13)); scene.add(core);
+  particles.push({ mesh: core, vel: null, life: 0.5, max: 0.5, type: 'mcore', grow: 14 });
+  const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: 0xcfd8e2, transparent: true, opacity: 0.5, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
+  puff.position.copy(pos); puff.scale.setScalar(rand(12, 18)); scene.add(puff);
+  particles.push({ mesh: puff, vel: new THREE.Vector3(rand(-4, 4), rand(-2, 4), rand(-4, 4)), life: rand(0.8, 1.3), max: 1.3, type: 'smoke', grow: 30, rot: rand(-1.5, 1.5) });
 }
 /* floating supply crate: glowing box, wire edges, spin ring, beacon glow + sky beam */
 function buildCrate() {
