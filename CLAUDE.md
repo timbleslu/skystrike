@@ -14,8 +14,8 @@ All code is browser globals — no imports/exports. Script load order in `index.
 | File | Role |
 |---|---|
 | `js/globals.js` | Shared state (player, enemies, missiles, wave, run, tech), math helpers (`rand`, `clamp`, `damp`), `jetStats` per-airframe table |
-| `js/engine.js` | Three.js scene/renderer/terrain (`terrainH`), r128→r159 compat shims, geometry cache; sky/sea shaders (`skyMat`/`seaMat` uniforms driven by `applyTimeOfDay`, sea `time` ticked in `animate`), `buildEnvMap` (PMREM sky → `scene.environment`), `updatePlayerShadow` blob shadow |
-| `js/entities.js` | `createEnemy`, jet mesh building (`buildJet`, cached), per-type update fns (`updateEnemy/Bomber/Drone/Ground`), `clearLocks`, `disposeGroup` |
+| `js/engine.js` | Three.js scene/renderer/terrain (`terrainH`); filmic pipeline (sRGB + ACES, physical lights) + PCFSoft sun shadows (`updateSunRig` follows player, ticked in `animate`); sky/sea shaders (`skyMat`/`seaMat`, `applyTimeOfDay`), billboard cloud banks (`retintClouds`/`updateClouds`), shader-detailed smooth terrain (fbm via onBeforeCompile); canvas FX textures `glowTex`/`cloudPuffTex`/`fireTex`; `buildEnvMap` (PMREM sky → `scene.environment`), `updatePlayerShadow` blob shadow |
+| `js/entities.js` | `createEnemy`, jet mesh building (`buildJet`, cached), per-type update fns (`updateEnemy/Bomber/Drone/Ground`), `clearLocks`, `disposeGroup`; `markShadowCasters`, `patchJetSurface` (hull noise), `animEngines` (throttle-driven afterburner) |
 | `js/combat.js` | Player update, weapons, missiles, damage, `killEnemy`, specials |
 | `js/main.js` | Game loop, wave scheduling, spawn fns (`airSpawnPos`/`groundSpawnPos`/`spawnGroundAt` helpers, `queueStrikeSite` builds fortified ground sites + fleeing convoys), wingman/CCA AI |
 | `js/ui.js` | HUD canvas (`drawHUD`), menus, hangar, tech tree, settings, touch controls |
@@ -29,6 +29,7 @@ All code is browser globals — no imports/exports. Script load order in `index.
 - Three.js is vendored; never re-add CDN script tags. r128-era API calls go through shims in `engine.js`.
 - Geometry/materials may be shared via cache — use `disposeGroup` for cleanup; never dispose marker geometry.
 - Enemy death/despawn must call `clearLocks(e)` and remove marker.
+- Custom `ShaderMaterial` fragment shaders must end with `#include <tonemapping_fragment>` + `#include <colorspace_fragment>` or they won't match the scene's ACES/sRGB grading.
 
 ## Docs layout (docs/)
 - `working/superpowers/plans/` — active in-progress implementation plans (writing-plans skill). Deleted once merged; empty = nothing in flight.
@@ -38,6 +39,7 @@ All code is browser globals — no imports/exports. Script load order in `index.
 
 ## Current state (2026-06-11)
 - Branch `feat/ios-readiness`: iOS-readiness plan COMPLETE (all 6 tasks, plan doc deleted post-merge): npm scaffold, Three.js vendoring, storage seam, safe-area CSS, vendored fonts (`vendor/fonts/`), Capacitor iOS scaffold (`ios/`, SPM-based, no CocoaPods; build via `npm run build:www && npx cap sync ios`, see `docs/ios/ios.md`). Pending: browser/device smoke test, swap storage.js internals to `@capacitor/preferences` before App Store release, merge to main (see `docs/ios/ios-completion-checklist.md`).
+- Graphics overhaul COMPLETE on this branch (plan: `docs/working/superpowers/plans/2026-06-11-graphics-overhaul.md`): filmic color pipeline, real-time sun shadows, billboard clouds, smooth shader-detailed terrain, hull-noise jet materials, live afterburners, textured fireball/smoke FX. All 3 TODs calibrated via `scripts/shot.mjs`. Pending: in-browser perf check on a real device (headless shots can't measure fps).
 - Known open issue: reset-path material leak (see geometry cache notes).
 - Next up: scope a plan from `docs/working/superpowers/ideas/2026-06-11-feature-ideas-progression-content.md` (meta-progression/customization backlog).
 

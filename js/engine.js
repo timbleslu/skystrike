@@ -190,7 +190,7 @@ function buildTerrain() {
   const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
-  const cLow = new THREE.Color(0x143038), cMid = new THREE.Color(0x1f4a3a), cHigh = new THREE.Color(0x586d7e), cSnow = new THREE.Color(0xd2e4ef);
+  const cLow = new THREE.Color(0x16343a), cMid = new THREE.Color(0x26523a), cHigh = new THREE.Color(0x55626e), cSnow = new THREE.Color(0xdde9f2);
   const cRock = new THREE.Color(0x3a444c), cSand = new THREE.Color(0x6e6450);
   const colors = new Float32Array(pos.count * 3), normals = new Float32Array(pos.count * 3);
   const c = new THREE.Color(), E = 14;
@@ -204,9 +204,9 @@ function buildTerrain() {
     normals[i * 3] = -dhx * inv; normals[i * 3 + 1] = inv; normals[i * 3 + 2] = -dhz * inv;
     // height bands
     const t = clamp((h + 220) / 760, 0, 1);
-    if (t < 0.4) c.copy(cLow).lerp(cMid, t / 0.4);
-    else if (t < 0.74) c.copy(cMid).lerp(cHigh, (t - 0.4) / 0.34);
-    else c.copy(cHigh).lerp(cSnow, (t - 0.74) / 0.26);
+    if (t < 0.45) c.copy(cLow).lerp(cMid, t / 0.45);
+    else if (t < 0.82) c.copy(cMid).lerp(cHigh, (t - 0.45) / 0.37);
+    else c.copy(cHigh).lerp(cSnow, ((t - 0.82) / 0.18) * 0.9);   // snow caps only the true peaks
     // shoreline sand near sea level, bare rock on steep faces
     if (h < 8) c.lerp(cSand, clamp((8 - h) / 26, 0, 1) * 0.8);
     const steep = clamp((0.78 - inv) / 0.3, 0, 1);
@@ -306,7 +306,7 @@ function buildClouds() {
 }
 /* re-light every puff for the active time of day (called from applyTimeOfDay) */
 function retintClouds(T) {
-  const lit = new THREE.Color(0xffffff).lerp(new THREE.Color(T.disc), 0.3);
+  const lit = new THREE.Color(0xffffff).lerp(new THREE.Color(T.disc), 0.3).multiplyScalar(1 - T.stars * 0.55);
   const shade = new THREE.Color(T.fog).lerp(lit, 0.38);
   const tmp = new THREE.Color();
   for (let i = 0; i < clouds.length; i++) {

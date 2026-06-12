@@ -1,5 +1,9 @@
 # Graphics Overhaul — toward World of Warplanes fidelity
 
+> **STATUS: COMPLETE (2026-06-11).** All 6 stages implemented and committed on
+> `feat/ios-readiness`; all three TODs screenshot-calibrated; tests green.
+> Remaining follow-up: fps check on real hardware (headless can't measure).
+
 **Goal:** Maximize visual quality of jets, environment, and weaponry within hard constraints: no build step, vendored Three.js r159, globals-only, iOS-viable performance, all three time-of-day themes must hold up, `npm test` stays green, `node scripts/shot.mjs` verifies every stage.
 
 **Approach chosen:** Stay 100% procedural (no external model/texture assets — keeps repo light, iOS bundle small, and the parametric jet system intact). Quality comes from: a modern color pipeline, real-time shadows, shader-level surface detail, billboard volumetrics, and a particle-FX rewrite. Rejected: importing glTF aircraft (breaks parametric airframe/cache system, large assets); full post-processing bloom chain (EffectComposer not in vendored min build; additive sprites already fake glow well).
