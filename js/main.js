@@ -11,7 +11,7 @@ function nextWave() {
   if (opMode && opSector) {
     const plan = sectorPlan(opSector, wave);
     strikeWaveActive = plan.ground;
-    showBanner(plan.boss ? '⚠ FINAL TARGET ⚠' : 'SECTOR: ' + opSector);
+    showBanner(plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) }));
     for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
     for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
     for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(spawnBomber);
@@ -22,15 +22,15 @@ function nextWave() {
     return;
   }
   if (strike) {
-    showBanner('\u2692 STRIKE WAVE \u2014 FLATTEN THE SITE \u2692');
+    showBanner(t('banner.strikeWave'));
     queueStrikeSite(wave);
     for (let i = 0; i < 3; i++) pendingSpawns.push(spawnFighter);
     return;
   }
   const count = clamp(3 + wave + DIFFS[difficulty].count, 2, 10);
   for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
-  if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner('\u26A0 BOSS INCOMING \u26A0'); }
-  else showBanner('WAVE ' + wave);
+  if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
+  else showBanner(tf('banner.wave', { n: wave }));
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
   if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
@@ -71,7 +71,7 @@ function spawnAce() {
   e.turnRate = 1.5; e.gunRunCd = rand(1.5, 3);
   e.bulletAmmo = 75; e.missileAmmo = 2; e.flareAmmo = 1;
   styleElite(e, 0xffcf3a, 0x4a3300, 0.9, 0xffd24d, 0xffd24d);
-  showBanner('\u2605 ACE INBOUND \u2605');
+  showBanner(t('banner.aceInbound'));
 }
 function spawnRival() {
   const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape] });
@@ -90,7 +90,7 @@ function spawnRival() {
   if (rival.traits.indexOf('HEADHUNTER') !== -1) { e.headhunter = true; }
   if (rival.traits.indexOf('VETERAN') !== -1) { e.hp = e.maxHp = Math.round(e.maxHp * 1.2); e.turnRate *= 1.1; }
   styleElite(e, 0xff5a2a, 0x551100, 1.0, 0xff5a2a, 0xff7a3a);
-  showBanner('\u2620 RIVAL ON STATION \u2014 ' + rival.name + ' \u00b7 Lv' + rival.level + ' \u2620');
+  showBanner(tf('banner.rivalOnStation', { name: rival.name, lvl: rival.level }));
 }
 function spawnFighter() {
   createEnemy('fighter', airSpawnPos(2600, 4600, -400, 650, 400, 4200));
@@ -103,7 +103,7 @@ function spawnBomber() {
   e.escapeDir = new THREE.Vector3().copy(player.group.position).sub(pos); e.escapeDir.y *= 0.2; e.escapeDir.normalize();
   dirToQuat(e.escapeDir, e.logicQuat);
   e.marker.material.color.setHex(0xffb060);
-  showBanner('\u2691 BOMBER DETECTED \u2691');
+  showBanner(t('banner.bomberDetected'));
 }
 function spawnBoss() {
   const px = player.group.position.x + rand(-1200, 1200), pz = player.group.position.z - 4200, py = player.group.position.y + 450;
@@ -153,7 +153,7 @@ function spawnDroneSwarm(n, origin) {
     dirToQuat(t1.copy(player.group.position).sub(p).normalize(), e.logicQuat);
     e.group.quaternion.copy(e.logicQuat);
   }
-  showBanner('\u26A0 DRONE SWARM \u26A0');
+  showBanner(t('banner.droneSwarm'));
   audio.warn(); audio.blip(360, 0.18, 'sawtooth', 0.12, 140);
 }
 
@@ -191,9 +191,9 @@ function updateBossSpecials(e, dt, dist) {
     e.attack = atk;
     e.teleMax = atk === 'pulse' ? 0.9 : 1.2;
     e.tele = e.teleMax;
-    const label = atk === 'pulse' ? '\u26A0 SHOCKWAVE PULSE \u26A0'
-                : atk === 'barrage' ? '\u26A0 MISSILE BARRAGE \u26A0'
-                : '\u26A0 DRONE DEPLOY \u26A0';
+    const label = atk === 'pulse' ? t('banner.shockwavePulse')
+                : atk === 'barrage' ? t('banner.missileBarrage')
+                : t('banner.droneDeploy');
     showBanner(label);
     audio.warn(); audio.blip(300, 0.2, 'sawtooth', 0.13, 90);
   }
@@ -294,7 +294,7 @@ function spawnWingman(temp, explicit) {
     rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: !!temp, expire: temp ? 15 : 0, cca: !!temp,
     shape: wShape, jetName: jetNameForShape(wShape), flares: 3, sprintT: 0, priorityCd: 0, flareCd: 0,
   });
-  if (!temp) { showBanner('\u25B2 ' + wingmen[wingmen.length - 1].name + ' ON STATION \u25B2'); audio.ui(); }
+  if (!temp) { showBanner(tf('banner.onStation', { name: wingmen[wingmen.length - 1].name })); audio.ui(); }
 }
 function damageWingman(w, amt) {
   if (!w.alive) return;
@@ -302,7 +302,7 @@ function damageWingman(w, amt) {
   if (w.hp <= 0) {
     w.alive = false; explode(w.group.position, true); scene.remove(w.group);
     w.rtb = 13;   // regroup / replacement timer
-    showBanner('\u25BC ' + w.name + ' DOWN \u25BC'); audio.warn();
+    showBanner(tf('banner.down', { name: w.name })); audio.warn();
   }
 }
 function reviveWingman(w) {
@@ -315,7 +315,7 @@ function reviveWingman(w) {
   w.fireCd = rand(0.4, 1); w.missileCd = rand(3, 6); w._spd = player.speed || 320;
   w.vel = fwdOf(player.group, new THREE.Vector3()).multiplyScalar(player.speed || 320);
   w.flares = 3; w.sprintT = 0; w.priorityCd = 0; w.flareCd = 0;
-  showBanner('\u25B2 ' + w.name + ' ON STATION \u25B2'); audio.ui();
+  showBanner(tf('banner.onStation', { name: w.name })); audio.ui();
 }
 function nearestEnemyForWingman(w) {
   let best = null, bestScore = Infinity;
@@ -539,7 +539,7 @@ function handleWaves(dt) {
     // Don't declare the wave clear until the queue is empty — otherwise the frames between
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0) {
-      betweenWaves = true; waveTimer = 4; showBanner('WAVE ' + wave + ' CLEAR');
+      betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
       if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       openTechScreen();   // open the R&D tech tree before the next wave
     }
