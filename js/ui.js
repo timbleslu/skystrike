@@ -50,7 +50,7 @@ function updateCamera(dt) {
   camera.updateMatrixWorld();
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
 }
-function cycleCamera() { camMode = (camMode + 1) % 3; audio.ui(); showBanner(CAM_NAMES[camMode] + ' CAM'); }
+function cycleCamera() { camMode = (camMode + 1) % 3; audio.ui(); showBanner(tf('banner.cam', { name: t('cam.' + CAM_NAMES[camMode]) })); }
 
 /* ---------------- projection helper ---------------- */
 function projectPoint(pos) {
@@ -124,7 +124,7 @@ function drawGunPipper(ctx, e) {
     const s = 13 + Math.sin(performance.now() * 0.02) * 2;
     ctx.strokeStyle = 'rgba(90,255,150,0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = 'rgba(90,255,150,0.95)'; ctx.fillText('GUNS', sp.x, sp.y - s - 6);
+    ctx.fillStyle = 'rgba(90,255,150,0.95)'; ctx.fillText(t('hud.guns'), sp.x, sp.y - s - 6);
     // "shoot now" cue ringing the central reticle
     const cx = W / 2, cy = H / 2;
     ctx.strokeStyle = 'rgba(90,255,150,' + (0.45 + 0.3 * Math.sin(performance.now() * 0.02)) + ')'; ctx.lineWidth = 2;
@@ -185,7 +185,7 @@ function drawHUD() {
     ctx.strokeStyle = 'rgba(70,255,200,0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
     ctx.fillStyle = 'rgba(70,255,200,0.85)'; ctx.font = '9px ' + HUDFONT; ctx.textAlign = 'center';
-    ctx.fillText('SUPPLY ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7);
+    ctx.fillText(t('hud.supply') + ' ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7);
   }
   ctx.lineWidth = 2;
 
@@ -282,7 +282,7 @@ function drawLockReticle(ctx, tgt, progress, locked) {
     ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
     const blink = (performance.now() % 600) < 400 ? 1 : 0.35;
     ctx.fillStyle = 'rgba(255,70,70,' + blink + ')'; ctx.font = 'bold 13px ' + HUDFONT;
-    ctx.fillText('\u25C9 LOCKED', x, y - s - 11);
+    ctx.fillText(t('hud.locked'), x, y - s - 11);
   } else if (progress > 0.02) {
     const o = base * (1.35 - progress * 0.9); // brackets converge as progress→1
     const a = 0.5 + progress * 0.5;
@@ -294,7 +294,7 @@ function drawLockReticle(ctx, tgt, progress, locked) {
     ctx.strokeStyle = 'rgba(255,210,80,0.85)'; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, base * 0.62, -Math.PI / 2, -Math.PI / 2 + progress * TWO_PI); ctx.stroke();
     ctx.fillStyle = 'rgba(255,210,80,0.95)'; ctx.font = '11px ' + HUDFONT;
-    ctx.fillText('LOCKING ' + Math.round(progress * 100) + '%', x, y + base * 0.62 + 14);
+    ctx.fillText(t('hud.locking') + ' ' + Math.round(progress * 100) + '%', x, y + base * 0.62 + 14);
   }
 }
 function drawEnemy(ctx, e, cx, cy, isNear) {
@@ -334,11 +334,11 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     ctx.fillStyle = hpFrac > 0.5 ? 'rgba(70,255,140,0.9)' : hpFrac > 0.25 ? 'rgba(255,210,80,0.9)' : 'rgba(255,70,70,0.95)';
     ctx.fillRect(bx, by, bw * hpFrac, 3);
     ctx.fillStyle = 'rgba(' + col + ',0.95)'; ctx.font = '11px ' + HUDFONT;
-    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', x, y + s + 12);
-    if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u25C6 BOSS', x, by - 8); }
-    else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2691 BOMBER', x, by - 8); }
-    else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 Lv' + rival.level, x, by - 8); }
-    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || 'ACE') + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
+    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + t('hud.km') : Math.round(dist) + t('hud.m'), x, y + s + 12);
+    if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.boss'), x, by - 8); }
+    else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.bomber'), x, by - 8); }
+    else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 ' + t('hud.lv') + rival.level, x, by - 8); }
+    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || t('hud.ace')) + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
     else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
   } else {
     let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
@@ -351,7 +351,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     ctx.restore();
     ctx.fillStyle = 'rgba(' + col + ',0.85)'; ctx.font = '10px ' + HUDFONT; ctx.textAlign = 'center';
     const tx = cx + Math.cos(ang) * (rx - 22), ty = cy + Math.sin(ang) * (ry - 22);
-    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm', tx, ty);
+    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + t('hud.km') : Math.round(dist) + t('hud.m'), tx, ty);
   }
 }
 
@@ -454,8 +454,8 @@ function updateWingmanSidebar() {
     row.className = 'wing-row' + (w.cca ? ' cca' : '') + (!w.alive ? ' down' : '');
     const hp = w.alive ? clamp(w.hp / w.maxHp * 100, 0, 100) : 0;
     let sub;
-    if (w.cca) sub = (w.jetName || '?') + ' · EXP ' + Math.max(0, Math.ceil(w.expire || 0)) + 's';
-    else if (!w.alive) sub = 'RTB ' + Math.max(0, Math.ceil(w.rtb)) + 's';
+    if (w.cca) sub = (w.jetName || '?') + ' · ' + t('hud.exp') + ' ' + Math.max(0, Math.ceil(w.expire || 0)) + t('hud.sec');
+    else if (!w.alive) sub = t('hud.rtb') + ' ' + Math.max(0, Math.ceil(w.rtb)) + t('hud.sec');
     else sub = (w.jetName || '?') + (w.flares != null ? ' · ★' + w.flares : '');
     row.children[0].textContent = w.name;
     row.children[1].textContent = sub;
@@ -477,9 +477,9 @@ function updateDom(dt) {
   if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
   else { el.bullets.textContent = player.bullets; el.bullets.style.color = player.bullets <= 80 ? '#ff8c2b' : ''; }
   el.missiles.style.color = player.missiles <= 0 ? '#ff394b' : '';
-  if (!hasSpecial(player.jet)) { el.special.textContent = 'NO SPECIAL'; el.special.classList.remove('ready'); }
-  else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 READY'; el.special.classList.add('ready'); }
-  else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + 's'; el.special.classList.remove('ready'); }
+  if (!hasSpecial(player.jet)) { el.special.textContent = t('hud.noSpecial'); el.special.classList.remove('ready'); }
+  else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + t('hud.ready'); el.special.classList.add('ready'); }
+  else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + t('hud.sec'); el.special.classList.remove('ready'); }
   updateWingmanSidebar();
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
@@ -489,8 +489,8 @@ function updateDom(dt) {
   const lockedNow = !!(player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1);
   const acquiringNow = !lockedNow && player.lockTarget && player.lockTarget.alive && player.lockProgress > 0.02;
   tog(el.wLock, lockedNow || acquiringNow);
-  if (lockedNow) { el.wLock.textContent = '\u25C9 TARGET LOCKED'; el.wLock.style.color = '#ff5a5a'; }
-  else if (acquiringNow) { el.wLock.textContent = 'ACQUIRING ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffd24d'; }
+  if (lockedNow) { el.wLock.textContent = t('hud.targetLocked'); el.wLock.style.color = '#ff5a5a'; }
+  else if (acquiringNow) { el.wLock.textContent = t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffd24d'; }
   el.hpbar.classList.toggle('low', player.hp / player.maxHp < 0.3);
 
   let boss = null;
@@ -579,7 +579,7 @@ function renderTechTree(recenter) {
     if (st === 'hidden') continue;
     const p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
     const cost = nodeCost(n);
-    const costTxt = n.id === 'core' ? 'CORE' : st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
+    const costTxt = n.id === 'core' ? t('tech.core') : st === 'bought' ? t('tech.owned') : st === 'na' ? t('tech.na') : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
     nodes += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
       badge +
@@ -604,7 +604,7 @@ function renderArmory() {
   const rv = g('rpval'); if (rv) rv.textContent = Math.floor(player.tp).toLocaleString();
   const grid = g('techgrid'); if (!grid) return;
   const hint = g('techhint');
-  if (hint) hint.textContent = 'Click any lit card to purchase. WEAPONS LOCKER, COMMAND AUTHORITY and TARGETING COMPUTER have no prerequisites \u2014 just spare RP.';
+  if (hint) hint.textContent = t('tech.hintArmory');
   const armNodes = TECH_TREE.filter(n => n.tab === 'armory');
   let html = '<div class="armory-grid">';
   for (const n of armNodes) {
@@ -612,7 +612,7 @@ function renderArmory() {
     if (st === 'hidden') continue;
     const ac = FAM_C[n.fam] || '#ffe14d';
     const cost = nodeCost(n);
-    const costTxt = st === 'bought' ? 'OWNED' : st === 'na' ? 'N/A' : cost + ' RP';
+    const costTxt = st === 'bought' ? t('tech.owned') : st === 'na' ? t('tech.na') : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
     html += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="--ac:' + ac + '">' +
       badge +
@@ -631,7 +631,7 @@ function switchTechTab(tab) {
   document.querySelectorAll('.tech-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'armory') { renderArmory(); return; }
   const hint = g('techhint');
-  if (hint) hint.textContent = 'Drag or scroll to explore the tree. Tap a lit node to research it \u2014 or just DEPLOY and spend nothing. The dashed RESERVE SQUADRON node can be bought over and over to grow & up-armour your flight.';
+  if (hint) hint.textContent = t('tech.hintTree');
   renderTechTree(true);
 }
 const WING_NODES = new Set(['w1', 'w2', 'reserve']);
@@ -651,7 +651,7 @@ function commitNode(node) {
   if (node.repeat) { player.techRepeat[node.id] = repeatCount(node) + 1; }
   else { player.tech.push(node.id); player.upgrades.push(node.id); }
   audio.power(); empFlash = 0.26;
-  showBanner('\u25C8 ' + techText(node, 'name') + ' RESEARCHED \u25C8');
+  showBanner(tf('banner.researched', { name: techText(node, 'name') }));
   techTab === 'armory' ? renderArmory() : renderTechTree(false);
 }
 
@@ -686,7 +686,7 @@ function openOpMap() {
   wrap.innerHTML = opMap.map((stage, si) =>
     '<div class="op-stage">' + stage.map((s, i) => {
       const cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
-      return '<div class="' + cls + '" data-s="' + si + '" data-i="' + i + '">' + s + '</div>';
+      return '<div class="' + cls + '" data-s="' + si + '" data-i="' + i + '">' + t('op.' + s) + '</div>';
     }).join('') + '</div>'
   ).join('');
   wrap.querySelectorAll('.op-sector.pickable').forEach(el => el.addEventListener('click', () => {
@@ -708,13 +708,13 @@ function launchSector() {
   if (clock) clock.getDelta();
   if (opSector === 'DEPOT') { applyDepot(); return; }
   betweenWaves = true; waveTimer = 1.4;
-  showBanner('SECTOR: ' + opSector); audio.ui();
+  showBanner(tf('banner.sector', { s: t('op.' + opSector) })); audio.ui();
 }
 function applyDepot() {
   player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.35);
   player.missiles = player.maxMissiles;
   player.flares = player.maxFlares;
-  showBanner('⚙ DEPOT — REPAIRED & REARMED ⚙'); audio.power();
+  showBanner(t('banner.depot')); audio.power();
   openOpMap();                       // straight back to the map for the next pick
 }
 function deployFromTech() {
@@ -729,15 +729,15 @@ function deployFromTech() {
     openOpMap(); return;
   }
   betweenWaves = true; waveTimer = 1.4;   // short breather, then the next wave spawns
-  showBanner('WAVE ' + (wave + 1) + ' INBOUND'); audio.ui();
+  showBanner(tf('banner.waveInbound', { n: wave + 1 })); audio.ui();
 }
 
 /* ---------------- hangar / flow ---------------- */
 function renderKillBoard() {
   const list = g('rbList'); if (!list || !rival) return;
   list.innerHTML = rival.board.length
-    ? rival.board.slice().reverse().map(b => '<div class="rb-row"><span>☠ ' + b.name + '</span><span>' + b.jetName + '</span><span>Lv' + b.level + ' · W' + b.wave + '</span></div>').join('')
-    : '<div class="rb-empty">NO RIVALS DOWNED</div>';
+    ? rival.board.slice().reverse().map(b => '<div class="rb-row"><span>☠ ' + b.name + '</span><span>' + b.jetName + '</span><span>' + tf('hud.killRow', { lv: b.level, wv: b.wave }) + '</span></div>').join('')
+    : '<div class="rb-empty">' + t('hangar.noRivals') + '</div>';
 }
 function buildHangar() {
   // ---- single-jet carousel selector ----
@@ -757,6 +757,7 @@ function buildHangar() {
   g('manualBtn').addEventListener('click', openManual);
   g('manualClose').addEventListener('click', closeManual);
   g('manualAbort').addEventListener('click', abortMission);
+  const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
   g('redeploy').addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
   const tg = g('techgrid');
@@ -788,6 +789,27 @@ function buildHangar() {
   updateBest();
   renderKillBoard();
 }
+// first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
+function initOnboarding() {
+  document.querySelectorAll('.ob-lang').forEach(b => b.addEventListener('click', () => {
+    LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui();
+    g('langSelect').classList.remove('show');
+    g('onboard').classList.add('show');
+  }));
+  const oc = g('obContinue');
+  if (oc) oc.addEventListener('click', () => {
+    g('onboard').classList.remove('show');
+    onboarding = false;
+    store.set('skystrike_onboarded', '1');
+    if (audio.on) audio.ui();
+  });
+  if (isReturningPlayer) {     // already onboarded, or a returning player from before onboarding existed
+    store.set('skystrike_onboarded', '1');
+    return;
+  }
+  onboarding = true;
+  g('langSelect').classList.add('show');
+}
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
 function renderJetCard(i) {
   const j = JETS[i];
@@ -795,7 +817,7 @@ function renderJetCard(i) {
     '<div class="cbgrid">' +
       '<div class="cbhead">' +
         '<div><div class="cname">' + jetText(j, 'name') + '</div><div class="crole">' + jetText(j, 'role') + '</div></div>' +
-        '<div class="cbtags"><div class="cgen">' + (j.gen || '') + '</div><div class="cability">\u25C8 ' + (j.ability ? jetText(j, 'ability') : t('card.noSpecial')) + '</div></div>' +
+        '<div class="cbtags"><div class="cgen">' + genText(j.gen) + '</div><div class="cability">\u25C8 ' + (j.ability ? jetText(j, 'ability') : t('card.noSpecial')) + '</div></div>' +
       '</div>' +
       '<div>' +
         '<div class="cstats">' +
@@ -803,9 +825,9 @@ function renderJetCard(i) {
           statBar(t('stat.ARM'), j.armor) + statBar(t('stat.STL'), j.stealth) + statBar(t('stat.FPW'), j.firepower) +
         '</div>' +
         '<div class="cspecs">' +
-          '<div><span>' + t('card.topSpeed') + '</span><b>' + j.topSpeed + '</b></div>' +
-          '<div><span>' + t('card.ceiling') + '</span><b>' + j.ceiling + '</b></div>' +
-          '<div><span>' + t('card.cannon') + '</span><b>' + j.cannon + '</b></div>' +
+          '<div><span>' + t('card.topSpeed') + '</span><b>' + jetText(j, 'topSpeed') + '</b></div>' +
+          '<div><span>' + t('card.ceiling') + '</span><b>' + jetText(j, 'ceiling') + '</b></div>' +
+          '<div><span>' + t('card.cannon') + '</span><b>' + jetText(j, 'cannon') + '</b></div>' +
         '</div>' +
       '</div>' +
       '<div>' +
@@ -836,7 +858,12 @@ function setOpMode(m) {
   if (audio.on) audio.ui();
   saveSettings();
 }
-function openManual() { g('manual').classList.add('show'); paused = true; g('touchControls').classList.remove('show'); }
+function showManualTab(name) {
+  document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
+  document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  if (audio.on) audio.ui();
+}
+function openManual() { g('manual').classList.add('show'); showManualTab('guide'); paused = true; g('touchControls').classList.remove('show'); }
 function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
 function toggleManual() { if (g('manual').classList.contains('show')) closeManual(); else openManual(); }
 function abortMission() { closeManual(); if (state !== 'hangar') returnToHangar(); }
@@ -882,7 +909,7 @@ function startGame(i) {
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now(), pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
   state = 'playing';
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
-  showBanner('GET READY');
+  showBanner(t('banner.getReady'));
 }
 function gameOver() {
   if (state !== 'playing') return;
@@ -892,7 +919,7 @@ function gameOver() {
   player.group.visible = false;
   clearWingmen();
   if (h2d) h2d.clearRect(0, 0, W, H);
-  endRun('MISSION FAILED');
+  endRun(t('banner.missionFailed'));
 }
 // shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title
 function endRun(title) {
@@ -915,8 +942,8 @@ function operationComplete() {
   state = 'dead';
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   player.score += 5000;
-  showBanner('★ OPERATION COMPLETE ★');
-  endRun('OPERATION COMPLETE');
+  showBanner(t('banner.operationComplete'));
+  endRun(t('banner.operationComplete'));
 }
 function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
@@ -1008,6 +1035,8 @@ function applyLang() {
   setTxt('manH_Hud', t('manual.hHud')); setTxt('manH_Wingman', t('manual.hWingman'));
   setTxt('manH_Enemies', t('manual.hEnemies')); setTxt('manH_Tech', t('manual.hTech'));
   setTxt('manH_Settings', t('manual.hSettings'));
+  setTxt('manTab_guide', t('manual.tabGuide')); setTxt('manTab_systems', t('manual.tabSystems'));
+  setTxt('manTab_tactics', t('manual.tabTactics')); setTxt('manTab_settings', t('manual.tabSettings'));
   // settings labels
   setTxt('lblLang', t('set.language')); setTxt('lblSens', t('set.sensitivity'));
   setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert'));
@@ -1016,6 +1045,20 @@ function applyLang() {
   setTxt('lblGunLead', t('set.gunLead')); setTxt('lblMute', t('set.mute'));
   setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
+  // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
+  setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
+  setTxt('w_highg', t('hud.highG')); setTxt('w_stealth', t('hud.stealthActive')); setTxt('w_lock', t('hud.targetLocked'));
+  setTxt('wingStatus', t('hud.escort'));
+  const hintEl = g('hint'); if (hintEl) hintEl.textContent = t('hud.hint');
+  const pauseEl = g('btnPause'); if (pauseEl) pauseEl.textContent = t('hud.pause');
+  // touch buttons
+  setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
+  setTxt('tb-thr', t('touch.thr')); setTxt('tb-brk', t('touch.brk')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
+  // flight manual body (HTML content)
+  const setHTML = (id, key) => { const e = g(id); if (e) e.innerHTML = t(key); };
+  setHTML('manUL_Flight', 'manBody.flight'); setHTML('manUL_Combat', 'manBody.combat'); setHTML('manP_Lock', 'manBody.lock');
+  setHTML('manUL_Stats', 'manBody.stats'); setHTML('manUL_Hud', 'manBody.hud'); setHTML('manUL_Wingman', 'manBody.wingman');
+  setHTML('manUL_Enemies', 'manBody.enemies'); setHTML('manP_Tech', 'manBody.tech');
   // re-render dynamic panels that bake text in
   if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
   if (typeof selectedJet === 'number') renderJetCard(selectedJet);

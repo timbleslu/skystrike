@@ -120,6 +120,10 @@ const TODS = [
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';
+let onboarding = false;   // true while the first-run language-select / controls-brief screens are showing
+// captured before boot writes skystrike_settings (cacheEl -> selectJet -> saveSettings), so the
+// first-run check in initOnboarding() isn't fooled by settings saved during this same boot
+const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;
 

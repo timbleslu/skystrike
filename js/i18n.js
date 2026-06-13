@@ -63,6 +63,23 @@ const I18N = {
     'hud.gun': 'Gun', 'hud.flares': 'Flares', 'hud.msl': 'Msl',
     'hud.escort': '▲ ESCORT',
     'hud.onStation': 'ON STATION', 'hud.regrouping': 'REGROUPING',
+    'hud.km': 'km', 'hud.m': 'm', 'hud.sec': 's',
+    'hud.rtb': 'RTB', 'hud.exp': 'EXP', 'hud.ace': 'ACE', 'hud.lv': 'Lv',
+    'hud.killRow': 'Lv{lv} · W{wv}',
+    'hud.hint': 'W/S PITCH · Q/E ROLL · A/D YAW · SHIFT/CTRL THRUST · CTRL+S HIGH-G · SPACE GUN · G MISSILE · X FLARE · F LOCK · R SPECIAL · C CAM · V LOOK-BACK · RMB TRACK',
+
+    /* ---- camera modes ---- */
+    'cam.CHASE': 'CHASE', 'cam.CLOSE': 'CLOSE', 'cam.COCKPIT': 'COCKPIT',
+
+    /* ---- airframe generation ---- */
+    'gen.BASELINE': 'BASELINE', 'gen.4.5 GEN': '4.5 GEN', 'gen.5th GEN': '5th GEN', 'gen.6th GEN': '6th GEN',
+
+    /* ---- touch buttons ---- */
+    'touch.gun': 'GUN', 'touch.msl': 'MSL', 'touch.flr': 'FLR', 'touch.spc': 'SPC',
+    'touch.thr': 'THR', 'touch.brk': 'BRK', 'touch.cam': 'CAM', 'touch.lck': 'LOCK',
+
+    /* ---- killstreak callouts ---- */
+    'ks.5': 'KILLSTREAK', 'ks.10': 'RAMPAGE', 'ks.15': 'UNSTOPPABLE', 'ks.20': 'GODLIKE',
 
     /* ---- banners ---- */
     'banner.getReady': 'GET READY',
@@ -84,6 +101,22 @@ const I18N = {
     'banner.onStation': '▲ {name} ON STATION ▲',
     'banner.down': '▼ {name} DOWN ▼',
     'banner.rivalOnStation': '☠ RIVAL ON STATION — {name} · Lv{lvl} ☠',
+    'banner.droneSwarm': '⚠ DRONE SWARM ⚠',
+    'banner.shockwavePulse': '⚠ SHOCKWAVE PULSE ⚠',
+    'banner.missileBarrage': '⚠ MISSILE BARRAGE ⚠',
+    'banner.droneDeploy': '⚠ DRONE DEPLOY ⚠',
+    'banner.supplyCrate': '◈ SUPPLY CRATE ◈',
+    'banner.guardianAngel': '✝ GUARDIAN ANGEL ✝',
+    'banner.reactivePulse': '◈ REACTIVE PULSE',
+    'banner.bossDestroyed': '◆ BOSS DESTROYED ◆',
+    'banner.rivalDown': '☠ RIVAL DOWN — +{rp} RP ☠',
+    'banner.radarDown': '◇ RADAR DOWN — SAM NET BLIND ◇',
+    'banner.siteFlattened': '⚒ SITE FLATTENED — +{rp} RP ⚒',
+    'banner.bomberDown': '⚑ BOMBER DOWN ⚑',
+    'banner.killStreak': '★ {label} x{n} ★',
+    'banner.cloakAmbush': 'CLOAK · AMBUSH ARMED',
+    'banner.ccaSwarm': '▶ CCA SWARM · {n} DRONES AWAY',
+    'banner.dewLance': 'DEW LANCE · FIRING',
 
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
@@ -163,6 +196,10 @@ const I18N = {
     'manual.hEnemies': 'Enemies & Abilities',
     'manual.hTech': 'R&D Tech Tree',
     'manual.hSettings': 'Settings',
+    'manual.tabGuide': 'Guide',
+    'manual.tabSystems': 'Systems',
+    'manual.tabTactics': 'Tactics',
+    'manual.tabSettings': 'Settings',
 
     /* ---- settings labels ---- */
     'set.language': 'Language',
@@ -176,6 +213,16 @@ const I18N = {
     'set.gunLead': 'Lead-computing gunsight (deflection pipper)',
     'set.mute': 'Mute all audio',
     'set.langEN': 'English', 'set.langZH': '简体中文',
+
+    /* ---- manual body (HTML) ---- */
+    'manBody.flight': '<li><b>W</b> / <b>S</b> — pitch down / up</li><li><b>Q</b> / <b>E</b> — roll left / right</li><li><b>A</b> / <b>D</b> — yaw (rudder)</li><li><b>SHIFT</b> / <b>CTRL</b> — throttle up / brake</li><li><b>CTRL + S</b> — high-G turn (tighter pitch, bleeds speed)</li>',
+    'manBody.combat': '<li><b>SPACE</b> — cannon (now a finite magazine — watch the <em>GUN</em> count)</li><li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead — fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li><li><b>G</b> — fire missile (homes only with a full lock)</li><li><b>X</b> — drop flares (now reliably drag incoming missiles off you)</li><li><b>F</b> — designate / cycle lock target <em>(locking is manual by default — toggle Auto-Lock in Settings)</em></li><li><b>R</b> — special ability</li><li><b>C</b> cycle camera (incl. clear cockpit view) · <b>V</b> hold to look back · hold <b>RMB</b> track</li><li>Fly into glowing green <em>SUPPLY CRATES</em> to restock guns, missiles &amp; flares.</li><li><b>H</b> / <b>ESC</b> — open this manual (pauses)</li>',
+    'manBody.lock': 'By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.',
+    'manBody.stats': '<li><b>SPD</b> — top speed</li><li><b>AGI</b> — turn rate / maneuverability</li><li><b>ACC</b> — acceleration &amp; throttle response</li><li><b>ARM</b> — hull integrity (hit points)</li><li><b>STL</b> — stealth: how well clouds &amp; active cloak hide you, and how readily incoming missiles lose your lock</li><li><b>FPW</b> — firepower: cannon damage &amp; missile loadout. <em>Each airframe also has a unique passive strength &amp; weakness — see its card.</em></li>',
+    'manBody.hud': '<li>Red brackets + health bar mark enemies; brightest = nearest threat.</li><li>Edge arrows with distance point to off-screen contacts.</li><li>Radar is heading-up: dots = bearing, ticks = above/below you, yellow ring = locked target.</li><li>Heed <b>PULL UP</b>, <b>MISSILE</b> (pop flares), <b>HIGH-G</b>, <b>STEALTH</b>.</li>',
+    'manBody.wingman': '<li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) — you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li><li>It draws enemy fire — hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li><li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>\'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s — they immediately acquire targets and attack. The F-47\'s passive makes all AI escorts and CCAs hit 25% harder.</li>',
+    'manBody.enemies': '<li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs — they now carry a real cannon magazine and a single missile, so expect to be shot at.</li><li><b>Crimson drones</b> — cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers — keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li><li><b>Gold ACE</b> — an elite with more ammo that shrugs off a single missile; wear it down.</li><li><b>Bombers</b> pack a heavy cannon, two missiles &amp; a few flares.</li><li><b>Orange turrets</b> are ground SAM sites (missiles only).</li><li><b>Magenta BOSS</b> (every 4th wave) now cycles <em>telegraphed</em> special attacks — radial MISSILE BARRAGE, deployed DRONE SWARMS, and a close-range SHOCKWAVE PULSE — then enrages at low health. Watch for the warning, then break away or pop countermeasures.</li><li>Enemy ammo still runs dry — a disarmed foe is just a target.</li>',
+    'manBody.tech': 'You earn <em>research points (RP)</em> — shown as <b>R&amp;D</b> on the HUD — only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> — a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all — press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.',
   },
 
   ZH: {
@@ -215,6 +262,19 @@ const I18N = {
     'hud.gun': '机炮', 'hud.flares': '干扰弹', 'hud.msl': '导弹',
     'hud.escort': '▲ 僚机',
     'hud.onStation': '就位', 'hud.regrouping': '重整中',
+    'hud.km': '千米', 'hud.m': '米', 'hud.sec': '秒',
+    'hud.rtb': '返航', 'hud.exp': '剩余', 'hud.ace': '王牌', 'hud.lv': '等级',
+    'hud.killRow': '等级{lv} · 第{wv}波',
+    'hud.hint': 'W/S 俯仰 · Q/E 滚转 · A/D 偏航 · SHIFT/CTRL 油门 · CTRL+S 高过载 · SPACE 机炮 · G 导弹 · X 干扰弹 · F 锁定 · R 技能 · C 镜头 · V 后视 · 右键 跟踪',
+
+    'cam.CHASE': '追尾', 'cam.CLOSE': '近景', 'cam.COCKPIT': '座舱',
+
+    'gen.BASELINE': '基准型', 'gen.4.5 GEN': '四代半', 'gen.5th GEN': '第五代', 'gen.6th GEN': '第六代',
+
+    'touch.gun': '机炮', 'touch.msl': '导弹', 'touch.flr': '干扰', 'touch.spc': '技能',
+    'touch.thr': '加速', 'touch.brk': '减速', 'touch.cam': '镜头', 'touch.lck': '锁定',
+
+    'ks.5': '连杀', 'ks.10': '狂暴', 'ks.15': '势不可挡', 'ks.20': '神一般',
 
     'banner.getReady': '准备就绪',
     'banner.waveInbound': '第 {n} 波来袭',
@@ -235,6 +295,22 @@ const I18N = {
     'banner.onStation': '▲ {name} 已就位 ▲',
     'banner.down': '▼ {name} 被击落 ▼',
     'banner.rivalOnStation': '☠ 宿敌出击 — {name} · 等级{lvl} ☠',
+    'banner.droneSwarm': '⚠ 无人机蜂群 ⚠',
+    'banner.shockwavePulse': '⚠ 冲击波脉冲 ⚠',
+    'banner.missileBarrage': '⚠ 导弹弹幕 ⚠',
+    'banner.droneDeploy': '⚠ 无人机部署 ⚠',
+    'banner.supplyCrate': '◈ 补给箱 ◈',
+    'banner.guardianAngel': '✝ 守护天使 ✝',
+    'banner.reactivePulse': '◈ 反应脉冲',
+    'banner.bossDestroyed': '◆ 首领已摧毁 ◆',
+    'banner.rivalDown': '☠ 宿敌被击落 — +{rp} RP ☠',
+    'banner.radarDown': '◇ 雷达摧毁 — 防空网失明 ◇',
+    'banner.siteFlattened': '⚒ 据点夷平 — +{rp} RP ⚒',
+    'banner.bomberDown': '⚑ 轰炸机被击落 ⚑',
+    'banner.killStreak': '★ {label} x{n} ★',
+    'banner.cloakAmbush': '隐身 · 伏击就绪',
+    'banner.ccaSwarm': '▶ CCA SWARM · {n} 架无人机出击',
+    'banner.dewLance': 'DEW LANCE · 开火',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',
@@ -307,6 +383,10 @@ const I18N = {
     'manual.hEnemies': '敌人与能力',
     'manual.hTech': '研发科技树',
     'manual.hSettings': '设置',
+    'manual.tabGuide': '指南',
+    'manual.tabSystems': '系统',
+    'manual.tabTactics': '战术',
+    'manual.tabSettings': '设置',
 
     'set.language': '语言',
     'set.sensitivity': '操控灵敏度',
@@ -320,66 +400,76 @@ const I18N = {
     'set.mute': '静音所有音频',
     'set.langEN': 'English', 'set.langZH': '简体中文',
 
+    /* ---- manual body (HTML) ---- */
+    'manBody.flight': '<li><b>W</b> / <b>S</b> — 俯冲 / 拉起</li><li><b>Q</b> / <b>E</b> — 向左 / 向右滚转</li><li><b>A</b> / <b>D</b> — 偏航（方向舵）</li><li><b>SHIFT</b> / <b>CTRL</b> — 加速 / 减速</li><li><b>CTRL + S</b> — 高过载转弯（俯仰更急，消耗速度）</li>',
+    'manBody.combat': '<li><b>SPACE</b> — 机炮（弹药有限，注意<em>机炮</em>数量）</li><li><em>瞄准提前量光环</em>会为正前方最近的目标计算机炮提前量——把机头对准光环，当出现击杀机会时它会变为绿色<em>可射击</em>菱形。可在设置中开关。</li><li><b>G</b> — 发射导弹（仅在完全锁定时追踪）</li><li><b>X</b> — 投放干扰弹（可有效将来袭导弹引离）</li><li><b>F</b> — 指定 / 切换锁定目标 <em>（默认手动锁定——可在设置中切换自动锁定）</em></li><li><b>R</b> — 特殊技能</li><li><b>C</b> 切换镜头（含纯净座舱视角）· <b>V</b> 按住后视 · 按住<b>右键</b>跟踪</li><li>飞入发光的绿色<em>补给箱</em>以补充机炮、导弹与干扰弹。</li><li><b>H</b> / <b>ESC</b> — 打开本手册（暂停）</li>',
+    'manBody.lock': '默认采用<b>手动</b>锁定：按<b>F</b>指定正前方最近的目标（再次按可切换）。当你将其保持在前方准星内时，锁定环会逐渐收拢；一旦锁定环变为实心红色<em>已锁定</em>方框，你的下一枚导弹将自动追踪并<b>瞬间摧毁任何非首领目标</b>。首领必须逐步消耗。云层与启动的隐身会打断锁定。想要旧的方式？在设置中开启<em>自动锁定</em>。',
+    'manBody.stats': '<li><b>速度</b> — 最大速度</li><li><b>敏捷</b> — 转向速率 / 机动性</li><li><b>加速</b> — 加速度与油门响应</li><li><b>装甲</b> — 机体强度（生命值）</li><li><b>隐身</b> — 隐身性：云层与启动的隐身对你的隐蔽程度，以及来袭导弹脱锁的难易</li><li><b>火力</b> — 火力：机炮伤害与导弹挂载。<em>每种机型还具备独特的被动优势与弱点——详见其卡片。</em></li>',
+    'manBody.hud': '<li>红色括号加血条标示敌人；最亮者为最近的威胁。</li><li>带距离的边缘箭头指向屏幕外的目标。</li><li>雷达为机头朝上：圆点表示方位，刻度表示在你上方/下方，黄环表示已锁定目标。</li><li>注意<b>拉起</b>、<b>导弹</b>（投放干扰弹）、<b>高过载</b>、<b>隐身</b>提示。</li>',
+    'manBody.wingman': '<li>默认情况下，每次出击都会带上一名忠诚的<b>AI僚机</b>（青色战机、青色雷达标记）——可在<em>设置</em>中关闭这名初始僚机。它会在你的侧翼编队飞行，一旦有敌人进入范围便脱离展开缠斗，用机炮扫射战机并不时发射导弹。</li><li>它会吸引敌方火力——敌人有时会攻击它而非你。它可能被<em>击落</em>（首领的冲击波脉冲也会将其打落），之后它会重整旗鼓，数秒后一架新的僚机将返回就位。右下角的标牌会显示<b>就位</b>或<b>重整中</b>计时。</li><li><b>僚机指挥官</b>与<b>中队编成</b>科技树节点会增加第二、第三架永久僚机并强化全编队装甲；<b>舰队指挥官</b>终极节点会让你的僚机伤害大幅提升。<b>F-47</b>的<b>CCA SWARM</b>会在你前方部署三架鲜亮电蓝色的无人机，持续约16秒——它们会立即锁定目标并发起攻击。F-47的被动技能使所有AI僚机与CCA伤害提高25%。</li>',
+    'manBody.enemies': '<li><b>红色战机</b>会保持距离并盘旋，然后投入扫射式机炮攻击——它们现在携带真正的机炮弹药与一枚导弹，所以预料会遭到还击。</li><li><b>深红色无人机</b>——廉价的神风蜂群，无视机炮，只会<em>径直撞向你</em>。单个脆弱，成群致命——保持机动，用机炮扫射，或借助云层切断其视线。</li><li><b>金色王牌</b>——弹药更多的精英，能扛下单枚导弹；逐步消耗它。</li><li><b>轰炸机</b>配备重型机炮、两枚导弹与少量干扰弹。</li><li><b>橙色炮塔</b>是地面防空导弹据点（仅发射导弹）。</li><li><b>洋红色首领</b>（每第4波）现在会循环施放<em>有预兆的</em>特殊攻击——放射状导弹弹幕、部署无人机蜂群、以及近距离冲击波脉冲——并在低血量时狂暴。注意警告，然后规避或释放对抗措施。</li><li>敌方弹药同样会耗尽——被缴械的敌人不过是个靶子。</li>',
+    'manBody.tech': '你仅能从<em>你亲自造成的</em>伤害、击杀与助攻中获得<em>研究点数（RP）</em>——在平显上显示为<b>研发</b>。僚机或CCA无人机的击杀不会给你任何点数。清除一波后会打开<b>研发界面</b>：将RP花费在五条分支上（机炮、导弹、机体、电子战、指挥）。每条分支都是一条<em>路线</em>——只有购买了上一个节点，下一个才会解锁。购买<em>在整局内永久生效</em>，因此每次出击都能打造不同的战机。能买多少就买多少，或者一个都不买——按<b>出击</b>（或<b>回车</b>）进入下一波。',
+
     /* JETS data-table overrides — name/ability kept in English (fall back to obj field) */
     jet: {
-      'FT-1': { role:'多用途教练机', desc:'朴实可靠的机体 — 没有花招，没有特殊技能。每位飞行员入门必飞的座驾。',
+      'FT-1': { role:'多用途教练机', topSpeed:'1.4马赫', ceiling:'48,000英尺', cannon:'20毫米转管炮', desc:'朴实可靠的机体 — 没有花招，没有特殊技能。每位飞行员入门必飞的座驾。',
         context:'通用教练/多用途机。一架诚实、操控均衡的第四代机体，没有招牌武器或绝招 — 是衡量本机库中其他特种战机的基准。' },
-      'F-22': { role:'空中优势',
+      'F-22': { role:'空中优势', topSpeed:'2.25马赫', ceiling:'65,000英尺', cannon:'20毫米 M61A2',
         abilityDesc:'加力超载，持续6秒：速度+75%，机炮伤害+50%，且机炮扩散为4连发。',
         passive:'精准火控 — 机炮伤害+20%，并有10%固定暴击率。',
         desc:'矢量推力全能机 — 没有明显弱点，任何阶段的空战都能致命。',
         context:'洛克希德·马丁 · 美国。世界上第一款服役的第五代战斗机，自2005年起列装美国空军。其两台F119发动机配备矩形矢量喷口，使其能够"超音速巡航"——在不开加力的情况下维持超音速飞行。仅建造187架，且美国法律禁止出口；二十年来，它一直是衡量其他隐身战机的标杆。' },
-      'SU-57': { role:'多用途',
+      'SU-57': { role:'多用途', topSpeed:'2.0马赫', ceiling:'66,000英尺', cannon:'30毫米 GSh-30-1',
         abilityDesc:'失速后机动：瞬间刹车并翻转，1.5秒无敌，并释放冲击波重创周围敌机、摧毁来袭导弹。',
         passive:'超机动性 — 转向速率+12%，生命值越低伤害越高（最高+20%），机体更轻。',
         desc:'为近距离格斗而生的失速后刀锋战机。',
         context:'苏霍伊 · 俄罗斯。俄罗斯首款第五代战斗机，2010年首飞，约2020年起小批量服役。它继承了苏-27系列传奇的超机动性——矢量喷口使其能完成"眼镜蛇机动"等失速后动作——但其全向隐身能力普遍被认为不及西方同类。' },
-      'J-20': { role:'截击机',
+      'J-20': { role:'截击机', topSpeed:'2.0马赫', ceiling:'66,000英尺', cannon:'无（PL-15）',
         abilityDesc:'大范围电磁脉冲：使敌方武器瘫痪6秒，引爆来袭导弹，并立即为你锁定最近目标。',
         passive:'PL-15狙击手 — 无机炮，但导弹伤害+50%、导弹+10、锁定极快，且弹头命中时爆裂。',
         desc:'纯粹的远程导弹狙击手，专猎高价值目标。',
         context:'成都飞机工业集团 · 中国。中国首款第五代战斗机，2017年起服役。机体庞大、航程远，鸭翼三角翼布局与大型内置弹舱围绕远程PL-15空空导弹设计——它的定位是从防区外猎杀加油机、预警机等高价值目标，而非近距离缠斗。早期型号不配备内置机炮。' },
-      'F-35': { role:'隐身多用途',
+      'F-35': { role:'隐身多用途', topSpeed:'1.6马赫', ceiling:'50,000英尺', cannon:'25毫米 GAU-22/A',
         abilityDesc:'主动隐形7秒；隐形期间发射的导弹将自动锁定最近敌机，并可一击秒杀任何非首领单位。',
         passive:'传感器融合 — 来袭导弹经常脱锁，自身导弹强制锁定。机炮威力中等。',
         desc:'软件定义的隐身多用途机；真正的武器是它构建的战场态势图。',
         context:'洛克希德·马丁 · 美国。全球产量最大的隐身战斗机，分为三种型号：用于跑道起降的A型、为海军陆战队和两栖舰艇设计的垂直起降B型，以及舰载C型。它真正的武器是软件——传感器融合将雷达、红外与电子信息整合为一张态势图，并在编队间共享。已被十余个盟国列装。' },
-      'EFT': { role:'空中优势',
+      'EFT': { role:'空中优势', topSpeed:'2.0马赫', ceiling:'65,000英尺', cannon:'27毫米 毛瑟 BK-27',
         abilityDesc:'齐射：向最近的威胁集中发射6枚强制锁定导弹，伤害+40%。',
         passive:'能量战机 — 机炮伤害+15%，转向速率+10%且锁定迅速，但照明弹储备少、无隐身能力。',
         desc:'由计算机操控的鸭翼三角翼战机，以凌厉的瞬时盘旋与加速著称。',
         context:'空客 / 英国航空航天 / 莱昂纳多 · 欧洲。英、德、意、西四国联合研制，自2003年起服役。其有意设计为静不稳定布局并由计算机操控，紧耦合鸭翼三角翼带来凌厉的瞬时盘旋性能与一流加速——是为视距内空战而非隐身设计的纯粹能量战机。' },
-      'RAFALE': { role:'全能型',
+      'RAFALE': { role:'全能型', topSpeed:'1.8马赫', ceiling:'50,000英尺', cannon:'30毫米 GIAT 30',
         abilityDesc:'SPECTRA电子战场：6秒内对导弹完全免疫——来袭导弹失去目标，敌机也无法发射。',
         passive:'SPECTRA电子套件 — 额外+6枚长效照明弹，并具备能偶尔击落来袭导弹的反射式近防能力。',
         desc:'全能型战机，配备世界级电子战系统，正面对抗威胁而非单纯躲避。',
         context:'达索 · 法国。法国称其为"全能型"战机——一机兼顾防空、打击、侦察与舰载核威慑投送。其SPECTRA电子战系统堪称世界顶尖，以干扰和欺骗手段对抗威胁而非单纯隐身。已在利比亚、马里、伊拉克和叙利亚实战检验，并出口至印度、埃及、卡塔尔、阿联酋、希腊和克罗地亚。' },
-      'TEJAS': { role:'轻型多用途',
+      'TEJAS': { role:'轻型多用途', topSpeed:'1.8马赫', ceiling:'52,000英尺', cannon:'23毫米 GSh-23',
         abilityDesc:'投射3个全息分身，吸引敌方机炮与导弹火力6秒。',
         passive:'轻量化机体 — 全机库最快的护盾回充速度，转向速率+14%，但机体仅有70%耐久。',
         desc:'一架小巧的无尾复合三角翼战机 — 在缠斗中难以咬尾的灵巧目标。',
         context:'HAL / ADA · 印度。印度自主研发的轻型战斗机，经长期研发后于2016年由印度空军列装。是现役最小、最轻的战斗机之一，其无尾复合三角翼布局使其成为难以咬尾的灵活目标——是印度发展本土航空工业的标志性成果。' },
-      'FA18': { role:'舰载多用途',
+      'FA18': { role:'舰载多用途', topSpeed:'1.8马赫', ceiling:'50,000英尺', cannon:'20毫米 M61A2',
         abilityDesc:'子弹时间：世界减速至40%，持续4秒，期间你仍以正常速度飞行与开火。',
         passive:'弹药卡车 — 巨大的机炮与导弹弹仓，115%坚固机体，每次击杀修复6点生命值。',
         desc:'坚固耐用的舰载主力机：宽容、全能，受创后仍能持续作战。',
         context:'波音 · 美国。美国海军舰载航空联队的中坚力量——在初代大黄蜂基础上发展而来，体型更大、航程更远。在航母进场所需的低速状态下操控宽容，且用途极为广泛；其衍生型EA-18G"咆哮者"是西方主要的舰载电子攻击机。' },
-      'J-36': { role:'重型隐身 · 第六代',
+      'J-36': { role:'重型隐身 · 第六代', topSpeed:'机密', ceiling:'机密', cannon:'内置空空导弹弹舱',
         abilityDesc:'倾泻弹舱：向周围全部威胁发射10枚强制锁定导弹组成的饱和打击，伤害+55%，并为机体罩上重型消蚀护盾。',
         passive:'饱和打击平台 — 庞大的载弹量与机体耐久，导弹爆炸威力强劲，但转向迟缓。',
         desc:'一座会飞的弹药库，意图是深入突破并倾泻重火力，而非缠斗格斗。',
         context:'成都飞机工业集团 · 中国（验证机）。一款大型无尾飞机，于2024年12月26日首次公开飞行。其最显著特征是无垂尾的宽体改良三角翼布局以及看似三发（三台发动机）的设计——暗示这是一个为远程、大载荷而设计的平台，意图携带大量导弹深入突破而非缠斗。其大部分信息仍属机密。' },
-      'F-47': { role:'空中主导 · 第六代',
+      'F-47': { role:'空中主导 · 第六代', topSpeed:'机密', ceiling:'机密', cannon:'机密',
         abilityDesc:'在你正前方部署三架鲜蓝色的协同作战飞机（CCA）。它们会立即猎杀并以机炮击毁附近威胁，持续约16秒后退场。F-47的被动技能使其伤害提高25%。',
         passive:'编队四分卫 — 性能均衡且具隐身能力，你部署的所有AI僚机与CCA伤害+25%。',
         desc:'编队中的有人驾驶核心，负责指挥无人僚机编队。',
         context:'波音 · 美国。于2025年3月21日公开，作为美国空军下一代空中主导（NGAD）计划的有人驾驶核心机型。F-47的设计定位并非孤狼式格斗机，而更像"四分卫"——一架隐身、远程的有人战机，指挥成本更低的无人协同作战飞机（CCA）编队，并采用变循环发动机。' },
-      'NGAD': { role:'实验型 · 第六代',
+      'NGAD': { role:'实验型 · 第六代', topSpeed:'机密', ceiling:'机密', cannon:'定向能武器',
         abilityDesc:'发射定向能武器：持续约3秒的光束，熔毁前方扇区内的一切目标，并击落误入光束的导弹。',
         passive:'前沿科技 — 最高速度+10%，几乎完美规避导弹，并配备内置近防激光。',
         desc:'一架前沿验证机：变循环推进、新一代传感器融合与定向能武器。',
         context:'美国空军（项目/验证机）。"NGAD"是整个下一代空中主导项目的名称——也是一架全尺寸技术验证机的代号，美国空军表示其早在2020年就已秘密首飞，远早于F-47的选定。在本作中，它代表该项目的前沿科技：变循环推进、新一代传感器融合与机载定向能武器。真实性能数据仍属机密。' },
-      'J-50': { role:'隐身战斗机 · 第六代',
+      'J-50': { role:'隐身战斗机 · 第六代', topSpeed:'机密', ceiling:'机密', cannon:'机密',
         abilityDesc:'转动翼尖并进入超机动状态，持续6秒：转向速率与推力大幅提升，所有来袭导弹脱锁，并留下灼热的等离子尾流重创近距离擦过的目标。',
         passive:'幻影机动 — 转向速率+15%，极难被导弹锁定，并有10%固定暴击率。机体更轻。',
         desc:'一架以可转动翼尖操控的无尾幻影战机 — 灵巧难缠，结构轻盈。',
@@ -462,4 +552,12 @@ function tf(key, vars) {
   let s = t(key);
   if (vars) for (const k in vars) s = s.replace('{' + k + '}', vars[k]);
   return s;
+}
+
+/* localize an airframe generation label (e.g. '5th GEN'); falls back to the raw value */
+function genText(gen) {
+  if (!gen) return '';
+  const L = I18N[LANG];
+  if (L && L['gen.' + gen] != null) return L['gen.' + gen];
+  return gen;
 }

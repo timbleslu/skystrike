@@ -191,10 +191,17 @@
   <div class="mwrap">
     <h2 id="manTitle">FLIGHT MANUAL</h2>
     <p id="manSub" class="msub">// TACTICAL REFERENCE //</p>
+    <div class="mnav" id="manNav">
+      <button class="mnavbtn on" data-tab="guide" id="manTab_guide">Guide</button>
+      <button class="mnavbtn" data-tab="systems" id="manTab_systems">Systems</button>
+      <button class="mnavbtn" data-tab="tactics" id="manTab_tactics">Tactics</button>
+      <button class="mnavbtn" data-tab="settings" id="manTab_settings">Settings</button>
+    </div>
+    <div class="mtab show" data-tab="guide">
     <div class="mgrid">
       <section>
         <h3 id="manH_Flight">Flight</h3>
-        <ul>
+        <ul id="manUL_Flight">
           <li><b>W</b> / <b>S</b> &mdash; pitch down / up</li>
           <li><b>Q</b> / <b>E</b> &mdash; roll left / right</li>
           <li><b>A</b> / <b>D</b> &mdash; yaw (rudder)</li>
@@ -204,7 +211,7 @@
       </section>
       <section>
         <h3 id="manH_Combat">Combat</h3>
-        <ul>
+        <ul id="manUL_Combat">
           <li><b>SPACE</b> &mdash; cannon (now a finite magazine &mdash; watch the <em>GUN</em> count)</li>
           <li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead &mdash; fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li>
           <li><b>G</b> &mdash; fire missile (homes only with a full lock)</li>
@@ -218,11 +225,15 @@
       </section>
       <section>
         <h3 id="manH_Lock">Target Lock</h3>
-        <p>By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.</p>
+        <p id="manP_Lock">By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.</p>
       </section>
+    </div>
+    </div>
+    <div class="mtab" data-tab="systems">
+    <div class="mgrid">
       <section>
         <h3 id="manH_Stats">Aircraft Stats</h3>
-        <ul>
+        <ul id="manUL_Stats">
           <li><b>SPD</b> &mdash; top speed</li>
           <li><b>AGI</b> &mdash; turn rate / maneuverability</li>
           <li><b>ACC</b> &mdash; acceleration &amp; throttle response</li>
@@ -233,16 +244,20 @@
       </section>
       <section>
         <h3 id="manH_Hud">HUD &amp; Radar</h3>
-        <ul>
+        <ul id="manUL_Hud">
           <li>Red brackets + health bar mark enemies; brightest = nearest threat.</li>
           <li>Edge arrows with distance point to off-screen contacts.</li>
           <li>Radar is heading-up: dots = bearing, ticks = above/below you, yellow ring = locked target.</li>
           <li>Heed <b>PULL UP</b>, <b>MISSILE</b> (pop flares), <b>HIGH-G</b>, <b>STEALTH</b>.</li>
         </ul>
       </section>
+    </div>
+    </div>
+    <div class="mtab" data-tab="tactics">
+    <div class="mgrid">
       <section>
         <h3 id="manH_Wingman">Your Wingman</h3>
-        <ul>
+        <ul id="manUL_Wingman">
           <li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) &mdash; you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li>
           <li>It draws enemy fire &mdash; hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li>
           <li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s &mdash; they immediately acquire targets and attack. The F-47's passive makes all AI escorts and CCAs hit 25% harder.</li>
@@ -250,7 +265,7 @@
       </section>
       <section>
         <h3 id="manH_Enemies">Enemies &amp; Abilities</h3>
-        <ul>
+        <ul id="manUL_Enemies">
           <li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs &mdash; they now carry a real cannon magazine and a single missile, so expect to be shot at.</li>
           <li><b>Crimson drones</b> &mdash; cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers &mdash; keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li>
           <li><b>Gold ACE</b> &mdash; an elite with more ammo that shrugs off a single missile; wear it down.</li>
@@ -262,8 +277,12 @@
       </section>
       <section>
         <h3 id="manH_Tech">R&amp;D Tech Tree</h3>
-        <p>You earn <em>research points (RP)</em> &mdash; shown as <b>R&amp;D</b> on the HUD &mdash; only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> &mdash; a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all &mdash; press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.</p>
+        <p id="manP_Tech">You earn <em>research points (RP)</em> &mdash; shown as <b>R&amp;D</b> on the HUD &mdash; only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> &mdash; a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all &mdash; press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.</p>
       </section>
+    </div>
+    </div>
+    <div class="mtab" data-tab="settings">
+    <div class="mgrid">
       <section class="mset">
         <h3 id="manH_Settings">Settings</h3>
         <div class="srow"><label id="lblLang">Language</label><div class="langtog"><button id="setLangEN" class="langbtn" data-lang="EN">English</button><button id="setLangZH" class="langbtn" data-lang="ZH">简体中文</button></div></div>
@@ -277,6 +296,7 @@
         <div class="srow"><label id="lblGunLead" for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
         <div class="srow"><label id="lblMute" for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
       </section>
+    </div>
     </div>
     <div class="mbtns">
       <button id="manualClose">&#9654; RESUME</button>

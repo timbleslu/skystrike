@@ -309,7 +309,7 @@ function collectLoot(l) {
   if (give.flares)   player.flares   = Math.min(player.maxFlares,   player.flares   + give.flares);
   if (give.hp)       player.hp       = Math.min(player.maxHp,       player.hp       + give.hp);
   audio.power(); empFlash = 0.4;
-  if (l.kind === 'crate') showBanner('\u25C8 SUPPLY CRATE \u25C8');
+  if (l.kind === 'crate') showBanner(t('banner.supplyCrate'));
 }
 
 function updateLoot(dt) {
@@ -460,7 +460,7 @@ function damagePlayer(amt, src) {
     if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per wave
       player._cheatUsed = true; player.hp = player.maxHp * 0.4; player.shield = player.maxShield;
       player.invuln = 2.5; player.damageFlash = 0; empFlash = Math.max(empFlash, 0.6);
-      showBanner('\u271D GUARDIAN ANGEL \u271D'); audio.power(); return;
+      showBanner(t('banner.guardianAngel')); audio.power(); return;
     }
     player.hp = 0; gameOver();
   }
@@ -490,7 +490,7 @@ function reactivePulse() {
   const pp = player.group.position, r2 = 640 * 640;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (e.type !== 'boss' && pp.distanceToSquared(e.group.position) < r2) damageEnemy(e, player.reactive, e.group.position, true); }
   for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && pp.distanceToSquared(m.mesh.position) < r2) m.decoyed = true; }
-  showBanner('\u25C8 REACTIVE PULSE'); audio.power();
+  showBanner(t('banner.reactivePulse')); audio.power();
 }
 let lastCrit = false;   // set per-hit by damageEnemy so the cannon can spawn an exploding-crit blast
 function damageEnemy(e, amt, wp, byPlayer, byCCA) {
@@ -514,7 +514,7 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
     if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
   }
   if (e.type === 'boss' && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.35) {
-    e.enraged = true; e.turnRate *= 1.3; empFlash = 0.45; showBanner('\u26A0 BOSS ENRAGED \u26A0');
+    e.enraged = true; e.turnRate *= 1.3; empFlash = 0.45; showBanner(t('banner.bossEnraged'));
     if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.8;
   }
   if (e.hp <= 0) killEnemy(e, byPlayer, byCCA);
@@ -544,20 +544,20 @@ function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer && player.slowOnKill) player.slow = Math.max(player.slow, player.slowOnKill);                   // KILL CLOCK — a beat of bullet-time
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
-  if (e.type === 'boss') { run.boss++; showBanner('\u25C6 BOSS DESTROYED \u25C6'); empFlash = 0.5; }
-  if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner('\u2620 RIVAL DOWN \u2014 +' + pay + ' RP \u2620'); run.kills++; }
+  if (e.type === 'boss') { run.boss++; showBanner(t('banner.bossDestroyed')); empFlash = 0.5; }
+  if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner(tf('banner.rivalDown', { rp: pay })); run.kills++; }
   else if (e.type === 'ground') {
     run.ground++;
     if (strikeWaveActive) {
-      if (e.gkind === 'radar') showBanner('◇ RADAR DOWN — SAM NET BLIND ◇');
+      if (e.gkind === 'radar') showBanner(t('banner.radarDown'));
       if (!enemies.some(o => o.alive && o.type === 'ground')) {   // last site element down → payout
         const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
         player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
-        showBanner('⚒ SITE FLATTENED — +' + pay + ' RP ⚒'); audio.power(); empFlash = Math.max(empFlash, 0.4);
+        showBanner(tf('banner.siteFlattened', { rp: pay })); audio.power(); empFlash = Math.max(empFlash, 0.4);
       }
     }
   }
-  else if (e.type === 'bomber') { run.kills++; showBanner('\u2691 BOMBER DOWN \u2691'); }
+  else if (e.type === 'bomber') { run.kills++; showBanner(t('banner.bomberDown')); }
   else run.kills++;
   if (e.type === 'drone') { if (Math.random() < 0.12) spawnLoot(e.group.position); }
   else if (e.type !== 'fighter' || e.elite || Math.random() < 0.5) spawnLoot(e.group.position);
@@ -571,13 +571,12 @@ function killEnemy(e, byPlayer, byCCA) {
 }
 function killStreakReward() {
   const n = player.killStreak;
-  const names = { 5: 'KILLSTREAK', 10: 'RAMPAGE', 15: 'UNSTOPPABLE', 20: 'GODLIKE' };
-  const label = names[n] || 'KILLSTREAK';
+  const label = t('ks.' + n) !== 'ks.' + n ? t('ks.' + n) : t('ks.5');
   player.flares = player.maxFlares;
   player.missiles = Math.min(player.maxMissiles, player.missiles + 4 + Math.floor(n / 5));
   player.bullets = Math.min(player.maxBullets, player.bullets + 150);
   if (n >= 10) { player.hp = Math.min(player.maxHp, player.hp + 25); player.shield = player.maxShield; }
-  showBanner('\u2605 ' + label + ' x' + n + ' \u2605');
+  showBanner(tf('banner.killStreak', { label: label, n: n }));
   audio.power(); empFlash = 0.35;
 }
 
@@ -678,7 +677,7 @@ function useSpecial() {
 
   } else if (id === 'F-35') {
     // STEALTH FIELD — vanish; missiles fired while cloaked become guaranteed ambush kills (see fireMissile)
-    player.stealthField = 7; showBanner('CLOAK \u00B7 AMBUSH ARMED');
+    player.stealthField = 7; showBanner(t('banner.cloakAmbush'));
 
   } else if (id === 'EFT') {
     // MISSILE SALVO — 6 hard-homing missiles, +40% damage, spread across the nearest threats
@@ -741,11 +740,11 @@ function useSpecial() {
     explode(pp.clone(), false);
     empFlash = Math.max(empFlash, 0.5);
     audio.power();
-    showBanner('\u25B6 CCA SWARM \u00B7 ' + launched + ' DRONES AWAY');
+    showBanner(tf('banner.ccaSwarm', { n: launched }));
 
   } else if (id === 'NGAD') {
     // DEW LANCE — sustained directed-energy beam (damage handled in updatePlayer)
-    player.dewLance = 3; empFlash = 0.3; showBanner('DEW LANCE \u00B7 FIRING'); audio.power();
+    player.dewLance = 3; empFlash = 0.3; showBanner(t('banner.dewLance')); audio.power();
 
   } else if (id === 'J-50') {
     // VECTOR SURGE — supermaneuver: agility & thrust soar, missiles lose lock, a plasma wake guts close passes
