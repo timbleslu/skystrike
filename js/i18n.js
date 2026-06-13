@@ -196,6 +196,10 @@ const I18N = {
     'manual.hEnemies': 'Enemies & Abilities',
     'manual.hTech': 'R&D Tech Tree',
     'manual.hSettings': 'Settings',
+    'manual.tabGuide': 'Guide',
+    'manual.tabSystems': 'Systems',
+    'manual.tabTactics': 'Tactics',
+    'manual.tabSettings': 'Settings',
 
     /* ---- settings labels ---- */
     'set.language': 'Language',
@@ -379,6 +383,10 @@ const I18N = {
     'manual.hEnemies': '敌人与能力',
     'manual.hTech': '研发科技树',
     'manual.hSettings': '设置',
+    'manual.tabGuide': '指南',
+    'manual.tabSystems': '系统',
+    'manual.tabTactics': '战术',
+    'manual.tabSettings': '设置',
 
     'set.language': '语言',
     'set.sensitivity': '操控灵敏度',

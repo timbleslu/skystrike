@@ -757,6 +757,7 @@ function buildHangar() {
   g('manualBtn').addEventListener('click', openManual);
   g('manualClose').addEventListener('click', closeManual);
   g('manualAbort').addEventListener('click', abortMission);
+  const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
   g('redeploy').addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
   const tg = g('techgrid');
@@ -857,7 +858,12 @@ function setOpMode(m) {
   if (audio.on) audio.ui();
   saveSettings();
 }
-function openManual() { g('manual').classList.add('show'); paused = true; g('touchControls').classList.remove('show'); }
+function showManualTab(name) {
+  document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
+  document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  if (audio.on) audio.ui();
+}
+function openManual() { g('manual').classList.add('show'); showManualTab('guide'); paused = true; g('touchControls').classList.remove('show'); }
 function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
 function toggleManual() { if (g('manual').classList.contains('show')) closeManual(); else openManual(); }
 function abortMission() { closeManual(); if (state !== 'hangar') returnToHangar(); }
@@ -1029,6 +1035,8 @@ function applyLang() {
   setTxt('manH_Hud', t('manual.hHud')); setTxt('manH_Wingman', t('manual.hWingman'));
   setTxt('manH_Enemies', t('manual.hEnemies')); setTxt('manH_Tech', t('manual.hTech'));
   setTxt('manH_Settings', t('manual.hSettings'));
+  setTxt('manTab_guide', t('manual.tabGuide')); setTxt('manTab_systems', t('manual.tabSystems'));
+  setTxt('manTab_tactics', t('manual.tabTactics')); setTxt('manTab_settings', t('manual.tabSettings'));
   // settings labels
   setTxt('lblLang', t('set.language')); setTxt('lblSens', t('set.sensitivity'));
   setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert'));

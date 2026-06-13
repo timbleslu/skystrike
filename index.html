@@ -191,6 +191,13 @@
   <div class="mwrap">
     <h2 id="manTitle">FLIGHT MANUAL</h2>
     <p id="manSub" class="msub">// TACTICAL REFERENCE //</p>
+    <div class="mnav" id="manNav">
+      <button class="mnavbtn on" data-tab="guide" id="manTab_guide">Guide</button>
+      <button class="mnavbtn" data-tab="systems" id="manTab_systems">Systems</button>
+      <button class="mnavbtn" data-tab="tactics" id="manTab_tactics">Tactics</button>
+      <button class="mnavbtn" data-tab="settings" id="manTab_settings">Settings</button>
+    </div>
+    <div class="mtab show" data-tab="guide">
     <div class="mgrid">
       <section>
         <h3 id="manH_Flight">Flight</h3>
@@ -220,6 +227,10 @@
         <h3 id="manH_Lock">Target Lock</h3>
         <p id="manP_Lock">By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.</p>
       </section>
+    </div>
+    </div>
+    <div class="mtab" data-tab="systems">
+    <div class="mgrid">
       <section>
         <h3 id="manH_Stats">Aircraft Stats</h3>
         <ul id="manUL_Stats">
@@ -240,6 +251,10 @@
           <li>Heed <b>PULL UP</b>, <b>MISSILE</b> (pop flares), <b>HIGH-G</b>, <b>STEALTH</b>.</li>
         </ul>
       </section>
+    </div>
+    </div>
+    <div class="mtab" data-tab="tactics">
+    <div class="mgrid">
       <section>
         <h3 id="manH_Wingman">Your Wingman</h3>
         <ul id="manUL_Wingman">
@@ -264,6 +279,10 @@
         <h3 id="manH_Tech">R&amp;D Tech Tree</h3>
         <p id="manP_Tech">You earn <em>research points (RP)</em> &mdash; shown as <b>R&amp;D</b> on the HUD &mdash; only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> &mdash; a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all &mdash; press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.</p>
       </section>
+    </div>
+    </div>
+    <div class="mtab" data-tab="settings">
+    <div class="mgrid">
       <section class="mset">
         <h3 id="manH_Settings">Settings</h3>
         <div class="srow"><label id="lblLang">Language</label><div class="langtog"><button id="setLangEN" class="langbtn" data-lang="EN">English</button><button id="setLangZH" class="langbtn" data-lang="ZH">简体中文</button></div></div>
@@ -277,6 +296,7 @@
         <div class="srow"><label id="lblGunLead" for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
         <div class="srow"><label id="lblMute" for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
       </section>
+    </div>
     </div>
     <div class="mbtns">
       <button id="manualClose">&#9654; RESUME</button>
