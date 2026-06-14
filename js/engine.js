@@ -188,6 +188,7 @@ function initThree() {
   sun.shadow.camera.right = sun.shadow.camera.top = 650;
   sun.shadow.camera.near = 50; sun.shadow.camera.far = 6000;
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 2.5;
+  refreshGfxTier(); applyGfxQuality();   // F11: pick render tier + size the shadow map for it (low = cheaper shadows)
   scene.add(sun.target);
   const rim = new THREE.DirectionalLight(0x77a8ff, 0.55);
   rim.position.set(-0.5, 0.35, -0.9).multiplyScalar(2000); scene.add(rim); rimLight = rim;
@@ -211,6 +212,20 @@ function onResize() {
   renderer.setSize(W, H);
   const c = document.getElementById('h2d'); c.width = W; c.height = H;
   if(isTouchEnabled) initTouchControls();
+}
+
+// F11 mobile perf — apply the resolved gfxTier to the sun shadow (resolution + frustum depth). VISUAL-ONLY:
+// no light direction, scene contents, or gameplay change — just a cheaper shadow pass on the low tier. Idempotent
+// (safe to call on every settings change). Disposing the existing shadow.map forces Three to reallocate it at the
+// new mapSize on the next render; the far plane shrink also tightens depth precision for the closer mid-range view.
+function applyGfxQuality() {
+  if (!sun) return;
+  const low = gfxTier === 'low';
+  const res = low ? 1024 : 2048;
+  sun.shadow.mapSize.set(res, res);
+  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }   // force realloc at the new resolution
+  sun.shadow.camera.far = low ? 3000 : 6000;
+  sun.shadow.camera.updateProjectionMatrix();
 }
 
 function buildSky() {

@@ -459,6 +459,25 @@ function updateCCA(w, dt) {
   }
 }
 
+// F11 mobile perf — draw-distance cull of distant enemy meshes. VISUAL-ONLY: toggles e.group.visible, NEVER
+// despawns (markers/locks/AI keep running on hidden foes). High tier forces everything visible (so toggling
+// quality high mid-run instantly restores draw). Inactive (non-boss, non-rival) jets hide sooner as a cheap
+// far-LOD; bosses/rivals stay drawn (they anchor the fight and are rarely beyond cull range).
+function cullDistantEnemies() {
+  if (!player || !player.group) return;
+  const high = gfxTier !== 'low';
+  const px = player.group.position;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !e.group) continue;
+    if (high) { if (!e.group.visible) e.group.visible = true; continue; }
+    if (e.type === 'boss' || e.rival) { if (!e.group.visible) e.group.visible = true; continue; }
+    const inactiveJet = e.type !== 'ground';   // air fodder/drones/bombers get the tighter LOD band
+    const r = inactiveJet ? GFX_CULL_JET : GFX_CULL_FAR;
+    const vis = e.group.position.distanceToSquared(px) <= r * r;
+    if (e.group.visible !== vis) e.group.visible = vis;
+  }
+}
 function updateWingmen(dt) {
   for (let i = wingmen.length - 1; i >= 0; i--) {
     const w = wingmen[i];
@@ -715,6 +734,7 @@ function animate() {
     updatePlayer(dt);
     tickTutorial();   // first-run guided tutorial: gate stepped prompts on the player's own actions
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
+    cullDistantEnemies();   // F11: low tier hides far enemy meshes (.visible only; AI/markers/locks untouched)
     updateWingmen(dt * ts);
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);

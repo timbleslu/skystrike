@@ -554,6 +554,41 @@ function steerCommand(scheme, intent, currentBank, t) {
   return { pitchCmd, rollCmd };
 }
 
+// graphics quality (F11 mobile perf): 'auto' picks a render tier by a cheap device heuristic; 'low'/'high'
+// force it. VISUAL-ONLY — never changes gameplay (it gates shadow-map resolution, shadow-camera far, and a
+// draw-distance .visible cull on distant enemy meshes; enemies are NEVER despawned, so locks/markers survive).
+// Persisted via the settings seam (saveSettings/loadSettings in ui.js). engine.js owns applyGfxQuality().
+let gfxQuality = 'auto';
+// === MIRROR START (globals.js gfx-quality core) ===
+const GFX_TIERS = ['auto', 'low', 'high'];
+// PURE — resolve the effective render tier ('low'|'high') from the gfxQuality setting plus a
+// cheap device heuristic. Explicit 'low'/'high' pass through untouched; 'auto' (and any unknown
+// value) picks 'low' for touch devices on a non-flagship pixel ratio (dpr <= 2 — the mid-range
+// phone signature), else 'high'. Deterministic + side-effect free so it is unit-testable; the
+// fps sample (which headless cannot measure) is layered on at the call site, never in here.
+function resolveQuality(setting, dpr, isTouch) {
+  if (setting === 'low' || setting === 'high') return setting;
+  return (isTouch && dpr <= 2) ? 'low' : 'high';
+}
+// === MIRROR END ===
+// live resolved tier ('low'|'high'); recomputed from gfxQuality whenever the setting changes (engine.js applyGfxQuality
+// reads it). Default 'high' so desktop is untouched until refreshGfxTier() runs at boot/settings-load.
+let gfxTier = 'high';
+// low-tier draw-distance cull radii (world units). Beyond GFX_CULL_FAR an enemy mesh is hidden (.visible=false, NOT
+// despawned — AI/markers/locks keep running); 'inactive' (non-boss, non-rival) jets hide sooner at GFX_CULL_JET as a
+// cheap far-LOD. High tier never hides. These sit well past the radar reach so hidden foes are off-screen specks.
+const GFX_CULL_FAR = 9000, GFX_CULL_JET = 6500;
+// recompute gfxTier from the current setting + a cheap device read. isTouch heuristic mirrors controls.js touch detection;
+// dpr from devicePixelRatio. Pure resolveQuality does the decision; this is the impure call site (could fold an fps
+// sample later). Returns the resolved tier.
+function refreshGfxTier() {
+  const isTouch = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ||
+                  (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || ('ontouchstart' in (typeof window !== 'undefined' ? window : {}));
+  const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1;
+  gfxTier = resolveQuality(gfxQuality, dpr, !!isTouch);
+  return gfxTier;
+}
+
 /* shared temporaries (avoid per-frame allocation) */
 const t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), t3 = new THREE.Vector3(),
       t4 = new THREE.Vector3(), t5 = new THREE.Vector3(), tA = new THREE.Vector3();
