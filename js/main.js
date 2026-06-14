@@ -11,7 +11,7 @@ function nextWave() {
   if (opMode && opSector) {
     const plan = sectorPlan(opSector, wave);
     strikeWaveActive = plan.ground;
-    applyWeather(plan.weather); applyTimeOfDay(plan.tod);   // sector condition: gameplay modifiers + sky/fog visuals + fresh env
+    applyWeather(rollWeather(weatherSeed + wave)); applyTimeOfDay(plan.tod);   // random weather per wave, TOD fixed to sector type
     startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset
     const sectorLine = plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) });
     const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);   // intro line names the condition
@@ -25,7 +25,8 @@ function nextWave() {
     else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     return;
   }
-  applyWeather(rollWeather(weatherSeed + wave));   // standalone play: deterministic per-run weather, weighted toward clear
+  applyWeather(rollWeather(weatherSeed + wave));
+  const _wCond = weatherLabel();
   if (strike) {
     showBanner(t('banner.strikeWave'));
     queueStrikeSite(wave);
@@ -35,7 +36,7 @@ function nextWave() {
   const count = clamp(3 + wave + DIFFS[difficulty].count, 2, 10);
   for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
   if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
-  else showBanner(tf('banner.wave', { n: wave }));
+  else showBanner(_wCond ? tf('banner.wave', { n: wave }) + '  ·  ' + _wCond : tf('banner.wave', { n: wave }));
   if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
   if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);

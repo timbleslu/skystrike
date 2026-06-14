@@ -823,12 +823,6 @@ function updatePlayer(dt) {
   pitchIn = clamp(pitchIn - flightInput.pitch, -1, 1);   // +flightInput.pitch (climb) -> -pitchIn (nose up, = W)
   rollIn = clamp(rollIn - flightInput.roll, -1, 1);      // +flightInput.roll (bank right) -> -rollIn (= E)
 
-  // weather turbulence: a small, smooth, ~zero-mean attitude wobble (storm/fog), added on top then re-clamped
-  if (weather.turbulence > 0) {
-    pitchIn = clamp(pitchIn + turbSample(weatherT * 1.7, weather.turbulence), -1, 1);
-    rollIn  = clamp(rollIn  + turbSample(weatherT * 2.3 + 11, weather.turbulence), -1, 1);
-  }
-
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;
   player.highG = brake && (down('KeyS') || (isTouchEnabled && flightInput.pitch < -0.5));
@@ -840,6 +834,11 @@ function updatePlayer(dt) {
   player.pitchRate = damp(player.pitchRate, tgtPitch, player.vectorSurge > 0 ? 6.5 : 4.5, dt);
   player.rollRate = damp(player.rollRate, tgtRoll, 5.5, dt);
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
+  // turbulence as a direct rate perturbation after the control law — feels like physical buffeting rather than fighting the controls
+  if (weather.turbulence > 0) {
+    player.pitchRate += turbSample(weatherT * 1.7, weather.turbulence * 0.5) * tb;
+    player.rollRate  += turbSample(weatherT * 2.3 + 11, weather.turbulence * 0.5) * tb;
+  }
 
   eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
   q1.setFromEuler(eul);
