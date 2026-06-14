@@ -1192,7 +1192,7 @@ function loadSettings() {
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
-    controlScheme = (s.controlScheme === 'rate') ? 'rate' : 'pointer';
+    controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
@@ -1293,7 +1293,7 @@ function applyLang() {
   }
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
-  segTxt('#controlSchemeTog [data-cs="pointer"]', 'set.csPointer'); segTxt('#controlSchemeTog [data-cs="rate"]', 'set.csClassic');
+  segTxt('#controlSchemeTog [data-cs="auto"]', 'set.csAuto'); segTxt('#controlSchemeTog [data-cs="pointer"]', 'set.csPointer'); segTxt('#controlSchemeTog [data-cs="rate"]', 'set.csClassic');
   segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
   segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
   segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');

@@ -391,11 +391,12 @@ let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live
 let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
 // flight control scheme — how combat.js INTERPRETS the flightInput seam (orthogonal to touch/motion source).
-//   'pointer' (default) = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
+//   'auto'    (default) = bank-hold like pointer + sin(bank)*autoPitchGain back-pressure -> banking auto-turns.
+//   'pointer'           = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
-let controlScheme = 'pointer';
+let controlScheme = 'auto';
 // point-to-steer tunables (only combat.js reads these). maxBank ≈ 80°. Verified stable (negative-feedback bank-hold).
-const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06 };
+const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoPitchGain: 0.6 };
 // PURE — map normalized flight intent to the engine's pitch/roll command axes, honouring the control scheme.
 // `intent` = { pitch, roll } in -1..1 (point-to-fly signs: +pitch=climb, +roll=bank right). `currentBank` is the
 // airframe's present bank angle in radians, SAME sign frame as roll intent (combat.js passes atan2(-right.y, up.y)).
@@ -403,9 +404,10 @@ const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06 
 //   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
 //   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
 //               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
+//   'auto'    : same bank-hold as pointer; also adds sin(currentBank)*autoPitchGain to pitchCmd so banking auto-turns.
 function steerCommand(scheme, intent, currentBank, t) {
   const pitchCmd = intent.pitch;
-  if (scheme !== 'pointer') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
+  if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
   const cb = currentBank || 0;
   let rollCmd;
   if (Math.abs(intent.roll) < t.deadzone) {
@@ -413,6 +415,9 @@ function steerCommand(scheme, intent, currentBank, t) {
   } else {
     const targetBank = intent.roll * t.maxBank;
     rollCmd = clamp(t.bankGain * (targetBank - cb) / t.maxBank, -1, 1);  // proportional bank-hold
+  }
+  if (scheme === 'auto') {
+    return { pitchCmd: clamp(pitchCmd + Math.sin(cb) * t.autoPitchGain, -1, 1), rollCmd };
   }
   return { pitchCmd, rollCmd };
 }

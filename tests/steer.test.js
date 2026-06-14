@@ -7,7 +7,7 @@ const path = require('path');
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 // ---- tunables mirror (js/globals.js STEER) ----
-const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06 };
+const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoPitchGain: 0.6 };
 
 // ============================================================================
 //  Mirror of js/globals.js steerCommand (byte-identity guard at the bottom
@@ -19,9 +19,11 @@ const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06 
 // Returns { pitchCmd, rollCmd } to be consumed exactly where flightInput.pitch/roll were before (so 'rate' is identical).
 //   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
 //   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
+//               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
+//   'auto'    : same bank-hold as pointer; also adds sin(currentBank)*autoPitchGain to pitchCmd so banking auto-turns.
 function steerCommand(scheme, intent, currentBank, t) {
   const pitchCmd = intent.pitch;
-  if (scheme !== 'pointer') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
+  if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
   const cb = currentBank || 0;
   let rollCmd;
   if (Math.abs(intent.roll) < t.deadzone) {
@@ -29,6 +31,9 @@ function steerCommand(scheme, intent, currentBank, t) {
   } else {
     const targetBank = intent.roll * t.maxBank;
     rollCmd = clamp(t.bankGain * (targetBank - cb) / t.maxBank, -1, 1);  // proportional bank-hold
+  }
+  if (scheme === 'auto') {
+    return { pitchCmd: clamp(pitchCmd + Math.sin(cb) * t.autoPitchGain, -1, 1), rollCmd };
   }
   return { pitchCmd, rollCmd };
 }
@@ -98,6 +103,33 @@ assert.ok(Math.abs(steerCommand('pointer', { pitch: 0, roll: 0 }, undefined, STE
 
 console.log('ok - steerCommand pointer: bank-hold settles, auto-levels in deadzone, clamps, shared pitch authority');
 
+/* ===== 'auto' scheme: bank-hold + auto back-pressure ===== */
+// wings-level (cb=0): sin(0)=0, so pitchCmd === intent.pitch (no spurious back-pressure)
+assert.strictEqual(steerCommand('auto', { pitch: 0, roll: 0 }, 0, STEER).pitchCmd, 0,
+  'auto: wings-level + no pitch intent -> pitchCmd=0');
+assert.strictEqual(steerCommand('auto', { pitch: 0.3, roll: 0 }, 0, STEER).pitchCmd, 0.3,
+  'auto: wings-level + pitch intent -> pitchCmd passes through');
+
+// positive bank (banked right) -> sin(cb)>0 -> pitchCmd > intent.pitch (back-pressure to complete turn)
+const autoBankRight = steerCommand('auto', { pitch: 0, roll: 0.6 }, 0.8, STEER);
+assert.ok(autoBankRight.pitchCmd > 0, 'auto: positive bank -> pitchCmd > 0 (auto back-pressure)');
+
+// negative bank (banked left) -> sin(cb)<0 -> pitchCmd < intent.pitch
+const autoBankLeft = steerCommand('auto', { pitch: 0, roll: -0.6 }, -0.8, STEER);
+assert.ok(autoBankLeft.pitchCmd < 0, 'auto: negative bank -> pitchCmd < 0 (auto back-pressure mirrored)');
+
+// auto pitchCmd is clamped to [-1, 1]
+const autoSat = steerCommand('auto', { pitch: 1, roll: 0 }, Math.PI / 2, STEER);
+assert.ok(autoSat.pitchCmd <= 1, 'auto: pitchCmd clamped at +1');
+
+// rollCmd in 'auto' uses identical bank-hold logic as 'pointer'
+const autoRollBelow = steerCommand('auto', { pitch: 0, roll: rollIntent }, targetBank - 0.5, STEER);
+assert.ok(autoRollBelow.rollCmd > 0, 'auto: bank below target -> positive rollCmd (same as pointer)');
+const autoSettled = steerCommand('auto', { pitch: 0, roll: rollIntent }, targetBank, STEER);
+assert.ok(Math.abs(autoSettled.rollCmd) < 1e-12, 'auto: at target bank rollCmd settles to ~0');
+
+console.log('ok - steerCommand auto: back-pressure proportional to bank, roll identical to pointer');
+
 /* ===== byte-identity guard: mirrored steerCommand must match js/globals.js verbatim =====
    (project convention: test-mirrored functions stay byte-identical with source) */
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'globals.js'), 'utf8');
@@ -121,7 +153,7 @@ function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
 }
 // STEER tunables table must be present in source with the same keys
 assert.ok(/const STEER\s*=/.test(src), 'globals.js defines STEER');
-for (const k of ['maxBank', 'bankGain', 'autoLevelGain', 'deadzone']) {
+for (const k of ['maxBank', 'bankGain', 'autoLevelGain', 'deadzone', 'autoPitchGain']) {
   assert.ok(new RegExp(k + '\\s*:').test(src), 'STEER.' + k + ' present in source');
 }
 
