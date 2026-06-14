@@ -117,6 +117,50 @@ const TODS = [
   { key: 'DUSK', top: 0x1a2150, hor: 0xe08a44, bot: 0x5a3340, fog: 0x2a1a28, sun: 0xffb060, sunI: 3.6, amb: 0.7, hemi: 0.6, rim: 1.1, stars: 0.35, disc: 0xffcf88, sunY: 0.32 },
   { key: 'NIGHT', top: 0x02030f, hor: 0x0c1832, bot: 0x070d1c, fog: 0x05070f, sun: 0x9fb6ff, sunI: 1.7, amb: 0.55, hemi: 0.5, rim: 0.95, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6 },
 ];
+
+/* ---------------- weather (feature #4: weather + TOD gameplay) ---------------- */
+// Live weather modifiers — engine.js applyWeather writes these; combat.js (lock + turbulence),
+// ui.js (radar + HUD chip) and engine.js (fog/sky) read them. Default clear = neutral (no-op).
+let weather = { type: 'clear', radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, turbulence: 0.0, fogMul: 1.0 };
+let weatherT = 0;            // turbulence phase clock, advanced each frame by updateWeather(dt)
+let weatherSeed = 1;         // per-run seed for standalone (non-op) weather rolls; reseeded in startGame
+const FOG_BASE = 0.000058;   // neutral FogExp2 density; weather.fogMul scales from this (matches scene init)
+// === MIRROR START (globals.js weather core) ===
+const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
+const WEATHER = {
+  clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
+  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.05, fogMul: 3.0 },
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.35, fogMul: 1.6 },
+};
+// PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
+// factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
+function resolveWeather(type, tod) {
+  const w = WEATHER[type] || WEATHER.clear;
+  const night = (tod === 2) ? NIGHT_RADAR_MUL : 1;
+  return {
+    type: WEATHER[type] ? type : 'clear',
+    radarMul: w.radarMul * night,
+    lockRangeMul: w.lockRangeMul,
+    lockSpeedMul: w.lockSpeedMul,
+    turbulence: w.turbulence,
+    fogMul: w.fogMul,
+  };
+}
+// PURE — bounded (|x| <= amp), smooth, exactly zero-mean-over-2π attitude wobble. Two
+// commensurate sines (1 + 2 cycles over [0,2π]) so the integral over a full cycle is exactly 0.
+function turbSample(t, amp) {
+  return amp * (0.6 * Math.sin(t) + 0.4 * Math.sin(2 * t + 1.3));
+}
+// PURE — deterministic standalone-play weather roll, weighted toward clear (hash -> [0,1)).
+function rollWeather(seed) {
+  let x = (seed | 0) ^ 0x9e3779b9;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = (x ^ (x >>> 16)) >>> 0;
+  const r = x / 4294967296;
+  return r < 0.6 ? 'clear' : r < 0.8 ? 'fog' : 'storm';
+}
+// === MIRROR END ===
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';

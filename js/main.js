@@ -11,8 +11,10 @@ function nextWave() {
   if (opMode && opSector) {
     const plan = sectorPlan(opSector, wave);
     strikeWaveActive = plan.ground;
+    applyWeather(plan.weather); applyTimeOfDay(plan.tod);   // sector condition: gameplay modifiers + sky/fog visuals + fresh env
     startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset
-    showBanner(plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) }));
+    const sectorLine = plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) });
+    const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);   // intro line names the condition
     for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
     for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
     for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
@@ -23,6 +25,7 @@ function nextWave() {
     else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     return;
   }
+  applyWeather(rollWeather(weatherSeed + wave));   // standalone play: deterministic per-run weather, weighted toward clear
   if (strike) {
     showBanner(t('banner.strikeWave'));
     queueStrikeSite(wave);
@@ -650,6 +653,7 @@ function animate() {
   } else if (state === 'playing') {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
     readFlightInput();   // compose touch/motion into flightInput before the player update consumes it
+    updateWeather(dt * ts);   // advance turbulence phase + storm lightning before the player update reads it
     updatePlayer(dt);
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
     updateWingmen(dt * ts);

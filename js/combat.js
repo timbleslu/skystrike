@@ -656,10 +656,10 @@ function updateLockOn(dt) {
   const to = t4.copy(tgt.group.position).sub(player.group.position);
   const dist = to.length(); to.multiplyScalar(1 / Math.max(dist, 0.001));
   const aligned = fwd.dot(to);
-  const acquiring = aligned > 0.92 && dist < 5200 && !tgt.isInCloud;
+  const acquiring = aligned > 0.92 && dist < 5200 * (weather.lockRangeMul || 1) && !tgt.isInCloud;   // weather cuts lock acquisition range
   if (acquiring) {
     const prev = player.lockProgress;
-    player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1)));
+    player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1)));   // weather slows lock-on
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
     if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lock(); audio.blip(1850, 0.14, 'sine', 0.13); haptic([18, 40, 18]); }
@@ -822,6 +822,12 @@ function updatePlayer(dt) {
   // flightInput uses point-to-fly signs (+pitch=climb, +roll=bank right); convert to engine signs here.
   pitchIn = clamp(pitchIn - flightInput.pitch, -1, 1);   // +flightInput.pitch (climb) -> -pitchIn (nose up, = W)
   rollIn = clamp(rollIn - flightInput.roll, -1, 1);      // +flightInput.roll (bank right) -> -rollIn (= E)
+
+  // weather turbulence: a small, smooth, ~zero-mean attitude wobble (storm/fog), added on top then re-clamped
+  if (weather.turbulence > 0) {
+    pitchIn = clamp(pitchIn + turbSample(weatherT * 1.7, weather.turbulence), -1, 1);
+    rollIn  = clamp(rollIn  + turbSample(weatherT * 2.3 + 11, weather.turbulence), -1, 1);
+  }
 
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;

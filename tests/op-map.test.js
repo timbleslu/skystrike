@@ -28,15 +28,16 @@ function sectorMission(type) {
   if (type === 'DEPOT') return 'none';
   return 'boss';   // FINAL
 }
-// Each plan carries the legacy spawn fields PLUS a `mission` descriptor and a reserved
-// `weather` slot (null here; feature #4 weather reads/sets it per sector).
+// Each plan carries the legacy spawn fields PLUS a `mission` descriptor and the feature #4
+// `weather` + `tod` slots — the tactical condition for the sector (applied in main.js nextWave
+// via applyWeather/applyTimeOfDay). tod: 0 day · 1 dusk · 2 night. Deterministic per sector type.
 function sectorPlan(type, wave) {
-  if (type === 'FURBALL')   return { fighters: Math.min(4 + (wave >> 1), 10), aces: wave >= 6 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, mission: 'sweep', weather: null };
-  if (type === 'INTERCEPT') return { fighters: 3, aces: 0, bombers: wave >= 8 ? 4 : 3, ground: false, boss: false, rival: false, depot: false, mission: 'intercept', weather: null };
-  if (type === 'STRIKE')    return { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, mission: 'strike', weather: null };
-  if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, mission: 'elite', weather: null };
-  if (type === 'DEPOT')     return { fighters: 0, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: true, mission: 'none', weather: null };
-  return { fighters: 4, aces: 2, bombers: 0, ground: false, boss: true, rival: false, depot: false, mission: 'boss', weather: null };   // FINAL
+  if (type === 'FURBALL')   return { fighters: Math.min(4 + (wave >> 1), 10), aces: wave >= 6 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, mission: 'sweep', weather: 'clear', tod: 0 };
+  if (type === 'INTERCEPT') return { fighters: 3, aces: 0, bombers: wave >= 8 ? 4 : 3, ground: false, boss: false, rival: false, depot: false, mission: 'intercept', weather: 'fog', tod: 1 };
+  if (type === 'STRIKE')    return { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, mission: 'strike', weather: 'storm', tod: 0 };
+  if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, mission: 'elite', weather: 'fog', tod: 2 };
+  if (type === 'DEPOT')     return { fighters: 0, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: true, mission: 'none', weather: 'clear', tod: 1 };
+  return { fighters: 4, aces: 2, bombers: 0, ground: false, boss: true, rival: false, depot: false, mission: 'boss', weather: 'storm', tod: 2 };   // FINAL
 }
 
 // deterministic rng
@@ -65,10 +66,18 @@ assert.strictEqual(sectorPlan('STRIKE', 3).mission, 'strike');
 assert.strictEqual(sectorPlan('ELITE', 3).mission, 'elite');
 assert.strictEqual(sectorPlan('DEPOT', 3).mission, 'none');
 assert.strictEqual(sectorPlan('FINAL', 3).mission, 'boss');
+// ---- feature #4 weather + TOD slots: every plan carries a known condition + a valid TOD index ----
+const WEATHER_KEYS = ['clear', 'fog', 'storm'];
 ['FURBALL', 'INTERCEPT', 'STRIKE', 'ELITE', 'DEPOT', 'FINAL'].forEach(function (ty) {
-  assert.ok('weather' in sectorPlan(ty, 5), 'every plan carries a weather slot (' + ty + ')');
-  assert.strictEqual(sectorPlan(ty, 5).weather, null, 'weather slot defaults to null (' + ty + ')');
-  assert.strictEqual(sectorMission(ty), sectorPlan(ty, 5).mission, 'sectorMission matches plan.mission (' + ty + ')');
+  const p = sectorPlan(ty, 5);
+  assert.ok('weather' in p, 'every plan carries a weather slot (' + ty + ')');
+  assert.ok(WEATHER_KEYS.indexOf(p.weather) !== -1, 'weather is a known condition (' + ty + ')');
+  assert.ok(p.tod >= 0 && p.tod <= 2, 'tod is a valid TOD index 0..2 (' + ty + ')');
+  assert.strictEqual(sectorMission(ty), p.mission, 'sectorMission matches plan.mission (' + ty + ')');
 });
+// the climactic FINAL sector flies a night storm; plain dogfights stay clear daylight
+assert.strictEqual(sectorPlan('FINAL', 13).weather, 'storm', 'FINAL is a storm');
+assert.strictEqual(sectorPlan('FINAL', 13).tod, 2, 'FINAL is at night');
+assert.strictEqual(sectorPlan('FURBALL', 3).weather, 'clear', 'FURBALL stays clear');
 
 console.log('ok - operation map generation and sector plans');

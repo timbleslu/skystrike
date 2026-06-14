@@ -97,7 +97,7 @@ function initThree() {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x070d18);
-  scene.fog = new THREE.FogExp2(0x0a1424, 0.000058);
+  scene.fog = new THREE.FogExp2(0x0a1424, FOG_BASE);
 
   camera = new THREE.PerspectiveCamera(72, W / H, 1, 40000);
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
@@ -424,7 +424,52 @@ function applyTimeOfDay(tod) {
   const f = 1 - T.stars * 0.8;
   if (haloA) { haloA.position.copy(sun.position).setLength(17000); haloA.material.opacity = 0.6 * f; }
   if (haloB) { haloB.position.copy(sun.position).setLength(17000); haloB.material.opacity = 0.32 * f; }
-  buildEnvMap();
+  applyWeather(weather.type);   // re-apply the weather overlay on the new TOD baseline (also refreshes the night radar factor)
+  buildEnvMap();                // env captures the (possibly storm-dimmed) sky
+}
+
+/* Apply a weather condition: copy its modifiers into `weather` (folding the night radar factor
+   via resolveWeather) and drive the visuals through the existing TOD/fog/cloud pipeline. Sibling
+   of applyTimeOfDay; reads the current timeOfDay. IDEMPOTENT — visuals are recomputed from the
+   TOD baseline each call (no accumulation). Does NOT rebuild the env map: pair with applyTimeOfDay
+   when a fresh sky env is wanted (e.g. sector start). */
+function applyWeather(type) {
+  const m = resolveWeather(type, timeOfDay);
+  weather.type = m.type;
+  weather.radarMul = m.radarMul;
+  weather.lockRangeMul = m.lockRangeMul;
+  weather.lockSpeedMul = m.lockSpeedMul;
+  weather.turbulence = m.turbulence;
+  weather.fogMul = m.fogMul;
+  const T = TODS[timeOfDay];
+  const storm = weather.type === 'storm';
+  if (scene && scene.fog) {
+    scene.fog.density = FOG_BASE * weather.fogMul;
+    const fc = new THREE.Color(T.fog);
+    if (storm) fc.lerp(new THREE.Color(0x23262c), 0.55);   // desaturated slate overcast
+    scene.fog.color.copy(fc);
+    if (scene.background && scene.background.copy) scene.background.copy(fc);
+  }
+  if (skyMat) skyMat.uniforms.scatter.value = (1.15 - T.stars * 0.8) * (storm ? 0.5 : 1);
+  retintClouds(T);   // reset every puff to the TOD baseline...
+  if (storm) {        // ...then darken + desaturate them into a low overcast
+    const grey = new THREE.Color(0x3a3f47);
+    for (let i = 0; i < clouds.length; i++) {
+      const kids = clouds[i].children;
+      for (let k = 0; k < kids.length; k++) kids[k].material.color.lerp(grey, 0.5).multiplyScalar(0.8);
+    }
+  }
+}
+
+let _lightT = 5;   // seconds until the next storm lightning flash
+/* Per-frame weather tick: advance the turbulence phase clock (read by combat.js) and fire the
+   occasional storm lightning flash (reuses the empFlash screen-flash channel). */
+function updateWeather(dt) {
+  weatherT += dt;
+  if (weather.type === 'storm') {
+    _lightT -= dt;
+    if (_lightT <= 0) { empFlash = Math.max(empFlash, 0.22); _lightT = 3.5 + Math.random() * 6.5; }
+  }
 }
 
 /* Keep the sun rig centred on the action each frame: the shadow frustum tracks the

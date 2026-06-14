@@ -139,6 +139,32 @@ function drawGunPipper(ctx, e) {
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
 
+// Localized active-condition label (incl. night), or '' for plain daylight-clear (nothing to flag).
+function weatherLabel() {
+  const night = (typeof timeOfDay !== 'undefined') && timeOfDay === 2;
+  const wt = (typeof weather !== 'undefined' && weather) ? weather.type : 'clear';
+  if (wt === 'clear' && !night) return '';
+  let s = wt !== 'clear' ? t('weather.' + wt) : '';
+  if (night) s = s ? (s + ' · ' + t('weather.night')) : t('weather.night');
+  return s;
+}
+// HUD weather chip (top-left): names the active condition; storm tints blue-grey, else teal.
+function drawWeatherChip(ctx) {
+  const label = weatherLabel();
+  if (!label) return;
+  const storm = (typeof weather !== 'undefined' && weather) ? weather.type === 'storm' : false;
+  ctx.save();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = 'bold 13px ' + HUDFONT;
+  const padX = 9, x = 16, y = 86, h = 23, w = ctx.measureText(label).width + padX * 2;
+  ctx.fillStyle = storm ? 'rgba(120,140,200,0.16)' : 'rgba(25,240,212,0.10)';
+  ctx.fillRect(x, y, w, h);
+  ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(25,240,212,0.5)';
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = storm ? 'rgba(205,215,255,0.95)' : 'rgba(150,255,235,0.95)';
+  ctx.fillText(label, x + padX, y + 6);
+  ctx.restore();
+}
 function drawHUD() {
   const ctx = h2d, cx = W / 2, cy = H / 2;
   ctx.clearRect(0, 0, W, H);
@@ -173,6 +199,8 @@ function drawHUD() {
     ctx.fillText(line, cx, 14);
     ctx.textBaseline = 'middle';
   }
+
+  drawWeatherChip(ctx);   // active condition (storm / fog / night) top-left
 
   // lead-computing gunsight for the nearest forward gun target
   if (gunLead && !player.noCannon) drawGunPipper(ctx, pickGunTarget());
@@ -421,6 +449,9 @@ function drawRadar() {
   const fx = fwd.x, fz = fwd.z, fl = Math.hypot(fx, fz) || 1;
   const Fx = fx / fl, Fz = fz / fl, Rx = -Fz, Rz = Fx;
   const range = 6500;
+  // weather + night shorten radar detection: contacts beyond detR drop off the scope entirely
+  const detR = 6500 * ((typeof weather !== 'undefined' && weather) ? (weather.radarMul || 1) : 1);
+  const detR2 = detR * detR;
 
   // forward FOV wedge
   ctx.fillStyle = 'rgba(25,240,212,0.07)';
@@ -458,6 +489,8 @@ function drawRadar() {
   }
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive || e.isInCloud) continue;
+    const rdx = e.group.position.x - player.group.position.x, rdz = e.group.position.z - player.group.position.z;
+    if (detR < 6500 && rdx * rdx + rdz * rdz > detR2) continue;   // weather/night only: drop contacts beyond the reduced detection range (clear day = unchanged)
     const lk = player.lockedTarget === e;
     if (e.type === 'boss') plot(e.group.position, 255, 69, 200, 5, false, lk);
     else if (e.type === 'bomber') plot(e.group.position, 255, 176, 96, 5, false, lk);
@@ -1063,6 +1096,8 @@ function startGame(i) {
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
   opMap = null; opStage = 0; opSector = null; mission = null;
+  weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;   // fresh per-run weather seed (standalone rolls derive from it)
+  if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
