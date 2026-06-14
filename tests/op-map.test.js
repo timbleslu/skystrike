@@ -2,29 +2,32 @@
 const assert = require('assert');
 
 // ---- mirrors of js/opmap.js pure helpers ----
-function genOpMap(groundOn, rng) {
-  rng = rng || Math.random;
-  const pool = ['FURBALL', 'INTERCEPT', 'ELITE'].concat(groundOn ? ['STRIKE'] : []);
-  const pick = () => pool[(rng() * pool.length) | 0];
-  const stages = [];
-  stages.push([pick(), pick()]);
-  for (let s = 0; s < 4; s++) {
-    const n = 2 + ((rng() * 2) | 0);
-    const arr = []; for (let i = 0; i < n; i++) arr.push(pick());
-    stages.push(arr);
-  }
-  const depotStage = 1 + ((rng() * 3) | 0);          // stages[1..3]
-  stages[depotStage][(rng() * stages[depotStage].length) | 0] = 'DEPOT';
-  stages.push(['FINAL']);
-  return stages;
+// Fixed campaign progression — the same hand-authored map every run (no longer random).
+// Each stage offers a choice of sectors; the player picks one per column, left to right.
+// All five mission types (sweep/intercept/escort/defend/strike) appear as labelled sectors,
+// a mid-campaign DEPOT gives a resupply breather, and FINAL caps the operation with the boss.
+// STRIKE needs the ground war; when it's off those sectors fall back to an air INTERCEPT.
+function genOpMap(groundOn) {
+  const strike = groundOn ? 'STRIKE' : 'INTERCEPT';
+  return [
+    ['FURBALL', 'INTERCEPT'],
+    [strike, 'ESCORT'],
+    ['DEFEND', 'FURBALL'],
+    ['DEPOT', 'INTERCEPT'],
+    ['ESCORT', strike],
+    ['ELITE', 'DEFEND'],
+    ['FINAL'],
+  ];
 }
 // sector type -> mission type for the typed-mission layer (missions.js). Pure + deterministic.
-// ELITE carries an 'elite' descriptor here; startMission rolls it to escort/defend at launch.
+// ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
 function sectorMission(type) {
   if (type === 'FURBALL') return 'sweep';
   if (type === 'INTERCEPT') return 'intercept';
   if (type === 'STRIKE') return 'strike';
-  if (type === 'ELITE') return 'elite';
+  if (type === 'ESCORT') return 'escort';
+  if (type === 'DEFEND') return 'defend';
+  if (type === 'ELITE') return 'none';
   if (type === 'DEPOT') return 'none';
   return 'boss';   // FINAL
 }
@@ -35,40 +38,53 @@ function sectorPlan(type, wave) {
   if (type === 'FURBALL')   return { fighters: Math.min(4 + (wave >> 1), 10), aces: wave >= 6 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, mission: 'sweep', weather: 'clear', tod: 0 };
   if (type === 'INTERCEPT') return { fighters: 3, aces: 0, bombers: wave >= 8 ? 4 : 3, ground: false, boss: false, rival: false, depot: false, mission: 'intercept', weather: 'fog', tod: 1 };
   if (type === 'STRIKE')    return { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, mission: 'strike', weather: 'storm', tod: 0 };
-  if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, mission: 'elite', weather: 'fog', tod: 2 };
+  if (type === 'ESCORT')    return { fighters: 3, aces: wave >= 8 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, mission: 'escort', weather: 'clear', tod: 0 };
+  if (type === 'DEFEND')    return { fighters: 3, aces: 0, bombers: wave >= 8 ? 2 : 1, ground: false, boss: false, rival: false, depot: false, mission: 'defend', weather: 'storm', tod: 1 };
+  if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, mission: 'none', weather: 'fog', tod: 2 };
   if (type === 'DEPOT')     return { fighters: 0, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: true, mission: 'none', weather: 'clear', tod: 1 };
   return { fighters: 4, aces: 2, bombers: 0, ground: false, boss: true, rival: false, depot: false, mission: 'boss', weather: 'storm', tod: 2 };   // FINAL
 }
 
-// deterministic rng
-function seqRng(vals) { let i = 0; return () => vals[i++ % vals.length]; }
+// flatten helper (avoid Array.prototype.flat for older Node)
+function flatten(stages) { return stages.reduce(function (a, st) { return a.concat(st); }, []); }
 
-const m = genOpMap(true, seqRng([0.1, 0.4, 0.7, 0.2, 0.9, 0.3, 0.6, 0.5, 0.8, 0.05, 0.45, 0.95, 0.25, 0.65, 0.15]));
-assert.strictEqual(m.length, 6, '5 stages + FINAL');
-assert.strictEqual(m[0].length, 2, 'stage 1 offers 2');
-assert.deepStrictEqual(m[5], ['FINAL'], 'last stage is FINAL only');
-let depots = 0; m.forEach(st => st.forEach(s => { if (s === 'DEPOT') depots++; }));
+// ---- the campaign is hand-authored, fixed, and identical on every call ----
+const m = genOpMap(true);
+assert.strictEqual(m.length, 7, '6 sector stages + FINAL');
+assert.strictEqual(m[0].length, 2, 'stage 1 offers a choice of 2');
+assert.deepStrictEqual(m[6], ['FINAL'], 'last stage is FINAL only');
+assert.deepStrictEqual(genOpMap(true), genOpMap(true), 'campaign is fixed (deterministic, not random)');
+
+// every sector type that surfaces a mission type appears somewhere on the map
+const flat = flatten(m);
+['FURBALL', 'INTERCEPT', 'ESCORT', 'DEFEND', 'STRIKE', 'ELITE', 'DEPOT', 'FINAL'].forEach(function (ty) {
+  assert.ok(flat.indexOf(ty) !== -1, 'campaign includes a ' + ty + ' sector');
+});
+let depots = 0; flat.forEach(function (s) { if (s === 'DEPOT') depots++; });
 assert.strictEqual(depots, 1, 'exactly one DEPOT');
-assert.ok(!m[0].includes('DEPOT') && !m[4].includes('DEPOT'), 'DEPOT only in stages 2-4');
 
-const m2 = genOpMap(false, seqRng([0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99]));
-m2.forEach(st => st.forEach(s => assert.notStrictEqual(s, 'STRIKE', 'no STRIKE sectors when ground war off')));
+// ground war off: STRIKE sectors fall back to air, but escort/defend objectives still appear
+const flat2 = flatten(genOpMap(false));
+assert.strictEqual(flat2.indexOf('STRIKE'), -1, 'no STRIKE sectors when ground war off');
+assert.ok(flat2.indexOf('ESCORT') !== -1 && flat2.indexOf('DEFEND') !== -1, 'escort/defend present even with ground war off');
 
 assert.strictEqual(sectorPlan('ELITE', 7).rival, true);
 assert.strictEqual(sectorPlan('FURBALL', 12).fighters, 10, 'fighter count caps at 10');
 assert.strictEqual(sectorPlan('DEPOT', 5).depot, true);
 assert.strictEqual(sectorPlan('FINAL', 13).boss, true);
 
-// ---- mission descriptor + reserved weather slot on every plan (feature #3 / #4 seam) ----
+// ---- mission descriptor on every plan (feature #3 seam) ----
 assert.strictEqual(sectorPlan('FURBALL', 3).mission, 'sweep');
 assert.strictEqual(sectorPlan('INTERCEPT', 3).mission, 'intercept');
 assert.strictEqual(sectorPlan('STRIKE', 3).mission, 'strike');
-assert.strictEqual(sectorPlan('ELITE', 3).mission, 'elite');
+assert.strictEqual(sectorPlan('ESCORT', 3).mission, 'escort');
+assert.strictEqual(sectorPlan('DEFEND', 3).mission, 'defend');
+assert.strictEqual(sectorPlan('ELITE', 3).mission, 'none');
 assert.strictEqual(sectorPlan('DEPOT', 3).mission, 'none');
 assert.strictEqual(sectorPlan('FINAL', 3).mission, 'boss');
 // ---- feature #4 weather + TOD slots: every plan carries a known condition + a valid TOD index ----
 const WEATHER_KEYS = ['clear', 'fog', 'storm'];
-['FURBALL', 'INTERCEPT', 'STRIKE', 'ELITE', 'DEPOT', 'FINAL'].forEach(function (ty) {
+['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE', 'DEPOT', 'FINAL'].forEach(function (ty) {
   const p = sectorPlan(ty, 5);
   assert.ok('weather' in p, 'every plan carries a weather slot (' + ty + ')');
   assert.ok(WEATHER_KEYS.indexOf(p.weather) !== -1, 'weather is a known condition (' + ty + ')');

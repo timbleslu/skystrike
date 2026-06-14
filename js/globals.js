@@ -198,6 +198,7 @@ let invertPitch = false;          // false = push-up/tilt-forward climbs (point-
 let haptics = true;               // vibration feedback where supported
 let buttonOpacity = 0.8;          // 0.4–1.0 on-screen touch button opacity
 let buttonLayout = 'right';       // 'right' | 'left' | 'compact' — touch button preset layout
+let hudScale = 1.0;               // HUD/readout size multiplier (Settings → HUD size dropdown; 0.8–1.3)
 let choosingUpgrade = false; // true while the between-wave field-upgrade screen is open
 let difficulty = 1;
 const DIFFS = [

@@ -132,6 +132,7 @@ function initTouchControls() {
 
   // Floating joystick: a touch on the LEFT half spawns the base under the thumb.
   function joyStart(e) {
+    if (state !== 'playing' || paused) return;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const tch = e.changedTouches[i];
       if (tch.clientX < half && !joyActive) {

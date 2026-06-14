@@ -880,6 +880,17 @@ function buildHangar() {
   const sip = g('setInvertPitch'); if (sip) { sip.checked = invertPitch; sip.addEventListener('change', () => { invertPitch = sip.checked; saveSettings(); }); }
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
   const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
+  const shs = g('setHudScale');
+  if (shs) {
+    shs.value = String(hudScale);
+    shs.addEventListener('change', () => {
+      hudScale = Math.max(0.6, Math.min(1.6, parseFloat(shs.value) || 1));
+      applyHudScale();
+      if (audio.on) audio.ui();
+      saveSettings();
+    });
+  }
+  applyHudScale();
   const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); if (audio.on) audio.ui(); });
   const srec = g('setRecenter'); if (srec) srec.addEventListener('click', () => { if (typeof recenterMotion === 'function') recenterMotion(); if (audio.on) audio.ui(); });
   syncControlSettingsUI();
@@ -1179,6 +1190,7 @@ function loadSettings() {
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
+    if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
     if (typeof s.invertPitch === 'boolean') invertPitch = s.invertPitch;
@@ -1269,6 +1281,14 @@ function applyLang() {
   setTxt('lblMotion', t('set.motionSensor')); setTxt('lblInvertPitch', t('set.invertPitch'));
   setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
   setTxt('lblBtnLayout', t('set.btnLayout'));
+  setTxt('lblHudScale', t('set.hudScale'));
+  const shs2 = g('setHudScale');
+  if (shs2 && shs2.options.length >= 4) {
+    shs2.options[0].textContent = t('set.hudSmall');
+    shs2.options[1].textContent = t('set.hudNormal');
+    shs2.options[2].textContent = t('set.hudLarge');
+    shs2.options[3].textContent = t('set.hudXl');
+  }
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
   segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
@@ -1297,8 +1317,8 @@ function applyLang() {
   if (g('meta') && g('meta').classList.contains('show')) renderMetaScreen();
 }
 function applyOpLegend() {
-  const map = { FURBALL: 'op.legFurball', INTERCEPT: 'op.legIntercept', STRIKE: 'op.legStrike', ELITE: 'op.legElite', DEPOT: 'op.legDepot', FINAL: 'op.legFinal' };
-  const order = ['FURBALL', 'INTERCEPT', 'STRIKE', 'ELITE', 'DEPOT', 'FINAL'];
+  const map = { FURBALL: 'op.legFurball', INTERCEPT: 'op.legIntercept', STRIKE: 'op.legStrike', ESCORT: 'op.legEscort', DEFEND: 'op.legDefend', ELITE: 'op.legElite', DEPOT: 'op.legDepot', FINAL: 'op.legFinal' };
+  const order = ['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE', 'DEPOT', 'FINAL'];
   const leg = document.querySelector('#opmap .op-legend');
   if (!leg) return;
   leg.innerHTML = order.map(k => '<span><b>' + t('op.' + k) + '</b> ' + t(map[k]) + '</span>').join('');
@@ -1348,11 +1368,15 @@ function enableMotionFlow() {
     syncControlSettingsUI(); saveSettings();
   });
 }
+function applyHudScale() {
+  const h = g('hud');
+  if (h) h.style.setProperty('--hud-scale', String(hudScale));
+}
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
-      lang: LANG, controlSensitivity,
+      lang: LANG, controlSensitivity, hudScale,
       mobileControl, motionAggression, invertPitch, haptics, buttonOpacity, buttonLayout
     }));
   } catch (e) {}
