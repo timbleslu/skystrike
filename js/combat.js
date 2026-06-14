@@ -536,6 +536,7 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
     if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.8;
   }
   if (e.hp <= 0) killEnemy(e, byPlayer, byCCA);
+  else if (byPlayer) haptic(6);   // light buzz on landing a non-fatal hit (kills buzz via killEnemy)
 }
 function tpBaseFor(e) {
   return e.type === 'boss' ? TP.boss : e.type === 'bomber' ? TP.bomber : e.elite ? TP.ace
