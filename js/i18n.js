@@ -149,6 +149,13 @@ const I18N = {
     'grade.title': 'MISSION RATING',
     'grade.bonus': 'SP BONUS',
 
+    /* ---- star objectives ---- */
+    'stars.title': 'OBJECTIVES',
+    'stars.best': 'BEST {n}/3',
+    'stars.obj.kills': 'CLEAR 60% OF FOES',
+    'stars.obj.noDamage': 'A FULL WAVE, NO DAMAGE',
+    'stars.obj.rescue': 'COMPLETE AN OBJECTIVE',
+
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
     'tech.researchPoints': 'RESEARCH POINTS',
@@ -441,6 +448,13 @@ const I18N = {
 
     'grade.title': '任务评级',
     'grade.bonus': 'SP 奖励',
+
+    /* ---- star objectives ---- */
+    'stars.title': '目标',
+    'stars.best': '最佳 {n}/3',
+    'stars.obj.kills': '消灭 60% 的敌人',
+    'stars.obj.noDamage': '一整波无伤通过',
+    'stars.obj.rescue': '完成一个任务目标',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',

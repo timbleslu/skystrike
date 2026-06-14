@@ -276,6 +276,10 @@ canvas{display:block}
 .grade-title{font-family:var(--disp);font-size:9px;letter-spacing:3px;color:var(--dim);text-transform:uppercase}
 .grade-letter{font-family:var(--disp);font-weight:900;font-size:clamp(56px,10vw,96px);line-height:1;letter-spacing:6px;color:var(--cy);text-shadow:0 0 40px rgba(25,240,212,.7)}
 .grade-bonus{font-family:var(--disp);font-size:12px;letter-spacing:4px;color:var(--yel)}
+.gostars{display:flex;flex-direction:column;align-items:center;margin:6px 0 10px;gap:3px}
+.stars-title{font-family:var(--disp);font-size:9px;letter-spacing:3px;color:var(--dim);text-transform:uppercase}
+.stars-pips{font-size:clamp(22px,4vw,32px);line-height:1;letter-spacing:6px;color:var(--yel);text-shadow:0 0 24px rgba(255,210,80,.6)}
+.stars-note{font-family:var(--disp);font-size:11px;letter-spacing:3px;color:var(--dim)}
 .gospbox{font-family:var(--disp);letter-spacing:3px;font-size:14px;margin:10px 0 22px;color:var(--dim)}
 .gospbox b{color:var(--cy);font-size:22px;margin:0 6px}
 .gospsep{margin:0 4px;color:var(--dim)}

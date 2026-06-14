@@ -144,6 +144,33 @@ function drawGunPipper(ctx, e) {
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
 
+// Small secondary-objective (star) checklist on the HUD: three live conditions, each ★ when met.
+// Mirrors evalStars' conditions (kill efficiency / no-damage wave / objectives) against the live run.
+function drawStarObjectives(ctx, cx) {
+  if (typeof run === 'undefined' || !run) return;
+  const waves = Math.max(1, wave || 1);
+  const killsMet = ((run.kills || 0) + (run.ground || 0) + (run.boss || 0)) / (waves * 4) >= 0.6;
+  const cleanMet = (run.cleanWaves || 0) >= 1;
+  const rescMet = (run.missions || 0) >= 1;
+  const items = [
+    [killsMet, t('stars.obj.kills')],
+    [cleanMet, t('stars.obj.noDamage')],
+    [rescMet, t('stars.obj.rescue')],
+  ];
+  ctx.save();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = '11px ' + HUDFONT;
+  let y = 40;
+  for (let i = 0; i < items.length; i++) {
+    const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = met ? 'rgba(255,210,80,0.95)' : 'rgba(150,170,190,0.7)';
+    ctx.fillText(label, cx - w / 2, y);
+    y += 15;
+  }
+  ctx.restore();
+}
+
 // Localized active-condition label (incl. night), or '' for plain daylight-clear (nothing to flag).
 function weatherLabel() {
   const night = (typeof timeOfDay !== 'undefined') && timeOfDay === 2;
@@ -205,6 +232,7 @@ function drawHUD() {
     ctx.textBaseline = 'middle';
   }
 
+  drawStarObjectives(ctx, cx);   // small secondary-objective (star) checklist, top-centre
   drawWeatherChip(ctx);   // active condition (storm / fog / night) top-left
 
   // lead-computing gunsight for the nearest forward gun target
@@ -1122,7 +1150,8 @@ function startGame(i) {
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0 };
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, cleanWaves: 0 };
+  noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   state = 'playing';
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
@@ -1164,6 +1193,15 @@ function endRun(title) {
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
   // render grade letter + bonus
   const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
+  // ---- star objectives: compute this run's stars, fold into the per-jet best, render on #gameover ----
+  const stars = evalStars(run, player);
+  const jetId = (player && player.jet && player.jet.id) || null;
+  const best = bestStars(meta, jetId, stars); saveMeta();   // meta.stars[jet] now holds the lifetime best
+  const sd = g('go_stars');
+  if (sd) {
+    const pips = sd.querySelector('.stars-pips'); if (pips) pips.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    const note = sd.querySelector('.stars-note'); if (note) note.textContent = stars + ' / 3  ·  ' + tf('stars.best', { n: best });
+  }
   if (achRes.unlocked.length) showBanner(tf('banner.achUnlocked', { n: achRes.unlocked.length }));
   updateBest();
   g('touchControls').classList.remove('show');
@@ -1247,6 +1285,7 @@ function applyLang() {
   setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
   setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
   setTxt('goLblGrade', t('grade.title'));
+  setTxt('goLblStars', t('stars.title'));
   setTxt('redeploy', t('go.redeploy'));
   // meta-progression screen labels
   setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));

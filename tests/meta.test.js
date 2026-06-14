@@ -83,12 +83,13 @@ const ACHIEVEMENTS = [
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {} };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
     m.jets && typeof m.jets === 'object' && m.skins && typeof m.skins === 'object' &&
-    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
+    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object' &&
+    m.stars && typeof m.stars === 'object');
 }
 function loadMeta() {
   try {
@@ -333,7 +334,7 @@ assert.strictEqual(meta.sp, 777, 'SP persisted across load');
 assert.strictEqual(meta.perks.hull, 3, 'perk level persisted');
 assert.strictEqual(meta.jets['J-20'], true, 'unlocked jet persisted');
 // starter jets always re-added even if a save omits one
-_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} });
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {}, stars: {} });
 loadMeta();
 assert.strictEqual(meta.jets['FT-1'], true, 'starter jets re-seeded on load');
 console.log('ok - validMeta rejects malformed blobs; persistence round-trips; starters re-seeded');

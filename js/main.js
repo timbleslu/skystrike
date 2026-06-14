@@ -5,6 +5,7 @@ function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
 function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
 function nextWave() {
   wave++;
+  noDamageWave = true;   // arm the per-wave no-damage star tracker; damagePlayer clears it on a hit
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
@@ -587,6 +588,7 @@ function handleWaves(dt) {
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
     // a mission sector stays open until its objective resolves (escort exit / defend hold / etc.)
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0 && !(mission && mission.status === 'active')) {
+      if (noDamageWave) run.cleanWaves = (run.cleanWaves || 0) + 1;   // cleared a full wave untouched → no-damage star progress
       betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
       if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       openTechScreen();   // open the R&D tech tree before the next wave
