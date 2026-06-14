@@ -216,6 +216,20 @@ const I18N = {
     'set.gunLead': 'Lead-computing gunsight (deflection pipper)',
     'set.mute': 'Mute all audio',
     'set.langEN': 'English', 'set.langZH': '简体中文',
+    /* ---- mobile control settings ---- */
+    'set.mobileControl': 'Mobile control',
+    'set.mcTouch': 'Touch', 'set.mcMotion': 'Motion',
+    'set.aggression': 'Tilt aggression',
+    'set.agCasual': 'Casual', 'set.agBalanced': 'Balanced', 'set.agDirect': 'Direct',
+    'set.motionSensor': 'Motion sensor',
+    'set.enableMotion': 'Enable Motion', 'set.recenter': 'Recenter',
+    'set.invertPitch': 'Invert pitch (push down = climb)',
+    'set.haptics': 'Haptic feedback (vibration)',
+    'set.btnOpacity': 'Button opacity',
+    'set.btnLayout': 'Button layout',
+    'set.blRight': 'Right', 'set.blLeft': 'Left', 'set.blCompact': 'Compact',
+    'set.motionDenied': 'Motion permission denied — using Touch controls.',
+    'set.motionUnsupported': 'Motion sensor unavailable — using Touch controls.',
 
     /* ---- manual body (HTML) ---- */
     'manBody.flight': '<li><b>W</b> / <b>S</b> — pitch down / up</li><li><b>Q</b> / <b>E</b> — roll left / right</li><li><b>A</b> / <b>D</b> — yaw (rudder)</li><li><b>SHIFT</b> / <b>CTRL</b> — throttle up / brake</li><li><b>CTRL + S</b> — high-G turn (tighter pitch, bleeds speed)</li>',
@@ -405,6 +419,20 @@ const I18N = {
     'set.gunLead': '提前量瞄准镜（偏置瞄准点）',
     'set.mute': '静音所有音频',
     'set.langEN': 'English', 'set.langZH': '简体中文',
+    /* ---- mobile control settings ---- */
+    'set.mobileControl': '移动端操控',
+    'set.mcTouch': '触屏', 'set.mcMotion': '体感',
+    'set.aggression': '体感灵敏度',
+    'set.agCasual': '休闲', 'set.agBalanced': '均衡', 'set.agDirect': '直接',
+    'set.motionSensor': '运动传感器',
+    'set.enableMotion': '启用体感', 'set.recenter': '重置中心',
+    'set.invertPitch': '反转俯仰（下压 = 拉升）',
+    'set.haptics': '触觉反馈（振动）',
+    'set.btnOpacity': '按钮不透明度',
+    'set.btnLayout': '按钮布局',
+    'set.blRight': '右手', 'set.blLeft': '左手', 'set.blCompact': '紧凑',
+    'set.motionDenied': '体感权限被拒绝 — 改用触屏操控。',
+    'set.motionUnsupported': '运动传感器不可用 — 改用触屏操控。',
 
     /* ---- manual body (HTML) ---- */
     'manBody.flight': '<li><b>W</b> / <b>S</b> — 俯冲 / 拉起</li><li><b>Q</b> / <b>E</b> — 向左 / 向右滚转</li><li><b>A</b> / <b>D</b> — 偏航（方向舵）</li><li><b>SHIFT</b> / <b>CTRL</b> — 加速 / 减速</li><li><b>CTRL + S</b> — 高过载转弯（俯仰更急，消耗速度）</li>',

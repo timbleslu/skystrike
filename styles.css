@@ -112,6 +112,24 @@ canvas{display:block}
 #tb-cam{top:20px; right:20px; width:45px; height:45px; font-size:9px;}
 #tb-lck{bottom:195px; right:70px; width:50px; height:50px; font-size:10px; border-color:#0bd5ff; color:#0bd5ff;}
 
+/* --- touch control opacity + layouts + floating stick (controls.js) --- */
+#touchControls{--btn-opacity:0.8; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+#touchControls .t-btn{opacity:var(--btn-opacity);}
+#touchControls .joy-base{opacity:calc(var(--btn-opacity) * 0.9);}
+.joy-base.floating{transition:left .04s linear, top .04s linear;}
+/* left-handed: swap the action cluster to the left, throttle/brake to the right */
+#touchControls.layout-left #tb-gun{right:auto; left:150px;}
+#touchControls.layout-left #tb-msl{right:auto; left:90px;}
+#touchControls.layout-left #tb-flr{right:auto; left:40px;}
+#touchControls.layout-left #tb-spc{right:auto; left:20px;}
+#touchControls.layout-left #tb-lck{right:auto; left:70px;}
+#touchControls.layout-left #tb-thr{left:auto; right:40px;}
+#touchControls.layout-left #tb-brk{left:auto; right:110px;}
+#touchControls.layout-left #tb-cam{right:auto; left:20px;}
+/* compact: shrink the on-screen buttons to declutter small screens */
+#touchControls.layout-compact .t-btn{transform:scale(0.82); transform-origin:center;}
+#touchControls.layout-compact #tb-gun{width:60px; height:60px;}
+
 /* ---------- HANGAR ---------- */
 #hangar{position:fixed;inset:0;z-index:60;display:flex;overflow-y:auto;
   background:radial-gradient(ellipse at 50% 40%,rgba(8,20,30,.55),rgba(2,5,10,.92));backdrop-filter:blur(2px);transition:opacity .5s}
@@ -364,3 +382,10 @@ canvas{display:block}
 .langtog{display:flex;gap:8px}
 .langbtn{background:transparent;border:1px solid rgba(91,138,134,.5);color:var(--txt);font-family:var(--mono);font-size:12px;padding:5px 12px;cursor:pointer}
 .langbtn.on{border-color:var(--cy);color:var(--cy);background:rgba(25,240,212,.12)}
+/* settings segmented toggles (mobile control / aggression / layout) + motion button */
+.segtog{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.segbtn{background:transparent;border:1px solid rgba(91,138,134,.5);color:var(--txt);font-family:var(--mono);font-size:11px;padding:5px 10px;cursor:pointer;transition:.15s}
+.segbtn:hover{border-color:var(--cy)}
+.segbtn.on{border-color:var(--cy);color:var(--cy);background:rgba(25,240,212,.12)}
+#manual .mset .srow.motion-note{justify-content:flex-start}
+.motion-note span{font-size:11px;color:var(--yel);line-height:1.4}

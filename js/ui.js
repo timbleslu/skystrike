@@ -829,6 +829,16 @@ function buildHangar() {
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { controlSensitivity = clamp(ss.value / 100, 0.5, 2.0); saveSettings(); }); }
+  // mobile control settings (controls.js owns the input layer; these just set state + persist)
+  bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
+  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => { motionAggression = v; }, () => { if (audio.on) audio.ui(); });
+  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
+  const sip = g('setInvertPitch'); if (sip) { sip.checked = invertPitch; sip.addEventListener('change', () => { invertPitch = sip.checked; saveSettings(); }); }
+  const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
+  const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
+  const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); if (audio.on) audio.ui(); });
+  const srec = g('setRecenter'); if (srec) srec.addEventListener('click', () => { if (typeof recenterMotion === 'function') recenterMotion(); if (audio.on) audio.ui(); });
+  syncControlSettingsUI();
   document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', () => { if (LANG === b.dataset.lang) return; LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui(); }));
   applyLang();
   selectJet(selectedJet);
@@ -1017,6 +1027,12 @@ function loadSettings() {
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
+    if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
+    if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
+    if (typeof s.invertPitch === 'boolean') invertPitch = s.invertPitch;
+    if (typeof s.haptics === 'boolean') haptics = s.haptics;
+    if (typeof s.buttonOpacity === 'number') buttonOpacity = clamp(s.buttonOpacity, 0.4, 1.0);
+    if (s.buttonLayout === 'right' || s.buttonLayout === 'left' || s.buttonLayout === 'compact') buttonLayout = s.buttonLayout;
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
     if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
@@ -1090,6 +1106,16 @@ function applyLang() {
   setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
   setTxt('lblGunLead', t('set.gunLead')); setTxt('lblMute', t('set.mute'));
   setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
+  // mobile control settings labels + segmented button captions
+  setTxt('lblMobileControl', t('set.mobileControl')); setTxt('lblAggression', t('set.aggression'));
+  setTxt('lblMotion', t('set.motionSensor')); setTxt('lblInvertPitch', t('set.invertPitch'));
+  setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
+  setTxt('lblBtnLayout', t('set.btnLayout'));
+  setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
+  const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
+  segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
+  segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
+  segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
   // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
@@ -1117,11 +1143,57 @@ function applyOpLegend() {
   if (!leg) return;
   leg.innerHTML = order.map(k => '<span><b>' + t('op.' + k) + '</b> ' + t(map[k]) + '</span>').join('');
 }
+// generic segmented toggle: data-<attr> buttons, getter()/setter(v) on a global, optional onChange.
+function bindSeg(containerId, attr, getter, setter, onChange) {
+  const box = g(containerId);
+  if (!box) return;
+  box.querySelectorAll('.segbtn[data-' + attr + ']').forEach(b => {
+    b.addEventListener('click', () => {
+      const v = b.dataset[attr];
+      if (getter() === v) return;
+      setter(v);
+      box.querySelectorAll('.segbtn').forEach(x => x.classList.toggle('on', x.dataset[attr] === v));
+      if (onChange) onChange();
+      saveSettings();
+    });
+  });
+}
+// reflect current control-setting state into the Settings widgets (on open / after load).
+function syncControlSettingsUI() {
+  const mark = (id, attr, val) => { const box = g(id); if (box) box.querySelectorAll('.segbtn').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); };
+  mark('mobileControlTog', 'mc', mobileControl);
+  mark('aggressionTog', 'ag', motionAggression);
+  mark('btnLayoutTog', 'bl', buttonLayout);
+  const sip = g('setInvertPitch'); if (sip) sip.checked = invertPitch;
+  const sh = g('setHaptics'); if (sh) sh.checked = haptics;
+  const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
+}
+// Enable-Motion flow: request permission from this user gesture; fall back to Touch on deny/unsupported.
+function enableMotionFlow() {
+  const note = g('motionNote'), txt = g('motionNoteTxt');
+  if (typeof requestMotionPermission !== 'function' || typeof motionSupported !== 'function' || !motionSupported()) {
+    mobileControl = 'touch';
+    if (note && txt) { txt.textContent = t('set.motionUnsupported'); note.style.display = ''; }
+    syncControlSettingsUI(); saveSettings();
+    return;
+  }
+  requestMotionPermission().then(ok => {
+    if (ok) {
+      mobileControl = 'motion';
+      if (note) note.style.display = 'none';
+    } else {
+      mobileControl = 'touch';
+      if (note && txt) { txt.textContent = t('set.motionDenied'); note.style.display = ''; }
+    }
+    syncControlSettingsUI(); saveSettings();
+  });
+}
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
-      lang: LANG, controlSensitivity
+      lang: LANG, controlSensitivity,
+      mobileControl, motionAggression, invertPitch, haptics, buttonOpacity, buttonLayout
     }));
   } catch (e) {}
 }

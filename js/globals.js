@@ -147,6 +147,13 @@ let groundWar = true;        // ground units + strike waves (Settings toggle)
 let opMode = false;          // operation map mode vs endless (Hangar mode select)
 let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
 let controlSensitivity = 1.0; // turn-rate multiplier (0.5–2.0, Settings slider)
+// mobile control settings (Settings tab; persisted via storage seam)
+let mobileControl = 'touch';      // 'touch' | 'motion' — active analog flight source on mobile
+let motionAggression = 'balanced';// 'casual' | 'balanced' | 'direct' — tilt assist preset
+let invertPitch = false;          // false = push-up/tilt-forward climbs (point-to-fly)
+let haptics = true;               // vibration feedback where supported
+let buttonOpacity = 0.8;          // 0.4–1.0 on-screen touch button opacity
+let buttonLayout = 'right';       // 'right' | 'left' | 'compact' — touch button preset layout
 let choosingUpgrade = false; // true while the between-wave field-upgrade screen is open
 let difficulty = 1;
 const DIFFS = [
@@ -332,8 +339,12 @@ const HUDFONT = "'Share Tech Mono', monospace";
 
 /* Touch controls state */
 let isTouchEnabled = false;
-let joyActive = false, joyBaseCenter = {x:0, y:0}, joyCurrent = {x:0, y:0}, touchInput = {x:0, y:0};
+let joyActive = false, joyTouchId = null, joyBaseCenter = {x:0, y:0}, touchInput = {x:0, y:0};
 let touchBtns = { gun:false, msl:false, flr:false, spc:false, thr:false, brk:false };
+// unified flight-input seam (controls.js writes it each frame; combat.js consumes + adds keyboard)
+let flightInput = { pitch: 0, roll: 0 };           // normalized analog flight axes, -1..1
+let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live device-orientation tilt
+let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
 /* shared temporaries (avoid per-frame allocation) */
 const t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), t3 = new THREE.Vector3(),

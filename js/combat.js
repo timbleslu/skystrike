@@ -37,6 +37,7 @@ function fireGun() {
   if (mz) { mz.visible = true; mz.scale.setScalar(rand(11, 18)); mz.material.rotation = rand(0, TWO_PI); player.muzzleT = 0.045; }
   player.shake = Math.max(player.shake, 0.12);
   audio.gun();
+  haptic(8);
   run.shots += used;
 }
 
@@ -102,6 +103,7 @@ function fireMissile() {
   }
   player.missiles -= 1; run.missiles += salvo; run.pMissiles += salvo;
   audio.missile();
+  haptic(25);
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
   // shared-asset airframe with tracking halo + motor exhaust baked in (see buildMissileMesh)
@@ -470,6 +472,7 @@ function damagePlayer(amt, src) {
   player.hp -= amt; player.damageFlash = 0.5; player.shake = Math.max(player.shake, 0.4);
   if (src) { player.hurtDir = new THREE.Vector3().copy(src).sub(player.group.position).normalize(); player.hurtT = 1.0; }
   audio.hurt();
+  haptic(60);
   if (player.reactive && hadShield && player.shield <= 0) reactivePulse();   // REACTIVE ARMOUR — the shield going down detonates
   if (player.hp <= 0) {
     if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per wave
@@ -541,6 +544,7 @@ function tpBaseFor(e) {
 function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
+  if (byPlayer) haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20);
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
@@ -655,7 +659,7 @@ function updateLockOn(dt) {
     player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1)));
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
-    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lock(); audio.blip(1850, 0.14, 'sine', 0.13); }
+    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lock(); audio.blip(1850, 0.14, 'sine', 0.13); haptic([18, 40, 18]); }
   } else {
     player.lockProgress = Math.max(0, player.lockProgress - dt / (LOCK_TIME * 0.5));
     if (player.lockProgress < 1) player.lockedTarget = null;
@@ -801,7 +805,7 @@ function updatePlayer(dt) {
   if (player.shieldT > 0) player.shieldT -= dt;
   else if (player.shield < player.maxShield) player.shield = Math.min(player.maxShield, player.shield + 16 * (player.shieldRegenMul || 1) * dt);
 
-  // Combine keyboard and touch input
+  // Unified flight input: digital keyboard (here) + analog flightInput (touch/motion, via readFlightInput).
   let pitchIn = 0, rollIn = 0, yawIn = 0;
   if (down('KeyW')) pitchIn -= 1;
   if (down('KeyS')) pitchIn += 1;
@@ -809,17 +813,16 @@ function updatePlayer(dt) {
   if (down('KeyE')) rollIn -= 1;
   if (down('KeyA')) yawIn += 1;
   if (down('KeyD')) yawIn -= 1;
+  if (invertY) pitchIn = -pitchIn;   // desktop invert toggle (keyboard only; touch/motion use invertPitch)
 
-  if (isTouchEnabled && joyActive) {
-    pitchIn = touchInput.y;
-    rollIn = -touchInput.x;
-  }
+  // add the shaped analog source on top so a plugged-in key always works alongside it, then clamp.
+  // flightInput uses point-to-fly signs (+pitch=climb, +roll=bank right); convert to engine signs here.
+  pitchIn = clamp(pitchIn - flightInput.pitch, -1, 1);   // +flightInput.pitch (climb) -> -pitchIn (nose up, = W)
+  rollIn = clamp(rollIn - flightInput.roll, -1, 1);      // +flightInput.roll (bank right) -> -rollIn (= E)
 
-  if (invertY) pitchIn = -pitchIn;
-  
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;
-  player.highG = brake && (down('KeyS') || (isTouchEnabled && touchInput.y > 0.5));
+  player.highG = brake && (down('KeyS') || (isTouchEnabled && flightInput.pitch < -0.5));
 
   const tb = st.turnRate * controlSensitivity * (player.turnMul || 1) * (player.vectorSurge > 0 ? 1.85 : 1);   // sensitivity + PROPULSION agility + VECTOR SURGE supermaneuver
   const tgtPitch = pitchIn * tb * (player.highG ? 2.0 : 1.0);

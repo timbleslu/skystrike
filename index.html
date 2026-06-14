@@ -287,6 +287,14 @@
         <h3 id="manH_Settings">Settings</h3>
         <div class="srow"><label id="lblLang">Language</label><div class="langtog"><button id="setLangEN" class="langbtn" data-lang="EN">English</button><button id="setLangZH" class="langbtn" data-lang="ZH">简体中文</button></div></div>
         <div class="srow"><label id="lblSens" for="setSens">Control sensitivity</label><input id="setSens" type="range" min="50" max="200" value="100"></div>
+        <div class="srow"><label id="lblMobileControl">Mobile control</label><div class="segtog" id="mobileControlTog"><button class="segbtn" data-mc="touch">Touch</button><button class="segbtn" data-mc="motion">Motion</button></div></div>
+        <div class="srow"><label id="lblAggression">Tilt aggression</label><div class="segtog" id="aggressionTog"><button class="segbtn" data-ag="casual">Casual</button><button class="segbtn" data-ag="balanced">Balanced</button><button class="segbtn" data-ag="direct">Direct</button></div></div>
+        <div class="srow"><label id="lblMotion">Motion sensor</label><div class="segtog"><button id="setEnableMotion" class="segbtn">Enable Motion</button><button id="setRecenter" class="segbtn">Recenter</button></div></div>
+        <div class="srow motion-note" id="motionNote" style="display:none"><span id="motionNoteTxt"></span></div>
+        <div class="srow"><label id="lblInvertPitch" for="setInvertPitch">Invert pitch (push down = climb)</label><input id="setInvertPitch" type="checkbox"></div>
+        <div class="srow"><label id="lblHaptics" for="setHaptics">Haptic feedback (vibration)</label><input id="setHaptics" type="checkbox"></div>
+        <div class="srow"><label id="lblBtnOpacity" for="setBtnOpacity">Button opacity</label><input id="setBtnOpacity" type="range" min="40" max="100" value="80"></div>
+        <div class="srow"><label id="lblBtnLayout">Button layout</label><div class="segtog" id="btnLayoutTog"><button class="segbtn" data-bl="right">Right</button><button class="segbtn" data-bl="left">Left</button><button class="segbtn" data-bl="compact">Compact</button></div></div>
         <div class="srow"><label id="lblVol" for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
         <div class="srow"><label id="lblInvert" for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
         <div class="srow"><label id="lblAutoLock" for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
@@ -342,6 +350,7 @@
 <script src="js/opmap.js"></script>
 <script src="js/combat.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/controls.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

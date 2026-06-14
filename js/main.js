@@ -608,62 +608,8 @@ addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 /* ---------------- touch logic ---------------- */
-function initTouchControls() {
-    isTouchEnabled = true;
-    
-    // Joystick
-    const joyBase = g('joyBase'), joyStick = g('joyStick');
-    const bRect = joyBase.getBoundingClientRect();
-    const radius = bRect.width / 2;
-    joyBaseCenter = { x: bRect.left + radius, y: bRect.top + radius };
-    
-    joyBase.addEventListener('touchstart', e => { e.preventDefault(); joyActive = true; handleJoyMove(e); }, {passive:false});
-    joyBase.addEventListener('touchmove', e => { e.preventDefault(); if (joyActive) handleJoyMove(e); }, {passive:false});
-    joyBase.addEventListener('touchend', e => { e.preventDefault(); joyActive = false; touchInput.x = 0; touchInput.y = 0; joyStick.style.transform = `translate(0px, 0px)`; }, {passive:false});
-    
-    function handleJoyMove(e) {
-        let touch = null;
-        for (let i = 0; i < e.touches.length; i++) {
-             const t = e.touches[i];
-             if(t.clientX >= bRect.left && t.clientX <= bRect.right && t.clientY >= bRect.top && t.clientY <= bRect.bottom) { touch = t; break; }
-        }
-        if(!touch) touch = e.touches[0]; // fallback
-        
-        const dx = touch.clientX - joyBaseCenter.x;
-        const dy = touch.clientY - joyBaseCenter.y;
-        const dist = Math.hypot(dx, dy);
-        const maxD = radius - 15; // padding
-        
-        let nx = dx, ny = dy;
-        if (dist > maxD) {
-            nx = (dx / dist) * maxD;
-            ny = (dy / dist) * maxD;
-        }
-        joyStick.style.transform = `translate(${nx}px, ${ny}px)`;
-        touchInput.x = clamp(nx / maxD, -1, 1);
-        touchInput.y = clamp(ny / maxD, -1, 1);
-    }
-
-    // Action Buttons
-    function bindBtn(id, key, clickAction) {
-        const el = g(id);
-        if (!el) return;
-        el.addEventListener('touchstart', (e) => { e.preventDefault(); touchBtns[key] = true; if (clickAction) clickAction(); }, {passive:false});
-        el.addEventListener('touchend', (e) => { e.preventDefault(); touchBtns[key] = false; }, {passive:false});
-    }
-
-    bindBtn('tb-gun', 'gun');
-    bindBtn('tb-thr', 'thr');
-    bindBtn('tb-brk', 'brk');
-    
-    bindBtn('tb-msl', 'msl', () => { if(state === 'playing' && !paused) fireMissile(); });
-    bindBtn('tb-flr', 'flr', () => { if(state === 'playing' && !paused) deployFlares(); });
-    bindBtn('tb-spc', 'spc', () => { if(state === 'playing' && !paused) useSpecial(); });
-    bindBtn('tb-lck', 'lck', () => { if(state === 'playing' && !paused) cycleLock(); });
-    bindBtn('tb-cam', 'cam', () => { if(state === 'playing' && !paused) cycleCamera(); });
-}
-
-// Auto-detect touch
+// initTouchControls() + the unified flight-input layer live in js/controls.js.
+// Auto-detect first touch, bind controls once, and reveal the on-screen pad in flight.
 window.addEventListener('touchstart', function firstTouch() {
     initTouchControls();
     if(state === 'playing' && !paused) g('touchControls').classList.add('show');
@@ -685,6 +631,7 @@ function animate() {
     if (platform) platform.children[1].rotation.z += dt * 0.6;
   } else if (state === 'playing') {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
+    readFlightInput();   // compose touch/motion into flightInput before the player update consumes it
     updatePlayer(dt);
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
     updateWingmen(dt * ts);
@@ -708,6 +655,7 @@ initThree();
 cacheEl();
 loadBest();
 loadSettings();
+applyButtonStyle();   // apply persisted touch button opacity/layout before first touch
 loadRival();
 buildHangar();
 initOnboarding();
