@@ -1066,7 +1066,7 @@ function startGame(i) {
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, t0: performance.now(), pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
   state = 'playing';
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
