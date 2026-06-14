@@ -1139,7 +1139,7 @@ function createEnemy(type, pos, opts) {
   //  bomber          : heavier cannon, 2 missiles, a few flares
   //  boss            : huge cannon,    many missiles, medium flares
   //  ground turret   : missile-only SAM site
-  if (type === 'boss')        { e.bulletAmmo = 600; e.missileAmmo = 24; e.flareAmmo = 10; }
+  if (type === 'boss')        { e.bulletAmmo = 600; e.missileAmmo = 24; e.flareAmmo = 10; e.phase = 1; }
   else if (type === 'bomber') { e.bulletAmmo = 90;  e.missileAmmo = 2;  e.flareAmmo = 4;  }
   else if (type === 'ground') { e.bulletAmmo = 0; e.missileAmmo = (!opts || !opts.gkind || opts.gkind === 'sam') ? 4 : 0; e.flareAmmo = 0; }
   else if (type === 'drone')  { e.bulletAmmo = 0;   e.missileAmmo = 0;  e.flareAmmo = 0;  }
@@ -1318,7 +1318,7 @@ function updateEnemy(e, dt) {
   if (e.state === 'engage' && visible && !scrambled) {
     const ang = nf.angleTo(toP);
     const df = DIFFS[difficulty].fire, dms = DIFFS[difficulty].missile;
-    const enr = e.enraged ? 0.55 : 1;
+    const enr = e.phase >= 3 ? 0.42 : e.phase >= 2 ? 0.55 : 1;   // boss phases tighten fire cadence
     // ----- cannon: flat effective range so enemies actually strafe (stealth still gates them via `visible`) -----
     e.fireCd -= dt;
     const gunCone = e.gunRun > 0 ? 0.34 : 0.24;
@@ -1336,7 +1336,7 @@ function updateEnemy(e, dt) {
     const mslRange = e.type === 'boss' ? 3000 : 2600;
     if (!jammed && dist < mslRange && dist > 360 && ang < 0.6 && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < cap) {
       enemyFireMissile(e);
-      if (e.type === 'boss') { enemyFireMissile(e); if (e.enraged) enemyFireMissile(e); }
+      if (e.type === 'boss') { enemyFireMissile(e); if (e.phase >= 2) enemyFireMissile(e); if (e.phase >= 3) enemyFireMissile(e); }
       e.missileCd = (e.type === 'boss' ? rand(3.5, 6) : rand(5, 9)) * dms * enr;
     }
   }
