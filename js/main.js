@@ -196,7 +196,7 @@ function updateBossSpecials(e, dt, dist) {
       e.attack = null;
       if (u.core) u.core.material.emissiveIntensity = 1.2;
       if (u.ring) u.ring.scale.setScalar(1);
-      e.specialCd = e.enraged ? rand(3.5, 5.5) : rand(6, 9);
+      e.specialCd = e.phase >= 3 ? rand(2.6, 4.2) : e.phase >= 2 ? rand(3.5, 5.5) : rand(6, 9);
     }
     return;
   }
@@ -222,12 +222,13 @@ function updateBossSpecials(e, dt, dist) {
 
 function fireBossAttack(e, dist) {
   const pp = e.group.position;
-  const enr = e.enraged;
+  const enr = e.phase >= 2;   // phase 2 keeps the legacy "enraged" intensity; phase 3 pushes further
+  const p3 = e.phase >= 3;
   if (e.attack === 'barrage') {
     // radial fan of homing missiles — wide spread so positioning + flares matter
-    const count = enr ? 12 : 8;
+    const count = p3 ? 16 : enr ? 12 : 8;
     const fwd = fwdQ(e.logicQuat, t3);
-    const spread = enr ? 2.6 : 1.9;
+    const spread = p3 ? 3.1 : enr ? 2.6 : 1.9;
     for (let i = 0; i < count; i++) {
       const a = (count > 1 ? (i / (count - 1) - 0.5) : 0) * spread;
       const dir = t1.copy(fwd).applyAxisAngle(UPV, a);
@@ -236,16 +237,16 @@ function fireBossAttack(e, dist) {
     }
     audio.missile(); audio.blip(220, 0.3, 'sawtooth', 0.12, 70);
   } else if (e.attack === 'drones') {
-    spawnDroneSwarm(enr ? 5 : 3, pp);          // plays its own banner + audio
+    spawnDroneSwarm(p3 ? 6 : enr ? 5 : 3, pp);          // plays its own banner + audio
   } else if (e.attack === 'pulse') {
     spawnBigRing(pp, 0xff39c8, 150);
     empFlash = 0.5;
     audio.explode(true); audio.blip(120, 0.5, 'sine', 0.16, 40);
     // instant close-range AoE — the telegraph gave the player time to break away
     if (player.invuln <= 0 && pp.distanceTo(player.group.position) < 900) {
-      damagePlayer(enr ? 38 : 26, pp);
+      damagePlayer(p3 ? 46 : enr ? 38 : 26, pp);
     }
-    for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (w.alive && pp.distanceToSquared(w.group.position) < 810000) damageWingman(w, enr ? 70 : 50); }
+    for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (w.alive && pp.distanceToSquared(w.group.position) < 810000) damageWingman(w, p3 ? 85 : enr ? 70 : 50); }
   }
 }
 

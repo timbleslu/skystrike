@@ -161,6 +161,23 @@ function rollWeather(seed) {
   return r < 0.6 ? 'clear' : r < 0.8 ? 'fog' : 'storm';
 }
 // === MIRROR END ===
+// === MIRROR START (globals.js boss phase core) ===
+const BOSS_PHASE2_HP = 0.6;   // boss steps 1 -> 2 when hp/maxHp drops below this
+const BOSS_PHASE3_HP = 0.3;   // boss steps 2 -> 3 when hp/maxHp drops below this
+// PURE — boss phase (1/2/3) implied by a HP fraction. Monotone non-increasing in hpFrac.
+function bossPhaseFor(hpFrac) {
+  if (hpFrac < BOSS_PHASE3_HP) return 3;
+  if (hpFrac < BOSS_PHASE2_HP) return 2;
+  return 1;
+}
+// PURE — once-per-phase guard. Given the highest phase already reached and the phase
+// implied by current HP, return the new highest reached: never regresses (HP regen can't
+// drop a phase) and only ever advances toward the HP-implied phase. `reached` starts at 1.
+function nextBossPhase(reached, hpFrac) {
+  const want = bossPhaseFor(hpFrac);
+  return want > reached ? want : reached;
+}
+// === MIRROR END ===
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';

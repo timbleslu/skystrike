@@ -532,12 +532,30 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
     e.hp = 0; spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
     if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
   }
-  if (e.type === 'boss' && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.35) {
-    e.enraged = true; e.turnRate *= 1.3; empFlash = 0.45; showBanner(t('banner.bossEnraged'));
-    if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.8;
+  if (e.type === 'boss' && e.hp > 0) {
+    // HP thresholds drive a once-per-phase state machine (bossPhaseFor/nextBossPhase, globals.js).
+    // nextBossPhase never regresses and only advances, so a transition fires exactly once even if
+    // HP oscillates near a boundary (lifesteal etc.) — and a big hit can skip straight to phase 3.
+    const np = nextBossPhase(e.phase, e.hp / e.maxHp);
+    while (e.phase < np) bossEnterPhase(e, e.phase + 1);   // step through each crossed phase in order
   }
   if (e.hp <= 0) killEnemy(e, byPlayer, byCCA);
   else if (byPlayer) haptic(6);   // light buzz on landing a non-fatal hit (kills buzz via killEnemy)
+}
+// Boss crosses an HP threshold -> escalate. Idempotent per phase (the caller guards via
+// nextBossPhase). Bumps aggression (turnRate; fire-rate/specials read e.phase elsewhere) and
+// fires a visual cue + banner + screen shake. Reusable by a future Boss-Rush mode.
+function bossEnterPhase(e, ph) {
+  e.phase = ph;
+  e.turnRate *= 1.18;                                    // each phase is a little twitchier
+  empFlash = Math.max(empFlash, ph >= 3 ? 0.6 : 0.45);  // afterburner-ignition screen flash
+  if (e.group.userData.body) e.group.userData.body.emissiveIntensity = ph >= 3 ? 2.4 : 1.8;
+  if (e.group.userData.core) e.group.userData.core.material.emissiveIntensity = ph >= 3 ? 5.5 : 3.5;
+  if (ph >= 3) for (let i = 0; i < 6; i++) spawnSmoke(e.group.position, 0xff5a8a, 2.2);   // armor shed
+  showBanner(t(ph >= 3 ? 'banner.bossPhase3' : 'banner.bossPhase2'));
+  audio.power(); audio.warn();
+  haptic([40, 30, 60]);
+  if (typeof shakeCam === 'function') shakeCam(ph >= 3 ? 1.0 : 0.8);   // shakeCam may not be merged yet
 }
 function tpBaseFor(e) {
   return e.type === 'boss' ? TP.boss : e.type === 'bomber' ? TP.bomber : e.elite ? TP.ace
