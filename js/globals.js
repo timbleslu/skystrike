@@ -178,6 +178,34 @@ function nextBossPhase(reached, hpFrac) {
   return want > reached ? want : reached;
 }
 // === MIRROR END ===
+let dailyMode = false;       // true while a Daily Challenge run is active (F7): seed-fixed layout/weather, one life
+let dailySeed = 0;           // the active daily calendar seed; startGame resets weatherSeed from it when dailyMode
+// === MIRROR START (globals.js daily core) ===
+// PURE — seeded PRNG (mulberry32). makeRng(seed) returns a function that yields a deterministic
+// stream of floats in [0,1); the same seed always produces the same sequence. Same hash style as
+// rollWeather (32-bit Math.imul mixing), but stateful so the layout/weather/restriction can each
+// pull successive draws from one daily seed.
+function makeRng(seed) {
+  let a = (seed | 0) >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// PURE — stable integer seed for a calendar date. Distinct (y,m,d) triples map to distinct seeds.
+// NEVER reads the clock — the caller reads the date once at the browser runtime and passes y/m/d in.
+// Mixes the packed date through the same splitmix-style avalanche rollWeather uses.
+function dailySeedFor(y, m, d) {
+  let x = (((y | 0) * 12 + ((m | 0) - 1)) * 31 + ((d | 0) - 1)) | 0;
+  x = (x ^ 0x9e3779b9) | 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  return (x ^ (x >>> 16)) >>> 0;
+}
+// === MIRROR END ===
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';
