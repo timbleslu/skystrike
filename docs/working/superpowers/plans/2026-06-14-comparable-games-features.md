@@ -3,6 +3,39 @@
 Source ideas: `docs/working/superpowers/ideas/2026-06-14-feature-ideas-comparable-games.md`
 Branch: `feat/comparable-games-features` (off master). Execution: subagent-driven-development, per-feature worktree isolation, model tailored to difficulty (haiku=very-simple, sonnet=easy, opus=hard). Two-stage review (spec → quality) per feature. Sequential test-gated merge into the integration branch.
 
+## ⏸ RESUME CHECKPOINT — 2026-06-14 (updated: Wave 1 MERGED)
+
+**Where we are:** ✅ **Wave 1 COMPLETE & MERGED** into `feat/comparable-games-features` (F2→F1→F3→F9→F4, `npm test` green after each; F1 MIRROR-marker polish applied @ `31f0442`). Wave 2 dispatched in fresh worktrees off the merged tip (`w2-f5-tutorial`/`w2-f6-stars`/`w2-f7-daily`/`w2-f8-aces`/`w2-f12-sound`/`w2-f13-pilot`). Wave 3 pending (F10,F11,F14,F15 — F15 needs F4, now merged ✓).
+
+**Wave 1 merge result:** integration branch `feat/comparable-games-features` @ `31f0442`; 5 feature commits + 5 merge commits + 1 polish commit on top of the 2 docs commits. CLAUDE.md Architecture rows (globals/combat/entities) + Current-state entries reconciled (all additive). Old `worktree-agent-*` worktrees now stale — prune after Wave 3.
+
+**Git state:**
+- Integration branch: `feat/comparable-games-features` @ `8653c45` (contains ONLY docs: the feature-ideas doc + this plan). Main working tree is on this branch, clean.
+- Merge base for every feature worktree branch: `d55e3a5` (2 docs-only commits behind the integration branch → code merges are clean vs the integration tip).
+- Recover feature work on resume with: `git worktree list` and `git branch | grep worktree-agent`. (Agent IDs below are session-scoped and become unreachable after a context clear — use the BRANCH names, which persist on disk.)
+
+**Wave-1 feature branches + status:**
+| F | Feature | Branch | SHA | Review | Action before merge |
+|---|---|---|---|---|---|
+| F1 | Screen shake | `worktree-agent-a11ee773456e06dc7` | `7555b79` | CHANGES-REQUESTED | Add `// MIRROR START`/`// MIRROR END` sentinel markers around the camshake block in globals.js (match codebase convention; the byte-identity test already passes). The reviewer's "missing boss-phase function" is a **FALSE POSITIVE** (F1 only needs `shakeCam` global+guarded — it is). Optional: dedupe the double `shakeCam(0.5)` on missile hit (combat.js missile-site + damagePlayer) — harmless (max-wins). |
+| F2 | Mission grading S/A/B/C | `worktree-agent-a9251035df608c3f4` | `e55b251` | ✅ APPROVED | None — merge-ready. (Non-blocking notes: grading test #4 uses a hardcoded mult array; sub-1s runs round timeSecs to 0 but gradeRun clamps to 1.) |
+| F3 | Afterburner HUD | `worktree-agent-a7155f77022ddffeb` | `dd54f81` | APPROVED + 1 spec miss | Add the one-line CLAUDE.md "Current state" entry (implementer skipped it). Optional: drop the unnecessary `if (el.abIndicator)` guard in ui.js applyLang. |
+| F9 | Barrel-roll evade | `worktree-agent-a3e99ce270de5dfac` | `a01cd1e` | NOT REVIEWED | Run the two-stage review (spec→quality). Has MIRROR block + `rollDetect`/`rollCooldownGate`; 14 asserts; tests green. Files: globals.js, combat.js, controls.js, main.js, ui.js, i18n.js, tests/barrel-roll.test.js, CLAUDE.md. |
+| F4 | Multi-phase bosses | `worktree-agent-a0e9640d567024562` | `cf7eeaf` | NOT REVIEWED | LANDED CLEAN (hardened prompt held — no escape). Run two-stage review, then **merge LAST**. `e.phase` state machine; pure `bossPhaseFor`/`nextBossPhase` MIRROR (byte-identical, once-per-phase, monotonic); guarded `if(typeof shakeCam==='function')`. Files: globals.js, combat.js (damageEnemy), entities.js (createEnemy e.phase, updateEnemy), main.js (fireBossAttack), i18n.js (banner.bossPhase2/3), tests/boss-phase.test.js, CLAUDE.md. ⚠ ALSO regenerated `graphify-out/*` — exclude those from the merge or just `graphify update .` once at the very end. Adds entities.js + main.js to the conflict surface. |
+
+**Next steps (in order):**
+1. Apply the small fixes: F1 MIRROR markers; F3 CLAUDE.md line. (Either edit the worktree branches and amend, OR apply during merge-conflict resolution on the integration branch.)
+2. Review F9 (two-stage).
+3. Confirm F4 landed (or re-dispatch).
+4. **Merge order** into `feat/comparable-games-features`, running `npm test` after EACH: F2 → F1 → F3 → F9 → F4. Expect **additive conflicts** (each merge after the first will conflict) on: `js/globals.js` (the `run` initializer — F2 adds `damageTaken`; camshake consts F1; barrel-roll consts F9), `js/ui.js` (startGame run initializer must stay in sync with globals.js; HUD), `js/combat.js` (**`damagePlayer` is touched by F1 shakeCam + F2 run.damageTaken + F9 timers — same function, will conflict**), `js/i18n.js` (F2 `grade.*`, F3 `hud.ab`, F9 `banner.evade`), `index.html` + `styles.css` (F2 #go_grade, F3 #abIndicator), `CLAUDE.md`. All resolvable by keeping BOTH additions. A cavecrew-builder can resolve each.
+5. After Wave 1 merges + green: `node scripts/shot.mjs wave1` smoke (optional), then launch **Wave 2** (F5,F6,F7,F8,F12,F13), then **Wave 3** (F10,F11,F14,F15 — F15 REQUIRES F4 merged). Specs for all below.
+
+**CRITICAL lesson — harden every future implementer dispatch:** one Wave-1 agent (haiku, F3) escaped its worktree and ran `git checkout` in the MAIN tree, leaving it on a stray `feat/afterburner-hud` branch (recovered; branch deleted). The F4 re-run prompt already includes a **git-discipline block** — REUSE IT in every Wave-2/3 dispatch: forbid `git checkout/switch/branch/reset/stash`, forbid `cd` out of cwd, require verifying `pwd`/`git rev-parse --show-toplevel` is under `.claude/worktrees/agent-`, only `git add`+`commit`. Consider NOT using haiku for tasks that involve any git/worktree discipline (it struggled). F3's actual feature work was fine; only its git hygiene failed.
+
+**Cleanup note:** stale `worktree-agent-*` worktrees remain registered under `.claude/worktrees/`; after all merges, `git worktree prune` + delete merged branches.
+
+---
+
 ## Shared context preamble (feed to EVERY implementer)
 
 Skystrike = arcade jet combat, Three.js r159 (vendored), **single HTML page, NO build step, NO modules, browser globals only**, strict script load order:
@@ -167,7 +200,13 @@ Known seams (verified this session):
 5. Keep this doc as the remaining-steps checklist; delete on final merge.
 
 ## Remaining-steps checklist
-- [ ] Wave 1: F1, F3, F9, F2, F4
-- [ ] Wave 2: F5, F6, F7, F8, F12, F13
-- [ ] Wave 3: F10, F11, F14, F15 (F15 after F4)
-- [ ] Final review + smoke + merge
+- Wave 1 (implemented in worktrees; see RESUME CHECKPOINT at top for SHAs/fixes):
+  - [x] F2 mission grading — APPROVED, merge-ready
+  - [~] F1 screen shake — needs MIRROR markers in globals.js, then merge
+  - [~] F3 afterburner HUD — needs CLAUDE.md line, then merge
+  - [~] F9 barrel-roll — needs two-stage review, then merge
+  - [~] F4 multi-phase bosses — LANDED `worktree-agent-a0e9640d567024562` @ `cf7eeaf`; needs review, merge LAST
+  - [ ] MERGE Wave 1 in order F2→F1→F3→F9→F4 with `npm test` gate (additive conflicts expected)
+- [ ] Wave 2: F5, F6, F7, F8, F12, F13 (harden dispatches w/ git-discipline block)
+- [ ] Wave 3: F10, F11, F14, F15 (F15 after F4 merged)
+- [ ] Final full-implementation review + `node scripts/shot.mjs` smoke + finishing-a-development-branch
