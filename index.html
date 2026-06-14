@@ -80,6 +80,16 @@
     <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
     <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
     <div id="hangarSp"><span id="hangarSpLbl">STRATEGIC POINTS</span> <b id="hangarSpVal">0</b></div>
+    <div id="pilotPanel">
+      <div class="pilotRow">
+        <span id="lblCallsign" class="dlab">CALLSIGN</span>
+        <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+      </div>
+      <div class="pilotRow">
+        <span id="lblEmblem" class="dlab">EMBLEM</span>
+        <div id="emblemGrid"></div>
+      </div>
+    </div>
     <div id="diffsel">
       <span id="lblDiff" class="dlab">DIFFICULTY</span>
       <div class="dbtns">
@@ -130,6 +140,7 @@
 <div id="gameover">
   <div class="gowrap">
     <h1>MISSION FAILED</h1>
+    <div id="go_pilot" class="gopilot"></div>
     <div class="gostats"><span id="goLblScore">SCORE</span> <b id="go_score">0</b> &middot; <span id="goLblWave">WAVE</span> <b id="go_wave">0</b> &middot; <span id="goLblBest">BEST</span> <b id="go_best">0</b></div>
     <div class="debrief">
       <div><span id="goLblKills">Kills</span><b id="go_kills">0</b></div>

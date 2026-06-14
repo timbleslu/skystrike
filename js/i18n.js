@@ -303,6 +303,12 @@ const I18N = {
     'meta.maxed': 'MAX LEVEL',
     'meta.requires': 'REQUIRES {r}',
     'meta.buyLvl': 'UPGRADE — {c} SP',
+    'pilot.callsign': 'CALLSIGN',
+    'pilot.emblem': 'EMBLEM',
+    'pilot.placeholder': 'ENTER CALLSIGN',
+    'pilot.buy': 'UNLOCK — {c} SP',
+    'pilot.locked': 'LOCKED',
+    'pilot.needAch': 'REQUIRES: {a}',
     'banner.achUnlocked': '★ {n} ACHIEVEMENT(S) UNLOCKED ★',
 
     /* meta data strings (perks / achievements / skins) — canonical EN copy (no fields in meta.js tables) */
@@ -729,6 +735,12 @@ const I18N = {
     'meta.maxed': '已满级',
     'meta.requires': '需要 {r}',
     'meta.buyLvl': '升级 — {c} 点',
+    'pilot.callsign': '呼号',
+    'pilot.emblem': '徽标',
+    'pilot.placeholder': '输入呼号',
+    'pilot.buy': '解锁 — {c} 点',
+    'pilot.locked': '已锁定',
+    'pilot.needAch': '需要：{a}',
     'banner.achUnlocked': '★ 解锁 {n} 项成就 ★',
 
     meta: {

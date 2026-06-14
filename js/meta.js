@@ -118,13 +118,69 @@ const ACHIEVEMENTS = [
   { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
 ];
 
+/* ---------------- callsign + emblem (F13) ----------------
+   PURE helpers — mirrored byte-identical in tests/meta.test.js.
+   EMBLEMS: each patch has a gate type: 'free', 'sp' (cost = gate value), or 'ach' (achievement id). */
+const EMBLEMS = [
+  { id: 'wings',    gate: 'free' },
+  { id: 'skull',    gate: 'sp',  cost: 80 },
+  { id: 'star',     gate: 'sp',  cost: 80 },
+  { id: 'dragon',   gate: 'ach', ach: 'bossSlayer' },
+  { id: 'ace',      gate: 'ach', ach: 'acePilot' },
+];
+/* uppercase, strip non-A-Z0-9, clamp to 8 chars. Empty string is valid (anonymous). */
+function sanitizeCallsign(str) {
+  if (!str) return '';
+  return String(str).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+/* true if the emblem is accessible to the player given current meta state. */
+function emblemUnlocked(id, m) {
+  if (!m) return false;
+  for (var j = 0; j < EMBLEMS.length; j++) {
+    var e = EMBLEMS[j];
+    if (e.id !== id) continue;
+    if (e.gate === 'free') return true;
+    if (e.gate === 'sp') return !!(m.patches && m.patches[id]);
+    if (e.gate === 'ach') return !!(m.ach && m.ach[e.ach]);
+    return false;
+  }
+  return false;
+}
+/* buy a SP-gated patch. Returns true on success. */
+function buyPatch(id) {
+  if (!meta) return false;
+  var def = null;
+  for (var j = 0; j < EMBLEMS.length; j++) { if (EMBLEMS[j].id === id) { def = EMBLEMS[j]; break; } }
+  if (!def || def.gate !== 'sp') return false;
+  if (meta.patches && meta.patches[id]) return false;      // already owned
+  if (meta.sp < def.cost) return false;
+  meta.sp -= def.cost;
+  if (!meta.patches) meta.patches = {};
+  meta.patches[id] = true;
+  saveMeta();
+  return true;
+}
+/* set the active emblem (must be unlocked). */
+function setEmblem(id) {
+  if (!meta || !emblemUnlocked(id, meta)) return false;
+  meta.emblem = id;
+  saveMeta();
+  return true;
+}
+/* set callsign (sanitizes before saving). */
+function setCallsign(str) {
+  if (!meta) return;
+  meta.callsign = sanitizeCallsign(str);
+  saveMeta();
+}
+
 /* ---------------- persistence ----------------
    Only meta.js touches storage for the meta blob (via store.get/set). validMeta guards a loaded
    blob; malformed/legacy data falls back to a fresh meta. Mirrored byte-identical in tests. */
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, callsign: '', emblem: 'wings', patches: {} };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -138,6 +194,10 @@ function loadMeta() {
   } catch (e) { meta = freshMeta(); }
   // ensure starter jets are always present even if an older save predates one
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
+  // heal legacy saves missing callsign/emblem/patches (F13)
+  if (typeof meta.callsign !== 'string') meta.callsign = '';
+  if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
+  if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
