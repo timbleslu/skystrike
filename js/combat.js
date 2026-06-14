@@ -11,14 +11,17 @@ function recycleBullet(b) { scene.remove(b.mesh); BPOOL.push(b); }
 
 // ADRENALINE — bonus damage that scales with how much HP you've lost (1.0 at full HP)
 function berserkMul() { return player.berserk ? 1 + player.berserk * (1 - clamp(player.hp / player.maxHp, 0, 1)) : 1; }
+// KILL FRENZY — current intensity 0..1 from the decaying frenzy timer
+function frenzyAmt() { return player.frenzyMax ? clamp(player.frenzy / player.frenzyMax, 0, 1) : 0; }
 function fireGun() {
   if (player.noCannon) { player.gunCd = 0.3; return; }   // J-20 carries no internal gun
   if (player.gunCd > 0) return;
   if (player.bullets <= 0) { player.gunCd = 0.25; audio.ui(); return; }
   const od = player.overdrive > 0;
-  player.gunCd = (od ? 0.05 : 0.07) * (player.fireRateMul || 1);
+  const fz = frenzyAmt();
+  player.gunCd = (od ? 0.05 : 0.07) * (player.fireRateMul || 1) * (1 - 0.4 * fz);   // FRENZY spins the cannon up
   const fwd = fwdOf(player.group, t1), rgt = rightOf(player.group, t2);
-  const dmg = player.stats.gunDmg * player.gunDmgMul * (od ? 1.5 : 1) * berserkMul();
+  const dmg = player.stats.gunDmg * player.gunDmgMul * (od ? 1.5 : 1) * berserkMul() * (1 + 0.3 * fz);
   const offs = od ? [-3.6, -1.2, 1.2, 3.6] : [-2.6, 2.6];   // overdrive widens to a 4-round burst
   for (const off of offs) {
     const b = getBullet(); b.enemy = false; b.dmg = dmg; b.life = 2.0; b.mesh.material = ASSET.bulletMat; b.mesh.scale.setScalar(1);
@@ -59,6 +62,7 @@ function updateBullets(dt, ts) {
             if (!b.ai && e.type === 'ground' && player.rktMul) bDmg *= player.rktMul;   // ROCKET PODS
             damageEnemy(e, bDmg, b.mesh.position, !b.ai, b.byCCA);
             if (!b.ai) { spawnHitMarker(); run.hits++; if (lastCrit && player.critChain) critBlast(b.mesh.position); }
+            if (!b.ai && player.burnDps && e.alive) { e.burnT = player.burnTime; e.burnDps = player.burnDps; }   // INCENDIARY ROUNDS: light it up
             if (!b.ai && b.pierce > 0) { b.pierce--; (b.passed || (b.passed = [])).push(e); }
             else dead = true;
             break;
@@ -82,7 +86,7 @@ function fireMissile() {
     const near = nearestEnemyInFront(0.72);
     if (near) { tgt = near; ambush = true; }
   }
-  const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul();
+  const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul() * (1 + 0.3 * frenzyAmt());
   player.missileCd = 0.55;
   const salvo = 1 + (player.mslSwarm || 0);   // SWARM RACK looses extra birds — bonus birds are free, only 1 leaves the rack
   const baseDir = fwdOf(player.group, t1).clone();
@@ -163,7 +167,18 @@ function updateMissiles(dt, ts) {
     if (m.enemy) {
       // POINT-DEFENSE LASER — a chance to swat an incoming missile out of the air before it connects
       if (player.pointDefense && m.armed <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 810000 && Math.random() < player.pointDefense * sdt * 3.2) {
+        firePdBeam(player.group.position, m.mesh.position, 0x9ff0ff);
         explode(m.mesh.position, false); audio.blip(1500, 0.05, 'square', 0.07, 900); hit = true;
+      }
+      // GUARDIAN ESCORTS — your wingmen run their own point-defense over the flight
+      if (!hit && player.escortPD && m.armed <= 0) {
+        for (let wi = 0; wi < wingmen.length; wi++) {
+          const w = wingmen[wi]; if (!w.alive) continue;
+          if (m.mesh.position.distanceToSquared(w.group.position) < 422500 && Math.random() < 0.55 * sdt * 3.2) {
+            firePdBeam(w.group.position, m.mesh.position, w.cca ? 0x49b6ff : 0x2dffb0);
+            explode(m.mesh.position, false); audio.blip(1400, 0.05, 'square', 0.06, 850); hit = true; break;
+          }
+        }
       }
       if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) {
         let mDmg = m.dmg;
@@ -544,6 +559,17 @@ function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer && player.slowOnKill) player.slow = Math.max(player.slow, player.slowOnKill);                   // KILL CLOCK — a beat of bullet-time
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
+  if (byPlayer && player.empKill) {   // EMP SUBMUNITIONS — the kill bursts a stunning shock over nearby foes
+    spawnShockwave(e.group.position.clone());
+    const er2 = player.empKill * player.empKill;
+    for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (!o.alive || o === e) continue; if (e.group.position.distanceToSquared(o.group.position) < er2) o.stun = Math.max(o.stun || 0, 2.0); }
+    empFlash = Math.max(empFlash, 0.3);
+  }
+  if (player.burnSpread && e.burnT > 0) {   // INFERNO CASCADE — a burning death splashes fire onto neighbours
+    const br2 = 240 * 240;
+    for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (!o.alive || o === e) continue; if (e.group.position.distanceToSquared(o.group.position) < br2) { o.burnT = player.burnTime; o.burnDps = player.burnDps; } }
+  }
+  if (byPlayer && player.frenzyOnKill) player.frenzy = Math.min(player.frenzyMax, player.frenzy + player.frenzyOnKill);   // KILL FRENZY stacks up
   if (e.type === 'boss') { run.boss++; showBanner(t('banner.bossDestroyed')); empFlash = 0.5; }
   if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner(tf('banner.rivalDown', { rp: pay })); run.kills++; }
   else if (e.type === 'ground') {
@@ -766,6 +792,7 @@ function updatePlayer(dt) {
   if (player.slow > 0) player.slow -= dt;
   if (player.dewLance > 0) player.dewLance -= dt;
   if (player.vectorSurge > 0) player.vectorSurge -= dt;
+  if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);   // KILL FRENZY bleeds off when you stop scoring
   if (player.special.cd > 0) player.special.cd -= dt;
   if (player.damageFlash > 0) player.damageFlash -= dt;
   if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
@@ -884,6 +911,8 @@ function updatePlayer(dt) {
 
   // ---- DEW LANCE (NGAD): sustained directed-energy beam down the boresight ----
   updateDewLance(dt);
+  updatePdBeams(dt);   // fade any point-defense laser bolts
+
   // ---- VECTOR SURGE (J-50): plasma wake guts anything you cut close past; missiles keep losing lock ----
   if (player.vectorSurge > 0) {
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && Math.random() < 0.6) m.decoyed = true; }
@@ -903,6 +932,40 @@ function updatePlayer(dt) {
   player._gpwsT -= dt; if (player.gpws && player._gpwsT <= 0) { audio.warn(); player._gpwsT = 0.5; }
   const incoming = missiles.some(m => m.enemy);
   player._missT -= dt; if (incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
+}
+
+/* POINT-DEFENSE LASER visuals — brief additive bolts fired from the airframe (or an escort) to a missile it swats */
+const PD_POOL = [];
+let pdBeams = [];
+function getPdBeam() {
+  let b = PD_POOL.pop();
+  if (!b) {
+    const geo = new THREE.CylinderGeometry(0.7, 0.7, 1, 6, 1, true);
+    geo.rotateX(Math.PI / 2); geo.translate(0, 0, -0.5);   // unit length running from origin toward -Z (Object3D.lookAt's forward)
+    const mat = new THREE.MeshBasicMaterial({ color: 0x9ff0ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    b = new THREE.Mesh(geo, mat); scene.add(b);
+  }
+  b.visible = true; return b;
+}
+function firePdBeam(from, to, color) {
+  const len = from.distanceTo(to); if (len < 1) return;
+  const b = getPdBeam();
+  b.material.color.setHex(color != null ? color : 0x9ff0ff);
+  b.position.copy(from);
+  b.lookAt(to);                 // local -Z now points at the missile
+  b.scale.set(1, 1, len);
+  b.material.opacity = 0.95;
+  pdBeams.push({ mesh: b, t: 0.13, max: 0.13 });
+  spawnTrail(to, color != null ? color : 0x9ff0ff, 0.9);   // bright hit flash at the intercept point
+}
+function updatePdBeams(dt) {
+  for (let i = pdBeams.length - 1; i >= 0; i--) {
+    const p = pdBeams[i]; p.t -= dt;
+    const k = clamp(p.t / p.max, 0, 1);
+    p.mesh.material.opacity = 0.95 * k;
+    p.mesh.scale.x = p.mesh.scale.y = 0.5 + (1 - k) * 1.8;   // bloom outward as it dies
+    if (p.t <= 0) { p.mesh.visible = false; PD_POOL.push(p.mesh); pdBeams.splice(i, 1); }
+  }
 }
 
 /* DEW LANCE — directed-energy beam: melts whatever is in the forward arc, swats missiles that stray in */

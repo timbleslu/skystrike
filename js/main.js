@@ -267,6 +267,7 @@ function spawnCCA(spawnPos) {
     target: null, retargetCd: 0, fireCd: 0.08, missileCd: rand(1.2, 2.5),   // minimal delay — attack immediately
     rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: true, expire: 16, cca: true,
     shape: ccaShape, jetName: ccaShape, flares: 2, sprintT: 0, priorityCd: 0, flareCd: 0,
+    forced: null, defend: 0,
   };
   wingmen.push(w);
   w.target = nearestEnemyForWingman(w);   // instant target acquisition on deploy
@@ -293,6 +294,7 @@ function spawnWingman(temp, explicit) {
     target: null, retargetCd: 0, fireCd: rand(0.2, 0.8), missileCd: rand(2, 5),
     rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: !!temp, expire: temp ? 15 : 0, cca: !!temp,
     shape: wShape, jetName: jetNameForShape(wShape), flares: 3, sprintT: 0, priorityCd: 0, flareCd: 0,
+    forced: null, defend: 0,
   });
   if (!temp) { showBanner(tf('banner.onStation', { name: wingmen[wingmen.length - 1].name })); audio.ui(); }
 }
@@ -314,7 +316,7 @@ function reviveWingman(w) {
   w.hp = w.maxHp; w.alive = true; w.target = null; w.retargetCd = 0;
   w.fireCd = rand(0.4, 1); w.missileCd = rand(3, 6); w._spd = player.speed || 320;
   w.vel = fwdOf(player.group, new THREE.Vector3()).multiplyScalar(player.speed || 320);
-  w.flares = 3; w.sprintT = 0; w.priorityCd = 0; w.flareCd = 0;
+  w.flares = 3; w.sprintT = 0; w.priorityCd = 0; w.flareCd = 0; w.forced = null; w.defend = 0;
   showBanner(tf('banner.onStation', { name: w.name })); audio.ui();
 }
 function nearestEnemyForWingman(w) {
@@ -328,9 +330,29 @@ function nearestEnemyForWingman(w) {
   }
   return best;
 }
+/* WINGMAN COMMANDS — issue a flight order to every airborne escort at once.
+   'focus'   → converge and concentrate fire on your locked (or nearest forward) target
+   'regroup' → break off, tuck into formation and fly defensively for a few seconds */
+function wingCommand(kind) {
+  let n = 0; for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) n++;
+  if (!n) { audio.ui(); showBanner(t('banner.wingNone')); return; }
+  if (kind === 'focus') {
+    let tgt = (player.lockedTarget && player.lockedTarget.alive) ? player.lockedTarget
+            : (player.lockTarget && player.lockTarget.alive) ? player.lockTarget
+            : nearestEnemyInFront(0.4);
+    if (!tgt) { audio.ui(); showBanner(t('banner.wingNoTarget')); return; }
+    for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (!w.alive) continue; w.forced = tgt; w.target = tgt; w.defend = 0; w.retargetCd = 1.2; }
+    showBanner(t('banner.wingFocus')); audio.power();
+  } else {
+    for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (!w.alive) continue; w.forced = null; w.target = null; w.defend = 6; }
+    showBanner(t('banner.wingRegroup')); audio.ui();
+  }
+}
 function updateCCA(w, dt) {
   w.retargetCd -= dt;
-  if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = nearestEnemyForWingman(w); w.retargetCd = 0.4; }
+  if (w.forced && !w.forced.alive) w.forced = null;
+  if (w.forced) { w.target = w.forced; }
+  else if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = nearestEnemyForWingman(w); w.retargetCd = 0.4; }
 
   const terminal = w.expire <= 1.5 || w.hp <= 10;
   let desired = t2, engaging = false;
@@ -412,9 +434,12 @@ function updateWingmen(dt) {
   }
 }
 function updateWingman(w, dt) {
-  // ----- target selection -----
+  // ----- target selection (honours FOCUS / REGROUP flight orders) -----
   w.retargetCd -= dt;
-  if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = nearestEnemyForWingman(w); w.retargetCd = 0.5; }
+  if (w.forced && !w.forced.alive) w.forced = null;
+  if (w.defend > 0) w.defend -= dt;
+  if (w.forced) { w.target = w.forced; }
+  else if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = (w.defend > 0 ? null : nearestEnemyForWingman(w)); w.retargetCd = 0.5; }
 
   let desired = t2, engaging = false, aimGood = false, td = Infinity;
   if (w.target && w.target.alive) {
@@ -572,6 +597,8 @@ addEventListener('keydown', e => {
     case 'KeyF': cycleLock(); break;
     case 'KeyR': useSpecial(); break;
     case 'KeyC': cycleCamera(); break;
+    case 'KeyT': wingCommand('focus'); break;
+    case 'KeyY': wingCommand('regroup'); break;
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -659,7 +686,7 @@ function animate() {
   } else if (state === 'playing') {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
     updatePlayer(dt);
-    for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) updateEnemy(enemies[i], dt * ts);
+    for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
     updateWingmen(dt * ts);
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);

@@ -195,12 +195,15 @@ const TECH_TREE = [
   { id:'g4', x:0, y:5, req:'g3',  fam:'gun', cost:640, sym:'\u25CE', name:'CRITICAL OPTICS',   desc:'+20% chance to land a critical hit for ×1.8 damage.',              ok:p=>!p.noCannon, apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.2); p.critMul = Math.max(p.critMul, 1.8); } },
   { id:'g5', x:0, y:6, req:'g4',  fam:'gun', cost:980, sym:'\u2726', name:'GAUSS DRIVER',      desc:'CAPSTONE \u2014 +45% cannon damage, +1 pierce, hypervelocity rounds, and critical hits now DETONATE on impact.', ok:p=>!p.noCannon, apply:p=>{ p.gunDmgMul *= 1.45; p.pierce += 1; p.bulletSpeedMul *= 1.2; p.critChance = Math.min(0.6, p.critChance + 0.05); p.critChain = true; } },
   { id:'sv', x:1, y:6, req:['g3','u3'], fam:'gun', cost:560, sym:'\u267b', name:'BRASS SCAVENGER', desc:'BRIDGE \u2014 every kill recovers 40 cannon rounds from the wreckage, and +10% cannon damage. (Gunnery OR Munitions.)', ok:p=>!p.noCannon, apply:p=>{ p.gunScavenge += 40; p.gunDmgMul *= 1.1; } },
+  { id:'g6', x:0, y:7, req:'g5', fam:'gun', cost:1180, sym:'♨', name:'INCENDIARY ROUNDS', desc:'Cannon hits set targets ABLAZE — they keep burning for heavy damage over time.', ok:p=>!p.noCannon, apply:p=>{ p.burnDps += 30; p.burnTime = Math.max(p.burnTime, 3.2); } },
+  { id:'ic', x:0, y:8, req:'g6', fam:'gun', cost:1320, sym:'❋', name:'INFERNO CASCADE', desc:'CAPSTONE — a foe that BURNS TO DEATH bursts, splashing its fire onto everything nearby. +16 burn damage. The blaze never stops spreading.', ok:p=>!p.noCannon, apply:p=>{ p.burnSpread = true; p.burnDps += 16; } },
 
   // ---- MUNITIONS (kill-cascade line, centre-left, under the WEAPONS trunk) ----
   { id:'u1', x:1, y:2, req:'wpn', fam:'mun', cost:170, sym:'\u229B', name:'SMART FUZING',      desc:'Every kill cooks off in a small blast, damaging nearby foes.',     apply:p=>{ p.chainRadius = Math.max(p.chainRadius, 150); p.chainDmg += 24; } },
   { id:'u2', x:1, y:3, req:'u1',  fam:'mun', cost:300, sym:'\u25C8', name:'OVERPRESSURE',      desc:'+15% cannon AND +15% missile damage.',                             apply:p=>{ p.gunDmgMul *= 1.15; p.missileDmgMul *= 1.15; } },
   { id:'u3', x:1, y:4, req:'u2',  fam:'mun', cost:470, sym:'\u2042', name:'CLUSTER CHARGES',   desc:'Kill blasts are much larger and hit harder.',                      apply:p=>{ p.chainRadius += 100; p.chainDmg += 22; } },
   { id:'u4', x:1, y:5, req:'u3',  fam:'mun', cost:820, sym:'\u2747', name:'CHAIN REACTION',    desc:'CAPSTONE \u2014 kill blasts DETONATE TWICE, reach further, and all your damage rises +20%. Cascading carnage.', apply:p=>{ p.chainProp = true; p.chainRadius += 70; p.chainDmg += 18; p.gunDmgMul *= 1.2; p.missileDmgMul *= 1.2; } },
+  { id:'u5', x:1, y:7, req:'u4', fam:'mun', cost:980, sym:'⚡', name:'EMP SUBMUNITIONS', desc:'Every kill bursts an EMP that STUNS nearby foes — cutting their guns, missiles and turns for ~2s.', apply:p=>{ p.empKill = Math.max(p.empKill, 540); } },
 
   // ---- MISSILES (ordnance line, centre) ----
   { id:'m1', x:2, y:2, req:'wpn', fam:'msl', cost:150, sym:'\u27B9', name:'HE WARHEADS',       desc:'+28% missile damage.',                                             apply:p=>{ p.missileDmgMul *= 1.28; } },
@@ -244,6 +247,7 @@ const TECH_TREE = [
     desc:'BRIDGE \u2014 reflex injection on confirmed kill: the world slows for a beat every time you down something. (Propulsion OR EW.)',
     apply:p=>{ p.slowOnKill = Math.max(p.slowOnKill, 0.6); } },
   { id:'p4', x:5, y:6, req:'p3',  fam:'prop', cost:820, sym:'\u27A4', name:'SUPERCRUISE',      desc:'CAPSTONE \u2014 +18% speed, +12% turn, and a constant 6% damage reduction from sheer energy.', apply:p=>{ p.speedMul *= 1.18; p.turnMul *= 1.12; p.dmgReduce = clamp(p.dmgReduce + 0.06, 0, 0.7); } },
+  { id:'p5', x:5, y:7, req:'p4', fam:'prop', cost:1080, sym:'⇈', name:'SCRAMJET CORE', desc:'+14% top speed, +10% turn rate, and a further 6% damage reduction from sheer energy.', apply:p=>{ p.speedMul *= 1.14; p.turnMul *= 1.10; p.dmgReduce = clamp(p.dmgReduce + 0.06, 0, 0.72); } },
 
   // ---- ELECTRONIC WARFARE (defence/utility line, right of AIRFRAME) ----
   { id:'e1', x:6, y:2, req:'def', fam:'ew', cost:140, sym:'\u2734', name:'DECOY POD',          desc:'+4 max flares (refilled) and they burn longer.',                   apply:p=>{ p.maxFlares += 4; p.flares = p.maxFlares; p.flarePro = 1; } },
@@ -252,6 +256,9 @@ const TECH_TREE = [
   { id:'fk', x:7, y:3, req:'e1', fam:'ew', cost:380, sym:'\u2749', name:'FLAK BLOOM',
     desc:'Flares are re-cored with HE \u2014 each one DETONATES as a flak burst when it burns out, shredding anything nearby. +2 max flares.',
     apply:p=>{ p.flakFlares = Math.max(p.flakFlares, 45); p.maxFlares += 2; p.flares = p.maxFlares; } },
+  { id:'fz', x:7, y:5, req:['t2','e3'], fam:'tac', cost:600, sym:'✶', name:'KILL FRENZY',
+    desc:'BRIDGE — every kill stokes a FRENZY: a stacking, decaying surge of fire-rate and damage. Stay on the trigger. (Tactics OR EW.)',
+    apply:p=>{ p.frenzyOnKill = 1.25; p.frenzyMax = 6; } },
   { id:'e4', x:6, y:5, req:'e3',  fam:'ew', cost:620, sym:'\u2737', name:'POINT-DEFENSE LASER', desc:'An auto-laser swats incoming missiles that stray too close.',     apply:p=>{ p.pointDefense = Math.max(p.pointDefense, 0.5); } },
   { id:'e5', x:6, y:6, req:'e4',  fam:'ew', cost:840, sym:'\u29BF', name:'TRACTOR FIELD',      desc:'Supply pickups are drawn toward you from range.',                  apply:p=>{ p.lootMagnet += 420; } },
   { id:'e6', x:6, y:7, req:'e5',  fam:'ew', cost:1120, sym:'\u2742', name:'GHOST PROTOCOL',    desc:'CAPSTONE \u2014 missiles rarely hold lock, special recharges another 20% faster, and the point-defense laser fires far more aggressively.', apply:p=>{ p.mslEvade = clamp(p.mslEvade + 0.3, 0, 0.95); p.special.max *= 0.8; p.pointDefense += 0.45; } },
@@ -284,6 +291,7 @@ const TECH_TREE = [
   { id:'reserve', x:10, y:5, req:'w3', fam:'wing', tab:'armory', cost:400, costStep:240, repeat:true, sym:'\u22EF', name:'RESERVE SQUADRON',
     desc:'REPEATABLE \u2014 scramble another escort (up to ' + MAX_WINGMEN + ' in the air) and up-armour the whole flight. Cost rises each time. A bottomless place to pour spare RP.',
     apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(55); } },
+  { id:'gd', x:11, y:4, req:'w3', fam:'wing', tab:'armory', cost:760, sym:'⛨', name:'GUARDIAN ESCORTS', desc:'Your escorts run their OWN point-defense laser — swatting enemy missiles that stray near the flight.', apply:p=>{ p.escortPD = true; } },
 
   // ===== ARMORY items (shown as grid in the Armory tab) ==========================
   { id:'fa1', x:0, y:0, tab:'armory', req:null, fam:'sup', cost:300, sym:'⚙', name:'WEAPONS LOCKER',
@@ -318,7 +326,7 @@ const CAM_NAMES = ['CHASE', 'CLOSE', 'COCKPIT'];
 
 const keys = {};
 let mouseRight = false;
-const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
+const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
 const HUDFONT = "'Share Tech Mono', monospace";
 

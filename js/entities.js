@@ -1023,6 +1023,10 @@ function createPlayer(idx) {
     shieldOnKill: 0, overshieldCap: 0, vampShield: 0, // ARMOUR: kills feed the shield; overheal banks as overshield
     reactive: 0,                                      // ARMOUR: shield-break emits a damaging pulse
     pointDefense: 0,                                  // EW: chance/s to swat an incoming missile
+    burnDps: 0, burnTime: 0, burnSpread: false,       // INCENDIARY: cannon hits ignite a DoT; INFERNO CASCADE spreads it on burn-death
+    empKill: 0,                                       // EMP SUBMUNITIONS: kills burst a stunning shock (radius)
+    escortPD: false,                                  // GUARDIAN ESCORTS: wingmen run their own point-defense
+    frenzyOnKill: 0, frenzy: 0, frenzyMax: 0,         // KILL FRENZY: kills stoke a decaying fire-rate/damage surge
     speedMul: 1, turnMul: 1,                          // PROPULSION: raw flight performance
     alphaMul: 1,                                      // TACTICS: bonus damage vs undamaged targets
     berserk: 0,                                       // TACTICS: bonus damage that grows as HP falls
@@ -1202,6 +1206,23 @@ function updateRivalFlee(e, dt) {
   return false;
 }
 
+/* status effects applied to EVERY enemy type (ticked before the per-type AI so a burn can finish a foe) */
+function tickEnemyStatus(e, dt) {
+  if (e.stun > 0) {
+    e.stun -= dt;
+    e.stunSparkT = (e.stunSparkT || 0) - dt;
+    if (e.stunSparkT <= 0) { e.stunSparkT = 0.08; spawnTrail(e.group.position, 0x6cc8ff, 0.7); }   // crackling EMP arcs
+  }
+  if (e.burnT > 0) {
+    e.burnT -= dt;
+    e.burnTickT = (e.burnTickT || 0) - dt;
+    if (e.burnTickT <= 0) {
+      e.burnTickT = 0.4;
+      damageEnemy(e, e.burnDps * 0.4, e.group.position, true);   // INCENDIARY DoT counts as your damage
+      if (e.alive) spawnSmoke(e.group.position, 0xff7a2a, 0.6);   // licking flames
+    }
+  }
+}
 function updateEnemy(e, dt) {
   if (e.type === 'ground') { updateGround(e, dt); return; }
   if (e.type === 'drone') { updateDrone(e, dt); return; }
@@ -1269,7 +1290,7 @@ function updateEnemy(e, dt) {
   if (e.elite && e.sprintTimer > 0) { e.sprintTimer -= dt; e.speed = lerp(e.speed, 340, dt * 2.5); }
 
   dirToQuat(desired, q1);
-  e.logicQuat.rotateTowards(q1, e.turnRate * dt);
+  e.logicQuat.rotateTowards(q1, e.turnRate * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun makes them wallow
   const nf = fwdQ(e.logicQuat, t4);
   const cross = t5.copy(fwd).cross(nf);
   const wantBank = clamp(-cross.y * 6, -1, 1);
@@ -1288,7 +1309,7 @@ function updateEnemy(e, dt) {
   if (e.group.userData.ring) e.group.userData.ring.rotation.z += dt * 2;
   if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.14 : 0))); }
 
-  const scrambled = player.empBurst > 0 && e.group.position.distanceToSquared(player.group.position) < 1960000;
+  const scrambled = (player.empBurst > 0 && e.group.position.distanceToSquared(player.group.position) < 1960000) || (e.stun > 0);
   if (scrambled) { e.fireCd = Math.max(e.fireCd, 1.4); e.missileCd = Math.max(e.missileCd, 3); }
   const jammed = player.jammer > 0;
 
@@ -1318,7 +1339,7 @@ function updateEnemy(e, dt) {
       e.missileCd = (e.type === 'boss' ? rand(3.5, 6) : rand(5, 9)) * dms * enr;
     }
   }
-  if (e.type === 'boss') updateBossSpecials(e, dt, dist);
+  if (e.type === 'boss' && !(e.stun > 0)) updateBossSpecials(e, dt, dist);
 }
 
 function updateBomber(e, dt) {
@@ -1327,7 +1348,7 @@ function updateBomber(e, dt) {
   if (agl < 320) desired.y = Math.max(desired.y, 0.18);
   desired.normalize();
   dirToQuat(desired, q1);
-  e.logicQuat.rotateTowards(q1, 0.5 * dt);
+  e.logicQuat.rotateTowards(q1, 0.5 * dt * (e.stun > 0 ? 0.35 : 1));
   const nf = fwdQ(e.logicQuat, t3);
   const cross = t4.copy(fwdQ(e.logicQuat, t5)).cross(nf);
   e.bank = damp(e.bank, clamp(-cross.y * 4, -0.5, 0.5), 3, dt);
@@ -1341,7 +1362,7 @@ function updateBomber(e, dt) {
   updateMarker(e);
   if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.08 : 0))); }
   const d = e.group.position.distanceTo(player.group.position);
-  const canShoot = !player.stealth && player.empBurst <= 0;
+  const canShoot = !player.stealth && player.empBurst <= 0 && !(e.stun > 0);
   // guns (medium magazine)
   if (d < 1500 && canShoot && e.bulletAmmo > 0) { e.fireCd -= dt; if (e.fireCd <= 0) { enemyFireGun(e); e.fireCd = rand(0.5, 1.0) * DIFFS[difficulty].fire; } }
   // missiles fired straight at the player (2 in the magazine)
@@ -1387,7 +1408,7 @@ function updateGround(e, dt) {
     const boosted = radarUp();
     const range = boosted ? 4800 : 3200;
     e.missileCd -= dt;
-    if (d < range && !player.stealth && player.empBurst <= 0 && player.jammer <= 0 && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < 5) {
+    if (d < range && !player.stealth && player.empBurst <= 0 && player.jammer <= 0 && !(e.stun > 0) && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < 5) {
       const dir = t1.copy(player.group.position).sub(e.group.position).normalize(); dir.y = Math.max(dir.y, 0.35); dir.normalize();
       spawnMissile(t2.copy(e.group.position).setY(e.group.position.y + 9), dir, null, true, 1);
       missiles[missiles.length - 1].fromGround = true;
@@ -1413,7 +1434,7 @@ function updateDrone(e, dt) {
   const dist = toP.length(); toP.multiplyScalar(1 / Math.max(dist, 0.001));
   const u = e.group.userData;
 
-  const scrambled = player.empBurst > 0 && e.group.position.distanceToSquared(player.group.position) < 1960000;
+  const scrambled = (player.empBurst > 0 && e.group.position.distanceToSquared(player.group.position) < 1960000) || (e.stun > 0);
   const canSee = !player.stealth && !scrambled;
   e.speed = lerp(e.speed, canSee ? 320 : 70, dt * (canSee ? 0.9 : 1.6));   // surge toward the player
 

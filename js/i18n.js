@@ -47,6 +47,7 @@ const I18N = {
     'hud.targetLocked': '◉ TARGET LOCKED',
     'hud.acquiring': 'ACQUIRING',
     'hud.supply': 'SUPPLY',
+    'hud.frenzy': 'FRENZY', 'hud.focus': 'FOCUS', 'hud.guard': 'GUARD',
     'hud.boss': '◆ BOSS',
     'hud.bomber': '⚑ BOMBER',
     'hud.noSpecial': 'NO SPECIAL',
@@ -66,7 +67,7 @@ const I18N = {
     'hud.km': 'km', 'hud.m': 'm', 'hud.sec': 's',
     'hud.rtb': 'RTB', 'hud.exp': 'EXP', 'hud.ace': 'ACE', 'hud.lv': 'Lv',
     'hud.killRow': 'Lv{lv} · W{wv}',
-    'hud.hint': 'W/S PITCH · Q/E ROLL · A/D YAW · SHIFT/CTRL THRUST · CTRL+S HIGH-G · SPACE GUN · G MISSILE · X FLARE · F LOCK · R SPECIAL · C CAM · V LOOK-BACK · RMB TRACK',
+    'hud.hint': 'W/S PITCH · Q/E ROLL · A/D YAW · SHIFT/CTRL THRUST · CTRL+S HIGH-G · SPACE GUN · G MISSILE · X FLARE · F LOCK · R SPECIAL · T/Y FLIGHT CMD · C CAM · V LOOK-BACK · RMB TRACK',
 
     /* ---- camera modes ---- */
     'cam.CHASE': 'CHASE', 'cam.CLOSE': 'CLOSE', 'cam.COCKPIT': 'COCKPIT',
@@ -117,6 +118,8 @@ const I18N = {
     'banner.cloakAmbush': 'CLOAK · AMBUSH ARMED',
     'banner.ccaSwarm': '▶ CCA SWARM · {n} DRONES AWAY',
     'banner.dewLance': 'DEW LANCE · FIRING',
+    'banner.wingFocus': '▸ FLIGHT: FOCUS FIRE', 'banner.wingRegroup': '▸ FLIGHT: REGROUP',
+    'banner.wingNone': 'NO ESCORTS AIRBORNE', 'banner.wingNoTarget': 'NO TARGET TO FOCUS',
 
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
@@ -216,11 +219,11 @@ const I18N = {
 
     /* ---- manual body (HTML) ---- */
     'manBody.flight': '<li><b>W</b> / <b>S</b> — pitch down / up</li><li><b>Q</b> / <b>E</b> — roll left / right</li><li><b>A</b> / <b>D</b> — yaw (rudder)</li><li><b>SHIFT</b> / <b>CTRL</b> — throttle up / brake</li><li><b>CTRL + S</b> — high-G turn (tighter pitch, bleeds speed)</li>',
-    'manBody.combat': '<li><b>SPACE</b> — cannon (now a finite magazine — watch the <em>GUN</em> count)</li><li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead — fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li><li><b>G</b> — fire missile (homes only with a full lock)</li><li><b>X</b> — drop flares (now reliably drag incoming missiles off you)</li><li><b>F</b> — designate / cycle lock target <em>(locking is manual by default — toggle Auto-Lock in Settings)</em></li><li><b>R</b> — special ability</li><li><b>C</b> cycle camera (incl. clear cockpit view) · <b>V</b> hold to look back · hold <b>RMB</b> track</li><li>Fly into glowing green <em>SUPPLY CRATES</em> to restock guns, missiles &amp; flares.</li><li><b>H</b> / <b>ESC</b> — open this manual (pauses)</li>',
+    'manBody.combat': '<li><b>SPACE</b> — cannon (now a finite magazine — watch the <em>GUN</em> count)</li><li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead — fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li><li><b>G</b> — fire missile (homes only with a full lock)</li><li><b>X</b> — drop flares (now reliably drag incoming missiles off you)</li><li><b>F</b> — designate / cycle lock target <em>(locking is manual by default — toggle Auto-Lock in Settings)</em></li><li><b>R</b> — special ability</li><li><b>T</b> — order your flight to FOCUS FIRE your target · <b>Y</b> — order them to REGROUP &amp; defend (escorts are tagged on the HUD)</li><li><b>C</b> cycle camera (incl. clear cockpit view) · <b>V</b> hold to look back · hold <b>RMB</b> track</li><li>Fly into glowing green <em>SUPPLY CRATES</em> to restock guns, missiles &amp; flares.</li><li><b>H</b> / <b>ESC</b> — open this manual (pauses)</li>',
     'manBody.lock': 'By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.',
     'manBody.stats': '<li><b>SPD</b> — top speed</li><li><b>AGI</b> — turn rate / maneuverability</li><li><b>ACC</b> — acceleration &amp; throttle response</li><li><b>ARM</b> — hull integrity (hit points)</li><li><b>STL</b> — stealth: how well clouds &amp; active cloak hide you, and how readily incoming missiles lose your lock</li><li><b>FPW</b> — firepower: cannon damage &amp; missile loadout. <em>Each airframe also has a unique passive strength &amp; weakness — see its card.</em></li>',
     'manBody.hud': '<li>Red brackets + health bar mark enemies; brightest = nearest threat.</li><li>Edge arrows with distance point to off-screen contacts.</li><li>Radar is heading-up: dots = bearing, ticks = above/below you, yellow ring = locked target.</li><li>Heed <b>PULL UP</b>, <b>MISSILE</b> (pop flares), <b>HIGH-G</b>, <b>STEALTH</b>.</li>',
-    'manBody.wingman': '<li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) — you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li><li>It draws enemy fire — hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li><li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>\'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s — they immediately acquire targets and attack. The F-47\'s passive makes all AI escorts and CCAs hit 25% harder.</li>',
+    'manBody.wingman': '<li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) — you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li><li>It draws enemy fire — hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li><li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>\'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s — they immediately acquire targets and attack. The F-47\'s passive makes all AI escorts and CCAs hit 25% harder.</li><li><b>FLIGHT COMMANDS:</b> press <b>T</b> to order the whole flight to <b>FOCUS FIRE</b> your locked target, or <b>Y</b> to <b>REGROUP</b> — break off and tuck into tight defensive formation. The <b>GUARDIAN ESCORTS</b> tech node lets your escorts run their own point-defense laser, swatting enemy missiles that stray near the flight.</li>',
     'manBody.enemies': '<li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs — they now carry a real cannon magazine and a single missile, so expect to be shot at.</li><li><b>Crimson drones</b> — cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers — keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li><li><b>Gold ACE</b> — an elite with more ammo that shrugs off a single missile; wear it down.</li><li><b>Bombers</b> pack a heavy cannon, two missiles &amp; a few flares.</li><li><b>Orange turrets</b> are ground SAM sites (missiles only).</li><li><b>Magenta BOSS</b> (every 4th wave) now cycles <em>telegraphed</em> special attacks — radial MISSILE BARRAGE, deployed DRONE SWARMS, and a close-range SHOCKWAVE PULSE — then enrages at low health. Watch for the warning, then break away or pop countermeasures.</li><li>Enemy ammo still runs dry — a disarmed foe is just a target.</li>',
     'manBody.tech': 'You earn <em>research points (RP)</em> — shown as <b>R&amp;D</b> on the HUD — only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> — a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all — press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.',
   },
@@ -246,6 +249,7 @@ const I18N = {
     'hud.targetLocked': '◉ 目标已锁定',
     'hud.acquiring': '搜索中',
     'hud.supply': '补给',
+    'hud.frenzy': '狂热', 'hud.focus': '集火', 'hud.guard': '护卫',
     'hud.boss': '◆ 首领',
     'hud.bomber': '⚑ 轰炸机',
     'hud.noSpecial': '无技能',
@@ -265,7 +269,7 @@ const I18N = {
     'hud.km': '千米', 'hud.m': '米', 'hud.sec': '秒',
     'hud.rtb': '返航', 'hud.exp': '剩余', 'hud.ace': '王牌', 'hud.lv': '等级',
     'hud.killRow': '等级{lv} · 第{wv}波',
-    'hud.hint': 'W/S 俯仰 · Q/E 滚转 · A/D 偏航 · SHIFT/CTRL 油门 · CTRL+S 高过载 · SPACE 机炮 · G 导弹 · X 干扰弹 · F 锁定 · R 技能 · C 镜头 · V 后视 · 右键 跟踪',
+    'hud.hint': 'W/S 俯仰 · Q/E 滚转 · A/D 偏航 · SHIFT/CTRL 油门 · CTRL+S 高过载 · SPACE 机炮 · G 导弹 · X 干扰弹 · F 锁定 · R 技能 · T/Y 编队指令 · C 镜头 · V 后视 · 右键 跟踪',
 
     'cam.CHASE': '追尾', 'cam.CLOSE': '近景', 'cam.COCKPIT': '座舱',
 
@@ -311,6 +315,8 @@ const I18N = {
     'banner.cloakAmbush': '隐身 · 伏击就绪',
     'banner.ccaSwarm': '▶ CCA SWARM · {n} 架无人机出击',
     'banner.dewLance': 'DEW LANCE · 开火',
+    'banner.wingFocus': '▸ 编队：集火', 'banner.wingRegroup': '▸ 编队：归队',
+    'banner.wingNone': '无僚机在空', 'banner.wingNoTarget': '无可集火目标',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',
@@ -402,11 +408,11 @@ const I18N = {
 
     /* ---- manual body (HTML) ---- */
     'manBody.flight': '<li><b>W</b> / <b>S</b> — 俯冲 / 拉起</li><li><b>Q</b> / <b>E</b> — 向左 / 向右滚转</li><li><b>A</b> / <b>D</b> — 偏航（方向舵）</li><li><b>SHIFT</b> / <b>CTRL</b> — 加速 / 减速</li><li><b>CTRL + S</b> — 高过载转弯（俯仰更急，消耗速度）</li>',
-    'manBody.combat': '<li><b>SPACE</b> — 机炮（弹药有限，注意<em>机炮</em>数量）</li><li><em>瞄准提前量光环</em>会为正前方最近的目标计算机炮提前量——把机头对准光环，当出现击杀机会时它会变为绿色<em>可射击</em>菱形。可在设置中开关。</li><li><b>G</b> — 发射导弹（仅在完全锁定时追踪）</li><li><b>X</b> — 投放干扰弹（可有效将来袭导弹引离）</li><li><b>F</b> — 指定 / 切换锁定目标 <em>（默认手动锁定——可在设置中切换自动锁定）</em></li><li><b>R</b> — 特殊技能</li><li><b>C</b> 切换镜头（含纯净座舱视角）· <b>V</b> 按住后视 · 按住<b>右键</b>跟踪</li><li>飞入发光的绿色<em>补给箱</em>以补充机炮、导弹与干扰弹。</li><li><b>H</b> / <b>ESC</b> — 打开本手册（暂停）</li>',
+    'manBody.combat': '<li><b>SPACE</b> — 机炮（弹药有限，注意<em>机炮</em>数量）</li><li><em>瞄准提前量光环</em>会为正前方最近的目标计算机炮提前量——把机头对准光环，当出现击杀机会时它会变为绿色<em>可射击</em>菱形。可在设置中开关。</li><li><b>G</b> — 发射导弹（仅在完全锁定时追踪）</li><li><b>X</b> — 投放干扰弹（可有效将来袭导弹引离）</li><li><b>F</b> — 指定 / 切换锁定目标 <em>（默认手动锁定——可在设置中切换自动锁定）</em></li><li><b>R</b> — 特殊技能</li><li><b>T</b> — 命令编队<em>集火</em>你的目标 · <b>Y</b> — 命令编队<em>归队</em>并转入防御（僚机会在HUD上标注）</li><li><b>C</b> 切换镜头（含纯净座舱视角）· <b>V</b> 按住后视 · 按住<b>右键</b>跟踪</li><li>飞入发光的绿色<em>补给箱</em>以补充机炮、导弹与干扰弹。</li><li><b>H</b> / <b>ESC</b> — 打开本手册（暂停）</li>',
     'manBody.lock': '默认采用<b>手动</b>锁定：按<b>F</b>指定正前方最近的目标（再次按可切换）。当你将其保持在前方准星内时，锁定环会逐渐收拢；一旦锁定环变为实心红色<em>已锁定</em>方框，你的下一枚导弹将自动追踪并<b>瞬间摧毁任何非首领目标</b>。首领必须逐步消耗。云层与启动的隐身会打断锁定。想要旧的方式？在设置中开启<em>自动锁定</em>。',
     'manBody.stats': '<li><b>速度</b> — 最大速度</li><li><b>敏捷</b> — 转向速率 / 机动性</li><li><b>加速</b> — 加速度与油门响应</li><li><b>装甲</b> — 机体强度（生命值）</li><li><b>隐身</b> — 隐身性：云层与启动的隐身对你的隐蔽程度，以及来袭导弹脱锁的难易</li><li><b>火力</b> — 火力：机炮伤害与导弹挂载。<em>每种机型还具备独特的被动优势与弱点——详见其卡片。</em></li>',
     'manBody.hud': '<li>红色括号加血条标示敌人；最亮者为最近的威胁。</li><li>带距离的边缘箭头指向屏幕外的目标。</li><li>雷达为机头朝上：圆点表示方位，刻度表示在你上方/下方，黄环表示已锁定目标。</li><li>注意<b>拉起</b>、<b>导弹</b>（投放干扰弹）、<b>高过载</b>、<b>隐身</b>提示。</li>',
-    'manBody.wingman': '<li>默认情况下，每次出击都会带上一名忠诚的<b>AI僚机</b>（青色战机、青色雷达标记）——可在<em>设置</em>中关闭这名初始僚机。它会在你的侧翼编队飞行，一旦有敌人进入范围便脱离展开缠斗，用机炮扫射战机并不时发射导弹。</li><li>它会吸引敌方火力——敌人有时会攻击它而非你。它可能被<em>击落</em>（首领的冲击波脉冲也会将其打落），之后它会重整旗鼓，数秒后一架新的僚机将返回就位。右下角的标牌会显示<b>就位</b>或<b>重整中</b>计时。</li><li><b>僚机指挥官</b>与<b>中队编成</b>科技树节点会增加第二、第三架永久僚机并强化全编队装甲；<b>舰队指挥官</b>终极节点会让你的僚机伤害大幅提升。<b>F-47</b>的<b>CCA SWARM</b>会在你前方部署三架鲜亮电蓝色的无人机，持续约16秒——它们会立即锁定目标并发起攻击。F-47的被动技能使所有AI僚机与CCA伤害提高25%。</li>',
+    'manBody.wingman': '<li>默认情况下，每次出击都会带上一名忠诚的<b>AI僚机</b>（青色战机、青色雷达标记）——可在<em>设置</em>中关闭这名初始僚机。它会在你的侧翼编队飞行，一旦有敌人进入范围便脱离展开缠斗，用机炮扫射战机并不时发射导弹。</li><li>它会吸引敌方火力——敌人有时会攻击它而非你。它可能被<em>击落</em>（首领的冲击波脉冲也会将其打落），之后它会重整旗鼓，数秒后一架新的僚机将返回就位。右下角的标牌会显示<b>就位</b>或<b>重整中</b>计时。</li><li><b>僚机指挥官</b>与<b>中队编成</b>科技树节点会增加第二、第三架永久僚机并强化全编队装甲；<b>舰队指挥官</b>终极节点会让你的僚机伤害大幅提升。<b>F-47</b>的<b>CCA SWARM</b>会在你前方部署三架鲜亮电蓝色的无人机，持续约16秒——它们会立即锁定目标并发起攻击。F-47的被动技能使所有AI僚机与CCA伤害提高25%。</li><li><b>编队指令：</b>按 <b>T</b> 命令整个编队<b>集火</b>你锁定的目标，或按 <b>Y</b> <b>归队</b>——脱离战斗并转入紧密防御编队。<b>守护僚机</b>科技节点让僚机运行自己的点防御激光，击落靠近编队的敌方导弹。</li>',
     'manBody.enemies': '<li><b>红色战机</b>会保持距离并盘旋，然后投入扫射式机炮攻击——它们现在携带真正的机炮弹药与一枚导弹，所以预料会遭到还击。</li><li><b>深红色无人机</b>——廉价的神风蜂群，无视机炮，只会<em>径直撞向你</em>。单个脆弱，成群致命——保持机动，用机炮扫射，或借助云层切断其视线。</li><li><b>金色王牌</b>——弹药更多的精英，能扛下单枚导弹；逐步消耗它。</li><li><b>轰炸机</b>配备重型机炮、两枚导弹与少量干扰弹。</li><li><b>橙色炮塔</b>是地面防空导弹据点（仅发射导弹）。</li><li><b>洋红色首领</b>（每第4波）现在会循环施放<em>有预兆的</em>特殊攻击——放射状导弹弹幕、部署无人机蜂群、以及近距离冲击波脉冲——并在低血量时狂暴。注意警告，然后规避或释放对抗措施。</li><li>敌方弹药同样会耗尽——被缴械的敌人不过是个靶子。</li>',
     'manBody.tech': '你仅能从<em>你亲自造成的</em>伤害、击杀与助攻中获得<em>研究点数（RP）</em>——在平显上显示为<b>研发</b>。僚机或CCA无人机的击杀不会给你任何点数。清除一波后会打开<b>研发界面</b>：将RP花费在五条分支上（机炮、导弹、机体、电子战、指挥）。每条分支都是一条<em>路线</em>——只有购买了上一个节点，下一个才会解锁。购买<em>在整局内永久生效</em>，因此每次出击都能打造不同的战机。能买多少就买多少，或者一个都不买——按<b>出击</b>（或<b>回车</b>）进入下一波。',
 
@@ -540,6 +546,12 @@ const I18N = {
       fa2: { name:'指挥权限', desc:'战区授权放行最大威力弹药 — 全部武器伤害+15%，僚机伤害+25%。' },
       fa3: { name:'瞄准计算机', desc:'战斗AI预算射击解算 — 暴击率+25%，暴击伤害至少为×2.2。' },
       fa4: { name:'黑市储备', desc:'黑市后勤渠道 — 最大照明弹+6，最大导弹+10，最大机炮弹药+400，全部立即补满。' },
+      g6: { name:'燃烧弹', desc:'机炮命中点燃目标 — 持续造成高额灼烧伤害。' },
+      ic: { name:'炼狱蔓延', desc:'终极节点 — 被烧死的敌人爆裂，将火焰溅射到附近所有目标。+16灼烧伤害。烈焰永不停息。' },
+      u5: { name:'电磁子弹药', desc:'每次击杀引爆电磁脉冲，使附近敌人瘫痪约2秒 — 切断其机炮、导弹与转向。' },
+      p5: { name:'冲压发动机核心', desc:'最高速度+14%，转向速率+10%，并再获得6%伤害减免。' },
+      fz: { name:'杀戮狂热', desc:'桥接节点 — 每次击杀积累狂热：可叠加、会衰减的射速与伤害增益。保持开火。（战术线或电子战线均可解锁。）' },
+      gd: { name:'守护僚机', desc:'你的僚机运行自己的点防御激光 — 击落靠近编队的敌方导弹。' },
       agm1: { name:'空对地导弹挂架', desc:'空对地导弹挂架 — 对地导弹伤害+75%。' },
       rkt1: { name:'火箭巢', desc:'机炮弹药对软目标产生破片效果 — 对地机炮伤害+100%。' },
       bel1: { name:'腹部装甲', desc:'机腹强化装甲 — 受地面导弹伤害−35%。' },

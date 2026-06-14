@@ -175,6 +175,7 @@ function drawHUD() {
   let near = null, nd = Infinity;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; const d = player.group.position.distanceToSquared(e.group.position); if (d < nd) { nd = d; near = e; } }
   for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) drawEnemy(ctx, enemies[i], cx, cy, enemies[i] === near);
+  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) drawWingman(ctx, wingmen[i], cx, cy);   // friendly escorts on the main HUD
 
   // supply-crate markers (diamond + range over any crate in view)
   for (let i = 0; i < loots.length; i++) {
@@ -188,6 +189,16 @@ function drawHUD() {
     ctx.fillText(t('hud.supply') + ' ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7);
   }
   ctx.lineWidth = 2;
+
+  // KILL FRENZY meter — a hot bar that drains while you hold off the trigger
+  if (player.frenzyMax && player.frenzy > 0) {
+    const f = clamp(player.frenzy / player.frenzyMax, 0, 1);
+    const bw = 168, bx = cx - bw / 2, by = H - 96;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, bw, 6);
+    ctx.fillStyle = 'rgba(255,140,40,0.92)'; ctx.fillRect(bx, by, bw * f, 6);
+    ctx.fillStyle = 'rgba(255,185,90,0.95)'; ctx.font = 'bold 11px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText(t('hud.frenzy') + ' ×' + (1 + 0.3 * f).toFixed(2), cx, by - 7);
+  }
 
   for (let i = hitMarkers.length - 1; i >= 0; i--) {
     const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1); const s = 11 + (1 - a) * 9;
@@ -231,6 +242,41 @@ function drawHUD() {
     ctx.beginPath(); ctx.moveTo(0, -rr - 7); ctx.lineTo(-9, -rr + 9); ctx.lineTo(9, -rr + 9); ctx.closePath(); ctx.fill();
     ctx.lineCap = 'butt'; ctx.restore();
   }
+}
+
+/* Friendly escort marker — an open teal chevron (deliberately unlike the enemies' square brackets) so you
+   can always read where your flight is, who they're focusing, and how healthy they are. */
+function drawWingman(ctx, w, cx, cy) {
+  const pos = w.group.position;
+  const p = projectPoint(pos);
+  const dist = player.group.position.distanceTo(pos);
+  const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
+  const col = w.cca ? '73,182,255' : '45,255,176';
+  if (onScreen) {
+    const s = clamp(52000 / Math.max(dist, 1), 11, 28), x = p.x, y = p.y;
+    ctx.strokeStyle = 'rgba(' + col + ',0.92)'; ctx.lineWidth = 2;
+    ctx.beginPath();                              // upward chevron ∧ centred on the escort
+    ctx.moveTo(x - s, y + s * 0.55); ctx.lineTo(x, y - s * 0.7); ctx.lineTo(x + s, y + s * 0.55);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(' + col + ',0.6)';
+    ctx.beginPath(); ctx.arc(x, y, 2.2, 0, TWO_PI); ctx.fill();
+    const hpFrac = clamp(w.hp / w.maxHp, 0, 1);    // slim health pip above the chevron
+    const bw = s * 1.5, bx = x - bw / 2, by = y - s * 0.7 - 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, bw, 3);
+    ctx.fillStyle = 'rgba(' + col + ',0.9)'; ctx.fillRect(bx, by, bw * hpFrac, 3);
+    ctx.fillStyle = 'rgba(' + col + ',0.92)'; ctx.font = '10px ' + HUDFONT; ctx.textAlign = 'center';
+    const tag = w.forced ? ' ▸' + t('hud.focus') : (w.defend > 0 ? ' ▸' + t('hud.guard') : '');
+    ctx.fillText(w.name + tag, x, y + s * 0.55 + 12);
+  } else {
+    let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
+    const rx = W / 2 - 48, ry = H / 2 - 48;
+    const ex = cx + Math.cos(ang) * rx, ey = cy + Math.sin(ang) * ry;
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+    ctx.strokeStyle = 'rgba(' + col + ',0.85)'; ctx.lineWidth = 2;   // hollow teal arrowhead at the screen edge
+    ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-9, -7); ctx.lineTo(-9, 7); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.lineWidth = 2;
 }
 
 function drawHorizon(ctx, cx, cy) {
