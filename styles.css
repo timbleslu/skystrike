@@ -271,6 +271,13 @@ canvas{display:block}
 .gowrap h1{font-family:var(--disp);font-weight:900;font-size:clamp(40px,8vw,86px);letter-spacing:10px;color:var(--red);text-shadow:0 0 40px rgba(255,57,75,.6)}
 .gostats{font-family:var(--disp);letter-spacing:4px;font-size:18px;margin:20px 0 30px;color:var(--txt)}
 .gostats b{color:var(--cy);font-size:28px;margin:0 8px}
+.gograde{display:flex;flex-direction:column;align-items:center;margin:18px 0 10px;gap:4px}
+.grade-title{font-family:var(--disp);font-size:9px;letter-spacing:3px;color:var(--dim);text-transform:uppercase}
+.grade-letter{font-family:var(--disp);font-weight:900;font-size:clamp(56px,10vw,96px);line-height:1;letter-spacing:6px;color:var(--cy);text-shadow:0 0 40px rgba(25,240,212,.7)}
+.grade-bonus{font-family:var(--disp);font-size:12px;letter-spacing:4px;color:var(--yel)}
+.gospbox{font-family:var(--disp);letter-spacing:3px;font-size:14px;margin:10px 0 22px;color:var(--dim)}
+.gospbox b{color:var(--cy);font-size:22px;margin:0 6px}
+.gospsep{margin:0 4px;color:var(--dim)}
 #gameover button{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:6px;color:var(--ink);padding:15px 50px;border:none;cursor:pointer;
   background:linear-gradient(90deg,var(--red),var(--warn));clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);box-shadow:0 0 30px rgba(255,57,75,.5)}
 #gameover button:hover{transform:scale(1.04)}

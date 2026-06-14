@@ -32,6 +32,30 @@ function spAward(run, player) {
   return Math.max(0, Math.floor(sp));
 }
 
+/* ---------------- run grading (PURE — mirrored byte-identical in tests/grading.test.js) ----------------
+   Grades the completed run on kill efficiency, time, damage taken, and objectives. Returns
+   { letter, mult, score } where letter is S/A/B/C and mult is the SP bonus multiplier.
+   Callers must stamp run.waveReached + run.timeSecs before calling so this stays pure. */
+function gradeRun(run, player) {
+  if (!run) return { letter: 'C', mult: 1.0, score: 0 };
+  var waves = Math.max(1, run.waveReached || 1);
+  var expected = waves * 4;
+  var kills = (run.kills || 0) + (run.ground || 0) + (run.boss || 0);
+  var killScore = Math.min(1, kills / expected);
+  var secs = Math.max(1, run.timeSecs || 1);
+  var timeScore = Math.min(1, (waves * 30) / secs);
+  var maxDmg = 300 + waves * 60;
+  var dmgScore = Math.max(0, 1 - (run.damageTaken || 0) / maxDmg);
+  var missionScore = Math.min(1, (run.missions || 0) / Math.max(1, Math.floor(waves / 2)));
+  var total = killScore * 0.40 + timeScore * 0.20 + dmgScore * 0.25 + missionScore * 0.15;
+  var letter, mult;
+  if (total >= 0.85)      { letter = 'S'; mult = 1.5; }
+  else if (total >= 0.65) { letter = 'A'; mult = 1.3; }
+  else if (total >= 0.40) { letter = 'B'; mult = 1.15; }
+  else                    { letter = 'C'; mult = 1.0; }
+  return { letter: letter, mult: mult, score: total };
+}
+
 /* ---------------- meta-upgrade perk tree ----------------
    Each perk is a bounded persistent edge applied at run start. apply(p, lvl) mutates the freshly
    spawned player; lvl 0 is a no-op (perk not owned). Costs scale with level via perkCost. */

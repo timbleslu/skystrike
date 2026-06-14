@@ -466,6 +466,7 @@ function damagePlayer(amt, src) {
   if (player.invuln > 0) return;
   amt *= DIFFS[difficulty].dmg;
   if (player.dmgReduce) amt *= (1 - player.dmgReduce);   // GUARDIAN SYSTEM upgrade
+  run.damageTaken = (run.damageTaken || 0) + amt;
   player.shieldT = 4.0;
   const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, amt); player.shield -= s; amt -= s; }
