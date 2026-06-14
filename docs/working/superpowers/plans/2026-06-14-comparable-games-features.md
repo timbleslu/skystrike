@@ -3,11 +3,22 @@
 Source ideas: `docs/working/superpowers/ideas/2026-06-14-feature-ideas-comparable-games.md`
 Branch: `feat/comparable-games-features` (off master). Execution: subagent-driven-development, per-feature worktree isolation, model tailored to difficulty (haiku=very-simple, sonnet=easy, opus=hard). Two-stage review (spec → quality) per feature. Sequential test-gated merge into the integration branch.
 
-## ⏸ RESUME CHECKPOINT — 2026-06-14 (updated: Wave 1 MERGED)
+## ⏸ RESUME CHECKPOINT — 2026-06-14 (updated: Wave 1 + Wave 2 MERGED; paused for /compact before Wave 3)
 
-**Where we are:** ✅ **Wave 1 COMPLETE & MERGED** into `feat/comparable-games-features` (F2→F1→F3→F9→F4, `npm test` green after each; F1 MIRROR-marker polish applied @ `31f0442`). Wave 2 dispatched in fresh worktrees off the merged tip (`w2-f5-tutorial`/`w2-f6-stars`/`w2-f7-daily`/`w2-f8-aces`/`w2-f12-sound`/`w2-f13-pilot`). Wave 3 pending (F10,F11,F14,F15 — F15 needs F4, now merged ✓).
+**Where we are:** ✅ **Wave 1 + Wave 2 COMPLETE & MERGED** into `feat/comparable-games-features` @ `44dcf6f`. Full suite green (51 ok lines), all `js/` syntax-clean. **Next: Wave 3** (F10 AWACS, F11 mobile perf, F14 set-pieces, F15 boss rush — F15 needs F4, already merged ✓). User asked to **/compact before starting Wave 3 edits.**
 
-**Wave 1 merge result:** integration branch `feat/comparable-games-features` @ `31f0442`; 5 feature commits + 5 merge commits + 1 polish commit on top of the 2 docs commits. CLAUDE.md Architecture rows (globals/combat/entities) + Current-state entries reconciled (all additive). Old `worktree-agent-*` worktrees now stale — prune after Wave 3.
+**Wave 1 merge result:** F2→F1→F3→F9→F4 merged, `npm test` green after each; F1 MIRROR-marker polish @ `31f0442`.
+
+**Wave 2 merge result:** F8→F5→F12→F7→F6→F13 merged (order arbitrary; all independent). Merge commits: `c8cb336`(F8) `da9f912`(F5) `6dac1a4`(F12) `06eddce`(F7) `d546dbf`(F6) `44dcf6f`(F13). Reconciled additive conflicts on: globals.js (`run` initializer — `sectorAceSpawned`+`cleanWaves`; two adjacent MIRROR blocks tutorial+daily), ui.js (`startGame` run reset + `applyLang`), meta.js (freshMeta/validMeta), i18n.js, CLAUDE.md, index.html/styles.css, tests/meta.test.js.
+  - **BLOCKER FIXED (F6+F13 meta back-compat):** F6 had made `validMeta` *require* `m.stars` → legacy saves would `freshMeta()`-wipe all progression. Reconciled with F13's pattern: `validMeta` stays **lenient** (core fields only), `freshMeta` defaults `stars{}`+`callsign`+`emblem`+`patches{}`, and `loadMeta` **heals** any missing field (no wipe). Updated source `js/meta.js` + both mirrors (`tests/meta.test.js`, `tests/stars.test.js`) byte-identical; flipped stars.test.js's old "missing stars rejected/wiped" asserts to "loads as-is, progression preserved, stars healed".
+  - ⚠️ One merge commit (F6, `d546dbf`) was initially made with `git add -A`, which embedded the `.claude/worktrees/*` repos — amended out, and `.claude/worktrees/` added to `.gitignore`. Don't use `git add -A` here.
+
+**Wave-2 minor follow-ups (non-blocking, from reviews — apply in Wave 3 session):**
+- F7: `returnToHangar()` (ui.js) doesn't call `refreshDailyEntry()`, so after a daily run the hangar button shows the unlocked label until reload (the *gate* still works — `played` flag blocks a 2nd attempt). One-line fix.
+- F12: `killSfx()` (engine.js) can orphan oscillators if `audio.on` toggles false mid-call. Add an `if(!this.on) return;` guard before the post-`burst()` sawtooth create. Cosmetic/leak-only.
+- F5: arrow placement not re-anchored on resize (YAGNI). F7 daily jet pick bypasses the unlock gate (intentional per agent). All headless-untestable; need a browser playtest pass eventually.
+
+Old `worktree-agent-*` (Wave 1) + `w2-*` (Wave 2) worktrees now stale — `git worktree prune` + branch cleanup after Wave 3.
 
 **Git state:**
 - Integration branch: `feat/comparable-games-features` @ `8653c45` (contains ONLY docs: the feature-ideas doc + this plan). Main working tree is on this branch, clean.
@@ -206,7 +217,7 @@ Known seams (verified this session):
   - [~] F3 afterburner HUD — needs CLAUDE.md line, then merge
   - [~] F9 barrel-roll — needs two-stage review, then merge
   - [~] F4 multi-phase bosses — LANDED `worktree-agent-a0e9640d567024562` @ `cf7eeaf`; needs review, merge LAST
-  - [ ] MERGE Wave 1 in order F2→F1→F3→F9→F4 with `npm test` gate (additive conflicts expected)
-- [ ] Wave 2: F5, F6, F7, F8, F12, F13 (harden dispatches w/ git-discipline block)
-- [ ] Wave 3: F10, F11, F14, F15 (F15 after F4 merged)
+  - [x] MERGE Wave 1 in order F2→F1→F3→F9→F4 with `npm test` gate — DONE @ `31f0442`
+- [x] Wave 2: F5, F6, F7, F8, F12, F13 — IMPLEMENTED (worktree-isolated, git-discipline held; F13 re-dispatched once after a mid-plan death), REVIEWED (2-stage), MERGED @ `44dcf6f`, suite green. Meta back-compat BLOCKER fixed.
+- [ ] **/compact here (user request), THEN Wave 3: F10 AWACS, F11 mobile perf, F14 set-pieces, F15 boss rush** (F15 after F4 ✓ merged). Apply Wave-2 minor follow-ups (F7 button refresh, F12 oscillator guard) in this session too.
 - [ ] Final full-implementation review + `node scripts/shot.mjs` smoke + finishing-a-development-branch
