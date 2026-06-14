@@ -162,6 +162,7 @@ function spawnEscortConvoy(m, wave) {
       e.truckDir = cDir.clone(); e.convoy = true; e.escortUnit = true; e.convoySpeed = 60 + wave * 0.5;
       e.spawnPos = e.group.position.clone();
       e.marker.material.color.setHex(0x46ff8c);   // friendly green marker
+      if (k === m.params.convoy - 1) m.params.spawnedAll = true;   // last truck on field: arm the survivor/fail check
     });
   }
 }
@@ -191,7 +192,7 @@ function updateMission(dt) {
       if (e.spawnPos && e.group.position.distanceTo(e.spawnPos) > 5500) { e.reachedExit = true; }
       if (e.reachedExit) exited = true;
     }
-    mission.params.survivors = alive;
+    if (mission.params.spawnedAll) mission.params.survivors = alive;   // don't count survivors until the convoy is fully spawned (avoids a false fail mid-spawn)
     if (exited) mission.params.exited = true;   // any surviving truck reaching the map edge clears the escort
   } else if (mission.type === 'defend') {
     const a = mission.params._asset;

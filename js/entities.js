@@ -1396,7 +1396,7 @@ function updateGround(e, dt) {
     if (e.convoy && d > 7800) {   // convoy truck outruns the radar — gone for good
       e.alive = false; scene.remove(e.group); disposeGroup(e.group); if (e.marker) scene.remove(e.marker);
       clearLocks(e);
-      showBanner('⚠ CONVOY TRUCK ESCAPED');
+      showBanner(t('banner.convoyEscaped'));
       return;
     }
   } else if (e.gkind === 'aaa') {

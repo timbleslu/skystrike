@@ -33,7 +33,7 @@ function sectorMission(type) {
 // `weather` slot (null here; feature #4 weather reads/sets it per sector).
 function sectorPlan(type, wave) {
   if (type === 'FURBALL')   return { fighters: Math.min(4 + (wave >> 1), 10), aces: wave >= 6 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, mission: 'sweep', weather: null };
-  if (type === 'INTERCEPT') return { fighters: 3, aces: 0, bombers: wave >= 8 ? 3 : 2, ground: false, boss: false, rival: false, depot: false, mission: 'intercept', weather: null };
+  if (type === 'INTERCEPT') return { fighters: 3, aces: 0, bombers: wave >= 8 ? 4 : 3, ground: false, boss: false, rival: false, depot: false, mission: 'intercept', weather: null };
   if (type === 'STRIKE')    return { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, mission: 'strike', weather: null };
   if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, mission: 'elite', weather: null };
   if (type === 'DEPOT')     return { fighters: 0, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: true, mission: 'none', weather: null };
