@@ -185,7 +185,7 @@ function updateMissiles(dt, ts) {
       if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) {
         let mDmg = m.dmg;
         if (m.fromGround && player.bellyArmor) mDmg *= player.bellyArmor;   // BELLY ARMOR
-        damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
+        shakeCam(0.5); damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
       }
     } else {
       for (let k = 0; k < enemies.length; k++) {
@@ -469,7 +469,7 @@ function damagePlayer(amt, src) {
   player.shieldT = 4.0;
   const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, amt); player.shield -= s; amt -= s; }
-  player.hp -= amt; player.damageFlash = 0.5; player.shake = Math.max(player.shake, 0.4);
+  player.hp -= amt; player.damageFlash = 0.5; player.shake = Math.max(player.shake, 0.4); shakeCam(0.5);
   if (src) { player.hurtDir = new THREE.Vector3().copy(src).sub(player.group.position).normalize(); player.hurtT = 1.0; }
   audio.hurt();
   haptic(60);
@@ -546,7 +546,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
-  if (byPlayer) haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20);
+  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(0.25); }
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);

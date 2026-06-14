@@ -375,6 +375,16 @@ function buffFlight(extra) { for (let i = 0; i < wingmen.length; i++) { const w 
 const LOCK_TIME = 1.3;
 const CAM_NAMES = ['CHASE', 'CLOSE', 'COCKPIT'];
 
+// ---- camera shake globals (F1) ----
+// camShake: current shake magnitude; decays to 0 each frame via decayShake.
+// shakeCam(amt): sets camShake = max(current, amt) — strongest pending shake wins, never accumulates unboundedly.
+// decayShake(v, dt): PURE — returns max(0, v - dt * CAMSHAKE_RATE). Mirrored byte-identical in tests/camshake.test.js.
+const CAMSHAKE_RATE = 6;   // shake units lost per second
+const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
+let camShake = 0;
+function shakeCam(amt) { camShake = Math.max(camShake, amt); }
+function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
+
 const keys = {};
 let mouseRight = false;
 const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);

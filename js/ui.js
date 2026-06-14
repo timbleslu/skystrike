@@ -47,6 +47,11 @@ function updateCamera(dt) {
     camera.position.y += rand(-1, 1) * player.shake * 3;
     camera.position.z += rand(-1, 1) * player.shake * 2;
   }
+  if (camShake > 0) {
+    camera.position.x += rand(-1, 1) * camShake * CAMSHAKE_K;
+    camera.position.y += rand(-1, 1) * camShake * CAMSHAKE_K;
+    camShake = decayShake(camShake, dt);
+  }
   camera.updateMatrixWorld();
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
 }
