@@ -524,9 +524,85 @@ function cacheEl() {
     vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
     bossbar: g('bossbar'), bossfill: g('bossfill'),
     abIndicator: g('abIndicator'),
+    tut: g('tutorial'), tutCard: g('tutCard'), tutArrow: g('tutArrow'),
+    tutStep: g('tutStep'), tutText: g('tutText'), tutSkip: g('tutSkip'),
   };
 }
 function tog(e, on) { e.classList.toggle('show', !!on); }
+
+/* ---------------- first-run guided tutorial (F5) ----------------
+   Lightweight stepped prompts that gate on the player's own actions during their first wave.
+   The pure step machine is `tutorialNext` (globals.js, mirrored in tests/tutorial.test.js); the
+   `tutorial` runtime state lives in globals.js. main.js feeds detected action events here each frame.
+   Touch vs keyboard is chosen at render time (isTouchEnabled) so the hint text matches the input mode. */
+// i18n key for the current step's hint, touch-aware.
+function tutStepKey(step) {
+  const base = TUTORIAL_STEPS[step];                 // 'pitch' | 'throttle' | 'guns' | 'missile'
+  if (!base) return 'tut.done';
+  return isTouchEnabled ? ('tut.' + base + 'Touch') : ('tut.' + base);  // e.g. tut.pitchTouch / tut.pitch
+}
+// the HUD element a step's arrow should point at (null = no specific element → arrow hidden).
+function tutArrowTarget(step) {
+  if (TUTORIAL_STEPS[step] === 'throttle') return el.thr && el.thr.parentElement;   // the THR meter row
+  if (TUTORIAL_STEPS[step] === 'missile') return el.missiles;                       // the Msl counter
+  return null;
+}
+// position the pointer arrow just above (or below) the target element, in viewport coords.
+function placeTutArrow(target) {
+  const a = el.tutArrow;
+  if (!a) return;
+  if (!target) { a.classList.remove('show'); return; }
+  const r = target.getBoundingClientRect();
+  if (!r.width && !r.height) { a.classList.remove('show'); return; }
+  const cx = r.left + r.width / 2;
+  // prefer pointing DOWN from just above the element; if it's near the top edge, flip to point UP from below.
+  const above = r.top > 46;
+  a.classList.toggle('up', !above);
+  a.style.left = cx + 'px';
+  a.style.top = (above ? r.top - 26 : r.bottom + 6) + 'px';
+  a.classList.add('show');
+}
+// render the overlay for the current tutorial.step (or hide it when done/inactive).
+function renderTutorial() {
+  if (!el.tut) return;
+  if (!tutorial.active || tutorial.done || tutorial.step >= TUTORIAL_DONE) { el.tut.classList.remove('show'); return; }
+  el.tut.classList.add('show');
+  if (el.tutText) el.tutText.textContent = t(tutStepKey(tutorial.step));
+  if (el.tutStep) el.tutStep.textContent = (tutorial.step + 1) + '/' + TUTORIAL_DONE;
+  placeTutArrow(tutArrowTarget(tutorial.step));
+}
+// begin the tutorial for a new player's first run. Idempotent; baselines the run-stat counters
+// so we detect the NEXT gun/missile action rather than ammo spent before this point.
+function startTutorial() {
+  tutorial.active = true; tutorial.done = false; tutorial.step = 0;
+  tutorial.prevShots = (typeof run === 'object' && run) ? (run.shots || 0) : 0;
+  tutorial.prevMissiles = (typeof run === 'object' && run) ? (run.missiles || 0) : 0;
+  if (el.tutSkip) {
+    el.tutSkip.textContent = t('tut.skip');
+    if (!el.tutSkip._wired) {                        // wire Skip once
+      el.tutSkip._wired = true;
+      el.tutSkip.addEventListener('click', () => { advanceTutorial('skip'); if (audio.on) audio.ui(); });
+    }
+  }
+  renderTutorial();
+}
+// tear down: latch done, hide overlay. Persistence is shared with onboarding (skystrike_onboarded
+// is already set once a new player clears the controls brief) — no extra storage key.
+function finishTutorial() {
+  tutorial.active = false; tutorial.done = true;
+  if (el.tut) el.tut.classList.remove('show');
+  showBanner(t('tut.done'));
+}
+// feed one detected action event into the pure machine; re-render or finish on a step change.
+function advanceTutorial(event) {
+  if (!tutorial.active || tutorial.done) return;
+  const next = tutorialNext(tutorial.step, event);
+  if (next === tutorial.step) return;               // no-op event
+  tutorial.step = next;
+  if (next >= TUTORIAL_DONE) { finishTutorial(); return; }
+  if (audio.on) audio.ui();
+  renderTutorial();
+}
 
 let bannerT = 0;
 function showBanner(txt) { el.banner.textContent = txt; el.banner.classList.remove('show'); void el.banner.offsetWidth; el.banner.classList.add('show'); bannerT = 2.0; }
@@ -1124,6 +1200,10 @@ function startGame(i) {
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {} };
   state = 'playing';
+  // first-run guided tutorial (F5): only a brand-new player (this session) who hasn't finished it yet.
+  // isReturningPlayer (globals.js) is captured at boot, so returning players skip entirely.
+  if (!isReturningPlayer && !tutorial.done) startTutorial();
+  else if (el.tut) el.tut.classList.remove('show');
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
 }
@@ -1227,6 +1307,8 @@ function applyLang() {
   setTxt('obCombatH', t('onboard.combat')); setTxt('obCombatK', t('onboard.combatKeys'));
   setTxt('obViewH', t('onboard.view')); setTxt('obViewK', t('onboard.viewKeys'));
   setTxt('obTouch', t('onboard.touch')); setTxt('obMore', t('onboard.more'));
+  setTxt('tutSkip', t('tut.skip'));
+  if (typeof tutorial !== 'undefined' && tutorial.active && !tutorial.done) renderTutorial();   // retranslate live tutorial hint
   setTxt('obContinue', t('onboard.continue'));
   // hangar
   setTxt('hangarSub', t('hangar.sub')); setTxt('hangarBestLbl', t('hangar.best'));

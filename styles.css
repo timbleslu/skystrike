@@ -395,6 +395,28 @@ canvas{display:block}
 .ob-continue{display:block;margin:26px auto 0;background:transparent;border:1px solid var(--cy);color:var(--cy);font-family:var(--disp);letter-spacing:3px;font-size:16px;padding:15px 44px;cursor:pointer;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)}
 .ob-continue:hover{background:rgba(25,240,212,.1)}
 @media(max-width:640px){.ob-grid{grid-template-columns:1fr}}
+/* first-run guided tutorial (F5): non-blocking HUD overlay (only #tutSkip is interactive) */
+#tutorial{position:fixed;inset:0;z-index:55;display:none;pointer-events:none}
+#tutorial.show{display:block}
+#tutCard{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);max-width:min(620px,86vw);
+  background:linear-gradient(180deg,rgba(6,18,26,.94),rgba(3,8,14,.96));border:1px solid var(--cy);
+  box-shadow:0 0 26px rgba(25,240,212,.35),inset 0 0 18px rgba(25,240,212,.06);
+  padding:16px 20px 18px;text-align:center;
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%)}
+.tut-step{font-family:var(--mono);letter-spacing:3px;font-size:11px;color:var(--cy);opacity:.85;margin-bottom:6px}
+.tut-text{font-family:var(--disp);letter-spacing:1px;font-size:16px;line-height:1.45;color:#eafffb;text-shadow:0 0 14px rgba(25,240,212,.4)}
+.tut-skip{pointer-events:auto;margin-top:14px;background:transparent;border:1px solid rgba(91,138,134,.6);
+  color:var(--dim);font-family:var(--mono);letter-spacing:3px;font-size:11px;padding:7px 22px;cursor:pointer;transition:color .15s,border-color .15s}
+.tut-skip:hover{color:var(--cy);border-color:var(--cy)}
+/* pointer arrow: positioned by JS via left/top; default points down at a HUD element */
+#tutArrow{position:absolute;width:0;height:0;display:none;
+  border-left:13px solid transparent;border-right:13px solid transparent;border-top:20px solid var(--cy);
+  filter:drop-shadow(0 0 8px rgba(25,240,212,.8));transform:translate(-50%,0);
+  animation:tutBob 1s ease-in-out infinite}
+#tutArrow.show{display:block}
+#tutArrow.up{border-top:0;border-bottom:20px solid var(--cy)}
+@keyframes tutBob{0%,100%{margin-top:0}50%{margin-top:7px}}
+@media(max-width:640px){#tutCard{bottom:20%}.tut-text{font-size:14px}}
 /* settings language toggle */
 .langtog{display:flex;gap:8px}
 .langbtn{background:transparent;border:1px solid rgba(91,138,134,.5);color:var(--txt);font-family:var(--mono);font-size:12px;padding:5px 12px;cursor:pointer}

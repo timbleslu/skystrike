@@ -618,6 +618,28 @@ function handleWaves(dt) {
   processSpawnQueue(SPAWN_PER_FRAME);   // build a few queued enemies this frame
 }
 
+/* First-run guided tutorial (F5): each frame, detect whether the player performed the CURRENT
+   step's action from live player/run state and feed the matching event to the pure step machine
+   (advanceTutorial → tutorialNext, ui.js/globals.js). Detection is action-based so the prompt only
+   advances once the pilot actually does the thing — works identically for keyboard and touch input.
+     step 0 pitch    : nose pitching (|pitchRate| past a clear threshold)
+     step 1 throttle : throttle pushed past 0.6
+     step 2 guns     : the run shot counter ticked up since we started/last advanced
+     step 3 missile  : a full lock was achieved AND a missile was launched since baseline */
+function tickTutorial() {
+  if (typeof tutorial === 'undefined' || !tutorial.active || tutorial.done || !player) return;
+  const step = TUTORIAL_STEPS[tutorial.step];
+  if (step === 'pitch') {
+    if (Math.abs(player.pitchRate || 0) > 0.25) advanceTutorial('pitched');
+  } else if (step === 'throttle') {
+    if ((player.throttle || 0) > 0.6) advanceTutorial('throttled');
+  } else if (step === 'guns') {
+    if ((run.shots || 0) > tutorial.prevShots) { tutorial.prevMissiles = run.missiles || 0; advanceTutorial('fired'); }
+  } else if (step === 'missile') {
+    if (player.lockedTarget && (run.missiles || 0) > tutorial.prevMissiles) advanceTutorial('missile');
+  }
+}
+
 /* ---------------- input ---------------- */
 addEventListener('keydown', e => {
   keys[e.code] = true;
@@ -685,6 +707,7 @@ function animate() {
     readFlightInput();   // compose touch/motion into flightInput before the player update consumes it
     updateWeather(dt * ts);   // advance turbulence phase + storm lightning before the player update reads it
     updatePlayer(dt);
+    tickTutorial();   // first-run guided tutorial: gate stepped prompts on the player's own actions
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
     updateWingmen(dt * ts);
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
