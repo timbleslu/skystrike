@@ -44,19 +44,28 @@ function motionAxis(angle, offset, maxAngle) {
 /* ---------------- per-frame source selection (the seam writer) ---------------- */
 // Picks the active analog source by Settings.mobileControl and writes flightInput{pitch,roll}.
 // Keyboard is intentionally NOT read here — combat.js adds digital keys on top before clamping.
+let motionPrevState = '';
 function readFlightInput() {
+  // At sortie start, (re)bind motion and recapture the neutral attitude at the moment play begins —
+  // not whatever attitude the phone was at when Motion was toggled on in the menu (which left the
+  // controls biased/unresponsive). The manual Recenter button still works mid-flight.
+  if (state === 'playing' && motionPrevState !== 'playing' && mobileControl === 'motion') {
+    attachMotionListener();
+    if (motionInput.ready) recenterMotion();
+  }
+  motionPrevState = state;
   let pitch = 0, roll = 0;
   if (mobileControl === 'motion' && motionInput.ready) {
     const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
-    // beta -> pitch (push nose down by tilting forward by default; invertPitch flips), gamma -> roll
+    // beta -> pitch (push nose down by tilting forward by default; invertY flips), gamma -> roll
     const rawPitch = motionAxis(motionInput.beta, motionOffset.beta, a.maxAngle);
     const rawRoll = motionAxis(motionInput.gamma, motionOffset.gamma, a.maxAngle);
-    pitch = mapFlightInput(rawPitch, a, !invertPitch) * a.pitchClamp;  // default push-up=climb -> invert raw beta
+    pitch = mapFlightInput(rawPitch, a, !invertY) * a.pitchClamp;  // default push-up=climb -> invert raw beta
     roll = mapFlightInput(rawRoll, a, false);
   } else if (isTouchEnabled && joyActive) {
     const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
-    // stick: up (negative y) = climb by default; invertPitch flips. push right (+x) = roll right.
-    pitch = mapFlightInput(-touchInput.y, a, invertPitch) * a.pitchClamp;  // cap pitch authority like the motion path
+    // stick: up (negative y) = climb by default; invertY flips. push right (+x) = roll right.
+    pitch = mapFlightInput(-touchInput.y, a, invertY) * a.pitchClamp;  // cap pitch authority like the motion path
     roll = mapFlightInput(touchInput.x, a, false);
   }
   flightInput.pitch = clamp(pitch, -1, 1);
@@ -133,9 +142,13 @@ function initTouchControls() {
   // Floating joystick: a touch on the LEFT half spawns the base under the thumb.
   function joyStart(e) {
     if (state !== 'playing' || paused) return;
+    // keep the joystick zone below the top HUD bar so the pause button (top-center) stays tappable
+    const pb = g('btnPause');
+    const pbr = pb && pb.getBoundingClientRect();
+    const topGuard = (pbr && pbr.bottom > 0) ? pbr.bottom + 12 : 100;
     for (let i = 0; i < e.changedTouches.length; i++) {
       const tch = e.changedTouches[i];
-      if (tch.clientX < half && !joyActive) {
+      if (tch.clientX < half && tch.clientY > topGuard && !joyActive) {
         joyActive = true;
         joyTouchId = tch.identifier;
         joyBaseCenter = { x: tch.clientX, y: tch.clientY };

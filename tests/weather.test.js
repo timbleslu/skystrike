@@ -7,7 +7,7 @@ const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens rad
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
   fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.05, fogMul: 3.0 },
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.35, fogMul: 1.6 },
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0,  fogMul: 1.6 },
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
 // factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
@@ -41,7 +41,8 @@ function rollWeather(seed) {
 
 // ---- WEATHER table invariants (spec §6) ----
 assert.deepStrictEqual(WEATHER.clear, { radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, turbulence: 0.0, fogMul: 1.0 }, 'clear is fully neutral');
-assert.ok(WEATHER.storm.turbulence > WEATHER.fog.turbulence, 'storm turbulence > fog');
+assert.strictEqual(WEATHER.storm.turbulence, 0, 'storm turbulence removed — no buffeting (was too jarring)');
+assert.ok(WEATHER.fog.turbulence > 0, 'fog keeps a faint buffet');
 assert.ok(WEATHER.fog.turbulence > WEATHER.clear.turbulence, 'fog turbulence > clear');
 assert.ok(WEATHER.fog.fogMul > WEATHER.storm.fogMul, 'fog density > storm density');
 assert.ok(WEATHER.storm.fogMul > WEATHER.clear.fogMul, 'storm density > clear density');
@@ -55,7 +56,7 @@ assert.ok(WEATHER.storm.fogMul > WEATHER.clear.fogMul, 'storm density > clear de
 });
 
 // ---- resolveWeather populates the live set + folds the night factor ----
-assert.deepStrictEqual(resolveWeather('storm', 0), { type: 'storm', radarMul: 0.7, lockRangeMul: 0.6, lockSpeedMul: 1.35, turbulence: 0.35, fogMul: 1.6 }, 'storm row (day) copied verbatim');
+assert.deepStrictEqual(resolveWeather('storm', 0), { type: 'storm', radarMul: 0.7, lockRangeMul: 0.6, lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 1.6 }, 'storm row (day) copied verbatim');
 assert.strictEqual(resolveWeather('clear', 0).turbulence, 0, 'clear has no turbulence');
 assert.strictEqual(resolveWeather('nope', 0).type, 'clear', 'unknown type falls back to clear');
 

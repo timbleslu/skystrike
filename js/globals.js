@@ -130,7 +130,7 @@ const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens rad
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
   fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.05, fogMul: 3.0 },
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.35, fogMul: 1.6 },
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 1.6 },
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
 // factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
@@ -194,7 +194,6 @@ let controlSensitivity = 1.0; // turn-rate multiplier (0.5–2.0, Settings slide
 // mobile control settings (Settings tab; persisted via storage seam)
 let mobileControl = 'touch';      // 'touch' | 'motion' — active analog flight source on mobile
 let motionAggression = 'balanced';// 'casual' | 'balanced' | 'direct' — tilt assist preset
-let invertPitch = false;          // false = push-up/tilt-forward climbs (point-to-fly)
 let haptics = true;               // vibration feedback where supported
 let buttonOpacity = 0.8;          // 0.4–1.0 on-screen touch button opacity
 let buttonLayout = 'right';       // 'right' | 'left' | 'compact' — touch button preset layout
