@@ -796,6 +796,8 @@ function updatePlayer(dt) {
   if (player.empBurst > 0) player.empBurst -= dt;
   if (player.stealthField > 0) player.stealthField -= dt;
   if (player.invuln > 0) player.invuln -= dt;
+  if (barrelRollCooldown > 0) barrelRollCooldown -= dt;
+  if (barrelRollAnim > 0) barrelRollAnim -= dt;
   if (player.jammer > 0) player.jammer -= dt;
   if (player.slow > 0) player.slow -= dt;
   if (player.dewLance > 0) player.dewLance -= dt;
@@ -829,6 +831,16 @@ function updatePlayer(dt) {
   pitchIn = clamp(pitchIn - cmd.pitchCmd, -1, 1);   // +pitchCmd (climb) -> -pitchIn (nose up, = W)
   rollIn = clamp(rollIn - cmd.rollCmd, -1, 1);      // +rollCmd (bank right / bank-hold) -> -rollIn (= E)
 
+  // Barrel-roll evasive maneuver: consume the request flag set by controls/main keydown
+  if (barrelRollRequest) {
+    barrelRollRequest = false;
+    barrelRollAnim = BARREL_ROLL_DURATION;
+    barrelRollCooldown = BARREL_ROLL_COOLDOWN;
+    player.invuln = Math.max(player.invuln, BARREL_ROLL_INVULN);
+    haptic(80);
+    if (typeof showBanner === 'function') showBanner(t('banner.evade'), 1.2);
+  }
+
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;
   player.highG = brake && (down('KeyS') || (isTouchEnabled && flightInput.pitch < -0.5));
@@ -839,6 +851,13 @@ function updatePlayer(dt) {
   const tgtYaw = yawIn * tb * 0.5;
   player.pitchRate = damp(player.pitchRate, tgtPitch, player.vectorSurge > 0 ? 6.5 : 4.5, dt);
   player.rollRate = damp(player.rollRate, tgtRoll, 5.5, dt);
+  // Barrel-roll animation: override roll rate to drive a full 360° spin over BARREL_ROLL_DURATION.
+  // TWO_PI / BARREL_ROLL_DURATION gives the required angular velocity; direction = player's last roll intent
+  // (or +1 if neutral). Overrides normal damped rate for the duration, then exits cleanly via normal damp.
+  if (barrelRollAnim > 0) {
+    const spinDir = (rollIn >= 0) ? 1 : -1;
+    player.rollRate = spinDir * (TWO_PI / BARREL_ROLL_DURATION);
+  }
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
   // turbulence as a direct rate perturbation after the control law — feels like physical buffeting rather than fighting the controls
   if (weather.turbulence > 0) {

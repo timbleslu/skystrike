@@ -239,6 +239,14 @@ function initTouchControls() {
   function joyEnd(e) {
     for (let i = 0; i < e.changedTouches.length; i++) {
       if (e.changedTouches[i].identifier === joyTouchId) {
+        // Barrel-roll touch double-tap: release with strong lateral deflection twice within threshold
+        if (state === 'playing' && !paused && Math.abs(touchInput.x) > 0.6) {
+          const now = performance.now() / 1000;
+          if (rollDetect(now, barrelRollLastTouchTap, BARREL_ROLL_THRESHOLD) && rollCooldownGate(barrelRollCooldown)) {
+            barrelRollRequest = true;
+          }
+          barrelRollLastTouchTap = now;
+        }
         joyActive = false; joyTouchId = null; touchInput.x = 0; touchInput.y = 0;
         if (joyStick) joyStick.style.transform = `translate(0px, 0px)`;
         if (joyBase) joyBase.classList.remove('floating');

@@ -397,6 +397,33 @@ let joyActive = false, joyTouchId = null, joyBaseCenter = {x:0, y:0}, touchInput
 let touchBtns = { gun:false, msl:false, flr:false, spc:false, thr:false, brk:false };
 // unified flight-input seam (controls.js writes it each frame; combat.js consumes + adds keyboard)
 let flightInput = { pitch: 0, roll: 0 };           // normalized analog flight axes, -1..1
+
+// === MIRROR START (globals.js barrel-roll pure helpers) ===
+// Returns true if the gap between now and lastTapTime is within threshold (double-tap detected).
+// gap must be > 0 (can't double-tap at identical timestamps) and <= threshold.
+function rollDetect(now, lastTapTime, threshold) {
+  const gap = now - lastTapTime;
+  return gap > 0 && gap <= threshold;
+}
+
+// Returns true if cooldown has elapsed (or was never started), meaning a new barrel roll is allowed.
+function rollCooldownGate(cooldown) {
+  return cooldown <= 0;
+}
+// === MIRROR END ===
+
+// Barrel-roll evasive maneuver constants
+const BARREL_ROLL_INVULN   = 0.4;   // seconds of i-frames granted
+const BARREL_ROLL_COOLDOWN = 6.0;   // seconds before another roll is allowed
+const BARREL_ROLL_DURATION = 0.4;   // seconds the 360° spin animation plays
+const BARREL_ROLL_THRESHOLD = 0.35; // seconds: max gap for double-tap recognition
+
+// Barrel-roll runtime state (reset each game start)
+let barrelRollCooldown   = 0;   // counts down from BARREL_ROLL_COOLDOWN; >0 = on cooldown
+let barrelRollAnim       = 0;   // counts down from BARREL_ROLL_DURATION; >0 = rolling
+let barrelRollRequest    = false; // set true by controls when double-tap detected; cleared by combat
+let barrelRollLastKeyTap = -999; // time (performance.now()/1000) of last keyboard Q or E press
+let barrelRollLastTouchTap = -999; // time of last joystick roll-direction flick release
 let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live device-orientation tilt
 let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
