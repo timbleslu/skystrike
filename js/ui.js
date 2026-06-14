@@ -1399,6 +1399,7 @@ function installMotionStatus() {
 function applyHudScale() {
   const h = g('hud');
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
+  if (typeof applyButtonStyle === 'function') applyButtonStyle();
 }
 function saveSettings() {
   try {

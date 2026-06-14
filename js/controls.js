@@ -270,11 +270,14 @@ function initTouchControls() {
   applyButtonStyle();
 }
 
-// Apply opacity + preset layout to the on-screen touch controls (called on init + Settings change).
+// Apply opacity + scale + preset layout to the on-screen touch controls (called on init + Settings change).
+// --ctrl-scale maps hudScale linearly: Small(0.8)→0.75, Normal(1.0)→0.89, Large(1.15)→1.0, XL(1.3)→1.1
 function applyButtonStyle() {
   const tc = g('touchControls');
   if (!tc) return;
   tc.style.setProperty('--btn-opacity', String(buttonOpacity));
+  const hs = (typeof hudScale === 'number') ? hudScale : 1;
+  tc.style.setProperty('--ctrl-scale', String(Math.round((hs * 0.7 + 0.19) * 100) / 100));
   tc.classList.remove('layout-right', 'layout-left', 'layout-compact');
   tc.classList.add('layout-' + (buttonLayout || 'right'));
 }

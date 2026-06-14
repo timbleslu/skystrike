@@ -104,38 +104,38 @@ canvas{display:block}
 /* ---------- TOUCH CONTROLS ---------- */
 #touchControls{display:none; position:fixed; inset:0; z-index:45; pointer-events:none;}
 #touchControls.show{display:block;}
-.joy-base{position:absolute; bottom:30px; left:30px; width:130px; height:130px; border:2px solid rgba(25,240,212,0.3); border-radius:50%; background:radial-gradient(circle, rgba(25,240,212,0.05), rgba(25,240,212,0.15)); pointer-events:auto; touch-action:none;}
-.joy-stick{position:absolute; top:50%; left:50%; width:50px; height:50px; margin:-25px 0 0 -25px; border-radius:50%; background:rgba(25,240,212,0.6); box-shadow:0 0 15px rgba(25,240,212,0.5); pointer-events:none; transition: transform 0.05s linear;}
-.t-btn{position:absolute; border-radius:50%; border:1px solid rgba(25,240,212,0.4); background:rgba(4,10,14,0.6); color:var(--cy); display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-size:11px; font-weight:700; pointer-events:auto; touch-action:none; user-select:none;}
+.joy-base{position:absolute; bottom:30px; left:30px; width:110px; height:110px; border:2px solid rgba(25,240,212,0.3); border-radius:50%; background:radial-gradient(circle, rgba(25,240,212,0.05), rgba(25,240,212,0.15)); pointer-events:auto; touch-action:none; transform:scale(var(--ctrl-scale,1)); transform-origin:center;}
+.joy-stick{position:absolute; top:50%; left:50%; width:42px; height:42px; margin:-21px 0 0 -21px; border-radius:50%; background:rgba(25,240,212,0.6); box-shadow:0 0 15px rgba(25,240,212,0.5); pointer-events:none; transition: transform 0.05s linear;}
+.t-btn{position:absolute; border-radius:50%; border:1px solid rgba(25,240,212,0.4); background:rgba(4,10,14,0.6); color:var(--cy); display:flex; align-items:center; justify-content:center; font-family:var(--disp); font-size:11px; font-weight:700; pointer-events:auto; touch-action:none; user-select:none; transform:scale(var(--ctrl-scale,1)); transform-origin:center;}
 .t-btn:active{background:rgba(25,240,212,0.4); box-shadow:0 0 20px rgba(25,240,212,0.6); color:#fff;}
-#tb-gun{bottom:40px; right:150px; width:70px; height:70px; font-size:14px; border-color:var(--yel); color:var(--yel);}
+#tb-gun{bottom:40px; right:140px; width:60px; height:60px; font-size:12px; border-color:var(--yel); color:var(--yel);}
 #tb-gun:active{background:rgba(255,225,77,0.4); color:#fff; box-shadow:0 0 20px rgba(255,225,77,0.6);}
-#tb-msl{bottom:120px; right:90px; width:60px; height:60px; border-color:var(--red); color:var(--red);}
+#tb-msl{bottom:108px; right:82px; width:52px; height:52px; border-color:var(--red); color:var(--red);}
 #tb-msl:active{background:rgba(255,57,75,0.4); color:#fff; box-shadow:0 0 20px rgba(255,57,75,0.6);}
-#tb-flr{bottom:50px; right:40px; width:50px; height:50px;}
-#tb-spc{bottom:130px; right:20px; width:50px; height:50px;}
-#tb-thr{bottom:180px; left:40px; width:55px; height:55px;}
-#tb-brk{bottom:180px; left:110px; width:55px; height:55px;}
-#tb-cam{top:20px; right:20px; width:45px; height:45px; font-size:9px;}
-#tb-lck{bottom:195px; right:70px; width:50px; height:50px; font-size:10px; border-color:#0bd5ff; color:#0bd5ff;}
+#tb-flr{bottom:46px; right:36px; width:44px; height:44px;}
+#tb-spc{bottom:118px; right:18px; width:44px; height:44px;}
+#tb-thr{bottom:168px; left:36px; width:48px; height:48px;}
+#tb-brk{bottom:168px; left:98px; width:48px; height:48px;}
+#tb-cam{top:18px; right:18px; width:40px; height:40px; font-size:9px;}
+#tb-lck{bottom:178px; right:62px; width:44px; height:44px; font-size:10px; border-color:#0bd5ff; color:#0bd5ff;}
 
-/* --- touch control opacity + layouts + floating stick (controls.js) --- */
-#touchControls{--btn-opacity:0.8; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+/* --- touch control opacity + scale + layouts + floating stick (controls.js) --- */
+#touchControls{--btn-opacity:0.8; --ctrl-scale:1; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
 #touchControls .t-btn{opacity:var(--btn-opacity);}
 #touchControls .joy-base{opacity:calc(var(--btn-opacity) * 0.9);}
 .joy-base.floating{transition:left .04s linear, top .04s linear;}
 /* left-handed: swap the action cluster to the left, throttle/brake to the right */
-#touchControls.layout-left #tb-gun{right:auto; left:150px;}
-#touchControls.layout-left #tb-msl{right:auto; left:90px;}
-#touchControls.layout-left #tb-flr{right:auto; left:40px;}
-#touchControls.layout-left #tb-spc{right:auto; left:20px;}
-#touchControls.layout-left #tb-lck{right:auto; left:70px;}
-#touchControls.layout-left #tb-thr{left:auto; right:40px;}
-#touchControls.layout-left #tb-brk{left:auto; right:110px;}
-#touchControls.layout-left #tb-cam{right:auto; left:20px;}
-/* compact: shrink the on-screen buttons to declutter small screens */
-#touchControls.layout-compact .t-btn{transform:scale(0.82); transform-origin:center;}
-#touchControls.layout-compact #tb-gun{width:60px; height:60px;}
+#touchControls.layout-left #tb-gun{right:auto; left:140px;}
+#touchControls.layout-left #tb-msl{right:auto; left:82px;}
+#touchControls.layout-left #tb-flr{right:auto; left:36px;}
+#touchControls.layout-left #tb-spc{right:auto; left:18px;}
+#touchControls.layout-left #tb-lck{right:auto; left:62px;}
+#touchControls.layout-left #tb-thr{left:auto; right:36px;}
+#touchControls.layout-left #tb-brk{left:auto; right:98px;}
+#touchControls.layout-left #tb-cam{right:auto; left:18px;}
+/* compact: shrink the on-screen buttons further (compounds with --ctrl-scale) */
+#touchControls.layout-compact .t-btn{transform:scale(calc(var(--ctrl-scale,1) * 0.85));}
+#touchControls.layout-compact .joy-base{transform:scale(calc(var(--ctrl-scale,1) * 0.85));}
 
 /* ---------- HANGAR ---------- */
 #hangar{position:fixed;inset:0;z-index:60;display:flex;overflow-y:auto;
