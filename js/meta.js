@@ -208,7 +208,7 @@ function setCallsign(str) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -222,11 +222,13 @@ function loadMeta() {
   } catch (e) { meta = freshMeta(); }
   // ensure starter jets are always present even if an older save predates one
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
-  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) — keep progression, never wipe
+  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) / boss-rush (F15) — keep progression, never wipe
   if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
   if (typeof meta.callsign !== 'string') meta.callsign = '';
   if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
   if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
+  if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
+  if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 

@@ -1016,6 +1016,8 @@ function buildHangar() {
   renderKillBoard();
   const db = g('dailyBtn'); if (db) db.addEventListener('click', startDaily);
   refreshDailyEntry();
+  const brb = g('bossRushBtn'); if (brb) brb.addEventListener('click', startBossRush);   // F15
+  refreshBossRushEntry();
   const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);
   const mc = g('metaClose'); if (mc) mc.addEventListener('click', closeMetaScreen);
   const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
@@ -1271,10 +1273,11 @@ function onMetaGridClick(e) {
   if (buyPerk(b.dataset.perk)) { updateSpHud(); renderMetaScreen(); audio.ui(); }
   else showBanner(t('meta.needSp'));
 }
-function startGame(i, daily) {
+function startGame(i, daily, rush) {
   if (state !== 'hangar') return;
   if (!jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
   dailyMode = !!daily;   // explicit per-launch: only startDaily passes true; normal launches reset it to false
+  bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
   selectedJet = i; audio.init();
   closeManual();
   if (previewJet) { scene.remove(previewJet); previewJet = null; }
@@ -1285,7 +1288,7 @@ function startGame(i, daily) {
 
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
-  applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree
+  if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
@@ -1303,10 +1306,11 @@ function startGame(i, daily) {
   awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls fresh each run (F10); nextWave also refreshes per sector
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, cleanWaves: 0 };
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
+  bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)
   state = 'playing';
   // first-run guided tutorial (F5): only a brand-new player (this session) who hasn't finished it yet.
-  // isReturningPlayer (globals.js) is captured at boot, so returning players skip entirely.
-  if (!isReturningPlayer && !tutorial.done) startTutorial();
+  // isReturningPlayer (globals.js) is captured at boot, so returning players skip entirely. Never in boss-rush.
+  if (!bossRush && !isReturningPlayer && !tutorial.done) startTutorial();
   else if (el.tut) el.tut.classList.remove('show');
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
@@ -1379,8 +1383,54 @@ function operationComplete() {
   state = 'dead';
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   player.score += 5000;
+  // F15: clearing the campaign once unlocks Boss Rush mode (persisted; healed for legacy saves)
+  if (meta && !meta.bossRushUnlocked) { meta.bossRushUnlocked = true; saveMeta(); }
   showBanner(t('banner.operationComplete'));
   endRun(t('banner.operationComplete'));
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // reflect the new unlock in the hangar
+}
+
+// ===== Boss Rush mode (F15) =====
+// Unlockable gauntlet: every boss in sequence, FIXED loadout, ONE life, NO tech tree. The run is
+// timed; the lower (faster) full-clear time is kept as the local best. Death ends the run with no
+// time recorded (gameOver → endRun). Completion records the time, then shows the result screen.
+function startBossRush() {
+  if (state !== 'hangar') return;
+  if (!meta || !meta.bossRushUnlocked) { showBanner(t('bossrush.locked')); audio.ui(); return; }
+  // fixed airframe: the player's first starter jet (always owned) — boss-rush is a level playing field.
+  let jetIdx = 0;
+  for (let k = 0; k < JETS.length; k++) { if (JETS[k].id === STARTER_JETS[0]) { jetIdx = k; break; } }
+  opMode = false;   // not the op-map campaign; single-life gauntlet
+  startGame(jetIdx, false, true);   // rush=true → fixed loadout (no meta perks), no tutorial, boss-rush loop
+  if (state === 'playing') { spawnBossRushBoss(); showBanner(t('bossrush.title')); }   // launch the first boss immediately
+}
+// every boss down → record the best time and show the debrief
+function bossRushComplete() {
+  if (state !== 'playing') return;
+  const secs = Math.max(0, Math.round((performance.now() - bossRushT0) / 1000));
+  if (meta) { meta.bossRushBest = betterTime(meta.bossRushBest || 0, secs); saveMeta(); }   // keep the LOWER time
+  player.score += 8000;   // gauntlet clear bonus
+  state = 'dead';
+  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  showBanner(tf('bossrush.cleared', { t: bossRushTimeStr(secs) }));
+  endRun(t('bossrush.title'));
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
+}
+// mm:ss for the leaderboard
+function bossRushTimeStr(secs) { return (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2); }
+// hangar entry: lock the button until unlocked; show the best time once set
+function refreshBossRushEntry() {
+  const btn = g('bossRushBtn'); if (!btn) return;
+  const unlocked = !!(meta && meta.bossRushUnlocked);
+  btn.disabled = !unlocked;
+  btn.classList.toggle('disabled', !unlocked);
+  btn.textContent = unlocked ? t('bossrush.start') : t('bossrush.locked');
+  const note = g('bossRushNote');
+  if (note) {
+    const best = (meta && meta.bossRushBest) || 0;
+    note.textContent = !unlocked ? t('bossrush.locked')
+      : (best > 0 ? tf('bossrush.best', { t: bossRushTimeStr(best) }) : t('bossrush.sub'));
+  }
 }
 
 // ===== Daily seeded challenge (F7) =====
@@ -1494,6 +1544,7 @@ function applyLang() {
   setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: boss-rush entry label/note follow language + unlock state
   setTxt('lblCallsign', t('pilot.callsign')); setTxt('lblEmblem', t('pilot.emblem'));
   const ci = g('callsignInput'); if (ci) ci.placeholder = t('pilot.placeholder');
   setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
@@ -1732,4 +1783,5 @@ function returnToHangar() {
   updateBest();
   renderKillBoard();
   refreshDailyEntry();   // daily button label/play-state can change after a run — keep it current
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: unlock/best-time can change after a run
 }

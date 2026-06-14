@@ -211,6 +211,8 @@ canvas{display:block}
 .hbtns{display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap}
 .ghostbtn{background:transparent;border:1px solid rgba(91,138,134,.5);color:var(--cy);font-family:var(--disp);letter-spacing:2px;font-size:12px;padding:14px 22px;cursor:pointer;transition:.2s;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)}
 .ghostbtn:hover{border-color:var(--cy);background:rgba(25,240,212,.08);box-shadow:0 0 18px rgba(25,240,212,.2)}
+.ghostbtn.disabled,.ghostbtn:disabled{opacity:.45;cursor:not-allowed;color:var(--dim);box-shadow:none}
+.ghostbtn.disabled:hover,.ghostbtn:disabled:hover{border-color:rgba(91,138,134,.5);background:transparent;box-shadow:none}
 #manual{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(circle at 50% 25%,rgba(8,20,30,.97),rgba(2,5,10,.99));backdrop-filter:blur(6px);overflow:auto;padding:40px 24px}
 #manual.show{display:block}
 #manual .mwrap{max-width:1000px;margin:0 auto}

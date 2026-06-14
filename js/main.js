@@ -640,6 +640,32 @@ function handleWaves(dt) {
   processSpawnQueue(SPAWN_PER_FRAME);   // build a few queued enemies this frame
 }
 
+/* Boss-rush (F15): replaces the wave/tech loop. No waves, no R&D tech tree, no op-map — just the
+   fixed boss gauntlet flown back-to-back. The next boss spawns once the arena is clear; the run
+   completes when every boss in BOSS_RUSH_POOL has been defeated. bossRushIndex counts spawned legs;
+   bossRushKilled (run.boss) counts defeats. Timed from bossRushT0 for the local best-time board. */
+function spawnBossRushBoss() {
+  const kind = bossRushNext(bossRushIndex);   // pure: the boss type for this leg (or null when done)
+  if (!kind) return;
+  spawnBoss();                                // reuse the F4 multi-phase boss spawner
+  bossRushIndex++;
+  showBanner(tf('bossrush.wave', { n: bossRushIndex, total: BOSS_RUSH_TOTAL }));
+}
+function handleBossRush(dt) {
+  processSpawnQueue(SPAWN_PER_FRAME);
+  if (bossRushDone(run.boss, BOSS_RUSH_TOTAL)) {   // every boss defeated → finish + record time
+    if (state === 'playing') bossRushComplete();
+    return;
+  }
+  const bossAlive = enemies.some(e => e.alive && e.type === 'boss');
+  if (!bossAlive && pendingSpawns.length === 0) {
+    if (bossRushIndex < BOSS_RUSH_TOTAL) {         // arena clear and more bosses to come → next leg
+      betweenWaves = true; waveTimer -= dt;
+      if (waveTimer <= 0) { waveTimer = 3; spawnBossRushBoss(); betweenWaves = false; }
+    }
+  }
+}
+
 /* First-run guided tutorial (F5): each frame, detect whether the player performed the CURRENT
    step's action from live player/run state and feed the matching event to the pure step machine
    (advanceTutorial → tutorialNext, ui.js/globals.js). Detection is action-based so the prompt only
@@ -739,7 +765,8 @@ function animate() {
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);
     updateMission(dt * ts);   // tick the active sector mission + resolve win/fail
-    handleWaves(dt);
+    if (bossRush) handleBossRush(dt);   // F15: fixed boss gauntlet — no waves / tech tree / op-map
+    else handleWaves(dt);
     maybeSpawnCrate(dt);
     updateCamera(dt);
     updatePlayerShadow();

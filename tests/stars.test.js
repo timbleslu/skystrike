@@ -42,7 +42,7 @@ function bestStars(m, jetId, stars) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
