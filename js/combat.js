@@ -820,8 +820,13 @@ function updatePlayer(dt) {
 
   // add the shaped analog source on top so a plugged-in key always works alongside it, then clamp.
   // flightInput uses point-to-fly signs (+pitch=climb, +roll=bank right); convert to engine signs here.
-  pitchIn = clamp(pitchIn - flightInput.pitch, -1, 1);   // +flightInput.pitch (climb) -> -pitchIn (nose up, = W)
-  rollIn = clamp(rollIn - flightInput.roll, -1, 1);      // +flightInput.roll (bank right) -> -rollIn (= E)
+  // controlScheme reinterprets the seam: 'rate' = today's mapping (rollCmd = roll intent); 'pointer' = bank-hold + auto-level.
+  // currentBank = atan2(-right.y, up.y): SAME sign frame as roll intent (+roll bank-right reads positive) -> stable feedback.
+  const _rgt = rightOf(player.group, t1), _up = upOf(player.group, t2);
+  const currentBank = Math.atan2(-_rgt.y, _up.y);
+  const cmd = steerCommand(controlScheme, flightInput, currentBank, STEER);
+  pitchIn = clamp(pitchIn - cmd.pitchCmd, -1, 1);   // +pitchCmd (climb) -> -pitchIn (nose up, = W)
+  rollIn = clamp(rollIn - cmd.rollCmd, -1, 1);      // +rollCmd (bank right / bank-hold) -> -rollIn (= E)
 
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;

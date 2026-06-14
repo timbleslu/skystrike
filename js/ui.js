@@ -874,6 +874,7 @@ function buildHangar() {
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { controlSensitivity = clamp(ss.value / 100, 0.5, 2.0); saveSettings(); }); }
   // mobile control settings (controls.js owns the input layer; these just set state + persist)
+  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => { controlScheme = v; }, () => { if (audio.on) audio.ui(); });
   bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
   bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => { motionAggression = v; }, () => { if (audio.on) audio.ui(); });
   bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
@@ -892,6 +893,7 @@ function buildHangar() {
   applyHudScale();
   const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); if (audio.on) audio.ui(); });
   const srec = g('setRecenter'); if (srec) srec.addEventListener('click', () => { if (typeof recenterMotion === 'function') recenterMotion(); if (audio.on) audio.ui(); });
+  installMotionStatus();
   syncControlSettingsUI();
   document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', () => { if (LANG === b.dataset.lang) return; LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui(); }));
   applyLang();
@@ -1190,6 +1192,7 @@ function loadSettings() {
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
+    controlScheme = (s.controlScheme === 'rate') ? 'rate' : 'pointer';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
@@ -1275,6 +1278,7 @@ function applyLang() {
   setTxt('lblGunLead', t('set.gunLead')); setTxt('lblMute', t('set.mute'));
   setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
   // mobile control settings labels + segmented button captions
+  setTxt('lblControlScheme', t('set.controlScheme'));
   setTxt('lblMobileControl', t('set.mobileControl')); setTxt('lblAggression', t('set.aggression'));
   setTxt('lblMotion', t('set.motionSensor'));
   setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
@@ -1289,6 +1293,7 @@ function applyLang() {
   }
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
+  segTxt('#controlSchemeTog [data-cs="pointer"]', 'set.csPointer'); segTxt('#controlSchemeTog [data-cs="rate"]', 'set.csClassic');
   segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
   segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
   segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');
@@ -1339,6 +1344,7 @@ function bindSeg(containerId, attr, getter, setter, onChange) {
 // reflect current control-setting state into the Settings widgets (on open / after load).
 function syncControlSettingsUI() {
   const mark = (id, attr, val) => { const box = g(id); if (box) box.querySelectorAll('.segbtn').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); };
+  mark('controlSchemeTog', 'cs', controlScheme);
   mark('mobileControlTog', 'mc', mobileControl);
   mark('aggressionTog', 'ag', motionAggression);
   mark('btnLayoutTog', 'bl', buttonLayout);
@@ -1365,6 +1371,31 @@ function enableMotionFlow() {
     syncControlSettingsUI(); saveSettings();
   });
 }
+// Motion status seam: controls.js (Slice C) calls window.onMotionStatus(status, msg) on every
+// motion state change. Renders #motionNote (show/hide + state class + text). Installed once at UI init.
+function installMotionStatus() {
+  const MOTION_STATUS = {
+    requesting:  { cls: 'ms-info', msg: t('set.msRequesting') },
+    denied:      { cls: 'ms-err',  msg: t('set.msDenied') },
+    unsupported: { cls: 'ms-err',  msg: t('set.msUnsupported') },
+    'no-data':   { cls: 'ms-warn', msg: t('set.msNoData') },
+    live:        { cls: 'ms-ok',   msg: t('set.msLive') },
+    off:         { cls: '',        msg: '' }
+  };
+  let hideTimer = null;
+  window.onMotionStatus = (status, msg) => {
+    const note = g('motionNote'), txt = g('motionNoteTxt');
+    if (!note) return;
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    const cfg = MOTION_STATUS[status];
+    note.classList.remove('ms-info', 'ms-ok', 'ms-warn', 'ms-err');
+    if (!cfg || status === 'off') { note.style.display = 'none'; return; }
+    if (cfg.cls) note.classList.add(cfg.cls);
+    if (txt) txt.textContent = msg || cfg.msg;
+    note.style.display = '';
+    if (status === 'live') hideTimer = setTimeout(() => { note.style.display = 'none'; hideTimer = null; }, 2000);
+  };
+}
 function applyHudScale() {
   const h = g('hud');
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
@@ -1373,7 +1404,7 @@ function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
-      lang: LANG, controlSensitivity, hudScale,
+      lang: LANG, controlSensitivity, hudScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout
     }));
   } catch (e) {}

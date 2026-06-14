@@ -41,10 +41,44 @@ function motionAxis(angle, offset, maxAngle) {
   return clamp((angle - offset) / maxAngle, -1, 1);
 }
 
+// EMA low-pass: pull prev toward next by alpha (0..1). Higher alpha = snappier, less smooth.
+// PURE (mirrored in tests/controls.test.js — keep byte-identical).
+function emaSmooth(prev, next, alpha) { return prev + alpha * (next - prev); }
+
 /* ---------------- per-frame source selection (the seam writer) ---------------- */
 // Picks the active analog source by Settings.mobileControl and writes flightInput{pitch,roll}.
 // Keyboard is intentionally NOT read here — combat.js adds digital keys on top before clamping.
 let motionPrevState = '';
+// ---- motion smoothing + no-data watchdog + status-seam state ----
+const MOTION_EMA_ALPHA = 0.2;     // EMA low-pass factor on the tilt axes (lower = smoother)
+const MOTION_NODATA_MS = 1500;    // no deviceorientation event within this window => 'no-data'
+let motionSmoothed = false;       // false => next event seeds the EMA (no startup lag spike)
+let motionSm = { beta: 0, gamma: 0 };
+let motionWatchdog = null;        // one-shot setTimeout; fires 'no-data' if no event arrives
+let motionOffWatch = null;        // interval that detects mobileControl leaving 'motion' (menu or in-flight)
+// fire the motion status seam if the UI provided a handler (optional-chaining => never crashes).
+function emitMotionStatus(status, msg) {
+  if (typeof window !== 'undefined') window.onMotionStatus?.(status, msg);
+}
+function clearMotionWatchdog() { if (motionWatchdog) { clearTimeout(motionWatchdog); motionWatchdog = null; } }
+// (re)arm the no-data watchdog: if no event lands within MOTION_NODATA_MS, report 'no-data'.
+function armMotionWatchdog() {
+  if (typeof setTimeout !== 'function') return;
+  clearMotionWatchdog();
+  motionWatchdog = setTimeout(() => { motionWatchdog = null; emitMotionStatus('no-data'); }, MOTION_NODATA_MS);
+}
+// Watch for motion being disabled. ui.js toggles `mobileControl` to 'touch' directly (menu or
+// fallback) without calling controls.js, and the per-frame seam only runs while playing — so a
+// state-independent poll is the one reliable place to surface 'off'. Self-cancels on the edge.
+function startMotionOffWatch() {
+  if (typeof setInterval !== 'function' || motionOffWatch) return;
+  motionOffWatch = setInterval(() => {
+    if (typeof mobileControl !== 'undefined' && mobileControl === 'motion') return;
+    clearInterval(motionOffWatch); motionOffWatch = null;
+    clearMotionWatchdog();          // no dangling 'no-data' after motion is off
+    emitMotionStatus('off');
+  }, 400);
+}
 function readFlightInput() {
   // At sortie start, (re)bind motion and recapture the neutral attitude at the moment play begins —
   // not whatever attitude the phone was at when Motion was toggled on in the menu (which left the
@@ -100,28 +134,55 @@ function readOrientationAngles(e) {
 }
 function onDeviceOrientation(e) {
   const a = readOrientationAngles(e);
-  motionInput.beta = a.beta;
-  motionInput.gamma = a.gamma;
+  // EMA low-pass the raw axes so sensor jitter is removed before they reach the seam.
+  // Seed directly on the first event after enable/recenter so there is no startup lag spike.
+  if (!motionSmoothed) { motionSm.beta = a.beta; motionSm.gamma = a.gamma; motionSmoothed = true; }
+  else {
+    motionSm.beta = emaSmooth(motionSm.beta, a.beta, MOTION_EMA_ALPHA);
+    motionSm.gamma = emaSmooth(motionSm.gamma, a.gamma, MOTION_EMA_ALPHA);
+  }
+  motionInput.beta = motionSm.beta;
+  motionInput.gamma = motionSm.gamma;
+  // Any event means the sensor is alive — cancel the no-data watchdog (idempotent).
+  clearMotionWatchdog();
+  // First real event after enable: capture neutral + report 'live'.
+  const wasReady = motionInput.ready;
   if (!motionInput.ready) { recenterMotion(); motionInput.ready = true; }
+  if (!wasReady) emitMotionStatus('live');
 }
 // capture the current attitude as the neutral offset.
 function recenterMotion() {
   motionOffset.beta = motionInput.beta;
   motionOffset.gamma = motionInput.gamma;
+  // Snap the EMA state to the current attitude so the smoother starts coherent (no post-recenter drift).
+  motionSm.beta = motionInput.beta;
+  motionSm.gamma = motionInput.gamma;
+  motionSmoothed = true;
 }
 function attachMotionListener() {
-  if (motionInput.attached) return;
+  // On (re)enable: reset smoothing so a stale EMA value can't drag the first reading, force the
+  // next event through the first-event path (recenter + 'live'), and (re)arm the no-data watchdog
+  // so a silent sensor surfaces as 'no-data'.
+  motionSmoothed = false;
+  motionInput.ready = false;
+  armMotionWatchdog();
+  startMotionOffWatch();              // surface 'off' when the user later disables motion
+  if (motionInput.attached) return;   // bind the listener once; resets above still run on re-entry
   window.addEventListener('deviceorientation', onDeviceOrientation, true);
   motionInput.attached = true;
 }
 // Request iOS 13+ permission from a user gesture; resolve(true) on grant / no-gate, false otherwise.
 function requestMotionPermission() {
   return new Promise((resolve) => {
-    if (!motionSupported()) { resolve(false); return; }
+    if (!motionSupported()) { emitMotionStatus('unsupported'); resolve(false); return; }
     if (motionNeedsPermission()) {
+      emitMotionStatus('requesting');
       DeviceOrientationEvent.requestPermission()
-        .then((res) => { if (res === 'granted') { attachMotionListener(); resolve(true); } else resolve(false); })
-        .catch(() => resolve(false));
+        .then((res) => {
+          if (res === 'granted') { attachMotionListener(); resolve(true); }
+          else { emitMotionStatus('denied'); resolve(false); }
+        })
+        .catch(() => { emitMotionStatus('denied'); resolve(false); });
     } else {
       attachMotionListener();  // Android / other: no permission gate
       resolve(true);

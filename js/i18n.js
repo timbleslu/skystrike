@@ -258,6 +258,13 @@ const I18N = {
     'set.blRight': 'Right', 'set.blLeft': 'Left', 'set.blCompact': 'Compact',
     'set.motionDenied': 'Motion permission denied — using Touch controls.',
     'set.motionUnsupported': 'Motion sensor unavailable — using Touch controls.',
+    'set.controlScheme': 'Steering',
+    'set.csPointer': 'Point-to-steer', 'set.csClassic': 'Classic',
+    'set.msRequesting': 'Requesting motion access…',
+    'set.msDenied': 'Motion permission denied — using touch',
+    'set.msUnsupported': 'Motion not supported on this device',
+    'set.msNoData': 'No motion data — open over HTTPS (npm run serve:https) and reload',
+    'set.msLive': 'Motion active',
 
     /* ---- manual body (HTML) ---- */
     'manBody.flight': '<li><b>W</b> / <b>S</b> — pitch down / up</li><li><b>Q</b> / <b>E</b> — roll left / right</li><li><b>A</b> / <b>D</b> — yaw (rudder)</li><li><b>SHIFT</b> / <b>CTRL</b> — throttle up / brake</li><li><b>CTRL + S</b> — high-G turn (tighter pitch, bleeds speed)</li>',
@@ -530,6 +537,13 @@ const I18N = {
     'set.blRight': '右手', 'set.blLeft': '左手', 'set.blCompact': '紧凑',
     'set.motionDenied': '体感权限被拒绝 — 改用触屏操控。',
     'set.motionUnsupported': '运动传感器不可用 — 改用触屏操控。',
+    'set.controlScheme': '转向方式',
+    'set.csPointer': '指向转向', 'set.csClassic': '经典',
+    'set.msRequesting': '正在请求体感权限…',
+    'set.msDenied': '体感权限被拒绝 — 改用触屏',
+    'set.msUnsupported': '本设备不支持体感',
+    'set.msNoData': '无体感数据 — 请通过 HTTPS 打开（npm run serve:https）并重新加载',
+    'set.msLive': '体感已启用',
 
     /* ---- manual body (HTML) ---- */
     'manBody.flight': '<li><b>W</b> / <b>S</b> — 俯冲 / 拉起</li><li><b>Q</b> / <b>E</b> — 向左 / 向右滚转</li><li><b>A</b> / <b>D</b> — 偏航（方向舵）</li><li><b>SHIFT</b> / <b>CTRL</b> — 加速 / 减速</li><li><b>CTRL + S</b> — 高过载转弯（俯仰更急，消耗速度）</li>',

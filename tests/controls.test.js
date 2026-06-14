@@ -38,6 +38,10 @@ function motionAxis(angle, offset, maxAngle) {
   return clamp((angle - offset) / maxAngle, -1, 1);
 }
 
+// EMA low-pass: pull prev toward next by alpha (0..1). Higher alpha = snappier, less smooth.
+// PURE (mirrored in tests/controls.test.js — keep byte-identical).
+function emaSmooth(prev, next, alpha) { return prev + alpha * (next - prev); }
+
 /* ===== shapeAxis behavior ===== */
 const bal = AGGRESSION.balanced;
 // dead-zone zeros sub-threshold input (both signs)
@@ -99,6 +103,26 @@ assert.ok(motionAxis(20 - 70, 20, 35) === -1, 'beyond -maxAngle clamps to -1');
 
 console.log('ok - motionAxis: recenter neutralizes at captured offset, clamps to +/-1');
 
+/* ===== emaSmooth: low-pass blend ===== */
+// one step of alpha=0.2 from 0 toward 10 lands exactly 20% of the way: 2.
+assert.ok(Math.abs(emaSmooth(0, 10, 0.2) - 2) < 1e-12, 'alpha 0.2 one-step 0->10 = 2');
+// alpha=0 holds prev (full smoothing, ignores next)
+assert.strictEqual(emaSmooth(7, 99, 0), 7, 'alpha 0 holds prev');
+// alpha=1 jumps straight to next (no smoothing)
+assert.strictEqual(emaSmooth(7, 99, 1), 99, 'alpha 1 jumps to next');
+// idempotent at equality: prev==next -> unchanged for any alpha
+assert.strictEqual(emaSmooth(5, 5, 0.2), 5, 'prev==next is a fixed point');
+// repeated application converges monotonically toward next (and never overshoots)
+let s = 0;
+for (let i = 0; i < 200; i++) {
+  const ns = emaSmooth(s, 10, 0.2);
+  assert.ok(ns >= s && ns <= 10, 'emaSmooth converges monotonically without overshoot at step ' + i);
+  s = ns;
+}
+assert.ok(Math.abs(s - 10) < 1e-6, 'emaSmooth converges to next');
+
+console.log('ok - emaSmooth: alpha endpoints, fixed point, monotone convergence');
+
 /* ===== byte-identity guard: mirrored helpers must match js/controls.js verbatim =====
    (project convention: test-mirrored functions stay byte-identical with source) */
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'controls.js'), 'utf8');
@@ -114,7 +138,7 @@ function bodyOf(fnName, text) {
   return text.slice(start, end);
 }
 function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
-for (const fn of ['shapeAxis', 'mapFlightInput', 'motionAxis']) {
+for (const fn of ['shapeAxis', 'mapFlightInput', 'motionAxis', 'emaSmooth']) {
   const mine = norm(eval('(' + fn + ').toString()')
     .replace(/^[^(]*\(/, 'function ' + fn + '(')); // normalize fn name form
   // compare the source slice to our mirror by stripping whitespace differences only
@@ -126,4 +150,4 @@ for (const fn of ['shapeAxis', 'mapFlightInput', 'motionAxis']) {
 assert.ok(/const AGGRESSION\s*=/.test(src), 'controls.js defines AGGRESSION');
 for (const k of ['casual', 'balanced', 'direct']) assert.ok(new RegExp(k + '\\s*:').test(src), 'AGGRESSION.' + k + ' present');
 
-console.log('ok - controls.js mirrors (shapeAxis/mapFlightInput/motionAxis) match source');
+console.log('ok - controls.js mirrors (shapeAxis/mapFlightInput/motionAxis/emaSmooth) match source');
