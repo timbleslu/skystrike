@@ -1107,6 +1107,8 @@ function startGame(i) {
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
+  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
+  barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null;
   weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;   // fresh per-run weather seed (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather

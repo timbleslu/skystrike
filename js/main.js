@@ -613,6 +613,14 @@ addEventListener('keydown', e => {
     if (e.code === 'Enter')      { e.preventDefault(); startGame(selectedJet); return; }
   }
   if (state !== 'playing' || e.repeat || paused) return;
+  // Barrel-roll double-tap: Q or E pressed twice within BARREL_ROLL_THRESHOLD seconds
+  if (e.code === 'KeyQ' || e.code === 'KeyE') {
+    const now = performance.now() / 1000;
+    if (rollDetect(now, barrelRollLastKeyTap, BARREL_ROLL_THRESHOLD) && rollCooldownGate(barrelRollCooldown)) {
+      barrelRollRequest = true;
+    }
+    barrelRollLastKeyTap = now;
+  }
   switch (e.code) {
     case 'KeyG': fireMissile(); break;
     case 'KeyX': deployFlares(); break;
