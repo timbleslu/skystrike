@@ -490,3 +490,17 @@ canvas{display:block}
 .jmskin.on{border-color:var(--cy);box-shadow:0 0 10px rgba(25,240,212,.6)}
 .jmskin.locked{opacity:.7}
 .jmsklk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:#fff;background:rgba(0,0,0,.45);border-radius:50%}
+/* ---- pilot callsign + emblem panel (F13) ---- */
+#pilotPanel{margin:8px 0 4px;border:1px solid rgba(91,138,134,.25);background:rgba(10,22,30,.4);padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.pilotRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(25,240,212,.35);color:var(--cy);font-family:var(--mono);font-size:13px;letter-spacing:3px;padding:6px 10px;width:140px;text-transform:uppercase;outline:none;transition:.15s}
+#callsignInput:focus{border-color:var(--cy);background:rgba(4,9,14,.9)}
+#emblemGrid{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.emblembtn{width:38px;height:38px;border:2px solid rgba(91,138,134,.4);background:rgba(4,9,14,.6);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;padding:0}
+.emblembtn:hover{border-color:var(--cy)}
+.emblembtn.active{border-color:var(--cy);background:rgba(25,240,212,.1);box-shadow:0 0 8px rgba(25,240,212,.4)}
+.emblembtn.elocked{opacity:.55;cursor:default}
+.emblembtn.elocked:hover{border-color:rgba(91,138,134,.4)}
+.emblemcost{position:absolute;bottom:1px;right:2px;font-size:8px;font-family:var(--mono);color:var(--yel);line-height:1}
+/* gameover pilot line */
+.gopilot{font-family:var(--disp);font-size:15px;letter-spacing:3px;color:var(--cy);text-align:center;min-height:22px;margin-bottom:4px}

@@ -80,16 +80,40 @@ const ACHIEVEMENTS = [
   { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
 ];
 
+const EMBLEMS = [
+  { id: 'wings',    gate: 'free' },
+  { id: 'skull',    gate: 'sp',  cost: 80 },
+  { id: 'star',     gate: 'sp',  cost: 80 },
+  { id: 'dragon',   gate: 'ach', ach: 'bossSlayer' },
+  { id: 'ace',      gate: 'ach', ach: 'acePilot' },
+];
+/* uppercase, strip non-A-Z0-9, clamp to 8 chars. Empty string is valid (anonymous). */
+function sanitizeCallsign(str) {
+  if (!str) return '';
+  return String(str).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+/* true if the emblem is accessible to the player given current meta state. */
+function emblemUnlocked(id, m) {
+  if (!m) return false;
+  for (var j = 0; j < EMBLEMS.length; j++) {
+    var e = EMBLEMS[j];
+    if (e.id !== id) continue;
+    if (e.gate === 'free') return true;
+    if (e.gate === 'sp') return !!(m.patches && m.patches[id]);
+    if (e.gate === 'ach') return !!(m.ach && m.ach[e.ach]);
+    return false;
+  }
+  return false;
+}
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {} };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
     m.jets && typeof m.jets === 'object' && m.skins && typeof m.skins === 'object' &&
-    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object' &&
-    m.stars && typeof m.stars === 'object');
+    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
 }
 function loadMeta() {
   try {
@@ -97,6 +121,11 @@ function loadMeta() {
     meta = validMeta(m) ? m : freshMeta();
   } catch (e) { meta = freshMeta(); }
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
+  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) — keep progression, never wipe
+  if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
+  if (typeof meta.callsign !== 'string') meta.callsign = '';
+  if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
+  if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
@@ -340,6 +369,69 @@ assert.strictEqual(meta.jets['FT-1'], true, 'starter jets re-seeded on load');
 console.log('ok - validMeta rejects malformed blobs; persistence round-trips; starters re-seeded');
 
 // ============================================================================
+//  sanitizeCallsign — uppercase, charset filter, length clamp, empty ok
+// ============================================================================
+assert.strictEqual(sanitizeCallsign(''), '', 'empty input -> empty');
+assert.strictEqual(sanitizeCallsign(null), '', 'null -> empty');
+assert.strictEqual(sanitizeCallsign(undefined), '', 'undefined -> empty');
+assert.strictEqual(sanitizeCallsign('ace'), 'ACE', 'lowercases to upper');
+assert.strictEqual(sanitizeCallsign('Maverick1'), 'MAVERICK', 'clamps to 8 chars');
+assert.strictEqual(sanitizeCallsign('VIPER'), 'VIPER', 'already-clean passthrough');
+assert.strictEqual(sanitizeCallsign('gh0st-1'), 'GH0ST1', 'strips non-alphanumeric');
+assert.strictEqual(sanitizeCallsign('a!b@c#d$e%f^'), 'ABCDEF', 'strips special chars, no overflow');
+assert.strictEqual(sanitizeCallsign('12345678extra'), '12345678', '8-digit numeric clamp');
+assert.strictEqual(sanitizeCallsign('   HELLO   '), 'HELLO', 'spaces stripped');
+console.log('ok - sanitizeCallsign: uppercase, A-Z0-9 filter, 8-char clamp, empty valid');
+
+// ============================================================================
+//  emblemUnlocked — free always true, SP-gated needs patch, ach-gated needs achievement
+// ============================================================================
+meta = freshMeta();
+assert.strictEqual(emblemUnlocked('wings', meta), true, 'free emblem always unlocked');
+assert.strictEqual(emblemUnlocked('skull', meta), false, 'sp-gated emblem locked without patch');
+assert.strictEqual(emblemUnlocked('star', meta), false, 'sp-gated star locked without patch');
+assert.strictEqual(emblemUnlocked('dragon', meta), false, 'ach-gated dragon locked without achievement');
+assert.strictEqual(emblemUnlocked('ace', meta), false, 'ach-gated ace locked without achievement');
+assert.strictEqual(emblemUnlocked('nonexistent', meta), false, 'unknown emblem is false');
+assert.strictEqual(emblemUnlocked('wings', null), false, 'null meta is false');
+// SP-gated unlocks with patch ownership
+meta = freshMeta(); meta.patches.skull = true;
+assert.strictEqual(emblemUnlocked('skull', meta), true, 'skull unlocked after patch owned');
+assert.strictEqual(emblemUnlocked('star', meta), false, 'star still locked (diff patch)');
+// ach-gated unlocks with achievement
+meta = freshMeta(); meta.ach.bossSlayer = true;
+assert.strictEqual(emblemUnlocked('dragon', meta), true, 'dragon unlocked after bossSlayer');
+assert.strictEqual(emblemUnlocked('ace', meta), false, 'ace still locked (diff ach)');
+meta.ach.acePilot = true;
+assert.strictEqual(emblemUnlocked('ace', meta), true, 'ace unlocked after acePilot');
+console.log('ok - emblemUnlocked: free=always, sp-gated=patch, ach-gated=achievement');
+
+// ============================================================================
+//  validMeta + freshMeta include callsign/emblem/patches fields
+// ============================================================================
+const fm = freshMeta();
+assert.strictEqual(fm.callsign, '', 'fresh meta callsign is empty string');
+assert.strictEqual(fm.emblem, 'wings', 'fresh meta emblem is wings');
+assert.ok(fm.patches && typeof fm.patches === 'object', 'fresh meta patches is object');
+assert.ok(validMeta(fm), 'fresh meta with new fields validates');
+// validMeta accepts legacy saves (missing callsign/emblem/patches) — backwards-compat
+const legacy = { v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} };
+assert.ok(validMeta(legacy), 'legacy save without callsign/emblem/patches still validates');
+// round-trip through JSON preserves new fields
+meta = freshMeta(); meta.callsign = 'VIPER'; meta.emblem = 'skull'; meta.patches.skull = true; saveMeta();
+meta = null; loadMeta();
+assert.strictEqual(meta.callsign, 'VIPER', 'callsign persists across save/load');
+assert.strictEqual(meta.emblem, 'skull', 'emblem persists across save/load');
+assert.strictEqual(meta.patches.skull, true, 'patch ownership persists across save/load');
+// loadMeta heals legacy saves missing the new fields
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} });
+loadMeta();
+assert.strictEqual(meta.callsign, '', 'legacy save healed: callsign defaults to empty');
+assert.strictEqual(meta.emblem, 'wings', 'legacy save healed: emblem defaults to wings');
+assert.ok(typeof meta.patches === 'object', 'legacy save healed: patches defaults to object');
+console.log('ok - validMeta accepts + defaults new fields; legacy saves heal on load');
+
+// ============================================================================
 //  byte-identity guard: mirrored fns must match js/meta.js verbatim (whitespace-insensitive)
 // ============================================================================
 const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'meta.js'), 'utf8');
@@ -356,7 +448,8 @@ function bodyOf(fnName, text) {
 function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
 const strip = (x) => x.replace(/\s+/g, ' ');
 for (const fn of ['spAward', 'perkCost', 'applyMetaPerks', 'validMeta', 'freshMeta', 'buyPerk',
-                  'buyJet', 'buySkin', 'grantAch', 'checkAchievements', 'jetUnlocked', 'skinOwned']) {
+                  'buyJet', 'buySkin', 'grantAch', 'checkAchievements', 'jetUnlocked', 'skinOwned',
+                  'sanitizeCallsign', 'emblemUnlocked']) {
   const mine = norm(eval('(' + fn + ').toString()').replace(/^[^(]*\(/, 'function ' + fn + '('));
   const theirs = norm(bodyOf(fn, src));
   assert.strictEqual(strip(theirs), strip(mine), fn + ' in meta.js must match the mirror (ignoring whitespace)');

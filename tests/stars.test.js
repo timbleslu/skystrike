@@ -42,13 +42,12 @@ function bestStars(m, jetId, stars) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {} };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
     m.jets && typeof m.jets === 'object' && m.skins && typeof m.skins === 'object' &&
-    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object' &&
-    m.stars && typeof m.stars === 'object');
+    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
 }
 function loadMeta() {
   try {
@@ -56,6 +55,8 @@ function loadMeta() {
     meta = validMeta(m) ? m : freshMeta();
   } catch (e) { meta = freshMeta(); }
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
+  // heal legacy saves missing stars (F6) — keep progression, never wipe
+  if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
@@ -120,17 +121,17 @@ assert.strictEqual(meta.stars['SU-57'], 2, 'SU-57 star best persisted across loa
 console.log('ok - bestStars: per-jet best is monotonic and persists across save/load');
 
 // ============================================================================
-//  validMeta + persistence accept the new stars field
+//  validMeta stays lenient for the new stars field; loadMeta heals it (no wipe)
 // ============================================================================
 assert.ok(validMeta(freshMeta()), 'fresh meta (with stars) validates');
 assert.ok(validMeta(JSON.parse(JSON.stringify(freshMeta()))), 'round-trips through JSON');
-assert.ok(!validMeta({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} }), 'a meta missing stars is rejected');
-// a legacy save without stars falls back to a fresh (valid) meta on load
+assert.ok(validMeta({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} }), 'a meta missing stars still validates (back-compat — no progression wipe)');
+// a legacy save without stars loads AS-IS (progression preserved) and heals the stars map
 _kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 5, jets: {}, skins: {}, perks: {}, ach: {} });
 loadMeta();
-assert.ok(validMeta(meta), 'legacy save -> fresh, valid meta with stars');
-assert.ok(meta.stars && typeof meta.stars === 'object', 'loaded meta has a stars map');
-console.log('ok - validMeta requires the stars field; legacy saves heal to a fresh meta');
+assert.strictEqual(meta.sp, 5, 'legacy save loads as-is — SP/progression preserved, NOT reset to a fresh meta');
+assert.ok(meta.stars && typeof meta.stars === 'object', 'loaded meta has a healed stars map');
+console.log('ok - validMeta stays lenient; a stars-less legacy save loads with progression intact and heals stars');
 
 // ============================================================================
 //  byte-identity guard: mirrored fns must match js/meta.js verbatim (ws-insensitive)

@@ -1019,6 +1019,75 @@ function buildHangar() {
   const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
   const mg = g('metaGrid'); if (mg) mg.addEventListener('click', onMetaGridClick);
   const js = g('jetStage'); if (js) js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
+  renderPilotPanel();
+}
+/* ---------------- pilot callsign + emblem (F13) ---------------- */
+const EMBLEM_GLYPHS = { wings: '✈', skull: '☠', star: '★', dragon: 'ᚴ', ace: '◈' };
+function renderPilotPanel() {
+  // callsign input
+  const inp = g('callsignInput');
+  if (inp) {
+    inp.value = (meta && meta.callsign) || '';
+    inp.placeholder = t('pilot.placeholder');
+    inp.removeEventListener('input', _onCallsignInput);
+    inp.addEventListener('input', _onCallsignInput);
+    inp.removeEventListener('blur', _onCallsignBlur);
+    inp.addEventListener('blur', _onCallsignBlur);
+  }
+  // emblem grid
+  const grid = g('emblemGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  EMBLEMS.forEach(function(em) {
+    const unlocked = emblemUnlocked(em.id, meta);
+    const active = meta && meta.emblem === em.id;
+    const btn = document.createElement('button');
+    btn.className = 'emblembtn' + (active ? ' active' : '') + (unlocked ? '' : ' elocked');
+    btn.title = em.id;
+    btn.dataset.eid = em.id;
+    const glyph = EMBLEM_GLYPHS[em.id] || '◆';
+    btn.textContent = glyph;
+    if (!unlocked && em.gate === 'sp') {
+      const cost = document.createElement('span');
+      cost.className = 'emblemcost';
+      cost.textContent = em.cost;
+      btn.appendChild(cost);
+    }
+    btn.addEventListener('click', function() { onEmblemClick(em.id); });
+    grid.appendChild(btn);
+  });
+  // update label
+  setTxt('lblCallsign', t('pilot.callsign'));
+  setTxt('lblEmblem', t('pilot.emblem'));
+}
+function _onCallsignInput(e) {
+  // show sanitized value live
+  const raw = e.target.value;
+  const clean = sanitizeCallsign(raw);
+  e.target.value = clean;
+}
+function _onCallsignBlur(e) {
+  if (!meta) return;
+  const clean = sanitizeCallsign(e.target.value);
+  e.target.value = clean;
+  setCallsign(clean);
+}
+function onEmblemClick(id) {
+  if (!meta) return;
+  if (emblemUnlocked(id, meta)) {
+    setEmblem(id);
+    renderPilotPanel();
+  } else {
+    // try to buy if SP-gated
+    const def = EMBLEMS.filter(function(e) { return e.id === id; })[0];
+    if (def && def.gate === 'sp') {
+      if (buyPatch(id)) { setEmblem(id); updateSpHud(); renderPilotPanel(); if (typeof audio !== 'undefined' && audio.on) audio.ui(); }
+      else showBanner(t('meta.needSp'));
+    } else if (def && def.gate === 'ach') {
+      const achDef = EMBLEMS.filter(function(e) { return e.id === id; })[0];
+      showBanner(tf('pilot.needAch', { a: achDef.ach }));
+    }
+  }
 }
 // first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
 function initOnboarding() {
@@ -1290,6 +1359,14 @@ function endRun(title) {
     const note = sd.querySelector('.stars-note'); if (note) note.textContent = stars + ' / 3  ·  ' + tf('stars.best', { n: best });
   }
   if (achRes.unlocked.length) showBanner(tf('banner.achUnlocked', { n: achRes.unlocked.length }));
+  // pilot callsign + emblem on debrief
+  const goPilot = g('go_pilot');
+  if (goPilot) {
+    const cs = (meta && meta.callsign) || '';
+    const emId = (meta && meta.emblem) || 'wings';
+    const glyph = (typeof EMBLEM_GLYPHS !== 'undefined' && EMBLEM_GLYPHS[emId]) || '';
+    goPilot.textContent = cs ? (glyph ? glyph + ' ' + cs : cs) : '';
+  }
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
@@ -1412,6 +1489,8 @@ function applyLang() {
   setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
+  setTxt('lblCallsign', t('pilot.callsign')); setTxt('lblEmblem', t('pilot.emblem'));
+  const ci = g('callsignInput'); if (ci) ci.placeholder = t('pilot.placeholder');
   setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
   setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
