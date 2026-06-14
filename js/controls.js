@@ -21,6 +21,8 @@ function shapeAxis(v, opts) {
 
 // per-aggression motion tuning. Invariants (asserted in tests):
 //   deadzone: casual > balanced > direct ; sens: direct > balanced > casual.
+//   autoLevel: reserved for a future roll auto-leveling assist (values + ordering tests
+//   exist; runtime wiring is a later step, intentionally not read yet).
 const AGGRESSION = {
   casual:   { deadzone: 0.18, expo: 0.55, sens: 0.75, maxAngle: 45, autoLevel: 2.2, pitchClamp: 0.70 },
   balanced: { deadzone: 0.10, expo: 0.35, sens: 1.00, maxAngle: 35, autoLevel: 1.2, pitchClamp: 0.85 },
@@ -54,7 +56,7 @@ function readFlightInput() {
   } else if (isTouchEnabled && joyActive) {
     const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
     // stick: up (negative y) = climb by default; invertPitch flips. push right (+x) = roll right.
-    pitch = mapFlightInput(-touchInput.y, a, invertPitch);
+    pitch = mapFlightInput(-touchInput.y, a, invertPitch) * a.pitchClamp;  // cap pitch authority like the motion path
     roll = mapFlightInput(touchInput.x, a, false);
   }
   flightInput.pitch = clamp(pitch, -1, 1);
