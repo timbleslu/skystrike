@@ -1,0 +1,4 @@
+# graphify code-graph exclusions (gitignore syntax — does NOT affect git tracking).
+# Keep the knowledge graph focused on game logic, not bundled deps.
+vendor/
+node_modules/

@@ -4,3 +4,6 @@ node_modules/
 www/
 .vercel
 *.png
+
+# graphify knowledge graph (derived artifact — rebuilt locally by post-commit/post-checkout hooks)
+graphify-out/

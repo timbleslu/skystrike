@@ -2,6 +2,8 @@
 
 Arcade jet combat game. Three.js (r159, vendored), single HTML page, no build step, no framework, no modules.
 
+**Source of truth: GitHub `timbleslu/skystrike`, worked via this clone. `git fetch`/`pull` before editing. Ignore any Obsidian Vault or `~/Downloads` copy of Skystrike — they are stale decoys, never source.**
+
 ## Run / Test
 - Play: open `index.html` in a browser (or any static server).
 - Tests: `npm test` — plain Node scripts in `tests/*.test.js`, no test framework. Each test extracts or mirrors functions from source files; keep mirrored helpers byte-identical with their source.
@@ -57,3 +59,13 @@ This file replaces codebase exploration — stale info costs more tokens than no
 - New/renamed/moved file, or new script-load-order entry → update Architecture table + load-order chain.
 - New cross-file convention/helper (like `clearLocks`, `airSpawnPos`, storage seam) → add to Hard rules or the table.
 - Finish/start a roadmap item → update Current state. Remove stale entries rather than letting them accumulate.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
