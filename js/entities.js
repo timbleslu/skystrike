@@ -991,7 +991,8 @@ function buildDrone() {
 /* ---------------- player ---------------- */
 function createPlayer(idx) {
   const j = JETS[idx], st = jetStats(j);
-  const mesh = buildJet(j.color, j.accent, SHAPES[j.shape], true); scene.add(mesh);
+  const paint = (typeof jetPaint === 'function') ? jetPaint(j) : { color: j.color, accent: j.accent };
+  const mesh = buildJet(paint.color, paint.accent, SHAPES[j.shape], true); scene.add(mesh);
   // muzzle flash: one persistent sprite at the nose, blinked on by fireGun
   const muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd76a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
   muzzle.position.set(0, 0, -14); muzzle.scale.setScalar(14); muzzle.visible = false; mesh.add(muzzle);

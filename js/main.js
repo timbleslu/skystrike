@@ -657,6 +657,7 @@ loadBest();
 loadSettings();
 applyButtonStyle();   // apply persisted touch button opacity/layout before first touch
 loadRival();
+loadMeta();
 buildHangar();
 initOnboarding();
 animate();

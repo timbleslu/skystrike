@@ -843,7 +843,13 @@ function buildHangar() {
   applyLang();
   selectJet(selectedJet);
   updateBest();
+  updateSpHud();
   renderKillBoard();
+  const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);
+  const mc = g('metaClose'); if (mc) mc.addEventListener('click', closeMetaScreen);
+  const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
+  const mg = g('metaGrid'); if (mg) mg.addEventListener('click', onMetaGridClick);
+  const js = g('jetStage'); if (js) js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
 }
 // first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
 function initOnboarding() {
@@ -893,7 +899,9 @@ function renderJetCard(i) {
       '</div>' +
       '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
       '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
+      '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
+  renderJetMeta(i);
 }
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
@@ -934,14 +942,98 @@ function selectJet(i) {
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
   const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
   if (previewJet) scene.remove(previewJet);
-  previewJet = buildJet(JETS[i].color, JETS[i].accent, SHAPES[JETS[i].shape], true);
+  const paint = jetPaint(JETS[i]);     // honour the chosen skin (falls back to stock paint)
+  previewJet = buildJet(paint.color, paint.accent, SHAPES[JETS[i].shape], true);
   previewJet.position.set(0, 2.5, 0);
   scene.add(previewJet);
   audio.init(); audio.ui();
   saveSettings();
 }
+// jet-card overlay: lock/buy state + skin chips (called by renderJetCard tail)
+function renderJetMeta(i) {
+  const j = JETS[i];
+  const wrap = g('jetMeta'); if (!wrap) return;
+  let html = '';
+  if (!jetUnlocked(j.id)) {
+    html += '<div class="jmlock"><span class="jmlocklbl">' + t('meta.locked') + '</span>' +
+            '<button class="jmbuy" data-buyjet="' + j.id + '">' + tf('meta.buyJet', { c: jetCost(j.id) }) + '</button></div>';
+  } else {
+    const skins = SKINS[j.id];
+    if (skins && skins.length > 1) {
+      html += '<div class="jmskins"><span class="jmskinlbl">' + t('meta.skins') + '</span>';
+      for (let s = 0; s < skins.length; s++) {
+        const sk = skins[s], owned = skinOwned(j.id, sk.id), sel = selectedSkin(j.id) === sk.id;
+        const sw = (sk.color != null ? sk.color : j.color);
+        html += '<button class="jmskin' + (sel ? ' on' : '') + (owned ? '' : ' locked') + '" data-skin="' + sk.id + '" data-jet="' + j.id +
+                '" style="--sw:#' + ('000000' + (sw >>> 0).toString(16)).slice(-6) + '" title="' + metaText({ id: 'skin.' + sk.id }, 'name') + '">' +
+                (owned ? '' : '<span class="jmsklk">' + skinCost(j.id, sk.id) + '</span>') + '</button>';
+      }
+      html += '</div>';
+    }
+  }
+  wrap.innerHTML = html;
+}
+// delegated buy/select handlers for the jet-card meta overlay
+function onJetMetaClick(e) {
+  const buy = e.target.closest('[data-buyjet]');
+  if (buy) { if (buyJet(buy.dataset.buyjet)) { updateSpHud(); selectJet(selectedJet); audio.ui(); } else showBanner(t('meta.needSp')); return; }
+  const sk = e.target.closest('.jmskin');
+  if (sk) {
+    const jet = sk.dataset.jet, id = sk.dataset.skin;
+    if (skinOwned(jet, id)) { setSkin(jet, id); selectJet(selectedJet); audio.ui(); }
+    else if (buySkin(jet, id)) { setSkin(jet, id); updateSpHud(); selectJet(selectedJet); audio.ui(); }
+    else showBanner(t('meta.needSp'));
+  }
+}
+/* ---------------- meta-progression screen (perk tree + achievements) ---------------- */
+let metaTab = 'perks';
+function openMetaScreen() { if (state !== 'hangar') return; metaTab = 'perks'; g('meta').classList.add('show'); renderMetaScreen(); if (audio.on) audio.ui(); }
+function closeMetaScreen() { g('meta').classList.remove('show'); if (audio.on) audio.ui(); }
+function showMetaTab(name) { metaTab = name; renderMetaScreen(); if (audio.on) audio.ui(); }
+function renderMetaScreen() {
+  const sp = g('metaSpVal'); if (sp) sp.textContent = spBalance().toLocaleString();
+  document.querySelectorAll('#meta .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === metaTab));
+  g('metaGrid').innerHTML = (metaTab === 'ach') ? renderAchGrid() : renderPerkGrid();
+}
+function renderPerkGrid() {
+  let html = '<div class="perkgrid">';
+  for (let i = 0; i < META_PERKS.length; i++) {
+    const d = META_PERKS[i], lvl = perkLevel(d.id), maxed = perkMaxed(d.id), unlocked = perkUnlocked(d.id);
+    const cost = perkCost(d.id, lvl), afford = spBalance() >= cost;
+    const cls = maxed ? 'maxed' : (!unlocked ? 'locked' : (afford ? 'afford' : 'poor'));
+    html += '<div class="perknode ' + cls + '">' +
+      '<div class="pntitle">' + metaText(d, 'name') + '</div>' +
+      '<div class="pndesc">' + metaText(d, 'desc') + '</div>' +
+      '<div class="pnlvl">' + tf('meta.level', { l: lvl, m: d.max }) + '</div>' +
+      (maxed ? '<div class="pnmax">' + t('meta.maxed') + '</div>'
+        : !unlocked ? '<div class="pnreq">' + tf('meta.requires', { r: metaText(META_BY_ID[d.req], 'name') }) + '</div>'
+        : '<button class="pnbuy" data-perk="' + d.id + '">' + tf('meta.buyLvl', { c: cost }) + '</button>') +
+      '</div>';
+  }
+  return html + '</div>';
+}
+function renderAchGrid() {
+  let html = '<div class="achgrid">';
+  for (let i = 0; i < ACHIEVEMENTS.length; i++) {
+    const a = ACHIEVEMENTS[i], earned = achEarned(a.id);
+    html += '<div class="achnode ' + (earned ? 'earned' : 'lockedach') + '">' +
+      '<div class="achbadge">' + (earned ? '★' : '☆') + '</div>' +
+      '<div class="achname">' + metaText({ id: 'ach.' + a.id }, 'name') + '</div>' +
+      '<div class="achdesc">' + metaText({ id: 'ach.' + a.id }, 'desc') + '</div>' +
+      '<div class="achsp">+' + a.sp + ' SP</div>' +
+      '</div>';
+  }
+  return html + '</div>';
+}
+function onMetaGridClick(e) {
+  const b = e.target.closest('[data-perk]');
+  if (!b) return;
+  if (buyPerk(b.dataset.perk)) { updateSpHud(); renderMetaScreen(); audio.ui(); }
+  else showBanner(t('meta.needSp'));
+}
 function startGame(i) {
   if (state !== 'hangar') return;
+  if (!jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
   selectedJet = i; audio.init();
   closeManual();
   if (previewJet) { scene.remove(previewJet); previewJet = null; }
@@ -952,6 +1044,7 @@ function startGame(i) {
 
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
+  applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
@@ -989,6 +1082,17 @@ function endRun(title) {
   const da = g('go_acc'); if (da) da.textContent = acc + '%';
   const dm = g('go_msl'); if (dm) dm.textContent = run.missiles;
   const dt2 = g('go_time'); if (dt2) dt2.textContent = (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2);
+  // ---- meta-progression: bank SP + evaluate achievements from this run's stats ----
+  // stamp the two derived stats onto run so spAward / achievement predicates stay pure
+  run.waveReached = wave;
+  run.rivalLevel = (rival && rival.level) || 0;
+  const award = spAward(run, player);
+  const achRes = checkAchievements(run, player);
+  bankSP(award);                       // achievement SP is banked inside grantAch
+  const total = award + (achRes.sp || 0);
+  const spd = g('go_sp'); if (spd) spd.textContent = '+' + total.toLocaleString();
+  const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
+  if (achRes.unlocked.length) showBanner(tf('banner.achUnlocked', { n: achRes.unlocked.length }));
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
@@ -1005,6 +1109,8 @@ function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
   const b = g('hangarBest'); if (b) { b.style.display = bestScore > 0 ? 'block' : 'none'; const v = g('hangarBestVal'); if (v) v.textContent = bestScore.toLocaleString(); }
 }
+// refresh the persistent SP balance shown in the hangar header (call after any SP spend)
+function updateSpHud() { const v = g('hangarSpVal'); if (v) v.textContent = spBalance().toLocaleString(); }
 // best score survives reloads when the file is opened locally (storage may be blocked in some sandboxes)
 function loadBest() {
   try { const v = parseInt(store.get('skystrike_best') || '0', 10); if (!isNaN(v) && v > bestScore) bestScore = v; } catch (e) {}
@@ -1055,6 +1161,7 @@ function applyLang() {
   setTxt('mbtnEndless', t('hangar.endless')); setTxt('mbtnOperation', t('hangar.operation'));
   setTxt('rbTitle', t('hangar.rivalBoard'));
   setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
+  setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
   setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
@@ -1065,7 +1172,12 @@ function applyLang() {
   // game over labels
   setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
   setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
+  setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
   setTxt('redeploy', t('go.redeploy'));
+  // meta-progression screen labels
+  setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));
+  setTxt('metaTab_perks', t('meta.tabPerks')); setTxt('metaTab_ach', t('meta.tabAch'));
+  setTxt('metaClose', t('meta.back')); setTxt('metaHint', t('meta.hint'));
   // tech tree shell
   setTxt('rplab', t('tech.researchPoints'));
   const th = g('techHeadTitle'); if (th) th.textContent = t('tech.title');
@@ -1135,6 +1247,8 @@ function applyLang() {
   if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
   if (typeof selectedJet === 'number') renderJetCard(selectedJet);
   renderKillBoard();
+  updateSpHud();
+  if (g('meta') && g('meta').classList.contains('show')) renderMetaScreen();
 }
 function applyOpLegend() {
   const map = { FURBALL: 'op.legFurball', INTERCEPT: 'op.legIntercept', STRIKE: 'op.legStrike', ELITE: 'op.legElite', DEPOT: 'op.legDepot', FINAL: 'op.legFinal' };

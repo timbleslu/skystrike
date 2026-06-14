@@ -16,6 +16,9 @@ function rowText(obj, id, field, group) {
 }
 function jetText(j, field) { return rowText(j, j.id, field, 'jet'); }
 function techText(n, field) { return rowText(n, n.id, field, 'tech'); }
+/* meta-progression data strings (perks/achievements/skins). The data tables in meta.js carry no
+   text fields, so the EN copy lives under the 'meta' group and rowText falls through to it. */
+function metaText(n, field) { return rowText(n, n.id, field, 'meta'); }
 
 function t(key) {
   const L = I18N[LANG];
@@ -240,6 +243,49 @@ const I18N = {
     'manBody.wingman': '<li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) — you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li><li>It draws enemy fire — hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li><li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>\'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s — they immediately acquire targets and attack. The F-47\'s passive makes all AI escorts and CCAs hit 25% harder.</li><li><b>FLIGHT COMMANDS:</b> press <b>T</b> to order the whole flight to <b>FOCUS FIRE</b> your locked target, or <b>Y</b> to <b>REGROUP</b> — break off and tuck into tight defensive formation. The <b>GUARDIAN ESCORTS</b> tech node lets your escorts run their own point-defense laser, swatting enemy missiles that stray near the flight.</li>',
     'manBody.enemies': '<li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs — they now carry a real cannon magazine and a single missile, so expect to be shot at.</li><li><b>Crimson drones</b> — cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers — keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li><li><b>Gold ACE</b> — an elite with more ammo that shrugs off a single missile; wear it down.</li><li><b>Bombers</b> pack a heavy cannon, two missiles &amp; a few flares.</li><li><b>Orange turrets</b> are ground SAM sites (missiles only).</li><li><b>Magenta BOSS</b> (every 4th wave) now cycles <em>telegraphed</em> special attacks — radial MISSILE BARRAGE, deployed DRONE SWARMS, and a close-range SHOCKWAVE PULSE — then enrages at low health. Watch for the warning, then break away or pop countermeasures.</li><li>Enemy ammo still runs dry — a disarmed foe is just a target.</li>',
     'manBody.tech': 'You earn <em>research points (RP)</em> — shown as <b>R&amp;D</b> on the HUD — only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> — a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all — press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.',
+
+    /* ---- meta-progression (SP currency, perks, jet/skin unlocks, achievements) ---- */
+    'meta.title': 'COMMAND PROGRESSION',
+    'meta.sub': '// STRATEGIC POINTS PERSIST BETWEEN SORTIES //',
+    'meta.btn': '▲ COMMAND & PROGRESSION',
+    'meta.sp': 'STRATEGIC POINTS',
+    'meta.spEarned': 'STRATEGIC POINTS EARNED',
+    'meta.banked': 'BANKED',
+    'meta.tabPerks': 'Upgrades',
+    'meta.tabAch': 'Achievements',
+    'meta.back': '▶ BACK TO HANGAR',
+    'meta.hint': 'Spend Strategic Points on persistent upgrades that apply at the start of every sortie. Locked aircraft and paint schemes are bought on each aircraft’s card in the hangar.',
+    'meta.locked': '🔒 LOCKED',
+    'meta.buyJet': 'UNLOCK — {c} SP',
+    'meta.jetLocked': 'AIRCRAFT LOCKED — UNLOCK FOR {c} SP',
+    'meta.skins': 'PAINT',
+    'meta.needSp': 'NOT ENOUGH STRATEGIC POINTS',
+    'meta.level': 'LVL {l} / {m}',
+    'meta.maxed': 'MAX LEVEL',
+    'meta.requires': 'REQUIRES {r}',
+    'meta.buyLvl': 'UPGRADE — {c} SP',
+    'banner.achUnlocked': '★ {n} ACHIEVEMENT(S) UNLOCKED ★',
+
+    /* meta data strings (perks / achievements / skins) — canonical EN copy (no fields in meta.js tables) */
+    meta: {
+      'hull':     { name: 'REINFORCED HULL',   desc: 'Start every sortie with more hull integrity (+6% max HP per level).' },
+      'plating':  { name: 'ABLATIVE PLATING',  desc: 'Begin with a sturdier shield (+8% max shield per level).' },
+      'guns':     { name: 'MACHINED BARRELS',  desc: 'Your cannon hits harder from the first trigger pull (+4% gun damage per level).' },
+      'warheads': { name: 'SHAPED WARHEADS',   desc: 'Missiles carry a heavier punch (+5% missile damage per level).' },
+      'magazine': { name: 'EXPANDED MAGAZINE', desc: 'Deploy with extra missiles and flares (+4 missiles, +1 flare per level).' },
+      'research': { name: 'FIELD ANALYSTS',    desc: 'Earn research points faster in every run (+10% RP per level).' },
+      'bounty':   { name: 'WAR BONDS',         desc: 'Score is worth 15% more for the whole run.' },
+      'ach.firstBlood':    { name: 'FIRST BLOOD',     desc: 'Destroy your first enemy.' },
+      'ach.acePilot':      { name: 'ACE PILOT',       desc: 'Score 25 air kills in a single run.' },
+      'ach.bossSlayer':    { name: 'GIANT SLAYER',    desc: 'Destroy a boss.' },
+      'ach.survivor':      { name: 'SURVIVOR',        desc: 'Reach wave 10 in a single run.' },
+      'ach.highScore':     { name: 'HIGH ROLLER',     desc: 'Finish a run with 50,000+ score.' },
+      'ach.groundPounder': { name: 'GROUND POUNDER',  desc: 'Destroy 20 ground targets in a single run.' },
+      'skin.default':  { name: 'STOCK' },
+      'skin.sand':     { name: 'DESERT' }, 'skin.arctic': { name: 'ARCTIC' },
+      'skin.splinter': { name: 'SPLINTER' }, 'skin.raptor': { name: 'PREDATOR' },
+      'skin.felon':    { name: 'FELON' }, 'skin.aurora': { name: 'AURORA' },
+    },
   },
 
   ZH: {
@@ -583,6 +629,48 @@ const I18N = {
       agm1: { name:'空对地导弹挂架', desc:'空对地导弹挂架 — 对地导弹伤害+75%。' },
       rkt1: { name:'火箭巢', desc:'机炮弹药对软目标产生破片效果 — 对地机炮伤害+100%。' },
       bel1: { name:'腹部装甲', desc:'机腹强化装甲 — 受地面导弹伤害−35%。' },
+    },
+
+    /* ---- meta-progression (ZH) ---- */
+    'meta.title': '指挥进阶',
+    'meta.sub': '// 战略点数在历次出击间保留 //',
+    'meta.btn': '▲ 指挥与进阶',
+    'meta.sp': '战略点数',
+    'meta.spEarned': '获得战略点数',
+    'meta.banked': '储备',
+    'meta.tabPerks': '升级',
+    'meta.tabAch': '成就',
+    'meta.back': '▶ 返回机库',
+    'meta.hint': '消耗战略点数购买永久升级，每次出击开始时自动生效。锁定的机型与涂装在机库各机型卡片上购买。',
+    'meta.locked': '🔒 已锁定',
+    'meta.buyJet': '解锁 — {c} 点',
+    'meta.jetLocked': '机型已锁定 — 花费 {c} 战略点数解锁',
+    'meta.skins': '涂装',
+    'meta.needSp': '战略点数不足',
+    'meta.level': '等级 {l} / {m}',
+    'meta.maxed': '已满级',
+    'meta.requires': '需要 {r}',
+    'meta.buyLvl': '升级 — {c} 点',
+    'banner.achUnlocked': '★ 解锁 {n} 项成就 ★',
+
+    meta: {
+      'hull':     { name: '强化机体',   desc: '每次出击开始时拥有更高的机体强度（每级 +6% 最大生命）。' },
+      'plating':  { name: '烧蚀装甲',   desc: '出击时护盾更坚固（每级 +8% 最大护盾）。' },
+      'guns':     { name: '精密炮管',   desc: '机炮从第一发就更具威力（每级 +4% 机炮伤害）。' },
+      'warheads': { name: '成型战斗部', desc: '导弹威力更强（每级 +5% 导弹伤害）。' },
+      'magazine': { name: '扩容弹仓',   desc: '出击时携带更多导弹与干扰弹（每级 +4 导弹，+1 干扰弹）。' },
+      'research': { name: '战地分析员', desc: '每次出击更快获取研究点数（每级 +10% RP）。' },
+      'bounty':   { name: '战争债券',   desc: '整局得分提高 15%。' },
+      'ach.firstBlood':    { name: '首杀',     desc: '击毁你的第一个敌人。' },
+      'ach.acePilot':      { name: '王牌飞行员', desc: '单局取得 25 个空中击杀。' },
+      'ach.bossSlayer':    { name: '巨兽杀手',  desc: '击毁一个首领。' },
+      'ach.survivor':      { name: '幸存者',    desc: '单局抵达第 10 波。' },
+      'ach.highScore':     { name: '豪客',      desc: '以 50,000+ 得分结束一局。' },
+      'ach.groundPounder': { name: '对地强击',  desc: '单局击毁 20 个地面目标。' },
+      'skin.default':  { name: '原厂' },
+      'skin.sand':     { name: '沙漠' }, 'skin.arctic': { name: '极地' },
+      'skin.splinter': { name: '碎裂迷彩' }, 'skin.raptor': { name: '猛禽' },
+      'skin.felon':    { name: '重罪' }, 'skin.aurora': { name: '极光' },
     },
   },
 };
