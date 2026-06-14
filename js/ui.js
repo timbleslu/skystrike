@@ -1113,7 +1113,7 @@ function startGame(i) {
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0 };
   state = 'playing';
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
@@ -1141,15 +1141,20 @@ function endRun(title) {
   const dm = g('go_msl'); if (dm) dm.textContent = run.missiles;
   const dt2 = g('go_time'); if (dt2) dt2.textContent = (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2);
   // ---- meta-progression: bank SP + evaluate achievements from this run's stats ----
-  // stamp the two derived stats onto run so spAward / achievement predicates stay pure
+  // stamp derived stats onto run so spAward / gradeRun / achievement predicates stay pure
   run.waveReached = wave;
   run.rivalLevel = (rival && rival.level) || 0;
+  run.timeSecs = secs;
   const award = spAward(run, player);
+  const grade = gradeRun(run, player);
+  const gradedAward = Math.round(award * grade.mult);
   const achRes = checkAchievements(run, player);
-  bankSP(award);                       // achievement SP is banked inside grantAch
-  const total = award + (achRes.sp || 0);
+  bankSP(gradedAward);                 // achievement SP is banked inside grantAch
+  const total = gradedAward + (achRes.sp || 0);
   const spd = g('go_sp'); if (spd) spd.textContent = '+' + total.toLocaleString();
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
+  // render grade letter + bonus
+  const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
   if (achRes.unlocked.length) showBanner(tf('banner.achUnlocked', { n: achRes.unlocked.length }));
   updateBest();
   g('touchControls').classList.remove('show');
@@ -1232,6 +1237,7 @@ function applyLang() {
   setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
   setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
   setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
+  setTxt('goLblGrade', t('grade.title'));
   setTxt('redeploy', t('go.redeploy'));
   // meta-progression screen labels
   setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));

@@ -142,6 +142,10 @@ const I18N = {
     'banner.wingFocus': '▸ FLIGHT: FOCUS FIRE', 'banner.wingRegroup': '▸ FLIGHT: REGROUP',
     'banner.wingNone': 'NO ESCORTS AIRBORNE', 'banner.wingNoTarget': 'NO TARGET TO FOCUS',
 
+    /* ---- mission grading ---- */
+    'grade.title': 'MISSION RATING',
+    'grade.bonus': 'SP BONUS',
+
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
     'tech.researchPoints': 'RESEARCH POINTS',
@@ -428,6 +432,9 @@ const I18N = {
     'banner.dewLance': 'DEW LANCE · 开火',
     'banner.wingFocus': '▸ 编队：集火', 'banner.wingRegroup': '▸ 编队：归队',
     'banner.wingNone': '无僚机在空', 'banner.wingNoTarget': '无可集火目标',
+
+    'grade.title': '任务评级',
+    'grade.bonus': 'SP 奖励',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',
