@@ -674,7 +674,7 @@ function animate() {
     maybeSpawnCrate(dt);
     updateCamera(dt);
     updatePlayerShadow();
-    audio.setEngine(player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
+    audio.setEngineJet(player.jet && player.jet.id, player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
     drawHUD(); drawRadar(); updateDom(dt);
   } else if (state === 'dead') {
     updateParticles(dt);
