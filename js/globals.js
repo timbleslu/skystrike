@@ -459,9 +459,32 @@ function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
 
 const keys = {};
 let mouseRight = false;
-const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
+const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','F10','F11','F12','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
 const HUDFONT = "'Share Tech Mono', monospace";
+
+/* ---------------- AWACS support calls (F10) ---------------- */
+// Spend in-run RP (player.tp) on one of three radio calls, each capped per sector.
+// AWACS_COSTS = RP price per call; AWACS_USES_MAX = how many times each may be called per sector.
+const AWACS_COSTS    = { strike: 140, resupply: 90, jam: 70 };
+const AWACS_USES_MAX = { strike: 1,   resupply: 1,  jam: 2 };
+const AWACS_JAM_TIME = 8;   // seconds enemy missiles stay blinded by a jamming call
+let awacsUses = { strike: 0, resupply: 0, jam: 0 };   // calls SPENT this sector (reset per sector + per run)
+// MIRROR(awacsCall): keep byte-identical with tests/awacs.test.js
+// Pure resolver: given a snapshot {rp, uses:{strike,resupply,jam}}, the cost+cap tables, and a call key,
+// returns a NEW snapshot. ok=false (state unchanged) when the call is unknown, capped out, or unaffordable.
+// reason: 'unknown' | 'empty' (no uses left) | 'noRp' (can't afford) | 'ok'.
+function awacsCall(state, costs, max, key) {
+  const cost = costs[key], cap = max[key];
+  if (cost === undefined || cap === undefined) return { ok: false, reason: 'unknown', rp: state.rp, uses: state.uses };
+  const used = state.uses[key] || 0;
+  if (used >= cap) return { ok: false, reason: 'empty', rp: state.rp, uses: state.uses };
+  if (state.rp < cost) return { ok: false, reason: 'noRp', rp: state.rp, uses: state.uses };
+  const uses = { strike: state.uses.strike || 0, resupply: state.uses.resupply || 0, jam: state.uses.jam || 0 };
+  uses[key] = used + 1;
+  return { ok: true, reason: 'ok', rp: state.rp - cost, uses: uses };
+}
+// MIRROR_END(awacsCall)
 
 /* Touch controls state */
 let isTouchEnabled = false;

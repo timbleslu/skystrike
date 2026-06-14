@@ -274,6 +274,9 @@ function initTouchControls() {
   bindBtn('tb-spc', 'spc', () => { if (state === 'playing' && !paused) useSpecial(); });
   bindBtn('tb-lck', 'lck', () => { if (state === 'playing' && !paused) cycleLock(); });
   bindBtn('tb-cam', 'cam', () => { if (state === 'playing' && !paused) cycleCamera(); });
+  bindBtn('tb-aws', 'aws', () => { if (state === 'playing' && !paused) awacsAction('strike'); });    // AWACS orbital strike
+  bindBtn('tb-ars', 'ars', () => { if (state === 'playing' && !paused) awacsAction('resupply'); });   // AWACS resupply
+  bindBtn('tb-ajm', 'ajm', () => { if (state === 'playing' && !paused) awacsAction('jam'); });        // AWACS jamming
 
   applyButtonStyle();
 }

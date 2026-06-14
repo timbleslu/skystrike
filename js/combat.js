@@ -645,6 +645,46 @@ function nearestEnemyInFront(coneDot) {
   }
   return best;
 }
+// nearest LIVE non-boss enemy in any direction (AWACS orbital strike targets it; bosses are immune).
+function nearestNonBossEnemy() {
+  let best = null, bd = Infinity;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive || e.type === 'boss') continue;
+    const d = t4.copy(e.group.position).sub(player.group.position).length();
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+
+/* ---------------- AWACS support calls (F10/F11/F12) ---------------- */
+// Spend RP (player.tp) on a capped-per-sector radio call. The cost/cap math is the pure
+// awacsCall() resolver (globals.js, mirrored in tests/awacs.test.js); this glue applies the effect.
+function awacsAction(key) {
+  if (!player) return false;
+  const res = awacsCall({ rp: player.tp, uses: awacsUses }, AWACS_COSTS, AWACS_USES_MAX, key);
+  if (!res.ok) {
+    if (res.reason === 'noRp') { showBanner(t('awacs.noRp')); audio.warn(); }
+    else if (res.reason === 'empty') { showBanner(t('awacs.empty')); audio.warn(); }
+    else audio.ui();
+    return false;
+  }
+  player.tp = res.rp; awacsUses = res.uses;   // commit the deduction + use spend
+  if (key === 'strike') {
+    const tgt = nearestNonBossEnemy();
+    if (tgt) { explode(tgt.group.position, true); killEnemy(tgt, true); }
+    empFlash = Math.max(empFlash, 0.45);
+    showBanner(t('awacs.strike')); audio.power();
+  } else if (key === 'resupply') {
+    player.bullets = player.maxBullets;
+    player.flares = player.maxFlares;
+    player.missiles = player.maxMissiles;
+    showBanner(t('awacs.resupply')); audio.power();
+  } else if (key === 'jam') {
+    player.jammer = Math.max(player.jammer, AWACS_JAM_TIME);   // reuse the SPECTRA jam pathway (updateMissiles blinds enemy missiles while jammer>0)
+    showBanner(t('awacs.jam')); audio.power();
+  }
+  return true;
+}
 function cycleLock() {
   const fwd = fwdOf(player.group, t3);
   const cand = [];

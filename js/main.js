@@ -7,6 +7,7 @@ function nextWave() {
   wave++;
   noDamageWave = true;   // arm the per-wave no-damage star tracker; damagePlayer clears it on a hit
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls refresh each sector/wave (F10)
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
   if (opMode && opSector) {
@@ -674,6 +675,9 @@ addEventListener('keydown', e => {
     case 'KeyC': cycleCamera(); break;
     case 'KeyT': wingCommand('focus'); break;
     case 'KeyY': wingCommand('regroup'); break;
+    case 'F10': awacsAction('strike'); break;     // AWACS orbital strike
+    case 'F11': awacsAction('resupply'); break;   // AWACS emergency resupply
+    case 'F12': awacsAction('jam'); break;        // AWACS jamming
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });

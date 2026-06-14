@@ -93,6 +93,11 @@ const I18N = {
     /* ---- touch buttons ---- */
     'touch.gun': 'GUN', 'touch.msl': 'MSL', 'touch.flr': 'FLR', 'touch.spc': 'SPC',
     'touch.thr': 'THR', 'touch.brk': 'BRK', 'touch.cam': 'CAM', 'touch.lck': 'LOCK',
+    'touch.aws': 'STRK', 'touch.ars': 'RSPLY', 'touch.ajm': 'JAM',
+
+    /* ---- AWACS support calls (F10/F11/F12) ---- */
+    'awacs.title': 'AWACS', 'awacs.strike': 'ORBITAL STRIKE', 'awacs.resupply': 'EMERGENCY RESUPPLY', 'awacs.jam': 'JAMMING',
+    'awacs.noRp': 'AWACS: NOT ENOUGH RP', 'awacs.empty': 'AWACS: NO CALLS LEFT THIS SECTOR',
 
     /* ---- killstreak callouts ---- */
     'ks.5': 'KILLSTREAK', 'ks.10': 'RAMPAGE', 'ks.15': 'UNSTOPPABLE', 'ks.20': 'GODLIKE',
@@ -422,6 +427,11 @@ const I18N = {
 
     'touch.gun': '机炮', 'touch.msl': '导弹', 'touch.flr': '干扰', 'touch.spc': '技能',
     'touch.thr': '加速', 'touch.brk': '减速', 'touch.cam': '镜头', 'touch.lck': '锁定',
+    'touch.aws': '打击', 'touch.ars': '补给', 'touch.ajm': '干扰',
+
+    /* ---- AWACS support calls ---- */
+    'awacs.title': '预警机', 'awacs.strike': '轨道打击', 'awacs.resupply': '紧急补给', 'awacs.jam': '电子干扰',
+    'awacs.noRp': '预警机：研发点不足', 'awacs.empty': '预警机：本区呼叫次数已用尽',
 
     'ks.5': '连杀', 'ks.10': '狂暴', 'ks.15': '势不可挡', 'ks.20': '神一般',
 
