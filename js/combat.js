@@ -544,6 +544,7 @@ function tpBaseFor(e) {
 }
 function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
+  missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
   if (byPlayer) haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20);
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
@@ -581,10 +582,11 @@ function killEnemy(e, byPlayer, byCCA) {
     run.ground++;
     if (strikeWaveActive) {
       if (e.gkind === 'radar') showBanner(t('banner.radarDown'));
-      if (!enemies.some(o => o.alive && o.type === 'ground')) {   // last site element down → payout
+      if (!enemies.some(o => o.alive && o.type === 'ground' && !o.escortUnit && !o.defendAsset)) {   // last site element down → payout
         const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
         player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
         showBanner(tf('banner.siteFlattened', { rp: pay })); audio.power(); empFlash = Math.max(empFlash, 0.4);
+        missionSiteDown();   // strike mission: the fortified site is down → objective met
       }
     }
   }

@@ -11,13 +11,15 @@ function nextWave() {
   if (opMode && opSector) {
     const plan = sectorPlan(opSector, wave);
     strikeWaveActive = plan.ground;
+    startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset
     showBanner(plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) }));
     for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
     for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
-    for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(spawnBomber);
-    if (plan.boss) pendingSpawns.push(spawnBoss);
+    for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
+    // FINAL boss graduates from the nemesis system — the rival ace IS the sector cap
+    if (plan.boss) { if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss); }
     if (plan.ground) queueStrikeSite(wave);
-    if (plan.rival && rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    if (plan.rival && rivalEnabled && !plan.boss) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     return;
   }
@@ -104,6 +106,21 @@ function spawnBomber() {
   dirToQuat(e.escapeDir, e.logicQuat);
   e.marker.material.color.setHex(0xffb060);
   showBanner(t('banner.bomberDetected'));
+}
+// intercept-mission bomber: a normal bomber flagged so missionKill credits the objective
+function spawnInterceptTarget() {
+  const before = enemies.length;
+  spawnBomber();
+  const e = enemies[enemies.length - 1];
+  if (e && enemies.length > before) e._missionTarget = true;
+}
+// FINAL sector cap: the nemesis rival as a boss that fights to the death (no withdrawal),
+// so completing the operation requires actually defeating it. Defeat pays out + advances via killEnemy.
+function spawnFinalRival() {
+  const before = enemies.length;
+  spawnRival();
+  const e = enemies[enemies.length - 1];
+  if (e && enemies.length > before) { e.finalCap = true; e.noFlee = true; e.hp = e.maxHp = Math.round(e.maxHp * 1.25); }
 }
 function spawnBoss() {
   const px = player.group.position.x + rand(-1200, 1200), pz = player.group.position.z - 4200, py = player.group.position.y + 450;
@@ -563,7 +580,8 @@ function handleWaves(dt) {
   if (!betweenWaves) {
     // Don't declare the wave clear until the queue is empty — otherwise the frames between
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
-    if (!aliveCombat && pendingSpawns.length === 0 && wave > 0) {
+    // a mission sector stays open until its objective resolves (escort exit / defend hold / etc.)
+    if (!aliveCombat && pendingSpawns.length === 0 && wave > 0 && !(mission && mission.status === 'active')) {
       betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
       if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       openTechScreen();   // open the R&D tech tree before the next wave
@@ -637,6 +655,7 @@ function animate() {
     updateWingmen(dt * ts);
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);
+    updateMission(dt * ts);   // tick the active sector mission + resolve win/fail
     handleWaves(dt);
     maybeSpawnCrate(dt);
     updateCamera(dt);

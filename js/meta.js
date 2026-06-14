@@ -91,6 +91,7 @@ const ACHIEVEMENTS = [
   { id: 'survivor',   test: function (run, player) { return (run.waveReached || 0) >= 10; }, sp: 40 },
   { id: 'highScore',  test: function (run, player) { return ((player && player.score) || 0) >= 50000; }, sp: 50 },
   { id: 'groundPounder', test: function (run, player) { return (run.ground || 0) >= 20; }, sp: 25 },
+  { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
 ];
 
 /* ---------------- persistence ----------------

@@ -163,6 +163,17 @@ function drawHUD() {
     }
   }
 
+  // active sector-mission objective readout (top-centre), tinted by urgency / outcome
+  if (typeof mission !== 'undefined' && mission && mission.status === 'active') {
+    const timed = (mission.type === 'intercept' && mission.timer <= 10);
+    ctx.fillStyle = timed ? 'rgba(255,90,60,0.95)' : 'rgba(120,255,220,0.95)';
+    ctx.font = 'bold 15px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    let line = objectiveText(mission);
+    if (mission.type === 'intercept') line += '   ⏱ ' + fmtClock(Math.max(0, mission.timer));
+    ctx.fillText(line, cx, 14);
+    ctx.textBaseline = 'middle';
+  }
+
   // lead-computing gunsight for the nearest forward gun target
   if (gunLead && !player.noCannon) drawGunPipper(ctx, pickGunTarget());
   else player._gunSol = false;
@@ -1051,7 +1062,7 @@ function startGame(i) {
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
-  opMap = null; opStage = 0; opSector = null;
+  opMap = null; opStage = 0; opSector = null; mission = null;
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');

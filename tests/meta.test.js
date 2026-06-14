@@ -77,6 +77,7 @@ const ACHIEVEMENTS = [
   { id: 'survivor',   test: function (run, player) { return (run.waveReached || 0) >= 10; }, sp: 40 },
   { id: 'highScore',  test: function (run, player) { return ((player && player.score) || 0) >= 50000; }, sp: 50 },
   { id: 'groundPounder', test: function (run, player) { return (run.ground || 0) >= 20; }, sp: 25 },
+  { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
 ];
 
 function freshMeta() {
@@ -300,7 +301,11 @@ assert.ok(res.unlocked.indexOf('acePilot') !== -1, 'acePilot fires (>=25 kills)'
 assert.ok(res.unlocked.indexOf('bossSlayer') !== -1, 'bossSlayer fires (boss>=1)');
 assert.ok(res.unlocked.indexOf('survivor') !== -1, 'survivor fires (wave>=10)');
 assert.ok(res.unlocked.indexOf('highScore') === -1, 'highScore does not fire under threshold');
+assert.ok(res.unlocked.indexOf('tactician') === -1, 'tactician does not fire with no missions cleared');
 assert.strictEqual(res.sp, 5 + 25 + 30 + 40, 'paid sum of newly-unlocked rewards');
+// tactician fires once 5 mission objectives are completed in a run
+let resT = checkAchievements({ missions: 5 }, { score: 0 });
+assert.ok(resT.unlocked.indexOf('tactician') !== -1, 'tactician fires at 5 missions');
 // running again with the same stats pays nothing (already earned)
 let res2 = checkAchievements({ kills: 30, ground: 0, boss: 1, waveReached: 12 }, { score: 0 });
 assert.strictEqual(res2.sp, 0, 'no double-pay on a second run');

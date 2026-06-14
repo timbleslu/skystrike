@@ -1238,7 +1238,7 @@ function updateEnemy(e, dt) {
   let incoming = false;
   for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { incoming = true; break; } }
   if (e.elite && !e.desprintUsed && e.hp / e.maxHp < 0.3) { e.desprintUsed = true; e.sprintTimer = 2.5; e.orbitSign *= -1; }
-  if (e.rival && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }
+  if (e.rival && !e.noFlee && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }   // FINAL-cap rivals (noFlee) fight to the death
   if (e.rival && e.fleeing) { if (updateRivalFlee(e, dt)) return; }
   if (e.rival && !e.fleeing) {
     e.rivalSpCd -= dt;
