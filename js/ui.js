@@ -877,7 +877,6 @@ function buildHangar() {
   bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
   bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => { motionAggression = v; }, () => { if (audio.on) audio.ui(); });
   bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
-  const sip = g('setInvertPitch'); if (sip) { sip.checked = invertPitch; sip.addEventListener('change', () => { invertPitch = sip.checked; saveSettings(); }); }
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
   const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
   const shs = g('setHudScale');
@@ -1193,7 +1192,6 @@ function loadSettings() {
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
-    if (typeof s.invertPitch === 'boolean') invertPitch = s.invertPitch;
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
     if (typeof s.buttonOpacity === 'number') buttonOpacity = clamp(s.buttonOpacity, 0.4, 1.0);
     if (s.buttonLayout === 'right' || s.buttonLayout === 'left' || s.buttonLayout === 'compact') buttonLayout = s.buttonLayout;
@@ -1278,7 +1276,7 @@ function applyLang() {
   setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
   // mobile control settings labels + segmented button captions
   setTxt('lblMobileControl', t('set.mobileControl')); setTxt('lblAggression', t('set.aggression'));
-  setTxt('lblMotion', t('set.motionSensor')); setTxt('lblInvertPitch', t('set.invertPitch'));
+  setTxt('lblMotion', t('set.motionSensor'));
   setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
   setTxt('lblBtnLayout', t('set.btnLayout'));
   setTxt('lblHudScale', t('set.hudScale'));
@@ -1344,7 +1342,6 @@ function syncControlSettingsUI() {
   mark('mobileControlTog', 'mc', mobileControl);
   mark('aggressionTog', 'ag', motionAggression);
   mark('btnLayoutTog', 'bl', buttonLayout);
-  const sip = g('setInvertPitch'); if (sip) sip.checked = invertPitch;
   const sh = g('setHaptics'); if (sh) sh.checked = haptics;
   const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
 }
@@ -1377,7 +1374,7 @@ function saveSettings() {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale,
-      mobileControl, motionAggression, invertPitch, haptics, buttonOpacity, buttonLayout
+      mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout
     }));
   } catch (e) {}
 }
