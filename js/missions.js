@@ -8,14 +8,15 @@
 // ---- BEGIN MIRROR (js/missions.js) ----
 const MISSION_TYPES = ['sweep', 'intercept', 'escort', 'defend', 'strike'];
 
-// op-map sector type -> mission type. Pure + deterministic given (type, rng).
-// ELITE rolls escort or defend so all five mission types are reachable in play.
-function missionForSector(type, rng) {
-  rng = rng || Math.random;
+// op-map sector type -> mission type. Pure + deterministic.
+// ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
+function missionForSector(type) {
   if (type === 'FURBALL') return 'sweep';
   if (type === 'INTERCEPT') return 'intercept';
   if (type === 'STRIKE') return 'strike';
-  if (type === 'ELITE') return rng() < 0.5 ? 'escort' : 'defend';
+  if (type === 'ESCORT') return 'escort';
+  if (type === 'DEFEND') return 'defend';
+  if (type === 'ELITE') return 'none';
   if (type === 'DEPOT') return 'none';
   if (type === 'FINAL') return 'boss';
   return 'sweep';
@@ -135,10 +136,10 @@ function missionName(type) { return t('mission.name.' + type) !== 'mission.name.
 
 /* ---------------- sector start ----------------
    Called from nextWave() (main.js) for op-mode sectors. `plan.mission` is the descriptor
-   from sectorPlan(); 'elite' rolls to escort/defend so all five types appear in play.
-   'none' (DEPOT) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
+   from sectorPlan() — escort/defend are first-class sectors now (no roll).
+   'none' (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
 function startSectorMission(plan, wave) {
-  const type = plan.mission === 'elite' ? (Math.random() < 0.5 ? 'escort' : 'defend') : plan.mission;
+  const type = plan.mission;
   if (type === 'none' || type === 'boss' || !MISSIONS[type]) { mission = null; return; }
   mission = startMission(type, wave, Math.random);
   if (type === 'escort') spawnEscortConvoy(mission, wave);

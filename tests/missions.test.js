@@ -10,14 +10,15 @@ const assert = require('assert');
 // ---- BEGIN MIRROR (js/missions.js) ----
 const MISSION_TYPES = ['sweep', 'intercept', 'escort', 'defend', 'strike'];
 
-// op-map sector type -> mission type. Pure + deterministic given (type, rng).
-// ELITE rolls escort or defend so all five mission types are reachable in play.
-function missionForSector(type, rng) {
-  rng = rng || Math.random;
+// op-map sector type -> mission type. Pure + deterministic.
+// ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
+function missionForSector(type) {
   if (type === 'FURBALL') return 'sweep';
   if (type === 'INTERCEPT') return 'intercept';
   if (type === 'STRIKE') return 'strike';
-  if (type === 'ELITE') return rng() < 0.5 ? 'escort' : 'defend';
+  if (type === 'ESCORT') return 'escort';
+  if (type === 'DEFEND') return 'defend';
+  if (type === 'ELITE') return 'none';
   if (type === 'DEPOT') return 'none';
   if (type === 'FINAL') return 'boss';
   return 'sweep';
@@ -117,17 +118,15 @@ function tickMission(m, dt) {
 }
 // ---- END MIRROR ----
 
-// ---- deterministic rng ----
-function seqRng(vals) { let i = 0; return () => vals[i++ % vals.length]; }
-
 // ===== sector -> mission mapping (deterministic) =====
 assert.strictEqual(missionForSector('FURBALL'), 'sweep');
 assert.strictEqual(missionForSector('INTERCEPT'), 'intercept');
 assert.strictEqual(missionForSector('STRIKE'), 'strike');
+assert.strictEqual(missionForSector('ESCORT'), 'escort');
+assert.strictEqual(missionForSector('DEFEND'), 'defend');
+assert.strictEqual(missionForSector('ELITE'), 'none');
 assert.strictEqual(missionForSector('FINAL'), 'boss');
 assert.strictEqual(missionForSector('DEPOT'), 'none');
-assert.strictEqual(missionForSector('ELITE', seqRng([0.1])), 'escort');
-assert.strictEqual(missionForSector('ELITE', seqRng([0.9])), 'defend');
 
 // ===== startMission builds correct target/timer/params per type =====
 const sw = startMission('sweep', 12);

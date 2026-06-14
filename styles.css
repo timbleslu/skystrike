@@ -28,6 +28,13 @@ canvas{display:block}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed;inset:0;z-index:40;pointer-events:none;text-transform:uppercase;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+/* HUD size — scale corner clusters from their anchored corner (grows inward, never off-screen). #h2d gunsight canvas is outside #hud and intentionally NOT scaled. */
+#hud .panel.tl{transform:scale(var(--hud-scale,1));transform-origin:top left}
+#hud .panel.tr{transform:scale(var(--hud-scale,1));transform-origin:top right}
+#hud .panel.bl{transform:scale(var(--hud-scale,1));transform-origin:bottom left}
+#hud .panel.br{transform:scale(var(--hud-scale,1));transform-origin:bottom right}
+#hud #warns{transform:scale(var(--hud-scale,1));transform-origin:top center}
+#hud #wingSidebar{transform:translateY(-50%) scale(var(--hud-scale,1));transform-origin:right center}
 .panel{position:absolute;padding:12px 14px}
 .lab{font-family:var(--disp);font-size:10px;letter-spacing:2.5px;color:var(--dim);display:block}
 .tl{top:0;left:0;width:300px}
@@ -247,7 +254,9 @@ canvas{display:block}
 #manual .mset .srow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}
 #manual .mset label{font-size:12px;color:var(--txt)}
 #manual .mset input[type=range]{flex:0 0 auto;width:150px;accent-color:#19f0d4}
-#manual .mset input[type=checkbox]{width:16px;height:16px;accent-color:#19f0d4;cursor:pointer}
+#manual .mset input[type=checkbox]{width:22px;height:22px;accent-color:#19f0d4;cursor:pointer}
+.seldrop{background:rgba(4,7,14,0.7);color:var(--cy);border:1px solid var(--dim);font-family:var(--disp);font-size:12px;text-transform:uppercase;padding:5px 8px;cursor:pointer;border-radius:3px;min-height:32px}
+@media(max-width:820px){#manual .mset input[type=checkbox]{width:28px;height:28px}.seldrop{min-height:42px;font-size:14px}}
 .debrief{display:grid;grid-template-columns:repeat(4,auto);gap:8px 28px;justify-content:center;margin:14px 0 20px}
 .debrief div{display:flex;flex-direction:column;align-items:center}
 .debrief span{font-family:var(--disp);font-size:9px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
