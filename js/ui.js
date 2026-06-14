@@ -1722,4 +1722,5 @@ function returnToHangar() {
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();
+  refreshDailyEntry();   // daily button label/play-state can change after a run — keep it current
 }
