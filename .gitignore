@@ -7,3 +7,7 @@ www/
 
 # graphify knowledge graph (derived artifact — rebuilt locally by post-commit/post-checkout hooks)
 graphify-out/
+
+# claude-mem auto-sidecars (machine-local mem logs, not source) — keep only root CLAUDE.md
+**/CLAUDE.md
+!/CLAUDE.md
