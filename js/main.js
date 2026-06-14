@@ -11,10 +11,15 @@ function nextWave() {
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
   if (opMode && opSector) {
-    const plan = sectorPlan(opSector, wave);
+    let plan = sectorPlan(opSector, wave);
+    // F14: certain campaign nodes run an AUTHORED set-piece instead of procedural waves. The
+    // current sector sits at stage opStage-1 (launchSector already advanced opStage past it).
+    // Fire once on the sector's first entry, then fold the encounter onto the plan.
+    const spId = setpieceFor(opSector, opStage - 1);
+    if (spId && !run.setpieceDone[opSector]) { run.setpieceDone[opSector] = true; plan = setpiecePlan(spId, plan); }
     strikeWaveActive = plan.ground;
     applyWeather(rollWeather(weatherSeed + wave)); applyTimeOfDay(plan.tod);   // random weather per wave, TOD fixed to sector type
-    startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset
+    startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset (+ set-piece intro)
     const sectorLine = plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) });
     const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);   // intro line names the condition
     for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
