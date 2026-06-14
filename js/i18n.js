@@ -42,6 +42,18 @@ const I18N = {
     'onboard.touch': 'Touchscreen controls auto-detect and activate on mobile devices.',
     'onboard.more': 'Full reference, aircraft briefs and Settings live in the FLIGHT MANUAL (▣ CONTROLS & MANUAL in the hangar).',
     'onboard.continue': '▶ CONTINUE TO HANGAR',
+    /* ---- first-run guided tutorial (F5) ---- */
+    'tut.title': 'FLIGHT TRAINING',
+    'tut.pitch': 'Pull back — press W to pitch your nose up and climb.',
+    'tut.pitchTouch': 'Pull back — drag the stick down to pitch your nose up and climb.',
+    'tut.throttle': 'Open the throttle — hold SHIFT to push power past 60%.',
+    'tut.throttleTouch': 'Open the throttle — hold the THROTTLE button to push power past 60%.',
+    'tut.guns': 'Fire the cannon — hold SPACE to let off a burst.',
+    'tut.gunsTouch': 'Fire the cannon — hold the GUN button to let off a burst.',
+    'tut.missile': 'Lock & fire — press F to lock a target, then G to launch a missile.',
+    'tut.missileTouch': 'Lock & fire — tap LOCK to designate a target, then MISSILE to launch.',
+    'tut.skip': 'SKIP',
+    'tut.done': 'TRAINING COMPLETE — good hunting, pilot.',
 
     /* ---- hud labels ---- */
     'hud.guns': 'GUNS',
@@ -342,6 +354,18 @@ const I18N = {
     'onboard.touch': '在移动设备上将自动检测并启用触屏操控。',
     'onboard.more': '完整操作参考、机型简报与设置均在《飞行手册》中（机库内点击「▣ 操作与手册」）。',
     'onboard.continue': '▶ 进入机库',
+    /* ---- 首次引导教程 (F5) ---- */
+    'tut.title': '飞行训练',
+    'tut.pitch': '拉杆爬升 —— 按 W 抬起机头向上爬升。',
+    'tut.pitchTouch': '拉杆爬升 —— 向下拖动摇杆抬起机头爬升。',
+    'tut.throttle': '加大油门 —— 按住 SHIFT 将动力推过 60%。',
+    'tut.throttleTouch': '加大油门 —— 按住「油门」键将动力推过 60%。',
+    'tut.guns': '开火射击 —— 按住空格扫射一轮机炮。',
+    'tut.gunsTouch': '开火射击 —— 按住「机炮」键扫射一轮。',
+    'tut.missile': '锁定并发射 —— 按 F 锁定目标，再按 G 发射导弹。',
+    'tut.missileTouch': '锁定并发射 —— 点「锁定」指定目标，再点「导弹」发射。',
+    'tut.skip': '跳过',
+    'tut.done': '训练完成 —— 祝你好运，飞行员。',
 
     'hud.guns': '可射击',
     'hud.locking': '锁定中',

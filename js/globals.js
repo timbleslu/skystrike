@@ -178,10 +178,34 @@ function nextBossPhase(reached, hpFrac) {
   return want > reached ? want : reached;
 }
 // === MIRROR END ===
+// === MIRROR START (globals.js tutorial step machine) ===
+// First-run tutorial step machine. Steps gate on player actions, in order:
+//   0 = pitch, 1 = throttle (>0.6), 2 = guns fired, 3 = missile (lock + fire), 4 = DONE.
+// Each step's REQUIRED event advances it by one; the 'skip' event jumps straight to DONE
+// from any step. Pure + monotonic: an event that does not match the current step is ignored,
+// the step index never decreases, and DONE (4) is a terminal absorbing state.
+const TUTORIAL_STEPS = ['pitch', 'throttle', 'guns', 'missile'];
+const TUTORIAL_DONE = TUTORIAL_STEPS.length;   // 4
+// the event that satisfies each step, by step index
+const TUTORIAL_EVENT_FOR_STEP = ['pitched', 'throttled', 'fired', 'missile'];
+// PURE — given the current step and an input event, return the next step (0..TUTORIAL_DONE).
+// Never regresses; only the current step's matching event (or 'skip') advances it.
+function tutorialNext(step, event) {
+  if (step >= TUTORIAL_DONE) return TUTORIAL_DONE;        // terminal: stay done
+  if (event === 'skip') return TUTORIAL_DONE;             // skip finishes from anywhere
+  if (event === TUTORIAL_EVENT_FOR_STEP[step]) return step + 1;   // matching action advances one
+  return step;                                           // anything else: no change
+}
+// === MIRROR END ===
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';
 let onboarding = false;   // true while the first-run language-select / controls-brief screens are showing
+// First-run guided tutorial (F5). `active` = run the stepped prompts this session (set for a brand-new
+// player when onboarding starts); `step` indexes TUTORIAL_STEPS (DONE = finished); `done` latches once the
+// player completes or skips. prevShots/prevMissiles baseline the run-stat counters so we detect the NEXT
+// gun/missile action (not ammo already spent). Not persisted separately — reuses skystrike_onboarded.
+let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles: 0 };
 // captured before boot writes skystrike_settings (cacheEl -> selectJet -> saveSettings), so the
 // first-run check in initOnboarding() isn't fooled by settings saved during this same boot
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
