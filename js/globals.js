@@ -396,11 +396,13 @@ const CAM_NAMES = ['CHASE', 'CLOSE', 'COCKPIT'];
 // camShake: current shake magnitude; decays to 0 each frame via decayShake.
 // shakeCam(amt): sets camShake = max(current, amt) — strongest pending shake wins, never accumulates unboundedly.
 // decayShake(v, dt): PURE — returns max(0, v - dt * CAMSHAKE_RATE). Mirrored byte-identical in tests/camshake.test.js.
-const CAMSHAKE_RATE = 6;   // shake units lost per second
-const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
 let camShake = 0;
 function shakeCam(amt) { camShake = Math.max(camShake, amt); }
+// === MIRROR START (globals.js camera shake helpers) ===
+const CAMSHAKE_RATE = 6;   // shake units lost per second
+const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
 function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
+// === MIRROR END ===
 
 const keys = {};
 let mouseRight = false;

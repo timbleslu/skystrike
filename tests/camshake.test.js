@@ -6,9 +6,9 @@ const assert = require('assert');
 // MIRROR START
 const CAMSHAKE_RATE = 6;   // shake units lost per second
 const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
-function shakeCamLogic(current, amt) { return Math.max(current, amt); }
 function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
 // MIRROR END
+function shakeCamLogic(current, amt) { return Math.max(current, amt); }
 
 // ---- decayShake: decays monotonically toward 0 ----
 {
