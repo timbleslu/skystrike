@@ -984,6 +984,8 @@ function buildHangar() {
   updateBest();
   updateSpHud();
   renderKillBoard();
+  const db = g('dailyBtn'); if (db) db.addEventListener('click', startDaily);
+  refreshDailyEntry();
   const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);
   const mc = g('metaClose'); if (mc) mc.addEventListener('click', closeMetaScreen);
   const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
@@ -1170,9 +1172,10 @@ function onMetaGridClick(e) {
   if (buyPerk(b.dataset.perk)) { updateSpHud(); renderMetaScreen(); audio.ui(); }
   else showBanner(t('meta.needSp'));
 }
-function startGame(i) {
+function startGame(i, daily) {
   if (state !== 'hangar') return;
   if (!jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
+  dailyMode = !!daily;   // explicit per-launch: only startDaily passes true; normal launches reset it to false
   selectedJet = i; audio.init();
   closeManual();
   if (previewJet) { scene.remove(previewJet); previewJet = null; }
@@ -1193,7 +1196,7 @@ function startGame(i) {
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null;
-  weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;   // fresh per-run weather seed (standalone rolls derive from it)
+  weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
@@ -1221,6 +1224,10 @@ function gameOver() {
 function endRun(title) {
   const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
   if (player.score > bestScore) { bestScore = player.score; saveBest(); }
+  if (dailyMode) {   // record today's daily best (attempt already marked played in startDaily); keep the higher score
+    const rec = dailyToday();
+    saveDaily({ date: rec.date, played: true, best: Math.max(rec.best || 0, player.score) });
+  }
   g('go_score').textContent = player.score.toLocaleString();
   g('go_wave').textContent = wave;
   const secs = Math.max(0, Math.round((performance.now() - run.t0) / 1000));
@@ -1257,6 +1264,55 @@ function operationComplete() {
   showBanner(t('banner.operationComplete'));
   endRun(t('banner.operationComplete'));
 }
+
+// ===== Daily seeded challenge (F7) =====
+// Calendar-date seed → fixed layout/weather/jet restriction, one attempt per day, score saved locally.
+// CRITICAL: the clock is read ONCE here at the call site (browser runtime); the pure fns
+// (dailySeedFor/makeRng in globals.js) never call new Date(). y/m/d are passed in.
+function todayParts() { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }; }
+function todayKey() { const p = todayParts(); return p.y + '-' + ('0' + p.m).slice(-2) + '-' + ('0' + p.d).slice(-2); }
+function loadDaily() {
+  try { const o = JSON.parse(store.get('skystrike_daily') || 'null'); if (o && typeof o === 'object') return o; } catch (e) {}
+  return null;
+}
+function saveDaily(o) { try { store.set('skystrike_daily', JSON.stringify(o)); } catch (e) {} }
+// today's record, or a fresh unplayed record if the stored one is for a previous day
+function dailyToday() {
+  const key = todayKey(); const rec = loadDaily();
+  if (rec && rec.date === key) return rec;
+  return { date: key, played: false, best: 0 };
+}
+// refresh the hangar Daily entry: lock the button once played, surface today's best / lock note
+function refreshDailyEntry() {
+  const rec = dailyToday();
+  const btn = g('dailyBtn');
+  if (btn) {
+    btn.textContent = rec.played ? t('daily.done') : t('daily.play');
+    btn.disabled = !!rec.played;
+    btn.classList.toggle('disabled', !!rec.played);
+  }
+  const note = g('dailyNoteTxt');
+  if (note) {
+    if (rec.played) note.textContent = t('daily.best').replace('{best}', rec.best.toLocaleString()) + ' · ' + t('daily.locked');
+    else note.textContent = t('daily.sub').replace('{date}', rec.date);
+  }
+}
+// launch today's daily run: seed-fix everything off the calendar date, force one-life endless, restrict the jet
+function startDaily() {
+  if (state !== 'hangar') return;
+  const rec = dailyToday();
+  if (rec.played) { showBanner(t('daily.locked')); if (audio.on) audio.ui(); return; }
+  const p = todayParts();
+  const seed = dailySeedFor(p.y, p.m, p.d);
+  // mark the attempt as consumed up front (one attempt/day, even if the player bails mid-run)
+  saveDaily({ date: rec.date, played: true, best: rec.best || 0 });
+  opMode = false;                                  // daily is single-life endless, not the op-map campaign
+  const rng = makeRng(seed);
+  const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;   // seed-derived jet restriction (everyone flies the same airframe today)
+  dailySeed = seed;                                // startGame reads this to reset weatherSeed deterministically when dailyMode
+  startGame(jetIdx, true);
+}
+
 function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
   const b = g('hangarBest'); if (b) { b.style.display = bestScore > 0 ? 'block' : 'none'; const v = g('hangarBestVal'); if (v) v.textContent = bestScore.toLocaleString(); }
@@ -1317,6 +1373,7 @@ function applyLang() {
   setTxt('rbTitle', t('hangar.rivalBoard'));
   setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
+  if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
   setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
   setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));

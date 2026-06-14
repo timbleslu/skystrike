@@ -317,6 +317,13 @@ const I18N = {
     'meta.requires': 'REQUIRES {r}',
     'meta.buyLvl': 'UPGRADE — {c} SP',
     'banner.achUnlocked': '★ {n} ACHIEVEMENT(S) UNLOCKED ★',
+    /* ---- daily seeded challenge (F7) ---- */
+    'daily.title': '◆ DAILY CHALLENGE',
+    'daily.sub': 'Everyone flies the same seed today — one attempt. Date {date}.',
+    'daily.play': '▶ FLY TODAY’S SORTIE',
+    'daily.done': '✔ FLOWN TODAY',
+    'daily.best': 'TODAY’S BEST {best}',
+    'daily.locked': 'COME BACK TOMORROW FOR A NEW SEED',
 
     /* meta data strings (perks / achievements / skins) — canonical EN copy (no fields in meta.js tables) */
     meta: {
@@ -756,6 +763,13 @@ const I18N = {
     'meta.requires': '需要 {r}',
     'meta.buyLvl': '升级 — {c} 点',
     'banner.achUnlocked': '★ 解锁 {n} 项成就 ★',
+    /* ---- 每日挑战 (F7) ---- */
+    'daily.title': '◆ 每日挑战',
+    'daily.sub': '今天所有人飞同一个种子 — 仅一次机会。日期 {date}。',
+    'daily.play': '▶ 出击今日任务',
+    'daily.done': '✔ 今日已完成',
+    'daily.best': '今日最佳 {best}',
+    'daily.locked': '明天再来挑战新种子',
 
     meta: {
       'hull':     { name: '强化机体',   desc: '每次出击开始时拥有更高的机体强度（每级 +6% 最大生命）。' },
