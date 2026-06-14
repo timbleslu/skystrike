@@ -518,6 +518,7 @@ function cacheEl() {
     wPull: g('w_pull'), wMissile: g('w_missile'), wHighG: g('w_highg'), wStealth: g('w_stealth'), wLock: g('w_lock'), wDrone: g('w_drone'),
     vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
     bossbar: g('bossbar'), bossfill: g('bossfill'),
+    abIndicator: g('abIndicator'),
   };
 }
 function tog(e, on) { e.classList.toggle('show', !!on); }
@@ -556,6 +557,7 @@ function updateDom(dt) {
   el.hp.style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
   el.shd.style.width = clamp(player.shield / player.maxShield * 100, 0, 100) + '%';
   el.thr.style.width = clamp(player.throttle * 100, 0, 100) + '%';
+  el.abIndicator.style.display = (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none';
   el.spd.textContent = Math.round(player.speed * 2.3);
   el.alt.textContent = Math.round(Math.max(0, player.group.position.y) * 3.28);
   el.score.textContent = player.score.toLocaleString();
@@ -1257,6 +1259,7 @@ function applyLang() {
   applyOpLegend();
   // hud panel labels
   setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
+  if (el.abIndicator) el.abIndicator.textContent = t('hud.ab');
   setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); setTxt('lblWave', t('hud.wave')); setTxt('lblCombo', t('hud.combo'));
   setTxt('lblSpd', t('hud.knots')); setTxt('lblAlt', t('hud.ft'));
   setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));

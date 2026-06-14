@@ -48,6 +48,7 @@ canvas{display:block}
 .meter.shd>div{background:linear-gradient(90deg,#7fd8ff,#cdeeff);box-shadow:0 0 10px #7fd8ffaa}
 #hpbar.low .meter.hp>div{background:linear-gradient(90deg,#ff394b,#ff8c2b);box-shadow:0 0 14px #ff394b;animation:lowblink .5s infinite}
 @keyframes lowblink{50%{opacity:.45}}
+.ab-chip{font-size:11px;font-weight:bold;padding:2px 6px;background:rgba(255,200,80,0.85);color:#000;border-radius:3px;font-family:var(--disp);text-shadow:none;letter-spacing:1px}
 
 .tr{top:0;right:0;text-align:right;display:flex;gap:24px}
 .stat b{font-family:var(--disp);font-weight:900;font-size:24px;color:var(--txt);text-shadow:0 0 12px rgba(25,240,212,.55);line-height:1}
