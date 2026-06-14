@@ -23,6 +23,8 @@ function nextWave() {
     if (plan.ground) queueStrikeSite(wave);
     if (plan.rival && rivalEnabled && !plan.boss) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    // F8: named hostile ace — spawns once per sector (guarded by run.sectorAceSpawned)
+    if (plan.hostileAce && !run.sectorAceSpawned[opSector]) { run.sectorAceSpawned[opSector] = true; pendingSpawns.push(spawnHostileAce); }
     return;
   }
   applyWeather(rollWeather(weatherSeed + wave));
@@ -78,6 +80,24 @@ function spawnAce() {
   e.bulletAmmo = 75; e.missileAmmo = 2; e.flareAmmo = 1;
   styleElite(e, 0xffcf3a, 0x4a3300, 0.9, 0xffd24d, 0xffd24d);
   showBanner(t('banner.aceInbound'));
+}
+function spawnHostileAce() {
+  const aceEntry = hostileAceFor(opSector);
+  if (!aceEntry) return;
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool() });
+  e.elite = true;
+  e.aceName = jetNameForShape(e.shapeKey);
+  e.callsign = aceEntry.callsign;
+  e.hostileAce = true;
+  e.desprintUsed = false; e.sprintTimer = 0;
+  const baseHp = 170 + wave * 9;
+  e.hp = e.maxHp = Math.round(baseHp * aceEntry.hpMul);
+  e.turnRate = aceEntry.turnRate;
+  e.speed = (e.speed || 280) * aceEntry.speed;
+  e.gunRunCd = rand(1.2, 2.5);
+  e.bulletAmmo = 90; e.missileAmmo = 3; e.flareAmmo = 2;
+  styleElite(e, 0xd44fff, 0x330044, 1.0, 0xcc55ff, 0xcc44ff);
+  showBanner(tf('banner.hostileAceInbound', { name: aceEntry.callsign }));
 }
 function spawnRival() {
   const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape] });
