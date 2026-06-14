@@ -63,3 +63,25 @@ function rivalSpecialFor(shape) {
   if (shape === 'J50' || shape === 'SU57' || shape === 'SU75') return 'GHOST';
   return 'OVERDRIVE';
 }
+
+// MIRROR START — hostileAceFor / hostileAceDeltas
+// Named hostile ace pool: one named antagonist per sector type.
+// Pure + deterministic given sectorType + index (no random, no globals).
+// Stat deltas are intentionally small — just enough to feel distinct.
+const HOSTILE_ACES = {
+  FURBALL:   { callsign: 'TALON',   hpMul: 1.10, turnRate: 1.55, speed: 1.08 },
+  INTERCEPT: { callsign: 'BANSHEE', hpMul: 1.12, turnRate: 1.50, speed: 1.10 },
+  STRIKE:    { callsign: 'REAPER',  hpMul: 1.15, turnRate: 1.45, speed: 1.05 },
+  ESCORT:    { callsign: 'DAGGER',  hpMul: 1.10, turnRate: 1.52, speed: 1.07 },
+  DEFEND:    { callsign: 'VIPER',   hpMul: 1.12, turnRate: 1.48, speed: 1.06 },
+  ELITE:     { callsign: 'SPECTER', hpMul: 1.18, turnRate: 1.60, speed: 1.12 },
+};
+function hostileAceFor(sectorType) {
+  return HOSTILE_ACES[sectorType] || null;
+}
+function hostileAceDeltas(entry) {
+  // Returns a copy of stat deltas only (no callsign). Safe to apply to any enemy.
+  if (!entry) return null;
+  return { hpMul: entry.hpMul, turnRate: entry.turnRate, speed: entry.speed };
+}
+// MIRROR END

@@ -222,7 +222,7 @@ const DIFFS = [
   { key: 'VETERAN', dmg: 1.0, fire: 1.0,  missile: 1.0, count: 0,  hp: 1.0,  desc: 'The intended challenge.' },
   { key: 'ACE',     dmg: 1.5, fire: 0.72, missile: 0.7, count: 1,  hp: 0.85, desc: 'Lethal — more foes, faster guns, fragile hull.' },
 ];
-let run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: 0, escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0 };
+let run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: 0, escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {} };
 
 /* per-airframe special-ability cooldown (seconds) */
 const SPECIAL_CD = {
