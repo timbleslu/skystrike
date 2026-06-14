@@ -85,7 +85,7 @@ function freshMeta() {
   return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {} };
 }
 function validMeta(m) {
-  return !!(m && typeof m === 'object' && typeof m.sp === 'number' && m.sp >= 0 &&
+  return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
     m.jets && typeof m.jets === 'object' && m.skins && typeof m.skins === 'object' &&
     m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
 }
