@@ -467,6 +467,7 @@ function damagePlayer(amt, src) {
   amt *= DIFFS[difficulty].dmg;
   if (player.dmgReduce) amt *= (1 - player.dmgReduce);   // GUARDIAN SYSTEM upgrade
   run.damageTaken = (run.damageTaken || 0) + amt;
+  noDamageWave = false;   // a hit landed this wave — the no-damage star is off for it (star objectives)
   player.shieldT = 4.0;
   const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, amt); player.shield -= s; amt -= s; }

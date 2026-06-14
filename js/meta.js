@@ -56,6 +56,34 @@ function gradeRun(run, player) {
   return { letter: letter, mult: mult, score: total };
 }
 
+/* ---------------- star objectives (PURE — mirrored byte-identical in tests/stars.test.js) ----------------
+   1–3 secondary stars per run from three independent, checkable conditions over the existing
+   `run` stats (kill efficiency / a full no-damage wave / objectives completed). Callers stamp
+   run.waveReached first (as for spAward/gradeRun). run.cleanWaves counts waves cleared without
+   taking a hit (tracked in main.js via the noDamageWave flag). Returns an integer 0..3. */
+const STAR_KILL_FRAC = 0.6;   // ≥60% of the wave-scaled expected kills earns the kills star
+function evalStars(run, player) {
+  if (!run) return 0;
+  var stars = 0;
+  var waves = Math.max(1, run.waveReached || 1);
+  var expected = waves * 4;
+  var kills = (run.kills || 0) + (run.ground || 0) + (run.boss || 0);
+  if (kills / expected >= STAR_KILL_FRAC) stars++;          // kill efficiency
+  if ((run.cleanWaves || 0) >= 1) stars++;                  // a full wave with no damage taken
+  if ((run.missions || 0) >= 1) stars++;                    // objectives / pilots rescued
+  return stars;
+}
+/* Record `stars` as the per-jet best in meta.stars[jetId] (never regresses); returns the new best.
+   Lazy-creates the stars map so a meta predating this field still works. PURE over (meta, args). */
+function bestStars(m, jetId, stars) {
+  if (!m || !jetId) return stars > 0 ? stars : 0;
+  if (!m.stars) m.stars = {};
+  var prev = m.stars[jetId] || 0;
+  var best = stars > prev ? stars : prev;
+  m.stars[jetId] = best;
+  return best;
+}
+
 /* ---------------- meta-upgrade perk tree ----------------
    Each perk is a bounded persistent edge applied at run start. apply(p, lvl) mutates the freshly
    spawned player; lvl 0 is a no-op (perk not owned). Costs scale with level via perkCost. */
@@ -124,12 +152,13 @@ const ACHIEVEMENTS = [
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {} };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
     m.jets && typeof m.jets === 'object' && m.skins && typeof m.skins === 'object' &&
-    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
+    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object' &&
+    m.stars && typeof m.stars === 'object');
 }
 function loadMeta() {
   try {
