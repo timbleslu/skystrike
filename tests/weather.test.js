@@ -1,43 +1,6 @@
 'use strict';
 const assert = require('assert');
-
-// ---- mirror of js/globals.js weather core (keep byte-identical between the MIRROR markers) ----
-// === MIRROR START (globals.js weather core) ===
-const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
-const WEATHER = {
-  clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 3.0 },
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0,  fogMul: 1.6 },
-};
-// PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
-// factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
-function resolveWeather(type, tod) {
-  const w = WEATHER[type] || WEATHER.clear;
-  const night = (tod === 2) ? NIGHT_RADAR_MUL : 1;
-  return {
-    type: WEATHER[type] ? type : 'clear',
-    radarMul: w.radarMul * night,
-    lockRangeMul: w.lockRangeMul,
-    lockSpeedMul: w.lockSpeedMul,
-    turbulence: w.turbulence,
-    fogMul: w.fogMul,
-  };
-}
-// PURE — bounded (|x| <= amp), smooth, exactly zero-mean-over-2π attitude wobble. Two
-// commensurate sines (1 + 2 cycles over [0,2π]) so the integral over a full cycle is exactly 0.
-function turbSample(t, amp) {
-  return amp * (0.6 * Math.sin(t) + 0.4 * Math.sin(2 * t + 1.3));
-}
-// PURE — deterministic standalone-play weather roll, weighted toward clear (hash -> [0,1)).
-function rollWeather(seed) {
-  let x = (seed | 0) ^ 0x9e3779b9;
-  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
-  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
-  x = (x ^ (x >>> 16)) >>> 0;
-  const r = x / 4294967296;
-  return r < 0.6 ? 'clear' : r < 0.8 ? 'fog' : 'storm';
-}
-// === MIRROR END ===
+const { WEATHER, NIGHT_RADAR_MUL, resolveWeather, turbSample, rollWeather } = require('../js/core.js');
 
 // ---- WEATHER table invariants (spec §6) ----
 assert.deepStrictEqual(WEATHER.clear, { radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, turbulence: 0.0, fogMul: 1.0 }, 'clear is fully neutral');

@@ -1,0 +1,458 @@
+/* SKYSTRIKE — hud.js: canvas HUD renderer. Loaded before ui.js. Reads global game state, writes the 2D canvas context. No DOM. Extracted from ui.js. */
+function drawGunPipper(ctx, e) {
+  if (!e) { player._gunSol = false; return; }
+  const k = hudK();
+  const pp = player.group.position;
+  const S = 1400 * (player.bulletSpeedMul || 1);
+  // rounds inherit 0.9 of the jet's velocity, so solve in that relative frame
+  const relV = t1.copy(e.vel || ZERO).addScaledVector(player.vel, -0.9);
+  const ip = interceptPoint(pp, e.group.position, relV, S) || e.group.position;
+  const sp = projectPoint(ip);
+  const dist = pp.distanceTo(e.group.position);
+  if (sp.behind) { player._gunSol = false; return; }
+
+  const fwd = fwdOf(player.group, t2);
+  const bsp = projectPoint(t3.copy(pp).addScaledVector(fwd, dist));   // boresight at target range
+  const tgtR = e.type === 'boss' ? 72 : e.type === 'ground' ? 17 : e.type === 'drone' ? 16 : 22;
+  const edge = projectPoint(t4.copy(ip).addScaledVector(rightOf(player.group, t5), tgtR));
+  const screenR = Math.max(8, Math.hypot(edge.x - sp.x, edge.y - sp.y));
+  const sep = bsp.behind ? 1e9 : Math.hypot(sp.x - bsp.x, sp.y - bsp.y);
+  const solution = sep < screenR * 1.15 && dist < 2300;
+
+  // correction line from boresight to the lead point
+  if (!bsp.behind && sep > 5) {
+    ctx.strokeStyle = 'rgba(120,255,220,0.25)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(bsp.x, bsp.y); ctx.lineTo(sp.x, sp.y); ctx.stroke();
+  }
+
+  const col = solution ? '90,255,150' : '255,210,80';
+  ctx.save(); ctx.translate(sp.x, sp.y); ctx.scale(k, k); ctx.translate(-sp.x, -sp.y);   // UI-size: gun pipper scales around the lead point
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(' + col + ',0.95)';
+  ctx.beginPath(); ctx.arc(sp.x, sp.y, 7, 0, TWO_PI); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(sp.x - 7, sp.y); ctx.lineTo(sp.x - 12, sp.y);
+  ctx.moveTo(sp.x + 7, sp.y); ctx.lineTo(sp.x + 12, sp.y);
+  ctx.moveTo(sp.x, sp.y - 7); ctx.lineTo(sp.x, sp.y - 12);
+  ctx.moveTo(sp.x, sp.y + 7); ctx.lineTo(sp.x, sp.y + 12);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(' + col + ',' + (solution ? 0.95 : 0.55) + ')';
+  ctx.beginPath(); ctx.arc(sp.x, sp.y, solution ? 3 : 2, 0, TWO_PI); ctx.fill();
+
+  ctx.font = '9px ' + HUDFONT; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(' + col + ',0.8)';
+  ctx.fillText(Math.round(dist), sp.x, sp.y + 20);
+  ctx.restore();
+
+  if (solution) {
+    const s = 13 + Math.sin(performance.now() * 0.02) * 2;
+    ctx.save(); ctx.translate(sp.x, sp.y); ctx.scale(k, k); ctx.translate(-sp.x, -sp.y);   // UI-size: "guns" diamond scales around lead point
+    ctx.strokeStyle = 'rgba(90,255,150,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = 'rgba(90,255,150,0.95)'; ctx.fillText(t('hud.guns'), sp.x, sp.y - s - 6);
+    ctx.restore();
+    // "shoot now" cue ringing the central reticle
+    const cx = W / 2, cy = H / 2;
+    ctx.strokeStyle = 'rgba(90,255,150,' + (0.45 + 0.3 * Math.sin(performance.now() * 0.02)) + ')'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 11 * k, 0, TWO_PI); ctx.stroke();
+  }
+  if (solution && !player._gunSol) audio.blip(1240, 0.04, 'sine', 0.05, 1560);   // soft tick on acquiring a gun solution
+  player._gunSol = solution;
+  ctx.lineWidth = 2;
+}
+
+// Small secondary-objective (star) checklist on the HUD: three live conditions, each ★ when met.
+// Mirrors evalStars' conditions (kill efficiency / no-damage wave / objectives) against the live run.
+function drawStarObjectives(ctx, cx) {
+  if (typeof run === 'undefined' || !run) return;
+  const waves = Math.max(1, wave || 1);
+  const killsMet = ((run.kills || 0) + (run.ground || 0) + (run.boss || 0)) / (waves * 4) >= 0.6;
+  const cleanMet = (run.cleanWaves || 0) >= 1;
+  const rescMet = (run.missions || 0) >= 1;
+  const items = [
+    [killsMet, t('stars.obj.kills')],
+    [cleanMet, t('stars.obj.noDamage')],
+    [rescMet, t('stars.obj.rescue')],
+  ];
+  const k = hudK();
+  ctx.save();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = (11 * k) + 'px ' + HUDFONT;
+  let y = 40;
+  for (let i = 0; i < items.length; i++) {
+    const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = met ? 'rgba(255,210,80,0.95)' : 'rgba(150,170,190,0.7)';
+    ctx.fillText(label, cx - w / 2, y);
+    y += 15 * k;
+  }
+  ctx.restore();
+}
+
+// HUD weather chip (top-left): names the active condition; storm tints blue-grey, else teal.
+function drawWeatherChip(ctx) {
+  const label = weatherLabel();
+  if (!label) return;
+  const storm = (typeof weather !== 'undefined' && weather) ? weather.type === 'storm' : false;
+  const k = hudK();
+  ctx.save();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = 'bold ' + (13 * k) + 'px ' + HUDFONT;
+  const padX = 9 * k, x = 16, y = 86, h = 23 * k, w = ctx.measureText(label).width + padX * 2;
+  ctx.fillStyle = storm ? 'rgba(120,140,200,0.16)' : 'rgba(25,240,212,0.10)';
+  ctx.fillRect(x, y, w, h);
+  ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(25,240,212,0.5)';
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = storm ? 'rgba(205,215,255,0.95)' : 'rgba(150,255,235,0.95)';
+  ctx.fillText(label, x + padX, y + 6 * k);
+  ctx.restore();
+}
+
+function drawHUD() {
+  const ctx = h2d, cx = W / 2, cy = H / 2, k = hudK();
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  drawHorizon(ctx, cx, cy);
+
+  // central reticle — scaled around its screen anchor (cx,cy)
+  ctx.strokeStyle = 'rgba(120,255,220,0.9)';
+  ctx.beginPath(); ctx.arc(cx, cy, 4 * k, 0, TWO_PI);
+  ctx.moveTo(cx - 15 * k, cy); ctx.lineTo(cx - 7 * k, cy); ctx.moveTo(cx + 7 * k, cy); ctx.lineTo(cx + 15 * k, cy); ctx.moveTo(cx, cy - 15 * k); ctx.lineTo(cx, cy - 7 * k);
+  ctx.stroke();
+
+  const vd = t1.copy(player.vel);
+  if (vd.lengthSq() > 1) {
+    vd.normalize();
+    const fp = projectPoint(t2.copy(player.group.position).addScaledVector(vd, 1600));
+    if (!fp.behind) {
+      // velocity-vector marker — projected position fixed, size ×k
+      ctx.strokeStyle = 'rgba(0,255,170,0.9)';
+      ctx.beginPath(); ctx.arc(fp.x, fp.y, 6 * k, 0, TWO_PI);
+      ctx.moveTo(fp.x - 6 * k, fp.y); ctx.lineTo(fp.x - 15 * k, fp.y); ctx.moveTo(fp.x + 6 * k, fp.y); ctx.lineTo(fp.x + 15 * k, fp.y); ctx.moveTo(fp.x, fp.y - 6 * k); ctx.lineTo(fp.x, fp.y - 13 * k);
+      ctx.stroke();
+    }
+  }
+
+  // active sector-mission objective readout (top-centre), tinted by urgency / outcome
+  if (typeof mission !== 'undefined' && mission && mission.status === 'active') {
+    const timed = (mission.type === 'intercept' && mission.timer <= 10);
+    ctx.fillStyle = timed ? 'rgba(255,90,60,0.95)' : 'rgba(120,255,220,0.95)';
+    ctx.font = 'bold ' + (15 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    let line = objectiveText(mission);
+    if (mission.type === 'intercept') line += '   ⏱ ' + fmtClock(Math.max(0, mission.timer));
+    ctx.fillText(line, cx, 14);
+    ctx.textBaseline = 'middle';
+  }
+
+  drawStarObjectives(ctx, cx);   // small secondary-objective (star) checklist, top-centre
+  drawWeatherChip(ctx);   // active condition (storm / fog / night) top-left
+
+  // lead-computing gunsight for the nearest forward gun target
+  if (gunLead && !player.noCannon) drawGunPipper(ctx, pickGunTarget());
+  else player._gunSol = false;
+
+  const lt = (player.lockTarget && player.lockTarget.alive) ? player.lockTarget : null;
+  if (lt) {
+    drawLockReticle(ctx, lt, player.lockProgress, player.lockedTarget === lt && player.lockProgress >= 1);
+  }
+
+  let near = null, nd = Infinity;
+  for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; const d = player.group.position.distanceToSquared(e.group.position); if (d < nd) { nd = d; near = e; } }
+  for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) drawEnemy(ctx, enemies[i], cx, cy, enemies[i] === near);
+  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) drawWingman(ctx, wingmen[i], cx, cy);   // friendly escorts on the main HUD
+
+  // supply-crate markers (diamond + range over any crate in view)
+  for (let i = 0; i < loots.length; i++) {
+    const l = loots[i]; if (l.kind !== 'crate') continue;
+    const sp = projectPoint(l.mesh.position);
+    if (sp.behind || sp.x < 0 || sp.x > W || sp.y < 0 || sp.y > H) continue;
+    const s = (9 + Math.sin(performance.now() * 0.006) * 2) * k;   // projected pos fixed, size ×k
+    ctx.strokeStyle = 'rgba(70,255,200,0.9)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = 'rgba(70,255,200,0.85)'; ctx.font = (9 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText(t('hud.supply') + ' ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7 * k);
+  }
+  ctx.lineWidth = 2;
+
+  // KILL FRENZY meter — a hot bar that drains while you hold off the trigger
+  if (player.frenzyMax && player.frenzy > 0) {
+    const f = clamp(player.frenzy / player.frenzyMax, 0, 1);
+    const bw = 168 * k, bh = 6 * k, bx = cx - bw / 2, by = H - 96;   // centred bar, scaled around cx
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = 'rgba(255,140,40,0.92)'; ctx.fillRect(bx, by, bw * f, bh);
+    ctx.fillStyle = 'rgba(255,185,90,0.95)'; ctx.font = 'bold ' + (11 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText(t('hud.frenzy') + ' ×' + (1 + 0.3 * f).toFixed(2), cx, by - 7 * k);
+  }
+
+  for (let i = hitMarkers.length - 1; i >= 0; i--) {
+    const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1); const s = (11 + (1 - a) * 9) * k, t7 = 7 * k;
+    ctx.strokeStyle = 'rgba(255,255,255,' + a + ')'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx - s + t7, cy - s + t7);
+    ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx + s - t7, cy - s + t7);
+    ctx.moveTo(cx - s, cy + s); ctx.lineTo(cx - s + t7, cy + s - t7);
+    ctx.moveTo(cx + s, cy + s); ctx.lineTo(cx + s - t7, cy + s - t7);
+    ctx.stroke();
+    if (hm.t <= 0) hitMarkers.splice(i, 1);
+  }
+  ctx.lineWidth = 2;
+
+  for (let i = dmgNumbers.length - 1; i >= 0; i--) {
+    const d = dmgNumbers[i]; d.life -= lastDt; d.pos.y += (d.crit ? 42 : 30) * lastDt;
+    const p = projectPoint(d.pos);
+    if (!p.behind) {
+      const lifeMax = d.crit ? 1.1 : 0.9, a = clamp(d.life / lifeMax, 0, 1);
+      if (d.crit) { ctx.fillStyle = 'rgba(255,150,40,' + a + ')'; ctx.font = 'bold ' + ((22 + (1 - a) * 12) * k) + 'px ' + HUDFONT; }
+      else { ctx.fillStyle = 'rgba(255,230,120,' + a + ')'; ctx.font = 'bold ' + ((16 + (1 - a) * 7) * k) + 'px ' + HUDFONT; }
+      ctx.fillText(d.val, p.x, p.y);
+    }
+    if (d.life <= 0) dmgNumbers.splice(i, 1);
+  }
+
+  if (player.hurtT > 0 && player.hurtDir) {
+    player.hurtT -= lastDt;
+    const cr = t1.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    const cu = t2.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const cfw = t3.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    const dx = player.hurtDir.dot(cr), dy = player.hurtDir.dot(cu), dz = player.hurtDir.dot(cfw);
+    let ang2; const mag = Math.hypot(dx, dy);
+    if (dz < -0.2 && mag < 0.35) ang2 = Math.PI; else ang2 = Math.atan2(dx, dy);
+    const a = clamp(player.hurtT, 0, 1);
+    const rr = Math.min(cx, cy) * 0.72;   // edge-ring radius kept (screen-anchored); stroke + arrowhead ×k
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang2);
+    ctx.strokeStyle = 'rgba(255,55,55,' + (0.85 * a) + ')'; ctx.lineWidth = 6 * k; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, 0, rr, -Math.PI / 2 - 0.36, -Math.PI / 2 + 0.36); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,80,80,' + (0.9 * a) + ')';
+    ctx.beginPath(); ctx.moveTo(0, -rr - 7 * k); ctx.lineTo(-9 * k, -rr + 9 * k); ctx.lineTo(9 * k, -rr + 9 * k); ctx.closePath(); ctx.fill();
+    ctx.lineCap = 'butt'; ctx.restore();
+  }
+}
+
+function drawWingman(ctx, w, cx, cy) {
+  const pos = w.group.position;
+  const p = projectPoint(pos);
+  const dist = player.group.position.distanceTo(pos);
+  const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
+  const col = w.cca ? '73,182,255' : '45,255,176';
+  if (onScreen) {
+    const s = clamp(52000 / Math.max(dist, 1), 11, 28), x = p.x, y = p.y;
+    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: escort marker scales around its position
+    ctx.strokeStyle = 'rgba(' + col + ',0.92)'; ctx.lineWidth = 2;
+    ctx.beginPath();                              // upward chevron ∧ centred on the escort
+    ctx.moveTo(x - s, y + s * 0.55); ctx.lineTo(x, y - s * 0.7); ctx.lineTo(x + s, y + s * 0.55);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(' + col + ',0.6)';
+    ctx.beginPath(); ctx.arc(x, y, 2.2, 0, TWO_PI); ctx.fill();
+    const hpFrac = clamp(w.hp / w.maxHp, 0, 1);    // slim health pip above the chevron
+    const bw = s * 1.5, bx = x - bw / 2, by = y - s * 0.7 - 8;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, bw, 3);
+    ctx.fillStyle = 'rgba(' + col + ',0.9)'; ctx.fillRect(bx, by, bw * hpFrac, 3);
+    ctx.fillStyle = 'rgba(' + col + ',0.92)'; ctx.font = '10px ' + HUDFONT; ctx.textAlign = 'center';
+    const tag = w.forced ? ' ▸' + t('hud.focus') : (w.defend > 0 ? ' ▸' + t('hud.guard') : '');
+    ctx.fillText(w.name + tag, x, y + s * 0.55 + 12);
+    ctx.restore();
+  } else {
+    let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
+    const rx = W / 2 - 48, ry = H / 2 - 48;
+    const ex = cx + Math.cos(ang) * rx, ey = cy + Math.sin(ang) * ry;
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+    ctx.strokeStyle = 'rgba(' + col + ',0.85)'; ctx.lineWidth = 2;   // hollow teal arrowhead at the screen edge
+    ctx.beginPath(); ctx.moveTo(13, 0); ctx.lineTo(-9, -7); ctx.lineTo(-9, 7); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.lineWidth = 2;
+}
+
+function drawHorizon(ctx, cx, cy) {
+  const fwd = fwdOf(player.group, t1), up = upOf(player.group, t2), rgt = rightOf(player.group, t3);
+  const pitch = Math.asin(clamp(fwd.y, -1, 1));
+  const roll = Math.atan2(rgt.y, up.y);
+  const scale = 6.2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(hudK(), hudK());   // UI-size: enlarge the whole pitch ladder uniformly around centre
+  ctx.rotate(roll);
+  ctx.translate(0, (pitch / DEG) * scale);
+  ctx.strokeStyle = 'rgba(0,255,190,0.55)'; ctx.lineWidth = 2; ctx.font = '11px ' + HUDFONT; ctx.fillStyle = 'rgba(0,255,190,0.6)';
+  ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(-70, 0); ctx.moveTo(70, 0); ctx.lineTo(260, 0);
+  ctx.moveTo(-70, 0); ctx.lineTo(-70, 9); ctx.moveTo(70, 0); ctx.lineTo(70, 9);
+  ctx.stroke();
+  ctx.lineWidth = 1.4;
+  for (let a = -40; a <= 40; a += 10) {
+    if (a === 0) continue;
+    const y = -a * scale;
+    const w = a > 0 ? 60 : 50;
+    ctx.beginPath();
+    ctx.moveTo(-w, y); ctx.lineTo(-30, y); ctx.moveTo(30, y); ctx.lineTo(w, y);
+    if (a < 0) { ctx.moveTo(-w, y); ctx.lineTo(-w, y - 6); ctx.moveTo(w, y); ctx.lineTo(w, y - 6); }
+    else { ctx.moveTo(-w, y); ctx.lineTo(-w, y + 6); ctx.moveTo(w, y); ctx.lineTo(w, y + 6); }
+    ctx.stroke();
+    ctx.textAlign = 'left'; ctx.fillText((a > 0 ? '+' : '') + a, w + 5, y);
+    ctx.textAlign = 'right'; ctx.fillText((a > 0 ? '+' : '') + a, -w - 5, y);
+  }
+  ctx.restore();
+  ctx.textAlign = 'center';
+}
+
+function drawLockReticle(ctx, tgt, progress, locked) {
+  const p = projectPoint(tgt.group.position);
+  if (p.behind) return;
+  const dist = player.group.position.distanceTo(tgt.group.position);
+  const base = clamp(120000 / Math.max(dist, 1), 34, 150);
+  const x = p.x, y = p.y, s = base * 0.45;
+  ctx.textAlign = 'center';
+  ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: lock box scales around target, position fixed
+  if (locked) {
+    ctx.strokeStyle = 'rgba(255,55,55,1)'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(x - s, y - s, s * 2, s * 2);
+    ctx.lineWidth = 2;
+    for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      ctx.beginPath(); ctx.moveTo(x + c[0] * s, y + c[1] * s); ctx.lineTo(x + c[0] * (s + 8), y + c[1] * s);
+      ctx.moveTo(x + c[0] * s, y + c[1] * s); ctx.lineTo(x + c[0] * s, y + c[1] * (s + 8)); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,55,55,0.95)';
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
+    const blink = (performance.now() % 600) < 400 ? 1 : 0.35;
+    ctx.fillStyle = 'rgba(255,70,70,' + blink + ')'; ctx.font = 'bold 13px ' + HUDFONT;
+    ctx.fillText(t('hud.locked'), x, y - s - 11);
+  } else if (progress > 0.02) {
+    const o = base * (1.35 - progress * 0.9); // brackets converge as progress→1
+    const a = 0.5 + progress * 0.5;
+    ctx.strokeStyle = 'rgba(255,210,80,' + a + ')'; ctx.lineWidth = 2;
+    for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      const px = x + c[0] * (s + o), py = y + c[1] * (s + o);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - c[0] * 11, py); ctx.moveTo(px, py); ctx.lineTo(px, py - c[1] * 11); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,210,80,0.85)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(x, y, base * 0.62, -Math.PI / 2, -Math.PI / 2 + progress * TWO_PI); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,210,80,0.95)'; ctx.font = '11px ' + HUDFONT;
+    ctx.fillText(t('hud.locking') + ' ' + Math.round(progress * 100) + '%', x, y + base * 0.62 + 14);
+  }
+  ctx.restore();
+}
+
+function drawEnemy(ctx, e, cx, cy, isNear) {
+  const pos = e.group.position;
+  const p = projectPoint(pos);
+  const dist = player.group.position.distanceTo(pos);
+  const boss = e.type === 'boss', grd = e.type === 'ground', drone = e.type === 'drone';
+  const locked = player.lockedTarget === e;
+  const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
+
+  if (drone) {                          // lightweight crimson diamond — swarms stay readable
+    if (!onScreen) return;
+    const s = clamp(60000 / Math.max(dist, 1), 9, 34), x = p.x, y = p.y;
+    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: marker scales around target
+    ctx.strokeStyle = 'rgba(255,64,96,' + (locked || isNear ? 1 : 0.82) + ')'; ctx.lineWidth = locked ? 2.4 : 1.6;
+    ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,64,96,0.5)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TWO_PI); ctx.fill();
+    ctx.restore(); ctx.lineWidth = 2;
+    return;
+  }
+
+  const col = boss ? '255,80,220' : e.type === 'bomber' ? '255,176,96' : e.elite ? '255,210,77' : grd ? '255,165,55' : '255,80,80';
+
+  if (onScreen) {
+    const size = clamp(90000 / Math.max(dist, 1), 24, 110) * (boss ? 1.7 : 1);
+    const s = size / 2, x = p.x, y = p.y, c = Math.max(7, s * 0.32);
+    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: bracket + label + hp bar scale around target, position fixed
+    ctx.strokeStyle = 'rgba(' + col + ',' + (locked || isNear ? 1 : 0.85) + ')';
+    ctx.lineWidth = locked ? 3 : isNear ? 2.4 : 1.8;
+    ctx.beginPath();
+    ctx.moveTo(x - s, y - s + c); ctx.lineTo(x - s, y - s); ctx.lineTo(x - s + c, y - s);
+    ctx.moveTo(x + s - c, y - s); ctx.lineTo(x + s, y - s); ctx.lineTo(x + s, y - s + c);
+    ctx.moveTo(x + s, y + s - c); ctx.lineTo(x + s, y + s); ctx.lineTo(x + s - c, y + s);
+    ctx.moveTo(x - s + c, y + s); ctx.lineTo(x - s, y + s); ctx.lineTo(x - s, y + s - c);
+    ctx.stroke();
+    const hpFrac = clamp(e.hp / e.maxHp, 0, 1);
+    const bw = size, bx = x - s, by = y - s - 7;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, 3);
+    ctx.fillStyle = hpFrac > 0.5 ? 'rgba(70,255,140,0.9)' : hpFrac > 0.25 ? 'rgba(255,210,80,0.9)' : 'rgba(255,70,70,0.95)';
+    ctx.fillRect(bx, by, bw * hpFrac, 3);
+    ctx.fillStyle = 'rgba(' + col + ',0.95)'; ctx.font = '11px ' + HUDFONT;
+    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + t('hud.km') : Math.round(dist) + t('hud.m'), x, y + s + 12);
+    if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.boss'), x, by - 8); }
+    else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.bomber'), x, by - 8); }
+    else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 ' + t('hud.lv') + rival.level, x, by - 8); }
+    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || t('hud.ace')) + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
+    else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
+    ctx.restore();
+  } else {
+    let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
+    const rx = W / 2 - 64, ry = H / 2 - 64;
+    const ex = cx + Math.cos(ang) * rx, ey = cy + Math.sin(ang) * ry;
+    ctx.save(); ctx.translate(ex, ey); ctx.rotate(ang);
+    const big = isNear ? 1.4 : 1;
+    ctx.fillStyle = 'rgba(' + col + ',' + (isNear ? 1 : 0.9) + ')';
+    ctx.beginPath(); ctx.moveTo(17 * big, 0); ctx.lineTo(-11 * big, -9 * big); ctx.lineTo(-11 * big, 9 * big); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(' + col + ',0.85)'; ctx.font = '10px ' + HUDFONT; ctx.textAlign = 'center';
+    const tx = cx + Math.cos(ang) * (rx - 22), ty = cy + Math.sin(ang) * (ry - 22);
+    ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + t('hud.km') : Math.round(dist) + t('hud.m'), tx, ty);
+  }
+}
+
+/* ---------------- radar ---------------- */
+function drawRadar() {
+  const ctx = radarCtx, w = radarCanvas.width, h = radarCanvas.height, cx = w / 2, cy = h / 2, R = w / 2 - 5;
+  ctx.clearRect(0, 0, w, h);
+
+  const fwd = fwdOf(player.group, t1);
+  const fx = fwd.x, fz = fwd.z, fl = Math.hypot(fx, fz) || 1;
+  const Fx = fx / fl, Fz = fz / fl, Rx = -Fz, Rz = Fx;
+  const range = 6500;
+  // weather + night shorten radar detection: contacts beyond detR drop off the scope entirely
+  const detR = 6500 * ((typeof weather !== 'undefined' && weather) ? (weather.radarMul || 1) : 1);
+  const detR2 = detR * detR;
+
+  // forward FOV wedge
+  ctx.fillStyle = 'rgba(25,240,212,0.07)';
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, R, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); ctx.closePath(); ctx.fill();
+
+  // rings + crosshair
+  ctx.strokeStyle = 'rgba(25,240,212,0.22)'; ctx.lineWidth = 1;
+  for (let r = R / 3; r <= R + 0.5; r += R / 3) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
+
+  // sweep
+  const sweep = (performance.now() * 0.0011) % TWO_PI;
+  const grad = ctx.createLinearGradient(cx, cy, cx + Math.cos(sweep - Math.PI / 2) * R, cy + Math.sin(sweep - Math.PI / 2) * R);
+  grad.addColorStop(0, 'rgba(25,240,212,0.5)'); grad.addColorStop(1, 'rgba(25,240,212,0)');
+  ctx.strokeStyle = grad; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep - Math.PI / 2) * R, cy + Math.sin(sweep - Math.PI / 2) * R); ctx.stroke();
+
+  function plot(pos, r, g, b, sz, sq, ring) {
+    const dx = pos.x - player.group.position.x, dz = pos.z - player.group.position.z;
+    let ahead = dx * Fx + dz * Fz, right = dx * Rx + dz * Rz;
+    let px = right / range * R, py = -ahead / range * R;
+    const dlen = Math.hypot(px, py);
+    if (dlen > R) { px = px / dlen * R; py = py / dlen * R; }
+    const X = cx + px, Y = cy + py;
+    const dy = pos.y - player.group.position.y;
+    if (Math.abs(dy) > 120) { // altitude tick
+      ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',0.6)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X, Y + (dy > 0 ? -7 : 7)); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+    if (sq) ctx.fillRect(X - sz, Y - sz, sz * 2, sz * 2);
+    else { ctx.beginPath(); ctx.arc(X, Y, sz, 0, TWO_PI); ctx.fill(); }
+    if (ring) { ctx.strokeStyle = 'rgba(255,225,77,0.95)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, sz + 3, 0, TWO_PI); ctx.stroke(); }
+  }
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive || e.isInCloud) continue;
+    const rdx = e.group.position.x - player.group.position.x, rdz = e.group.position.z - player.group.position.z;
+    if (detR < 6500 && rdx * rdx + rdz * rdz > detR2) continue;   // weather/night only: drop contacts beyond the reduced detection range (clear day = unchanged)
+    const lk = player.lockedTarget === e;
+    if (e.type === 'boss') plot(e.group.position, 255, 69, 200, 5, false, lk);
+    else if (e.type === 'bomber') plot(e.group.position, 255, 176, 96, 5, false, lk);
+    else if (e.type === 'drone') plot(e.group.position, 255, 64, 96, 3, false, lk);
+    else if (e.elite) plot(e.group.position, 255, 210, 77, 4, false, lk);
+    else if (e.type === 'ground') plot(e.group.position, 255, 165, 55, 4, true, lk);
+    else plot(e.group.position, 255, 80, 80, 4, false, lk);
+  }
+  for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) plot(missiles[i].mesh.position, 255, 255, 255, 2);
+  for (let i = 0; i < wingmen.length; i++) { if (wingmen[i].alive) plot(wingmen[i].group.position, 45, 255, 176, 4, true); }
+  for (let i = 0; i < loots.length; i++) { const isC = loots[i].kind === 'crate'; plot(loots[i].mesh.position, 70, 255, 190, isC ? 4 : 3, isC); }
+  ctx.fillStyle = '#19f0d4'; ctx.beginPath();
+  ctx.moveTo(cx, cy - 8); ctx.lineTo(cx - 6, cy + 6); ctx.lineTo(cx + 6, cy + 6); ctx.closePath(); ctx.fill();
+}

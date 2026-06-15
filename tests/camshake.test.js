@@ -1,13 +1,7 @@
 'use strict';
 const assert = require('assert');
+const { CAMSHAKE_RATE, CAMSHAKE_K, decayShake } = require('../js/core.js');
 
-// ---- MIRROR of js/globals.js camera shake helpers ----
-// Keep byte-identical with the source between these markers.
-// MIRROR START
-const CAMSHAKE_RATE = 6;   // shake units lost per second
-const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
-function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
-// MIRROR END
 function shakeCamLogic(current, amt) { return Math.max(current, amt); }
 
 // ---- decayShake: decays monotonically toward 0 ----

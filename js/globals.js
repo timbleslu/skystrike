@@ -5,13 +5,7 @@
    ===================================================================== */
 
 /* ---------------- math helpers ---------------- */
-const TWO_PI = Math.PI * 2;
-const DEG = Math.PI / 180;
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
-const rand = (a, b) => a + Math.random() * (b - a);
-const randInt = (a, b) => Math.floor(rand(a, b + 1));
-const damp = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
+// TWO_PI, DEG, clamp, lerp, rand, randInt, damp → core.js (pure, require-safe; loaded before this file).
 
 /* ---------------- jet roster ---------------- */
 const JETS = [
@@ -125,134 +119,18 @@ let weather = { type: 'clear', radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1
 let weatherT = 0;            // turbulence phase clock, advanced each frame by updateWeather(dt)
 let weatherSeed = 1;         // per-run seed for standalone (non-op) weather rolls; reseeded in startGame
 const FOG_BASE = 0.000058;   // neutral FogExp2 density; weather.fogMul scales from this (matches scene init)
-// === MIRROR START (globals.js weather core) ===
-const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
-const WEATHER = {
-  clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 3.0 },
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 1.6 },
-};
-// PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
-// factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
-function resolveWeather(type, tod) {
-  const w = WEATHER[type] || WEATHER.clear;
-  const night = (tod === 2) ? NIGHT_RADAR_MUL : 1;
-  return {
-    type: WEATHER[type] ? type : 'clear',
-    radarMul: w.radarMul * night,
-    lockRangeMul: w.lockRangeMul,
-    lockSpeedMul: w.lockSpeedMul,
-    turbulence: w.turbulence,
-    fogMul: w.fogMul,
-  };
-}
-// PURE — bounded (|x| <= amp), smooth, exactly zero-mean-over-2π attitude wobble. Two
-// commensurate sines (1 + 2 cycles over [0,2π]) so the integral over a full cycle is exactly 0.
-function turbSample(t, amp) {
-  return amp * (0.6 * Math.sin(t) + 0.4 * Math.sin(2 * t + 1.3));
-}
-// PURE — deterministic standalone-play weather roll, weighted toward clear (hash -> [0,1)).
-function rollWeather(seed) {
-  let x = (seed | 0) ^ 0x9e3779b9;
-  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
-  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
-  x = (x ^ (x >>> 16)) >>> 0;
-  const r = x / 4294967296;
-  return r < 0.6 ? 'clear' : r < 0.8 ? 'fog' : 'storm';
-}
-// === MIRROR END ===
-// === MIRROR START (globals.js boss phase core) ===
-const BOSS_PHASE2_HP = 0.6;   // boss steps 1 -> 2 when hp/maxHp drops below this
-const BOSS_PHASE3_HP = 0.3;   // boss steps 2 -> 3 when hp/maxHp drops below this
-// PURE — boss phase (1/2/3) implied by a HP fraction. Monotone non-increasing in hpFrac.
-function bossPhaseFor(hpFrac) {
-  if (hpFrac < BOSS_PHASE3_HP) return 3;
-  if (hpFrac < BOSS_PHASE2_HP) return 2;
-  return 1;
-}
-// PURE — once-per-phase guard. Given the highest phase already reached and the phase
-// implied by current HP, return the new highest reached: never regresses (HP regen can't
-// drop a phase) and only ever advances toward the HP-implied phase. `reached` starts at 1.
-function nextBossPhase(reached, hpFrac) {
-  const want = bossPhaseFor(hpFrac);
-  return want > reached ? want : reached;
-}
-// === MIRROR END ===
+// weather core (NIGHT_RADAR_MUL, WEATHER, resolveWeather, turbSample, rollWeather) → core.js.
+// boss-phase core (BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase) → core.js.
 // Boss-rush mode (F15): unlockable gauntlet — fight every boss in sequence, fixed loadout,
 // ONE life, no tech tree. Runtime mode flag + progress; best time persists in meta.
 let bossRush = false;        // true while a Boss Rush run is active (gates tech tree / meta perks / loadout)
 let bossRushIndex = 0;       // how many bosses have been DEFEATED so far this run (0..BOSS_RUSH_TOTAL)
 let bossRushT0 = 0;          // performance.now() at run start, for the timed leaderboard
-// === MIRROR START (globals.js boss-rush core) ===
-// The fixed boss gauntlet, flown in order. Each entry is the boss type spawned for that leg
-// (all reuse the F4 multi-phase 'boss' enemy). Length defines the sequence; index 0 spawns first.
-const BOSS_RUSH_POOL = ['boss', 'boss', 'boss', 'boss', 'boss'];
-const BOSS_RUSH_TOTAL = BOSS_RUSH_POOL.length;   // bosses to clear for a full run
-// PURE — the boss type to spawn for leg `index` (0-based), or null once the gauntlet is done.
-// Out-of-range / negative indices return null (no spawn). Monotone: index past the end yields null.
-function bossRushNext(index) {
-  if (index < 0 || index >= BOSS_RUSH_POOL.length) return null;
-  return BOSS_RUSH_POOL[index];
-}
-// PURE — the run is complete once `killed` bosses reaches the total. Saturating (>= guards overshoot).
-function bossRushDone(killed, total) {
-  return killed >= total;
-}
-// PURE — keep the better (lower) of two run times in seconds. 0/undefined means "no record yet",
-// so the first finish always wins; thereafter only a strictly faster time replaces the record.
-function betterTime(prev, next) {
-  if (!(next > 0)) return prev > 0 ? prev : 0;     // invalid new time: keep the old record (or 0)
-  if (!(prev > 0)) return next;                    // no prior record: the new time is the record
-  return next < prev ? next : prev;                // otherwise keep the smaller
-}
-// === MIRROR END ===
-// === MIRROR START (globals.js tutorial step machine) ===
-// First-run tutorial step machine. Steps gate on player actions, in order:
-//   0 = pitch, 1 = throttle (>0.6), 2 = guns fired, 3 = missile (lock + fire), 4 = DONE.
-// Each step's REQUIRED event advances it by one; the 'skip' event jumps straight to DONE
-// from any step. Pure + monotonic: an event that does not match the current step is ignored,
-// the step index never decreases, and DONE (4) is a terminal absorbing state.
-const TUTORIAL_STEPS = ['pitch', 'throttle', 'guns', 'missile'];
-const TUTORIAL_DONE = TUTORIAL_STEPS.length;   // 4
-// the event that satisfies each step, by step index
-const TUTORIAL_EVENT_FOR_STEP = ['pitched', 'throttled', 'fired', 'missile'];
-// PURE — given the current step and an input event, return the next step (0..TUTORIAL_DONE).
-// Never regresses; only the current step's matching event (or 'skip') advances it.
-function tutorialNext(step, event) {
-  if (step >= TUTORIAL_DONE) return TUTORIAL_DONE;        // terminal: stay done
-  if (event === 'skip') return TUTORIAL_DONE;             // skip finishes from anywhere
-  if (event === TUTORIAL_EVENT_FOR_STEP[step]) return step + 1;   // matching action advances one
-  return step;                                           // anything else: no change
-}
-// === MIRROR END ===
+// boss-rush core (BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime) → core.js.
+// tutorial step machine (TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext) → core.js.
 let dailyMode = false;       // true while a Daily Challenge run is active (F7): seed-fixed layout/weather, one life
 let dailySeed = 0;           // the active daily calendar seed; startGame resets weatherSeed from it when dailyMode
-// === MIRROR START (globals.js daily core) ===
-// PURE — seeded PRNG (mulberry32). makeRng(seed) returns a function that yields a deterministic
-// stream of floats in [0,1); the same seed always produces the same sequence. Same hash style as
-// rollWeather (32-bit Math.imul mixing), but stateful so the layout/weather/restriction can each
-// pull successive draws from one daily seed.
-function makeRng(seed) {
-  let a = (seed | 0) >>> 0;
-  return function () {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-// PURE — stable integer seed for a calendar date. Distinct (y,m,d) triples map to distinct seeds.
-// NEVER reads the clock — the caller reads the date once at the browser runtime and passes y/m/d in.
-// Mixes the packed date through the same splitmix-style avalanche rollWeather uses.
-function dailySeedFor(y, m, d) {
-  let x = (((y | 0) * 12 + ((m | 0) - 1)) * 31 + ((d | 0) - 1)) | 0;
-  x = (x ^ 0x9e3779b9) | 0;
-  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
-  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
-  return (x ^ (x >>> 16)) >>> 0;
-}
-// === MIRROR END ===
+// daily-challenge core (makeRng, dailySeedFor) → core.js.
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';
@@ -479,11 +357,7 @@ const CAM_NAMES = ['CHASE', 'CLOSE', 'COCKPIT'];
 // decayShake(v, dt): PURE — returns max(0, v - dt * CAMSHAKE_RATE). Mirrored byte-identical in tests/camshake.test.js.
 let camShake = 0;
 function shakeCam(amt) { camShake = Math.max(camShake, amt); }
-// === MIRROR START (globals.js camera shake helpers) ===
-const CAMSHAKE_RATE = 6;   // shake units lost per second
-const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
-function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
-// === MIRROR END ===
+// camera-shake core (CAMSHAKE_RATE, CAMSHAKE_K, decayShake) → core.js.
 
 const keys = {};
 let mouseRight = false;
@@ -492,27 +366,10 @@ const down = (c) => !!keys[c];
 const HUDFONT = "'Share Tech Mono', monospace";
 
 /* ---------------- AWACS support calls (F10) ---------------- */
-// Spend in-run RP (player.tp) on one of three radio calls, each capped per sector.
-// AWACS_COSTS = RP price per call; AWACS_USES_MAX = how many times each may be called per sector.
-const AWACS_COSTS    = { strike: 140, resupply: 90, jam: 70 };
-const AWACS_USES_MAX = { strike: 1,   resupply: 1,  jam: 2 };
-const AWACS_JAM_TIME = 8;   // seconds enemy missiles stay blinded by a jamming call
+// Core (AWACS_COSTS, AWACS_USES_MAX, AWACS_JAM_TIME, pure awacsCall resolver) → core.js.
+// awacsUses below is the live per-sector counter (reset per sector + per run); combat.js awacsAction
+// wraps awacsCall reading {rp: player.tp, uses: awacsUses}.
 let awacsUses = { strike: 0, resupply: 0, jam: 0 };   // calls SPENT this sector (reset per sector + per run)
-// MIRROR(awacsCall): keep byte-identical with tests/awacs.test.js
-// Pure resolver: given a snapshot {rp, uses:{strike,resupply,jam}}, the cost+cap tables, and a call key,
-// returns a NEW snapshot. ok=false (state unchanged) when the call is unknown, capped out, or unaffordable.
-// reason: 'unknown' | 'empty' (no uses left) | 'noRp' (can't afford) | 'ok'.
-function awacsCall(state, costs, max, key) {
-  const cost = costs[key], cap = max[key];
-  if (cost === undefined || cap === undefined) return { ok: false, reason: 'unknown', rp: state.rp, uses: state.uses };
-  const used = state.uses[key] || 0;
-  if (used >= cap) return { ok: false, reason: 'empty', rp: state.rp, uses: state.uses };
-  if (state.rp < cost) return { ok: false, reason: 'noRp', rp: state.rp, uses: state.uses };
-  const uses = { strike: state.uses.strike || 0, resupply: state.uses.resupply || 0, jam: state.uses.jam || 0 };
-  uses[key] = used + 1;
-  return { ok: true, reason: 'ok', rp: state.rp - cost, uses: uses };
-}
-// MIRROR_END(awacsCall)
 
 /* Touch controls state */
 let isTouchEnabled = false;
@@ -521,19 +378,7 @@ let touchBtns = { gun:false, msl:false, flr:false, spc:false, thr:false, brk:fal
 // unified flight-input seam (controls.js writes it each frame; combat.js consumes + adds keyboard)
 let flightInput = { pitch: 0, roll: 0 };           // normalized analog flight axes, -1..1
 
-// === MIRROR START (globals.js barrel-roll pure helpers) ===
-// Returns true if the gap between now and lastTapTime is within threshold (double-tap detected).
-// gap must be > 0 (can't double-tap at identical timestamps) and <= threshold.
-function rollDetect(now, lastTapTime, threshold) {
-  const gap = now - lastTapTime;
-  return gap > 0 && gap <= threshold;
-}
-
-// Returns true if cooldown has elapsed (or was never started), meaning a new barrel roll is allowed.
-function rollCooldownGate(cooldown) {
-  return cooldown <= 0;
-}
-// === MIRROR END ===
+// barrel-roll pure helpers (rollDetect, rollCooldownGate) → core.js.
 
 // Barrel-roll evasive maneuver constants
 const BARREL_ROLL_INVULN   = 0.4;   // seconds of i-frames granted
@@ -559,51 +404,14 @@ let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
 let controlScheme = 'auto';
 let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
-// steering tunables (combat.js reads these). pointer maxBank ≈ 80°; 'auto' banks gently (autoMaxBank ≈ 29°) and turns
-// via a world-yaw ∝ sin(bank)*autoYawGain applied in combat.js (NOT here — heading turn is decoupled from pitch).
-const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoMaxBank: 0.5, autoYawGain: 1.6 };
-// PURE — map normalized flight intent to the engine's pitch/roll command axes, honouring the control scheme.
-// `intent` = { pitch, roll } in -1..1 (point-to-fly signs: +pitch=climb, +roll=bank right). `currentBank` is the
-// airframe's present bank angle in radians, SAME sign frame as roll intent (combat.js passes atan2(-right.y, up.y)).
-// Returns { pitchCmd, rollCmd } to be consumed exactly where flightInput.pitch/roll were before (so 'rate' is identical).
-//   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
-//   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
-//               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
-//   'auto'    : SAME pitch/roll mapping as pointer, but banks to a SMALLER cap (autoMaxBank). The actual turn is a
-//              world-axis yaw applied in combat.js (∝ sin(bank)); keeping it OUT of pitch is what lets you dive while
-//              turning (diagonals). An older design pulled pitch ∝ |sin(bank)| to turn, which blocked diving in a turn.
-function steerCommand(scheme, intent, currentBank, t) {
-  const pitchCmd = intent.pitch;
-  if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
-  const cb = currentBank || 0;
-  const mb = (scheme === 'auto') ? t.autoMaxBank : t.maxBank;   // 'auto' banks gently; heading turns via world-yaw in combat.js
-  let rollCmd;
-  if (Math.abs(intent.roll) < t.deadzone) {
-    rollCmd = clamp(-cb * t.autoLevelGain / mb, -1, 1);           // wings-level seek when stick released
-  } else {
-    const targetBank = intent.roll * mb;
-    rollCmd = clamp(t.bankGain * (targetBank - cb) / mb, -1, 1);  // proportional bank-hold
-  }
-  return { pitchCmd, rollCmd };
-}
+// steering core (STEER tunables + pure steerCommand) → core.js. combat.js reads STEER + calls steerCommand.
 
 // graphics quality (F11 mobile perf): 'auto' picks a render tier by a cheap device heuristic; 'low'/'high'
 // force it. VISUAL-ONLY — never changes gameplay (it gates shadow-map resolution, shadow-camera far, and a
 // draw-distance .visible cull on distant enemy meshes; enemies are NEVER despawned, so locks/markers survive).
 // Persisted via the settings seam (saveSettings/loadSettings in ui.js). engine.js owns applyGfxQuality().
 let gfxQuality = 'auto';
-// === MIRROR START (globals.js gfx-quality core) ===
-const GFX_TIERS = ['auto', 'low', 'high'];
-// PURE — resolve the effective render tier ('low'|'high') from the gfxQuality setting plus a
-// cheap device heuristic. Explicit 'low'/'high' pass through untouched; 'auto' (and any unknown
-// value) picks 'low' for touch devices on a non-flagship pixel ratio (dpr <= 2 — the mid-range
-// phone signature), else 'high'. Deterministic + side-effect free so it is unit-testable; the
-// fps sample (which headless cannot measure) is layered on at the call site, never in here.
-function resolveQuality(setting, dpr, isTouch) {
-  if (setting === 'low' || setting === 'high') return setting;
-  return (isTouch && dpr <= 2) ? 'low' : 'high';
-}
-// === MIRROR END ===
+// gfx-quality core (GFX_TIERS + pure resolveQuality) → core.js. refreshGfxTier (below) is the impure call site.
 // live resolved tier ('low'|'high'); recomputed from gfxQuality whenever the setting changes (engine.js applyGfxQuality
 // reads it). Default 'high' so desktop is untouched until refreshGfxTier() runs at boot/settings-load.
 let gfxTier = 'high';

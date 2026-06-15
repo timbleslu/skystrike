@@ -1,27 +1,11 @@
 'use strict';
 const assert = require('assert');
 
-// ---- mirrors of js/rival.js pure helpers (must stay byte-identical) ----
-function rivalDue(wave, lastRivalWave, enabled) {
-  return !!enabled && wave >= 5 && wave % 4 !== 0 && (wave - (lastRivalWave || 0)) >= 3;
-}
-function rivalHpFor(wave, level) { return Math.round((170 + wave * 9) * Math.pow(1.3, level - 1)); }
-function rivalPayout(level) { return 150 + 100 * level; }
-function pickTrait(profile, owned) {
-  const p = profile || {};
-  const cand = [];
-  if ((p.missiles || 0) >= (p.gunKills || 0) && (p.missiles || 0) > 0) cand.push('FLARE_WALL');
-  if ((p.gunKills || 0) > (p.missiles || 0)) cand.push('SCISSORS');
-  if ((p.wingmen || 0) >= 2) cand.push('HEADHUNTER');
-  cand.push('VETERAN');
-  for (let i = 0; i < cand.length; i++) if (owned.indexOf(cand[i]) === -1) return cand[i];
-  return null;
-}
-function validRival(r) {
-  return !!(r && typeof r.name === 'string' && typeof r.shape === 'string' &&
-    typeof r.jetName === 'string' && typeof r.level === 'number' && r.level >= 1 && r.level <= 5 &&
-    Array.isArray(r.traits) && Array.isArray(r.board) && r.profile && typeof r.profile === 'object');
-}
+// store stub so js/rival.js (which references store inside loadRival/saveRival/genRival)
+// loads + runs cleanly under Node. Pure cores tested below don't touch it.
+global.store = { get: () => null, set: () => {} };
+
+const { rivalDue, rivalHpFor, rivalPayout, pickTrait, validRival, rivalSpecialFor } = require('../js/rival.js');
 
 // cadence
 assert.strictEqual(rivalDue(5, 0, true), true, 'first rival at wave 5');
@@ -52,13 +36,6 @@ assert.ok(!validRival(null) && !validRival({}) && !validRival({name:'X'}), 'garb
 const lvl9 = JSON.parse(JSON.stringify(fresh)); lvl9.level = 9;
 assert.ok(!validRival(lvl9), 'level out of range rejected');
 
-// mirror of js/rival.js rivalSpecialFor
-function rivalSpecialFor(shape) {
-  if (shape === 'J20' || shape === 'J35') return 'VOLLEY';
-  if (shape === 'NGAD' || shape === 'F47') return 'FLARESTORM';
-  if (shape === 'J50' || shape === 'SU57' || shape === 'SU75') return 'GHOST';
-  return 'OVERDRIVE';
-}
 assert.strictEqual(rivalSpecialFor('J20'), 'VOLLEY');
 assert.strictEqual(rivalSpecialFor('F47'), 'FLARESTORM');
 assert.strictEqual(rivalSpecialFor('SU57'), 'GHOST');

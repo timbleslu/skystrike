@@ -85,3 +85,8 @@ function hostileAceDeltas(entry) {
   return { hpMul: entry.hpMul, turnRate: entry.turnRate, speed: entry.speed };
 }
 // MIRROR END
+
+/* CommonJS export for Node tests — inert in the browser. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { rivalDue, rivalHpFor, rivalPayout, pickTrait, validRival, rivalSpecialFor, genRival, loadRival, saveRival, HOSTILE_ACES, hostileAceFor, hostileAceDeltas };
+}

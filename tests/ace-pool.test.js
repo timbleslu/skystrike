@@ -1,6 +1,12 @@
 'use strict';
 const assert = require('assert');
 
+// store stub so js/rival.js (which references store inside loadRival/saveRival/genRival)
+// loads cleanly under Node. Rival cores imported below; entities.js is THREE-coupled
+// (not require-safe) so aceShapePool/jetNameForShape stay mirrored inline.
+global.store = { get: () => null, set: () => {} };
+const { HOSTILE_ACES, hostileAceFor, hostileAceDeltas } = require('../js/rival.js');
+
 // mirror of js/entities.js aceShapePool + jetNameForShape, fed a stub roster
 const JETS = [
   { id:'FT-1', shape:'STD',  name:'FT-1 STANDARD' },
@@ -17,28 +23,6 @@ assert.strictEqual(jetNameForShape('F22'), 'F-22 RAPTOR', 'shape resolves to ros
 assert.strictEqual(jetNameForShape('CCAJET'), 'CCAJET', 'unknown shape falls back to its key');
 
 console.log('ok - aceShapePool excludes STD and jetNameForShape maps shapes to names');
-
-// MIRROR START — hostileAceFor / hostileAceDeltas
-// Named hostile ace pool: one named antagonist per sector type.
-// Pure + deterministic given sectorType + index (no random, no globals).
-// Stat deltas are intentionally small — just enough to feel distinct.
-const HOSTILE_ACES = {
-  FURBALL:   { callsign: 'TALON',   hpMul: 1.10, turnRate: 1.55, speed: 1.08 },
-  INTERCEPT: { callsign: 'BANSHEE', hpMul: 1.12, turnRate: 1.50, speed: 1.10 },
-  STRIKE:    { callsign: 'REAPER',  hpMul: 1.15, turnRate: 1.45, speed: 1.05 },
-  ESCORT:    { callsign: 'DAGGER',  hpMul: 1.10, turnRate: 1.52, speed: 1.07 },
-  DEFEND:    { callsign: 'VIPER',   hpMul: 1.12, turnRate: 1.48, speed: 1.06 },
-  ELITE:     { callsign: 'SPECTER', hpMul: 1.18, turnRate: 1.60, speed: 1.12 },
-};
-function hostileAceFor(sectorType) {
-  return HOSTILE_ACES[sectorType] || null;
-}
-function hostileAceDeltas(entry) {
-  // Returns a copy of stat deltas only (no callsign). Safe to apply to any enemy.
-  if (!entry) return null;
-  return { hpMul: entry.hpMul, turnRate: entry.turnRate, speed: entry.speed };
-}
-// MIRROR END
 
 // pool non-empty for each combat sector type
 const COMBAT_SECTORS = ['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE'];
