@@ -925,6 +925,13 @@ function updatePlayer(dt) {
   eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
   q1.setFromEuler(eul);
   player.group.quaternion.multiply(q1);
+  // AUTO scheme heading turn: a WORLD-axis yaw proportional to the current bank. Applied here (not in steerCommand)
+  // and about the WORLD up axis so it's DECOUPLED from pitch — you can dive/climb while turning (diagonals work).
+  // sign: bank right (currentBank>0) -> negative world yaw -> nose right. Scaled by tb so it tracks airframe agility.
+  if (controlScheme === 'auto') {
+    const autoYaw = -STEER.autoYawGain * Math.sin(currentBank) * tb * dt;
+    if (autoYaw) player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, autoYaw));
+  }
 
   let tT = player.throttle;
   if (thr) tT += dt * (0.35 + st.accel * 0.22);

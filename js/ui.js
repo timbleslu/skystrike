@@ -87,6 +87,7 @@ function pickGunTarget() {
 }
 function drawGunPipper(ctx, e) {
   if (!e) { player._gunSol = false; return; }
+  const k = hudK();
   const pp = player.group.position;
   const S = 1400 * (player.bulletSpeedMul || 1);
   // rounds inherit 0.9 of the jet's velocity, so solve in that relative frame
@@ -111,6 +112,7 @@ function drawGunPipper(ctx, e) {
   }
 
   const col = solution ? '90,255,150' : '255,210,80';
+  ctx.save(); ctx.translate(sp.x, sp.y); ctx.scale(k, k); ctx.translate(-sp.x, -sp.y);   // UI-size: gun pipper scales around the lead point
   ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(' + col + ',0.95)';
   ctx.beginPath(); ctx.arc(sp.x, sp.y, 7, 0, TWO_PI); ctx.stroke();
   ctx.beginPath();
@@ -124,16 +126,19 @@ function drawGunPipper(ctx, e) {
 
   ctx.font = '9px ' + HUDFONT; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(' + col + ',0.8)';
   ctx.fillText(Math.round(dist), sp.x, sp.y + 20);
+  ctx.restore();
 
   if (solution) {
     const s = 13 + Math.sin(performance.now() * 0.02) * 2;
+    ctx.save(); ctx.translate(sp.x, sp.y); ctx.scale(k, k); ctx.translate(-sp.x, -sp.y);   // UI-size: "guns" diamond scales around lead point
     ctx.strokeStyle = 'rgba(90,255,150,0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
     ctx.fillStyle = 'rgba(90,255,150,0.95)'; ctx.fillText(t('hud.guns'), sp.x, sp.y - s - 6);
+    ctx.restore();
     // "shoot now" cue ringing the central reticle
     const cx = W / 2, cy = H / 2;
     ctx.strokeStyle = 'rgba(90,255,150,' + (0.45 + 0.3 * Math.sin(performance.now() * 0.02)) + ')'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, 11, 0, TWO_PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 11 * k, 0, TWO_PI); ctx.stroke();
   }
   if (solution && !player._gunSol) audio.blip(1240, 0.04, 'sine', 0.05, 1560);   // soft tick on acquiring a gun solution
   player._gunSol = solution;
@@ -141,6 +146,9 @@ function drawGunPipper(ctx, e) {
 }
 
 /* ---------------- HUD canvas ---------------- */
+// Canvas-HUD size multiplier driven by the global hudScale setting (Settings → UI size).
+// World-projected x/y positions stay EXACT; only sizes (radii, fonts, line offsets) get ×k.
+function hudK() { return (typeof hudScale === 'number') ? Math.max(0.6, Math.min(1.6, hudScale)) : 1; }
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
 
@@ -157,16 +165,17 @@ function drawStarObjectives(ctx, cx) {
     [cleanMet, t('stars.obj.noDamage')],
     [rescMet, t('stars.obj.rescue')],
   ];
+  const k = hudK();
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.font = '11px ' + HUDFONT;
+  ctx.font = (11 * k) + 'px ' + HUDFONT;
   let y = 40;
   for (let i = 0; i < items.length; i++) {
     const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
     const w = ctx.measureText(label).width;
     ctx.fillStyle = met ? 'rgba(255,210,80,0.95)' : 'rgba(150,170,190,0.7)';
     ctx.fillText(label, cx - w / 2, y);
-    y += 15;
+    y += 15 * k;
   }
   ctx.restore();
 }
@@ -185,28 +194,30 @@ function drawWeatherChip(ctx) {
   const label = weatherLabel();
   if (!label) return;
   const storm = (typeof weather !== 'undefined' && weather) ? weather.type === 'storm' : false;
+  const k = hudK();
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.font = 'bold 13px ' + HUDFONT;
-  const padX = 9, x = 16, y = 86, h = 23, w = ctx.measureText(label).width + padX * 2;
+  ctx.font = 'bold ' + (13 * k) + 'px ' + HUDFONT;
+  const padX = 9 * k, x = 16, y = 86, h = 23 * k, w = ctx.measureText(label).width + padX * 2;
   ctx.fillStyle = storm ? 'rgba(120,140,200,0.16)' : 'rgba(25,240,212,0.10)';
   ctx.fillRect(x, y, w, h);
   ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(25,240,212,0.5)';
   ctx.strokeRect(x, y, w, h);
   ctx.fillStyle = storm ? 'rgba(205,215,255,0.95)' : 'rgba(150,255,235,0.95)';
-  ctx.fillText(label, x + padX, y + 6);
+  ctx.fillText(label, x + padX, y + 6 * k);
   ctx.restore();
 }
 function drawHUD() {
-  const ctx = h2d, cx = W / 2, cy = H / 2;
+  const ctx = h2d, cx = W / 2, cy = H / 2, k = hudK();
   ctx.clearRect(0, 0, W, H);
   ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
   drawHorizon(ctx, cx, cy);
 
+  // central reticle — scaled around its screen anchor (cx,cy)
   ctx.strokeStyle = 'rgba(120,255,220,0.9)';
-  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, TWO_PI);
-  ctx.moveTo(cx - 15, cy); ctx.lineTo(cx - 7, cy); ctx.moveTo(cx + 7, cy); ctx.lineTo(cx + 15, cy); ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy - 7);
+  ctx.beginPath(); ctx.arc(cx, cy, 4 * k, 0, TWO_PI);
+  ctx.moveTo(cx - 15 * k, cy); ctx.lineTo(cx - 7 * k, cy); ctx.moveTo(cx + 7 * k, cy); ctx.lineTo(cx + 15 * k, cy); ctx.moveTo(cx, cy - 15 * k); ctx.lineTo(cx, cy - 7 * k);
   ctx.stroke();
 
   const vd = t1.copy(player.vel);
@@ -214,9 +225,10 @@ function drawHUD() {
     vd.normalize();
     const fp = projectPoint(t2.copy(player.group.position).addScaledVector(vd, 1600));
     if (!fp.behind) {
+      // velocity-vector marker — projected position fixed, size ×k
       ctx.strokeStyle = 'rgba(0,255,170,0.9)';
-      ctx.beginPath(); ctx.arc(fp.x, fp.y, 6, 0, TWO_PI);
-      ctx.moveTo(fp.x - 6, fp.y); ctx.lineTo(fp.x - 15, fp.y); ctx.moveTo(fp.x + 6, fp.y); ctx.lineTo(fp.x + 15, fp.y); ctx.moveTo(fp.x, fp.y - 6); ctx.lineTo(fp.x, fp.y - 13);
+      ctx.beginPath(); ctx.arc(fp.x, fp.y, 6 * k, 0, TWO_PI);
+      ctx.moveTo(fp.x - 6 * k, fp.y); ctx.lineTo(fp.x - 15 * k, fp.y); ctx.moveTo(fp.x + 6 * k, fp.y); ctx.lineTo(fp.x + 15 * k, fp.y); ctx.moveTo(fp.x, fp.y - 6 * k); ctx.lineTo(fp.x, fp.y - 13 * k);
       ctx.stroke();
     }
   }
@@ -225,7 +237,7 @@ function drawHUD() {
   if (typeof mission !== 'undefined' && mission && mission.status === 'active') {
     const timed = (mission.type === 'intercept' && mission.timer <= 10);
     ctx.fillStyle = timed ? 'rgba(255,90,60,0.95)' : 'rgba(120,255,220,0.95)';
-    ctx.font = 'bold 15px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.font = 'bold ' + (15 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     let line = objectiveText(mission);
     if (mission.type === 'intercept') line += '   ⏱ ' + fmtClock(Math.max(0, mission.timer));
     ctx.fillText(line, cx, 14);
@@ -254,32 +266,32 @@ function drawHUD() {
     const l = loots[i]; if (l.kind !== 'crate') continue;
     const sp = projectPoint(l.mesh.position);
     if (sp.behind || sp.x < 0 || sp.x > W || sp.y < 0 || sp.y > H) continue;
-    const s = 9 + Math.sin(performance.now() * 0.006) * 2;
+    const s = (9 + Math.sin(performance.now() * 0.006) * 2) * k;   // projected pos fixed, size ×k
     ctx.strokeStyle = 'rgba(70,255,200,0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = 'rgba(70,255,200,0.85)'; ctx.font = '9px ' + HUDFONT; ctx.textAlign = 'center';
-    ctx.fillText(t('hud.supply') + ' ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7);
+    ctx.fillStyle = 'rgba(70,255,200,0.85)'; ctx.font = (9 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText(t('hud.supply') + ' ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7 * k);
   }
   ctx.lineWidth = 2;
 
   // KILL FRENZY meter — a hot bar that drains while you hold off the trigger
   if (player.frenzyMax && player.frenzy > 0) {
     const f = clamp(player.frenzy / player.frenzyMax, 0, 1);
-    const bw = 168, bx = cx - bw / 2, by = H - 96;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, bw, 6);
-    ctx.fillStyle = 'rgba(255,140,40,0.92)'; ctx.fillRect(bx, by, bw * f, 6);
-    ctx.fillStyle = 'rgba(255,185,90,0.95)'; ctx.font = 'bold 11px ' + HUDFONT; ctx.textAlign = 'center';
-    ctx.fillText(t('hud.frenzy') + ' ×' + (1 + 0.3 * f).toFixed(2), cx, by - 7);
+    const bw = 168 * k, bh = 6 * k, bx = cx - bw / 2, by = H - 96;   // centred bar, scaled around cx
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = 'rgba(255,140,40,0.92)'; ctx.fillRect(bx, by, bw * f, bh);
+    ctx.fillStyle = 'rgba(255,185,90,0.95)'; ctx.font = 'bold ' + (11 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText(t('hud.frenzy') + ' ×' + (1 + 0.3 * f).toFixed(2), cx, by - 7 * k);
   }
 
   for (let i = hitMarkers.length - 1; i >= 0; i--) {
-    const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1); const s = 11 + (1 - a) * 9;
+    const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1); const s = (11 + (1 - a) * 9) * k, t7 = 7 * k;
     ctx.strokeStyle = 'rgba(255,255,255,' + a + ')'; ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx - s + 7, cy - s + 7);
-    ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx + s - 7, cy - s + 7);
-    ctx.moveTo(cx - s, cy + s); ctx.lineTo(cx - s + 7, cy + s - 7);
-    ctx.moveTo(cx + s, cy + s); ctx.lineTo(cx + s - 7, cy + s - 7);
+    ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx - s + t7, cy - s + t7);
+    ctx.moveTo(cx + s, cy - s); ctx.lineTo(cx + s - t7, cy - s + t7);
+    ctx.moveTo(cx - s, cy + s); ctx.lineTo(cx - s + t7, cy + s - t7);
+    ctx.moveTo(cx + s, cy + s); ctx.lineTo(cx + s - t7, cy + s - t7);
     ctx.stroke();
     if (hm.t <= 0) hitMarkers.splice(i, 1);
   }
@@ -290,8 +302,8 @@ function drawHUD() {
     const p = projectPoint(d.pos);
     if (!p.behind) {
       const lifeMax = d.crit ? 1.1 : 0.9, a = clamp(d.life / lifeMax, 0, 1);
-      if (d.crit) { ctx.fillStyle = 'rgba(255,150,40,' + a + ')'; ctx.font = 'bold ' + (22 + (1 - a) * 12) + 'px ' + HUDFONT; }
-      else { ctx.fillStyle = 'rgba(255,230,120,' + a + ')'; ctx.font = 'bold ' + (16 + (1 - a) * 7) + 'px ' + HUDFONT; }
+      if (d.crit) { ctx.fillStyle = 'rgba(255,150,40,' + a + ')'; ctx.font = 'bold ' + ((22 + (1 - a) * 12) * k) + 'px ' + HUDFONT; }
+      else { ctx.fillStyle = 'rgba(255,230,120,' + a + ')'; ctx.font = 'bold ' + ((16 + (1 - a) * 7) * k) + 'px ' + HUDFONT; }
       ctx.fillText(d.val, p.x, p.y);
     }
     if (d.life <= 0) dmgNumbers.splice(i, 1);
@@ -306,12 +318,12 @@ function drawHUD() {
     let ang2; const mag = Math.hypot(dx, dy);
     if (dz < -0.2 && mag < 0.35) ang2 = Math.PI; else ang2 = Math.atan2(dx, dy);
     const a = clamp(player.hurtT, 0, 1);
-    const rr = Math.min(cx, cy) * 0.72;
+    const rr = Math.min(cx, cy) * 0.72;   // edge-ring radius kept (screen-anchored); stroke + arrowhead ×k
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang2);
-    ctx.strokeStyle = 'rgba(255,55,55,' + (0.85 * a) + ')'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,55,55,' + (0.85 * a) + ')'; ctx.lineWidth = 6 * k; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(0, 0, rr, -Math.PI / 2 - 0.36, -Math.PI / 2 + 0.36); ctx.stroke();
     ctx.fillStyle = 'rgba(255,80,80,' + (0.9 * a) + ')';
-    ctx.beginPath(); ctx.moveTo(0, -rr - 7); ctx.lineTo(-9, -rr + 9); ctx.lineTo(9, -rr + 9); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, -rr - 7 * k); ctx.lineTo(-9 * k, -rr + 9 * k); ctx.lineTo(9 * k, -rr + 9 * k); ctx.closePath(); ctx.fill();
     ctx.lineCap = 'butt'; ctx.restore();
   }
 }
@@ -326,6 +338,7 @@ function drawWingman(ctx, w, cx, cy) {
   const col = w.cca ? '73,182,255' : '45,255,176';
   if (onScreen) {
     const s = clamp(52000 / Math.max(dist, 1), 11, 28), x = p.x, y = p.y;
+    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: escort marker scales around its position
     ctx.strokeStyle = 'rgba(' + col + ',0.92)'; ctx.lineWidth = 2;
     ctx.beginPath();                              // upward chevron ∧ centred on the escort
     ctx.moveTo(x - s, y + s * 0.55); ctx.lineTo(x, y - s * 0.7); ctx.lineTo(x + s, y + s * 0.55);
@@ -339,6 +352,7 @@ function drawWingman(ctx, w, cx, cy) {
     ctx.fillStyle = 'rgba(' + col + ',0.92)'; ctx.font = '10px ' + HUDFONT; ctx.textAlign = 'center';
     const tag = w.forced ? ' ▸' + t('hud.focus') : (w.defend > 0 ? ' ▸' + t('hud.guard') : '');
     ctx.fillText(w.name + tag, x, y + s * 0.55 + 12);
+    ctx.restore();
   } else {
     let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
     const rx = W / 2 - 48, ry = H / 2 - 48;
@@ -358,6 +372,7 @@ function drawHorizon(ctx, cx, cy) {
   const scale = 6.2;
   ctx.save();
   ctx.translate(cx, cy);
+  ctx.scale(hudK(), hudK());   // UI-size: enlarge the whole pitch ladder uniformly around centre
   ctx.rotate(roll);
   ctx.translate(0, (pitch / DEG) * scale);
   ctx.strokeStyle = 'rgba(0,255,190,0.55)'; ctx.lineWidth = 2; ctx.font = '11px ' + HUDFONT; ctx.fillStyle = 'rgba(0,255,190,0.6)';
@@ -388,6 +403,7 @@ function drawLockReticle(ctx, tgt, progress, locked) {
   const base = clamp(120000 / Math.max(dist, 1), 34, 150);
   const x = p.x, y = p.y, s = base * 0.45;
   ctx.textAlign = 'center';
+  ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: lock box scales around target, position fixed
   if (locked) {
     ctx.strokeStyle = 'rgba(255,55,55,1)'; ctx.lineWidth = 2.5;
     ctx.strokeRect(x - s, y - s, s * 2, s * 2);
@@ -414,6 +430,7 @@ function drawLockReticle(ctx, tgt, progress, locked) {
     ctx.fillStyle = 'rgba(255,210,80,0.95)'; ctx.font = '11px ' + HUDFONT;
     ctx.fillText(t('hud.locking') + ' ' + Math.round(progress * 100) + '%', x, y + base * 0.62 + 14);
   }
+  ctx.restore();
 }
 function drawEnemy(ctx, e, cx, cy, isNear) {
   const pos = e.group.position;
@@ -426,10 +443,11 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
   if (drone) {                          // lightweight crimson diamond — swarms stay readable
     if (!onScreen) return;
     const s = clamp(60000 / Math.max(dist, 1), 9, 34), x = p.x, y = p.y;
+    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: marker scales around target
     ctx.strokeStyle = 'rgba(255,64,96,' + (locked || isNear ? 1 : 0.82) + ')'; ctx.lineWidth = locked ? 2.4 : 1.6;
     ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.stroke();
     ctx.fillStyle = 'rgba(255,64,96,0.5)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TWO_PI); ctx.fill();
-    ctx.lineWidth = 2;
+    ctx.restore(); ctx.lineWidth = 2;
     return;
   }
 
@@ -438,6 +456,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
   if (onScreen) {
     const size = clamp(90000 / Math.max(dist, 1), 24, 110) * (boss ? 1.7 : 1);
     const s = size / 2, x = p.x, y = p.y, c = Math.max(7, s * 0.32);
+    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: bracket + label + hp bar scale around target, position fixed
     ctx.strokeStyle = 'rgba(' + col + ',' + (locked || isNear ? 1 : 0.85) + ')';
     ctx.lineWidth = locked ? 3 : isNear ? 2.4 : 1.8;
     ctx.beginPath();
@@ -458,6 +477,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 ' + t('hud.lv') + rival.level, x, by - 8); }
     else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || t('hud.ace')) + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
     else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
+    ctx.restore();
   } else {
     let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
     const rx = W / 2 - 64, ry = H / 2 - 64;

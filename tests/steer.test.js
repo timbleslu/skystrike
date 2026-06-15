@@ -7,7 +7,7 @@ const path = require('path');
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 // ---- tunables mirror (js/globals.js STEER) ----
-const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoPitchGain: 0.6 };
+const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoMaxBank: 0.5, autoYawGain: 1.6 };
 
 // ============================================================================
 //  Mirror of js/globals.js steerCommand (byte-identity guard at the bottom
@@ -20,20 +20,20 @@ const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06,
 //   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
 //   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
 //               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
-//   'auto'    : same bank-hold as pointer; also adds sin(currentBank)*autoPitchGain to pitchCmd so banking auto-turns.
+//   'auto'    : SAME pitch/roll mapping as pointer, but banks to a SMALLER cap (autoMaxBank). The actual turn is a
+//              world-axis yaw applied in combat.js (∝ sin(bank)); keeping it OUT of pitch is what lets you dive while
+//              turning (diagonals). An older design pulled pitch ∝ |sin(bank)| to turn, which blocked diving in a turn.
 function steerCommand(scheme, intent, currentBank, t) {
   const pitchCmd = intent.pitch;
   if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
   const cb = currentBank || 0;
+  const mb = (scheme === 'auto') ? t.autoMaxBank : t.maxBank;   // 'auto' banks gently; heading turns via world-yaw in combat.js
   let rollCmd;
   if (Math.abs(intent.roll) < t.deadzone) {
-    rollCmd = clamp(-cb * t.autoLevelGain / t.maxBank, -1, 1);           // wings-level seek when stick released
+    rollCmd = clamp(-cb * t.autoLevelGain / mb, -1, 1);           // wings-level seek when stick released
   } else {
-    const targetBank = intent.roll * t.maxBank;
-    rollCmd = clamp(t.bankGain * (targetBank - cb) / t.maxBank, -1, 1);  // proportional bank-hold
-  }
-  if (scheme === 'auto') {
-    return { pitchCmd: clamp(pitchCmd - Math.abs(Math.sin(cb)) * t.autoPitchGain, -1, 1), rollCmd };
+    const targetBank = intent.roll * mb;
+    rollCmd = clamp(t.bankGain * (targetBank - cb) / mb, -1, 1);  // proportional bank-hold
   }
   return { pitchCmd, rollCmd };
 }
@@ -103,37 +103,26 @@ assert.ok(Math.abs(steerCommand('pointer', { pitch: 0, roll: 0 }, undefined, STE
 
 console.log('ok - steerCommand pointer: bank-hold settles, auto-levels in deadzone, clamps, shared pitch authority');
 
-/* ===== 'auto' scheme: bank-hold + auto back-pressure ===== */
-// wings-level (cb=0): sin(0)=0, so pitchCmd === intent.pitch (no spurious back-pressure)
-assert.strictEqual(steerCommand('auto', { pitch: 0, roll: 0 }, 0, STEER).pitchCmd, 0,
-  'auto: wings-level + no pitch intent -> pitchCmd=0');
-assert.strictEqual(steerCommand('auto', { pitch: 0.3, roll: 0 }, 0, STEER).pitchCmd, 0.3,
-  'auto: wings-level + pitch intent -> pitchCmd passes through');
+/* ===== 'auto' scheme: pitch identical to pointer; bank capped at autoMaxBank; turn is a world-yaw in combat.js ===== */
+// pitch authority is fully manual — pitchCmd === intent.pitch for ALL pitch/bank (no auto pitch pull, so you can dive
+// while turning). The heading turn lives in combat.js (world-axis yaw ∝ bank) and is NOT exercised by this pure test.
+for (const p of [-1, -0.4, 0, 0.4, 1]) {
+  for (const cb of [0, 0.4, -0.8, Math.PI / 2]) {
+    assert.strictEqual(steerCommand('auto', { pitch: p, roll: 0.6 }, cb, STEER).pitchCmd, p,
+      'auto: pitchCmd === intent.pitch at every bank (pitch decoupled from turn)');
+  }
+}
 
-// banked EITHER way -> a CONSTANT nose-up pull: pitchCmd drops below intent.pitch by autoPitchGain*|sin(cb)|.
-// (combat applies pitchIn = -pitchCmd, so negative pitchCmd = nose up. Direction-INDEPENDENT so heading turns
-//  in the BANK direction; a signed sin(cb) term would cancel to a single turn direction regardless of stick side.)
-const autoBankRight = steerCommand('auto', { pitch: 0, roll: 0.6 }, 0.8, STEER);
-assert.ok(autoBankRight.pitchCmd < 0, 'auto: positive bank -> pitchCmd < 0 (constant nose-up pull)');
+// rollCmd in 'auto' uses the SAME bank-hold shape as pointer but against autoMaxBank (gentler cap)
+const autoTarget = rollIntent * STEER.autoMaxBank;
+const autoRollBelow = steerCommand('auto', { pitch: 0, roll: rollIntent }, autoTarget - 0.2, STEER);
+assert.ok(autoRollBelow.rollCmd > 0, 'auto: bank below target -> positive rollCmd');
+const autoSettled = steerCommand('auto', { pitch: 0, roll: rollIntent }, autoTarget, STEER);
+assert.ok(Math.abs(autoSettled.rollCmd) < 1e-12, 'auto: at (autoMaxBank-scaled) target bank rollCmd settles to ~0');
+// the gentler cap means 'auto' settles at a SMALLER bank than 'pointer' for the same stick (autoMaxBank < maxBank)
+assert.ok(STEER.autoMaxBank < STEER.maxBank, 'auto: autoMaxBank is a gentler bank cap than pointer maxBank');
 
-const autoBankLeft = steerCommand('auto', { pitch: 0, roll: -0.6 }, -0.8, STEER);
-assert.ok(autoBankLeft.pitchCmd < 0, 'auto: negative bank -> pitchCmd < 0 (same pull, mirrored bank)');
-
-// the pull is SYMMETRIC in bank sign (direction-independent): equal/opposite banks give identical pitchCmd
-assert.ok(Math.abs(autoBankRight.pitchCmd - autoBankLeft.pitchCmd) < 1e-12,
-  'auto: back-pressure pull is symmetric in bank sign');
-
-// auto pitchCmd is clamped to [-1, 1]
-const autoSat = steerCommand('auto', { pitch: -1, roll: 0 }, Math.PI / 2, STEER);
-assert.ok(autoSat.pitchCmd >= -1, 'auto: pitchCmd clamped at -1');
-
-// rollCmd in 'auto' uses identical bank-hold logic as 'pointer'
-const autoRollBelow = steerCommand('auto', { pitch: 0, roll: rollIntent }, targetBank - 0.5, STEER);
-assert.ok(autoRollBelow.rollCmd > 0, 'auto: bank below target -> positive rollCmd (same as pointer)');
-const autoSettled = steerCommand('auto', { pitch: 0, roll: rollIntent }, targetBank, STEER);
-assert.ok(Math.abs(autoSettled.rollCmd) < 1e-12, 'auto: at target bank rollCmd settles to ~0');
-
-console.log('ok - steerCommand auto: back-pressure proportional to bank, roll identical to pointer');
+console.log('ok - steerCommand auto: pitch decoupled (=== intent), bank-hold capped at autoMaxBank');
 
 /* ===== byte-identity guard: mirrored steerCommand must match js/globals.js verbatim =====
    (project convention: test-mirrored functions stay byte-identical with source) */
@@ -158,7 +147,7 @@ function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
 }
 // STEER tunables table must be present in source with the same keys
 assert.ok(/const STEER\s*=/.test(src), 'globals.js defines STEER');
-for (const k of ['maxBank', 'bankGain', 'autoLevelGain', 'deadzone', 'autoPitchGain']) {
+for (const k of ['maxBank', 'bankGain', 'autoLevelGain', 'deadzone', 'autoMaxBank', 'autoYawGain']) {
   assert.ok(new RegExp(k + '\\s*:').test(src), 'STEER.' + k + ' present in source');
 }
 
