@@ -166,6 +166,8 @@ function drawHUD() {
     drawLockReticle(ctx, lt, player.lockProgress, player.lockedTarget === lt && player.lockProgress >= 1);
   }
 
+  drawThreatReticle(ctx, cx, cy, k, reduce);   // §4b: warn bracket when an enemy is currently aiming at YOU
+
   let near = null, nd = Infinity;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; const d = player.group.position.distanceToSquared(e.group.position); if (d < nd) { nd = d; near = e; } }
   for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) drawEnemy(ctx, enemies[i], cx, cy, enemies[i] === near);
@@ -399,10 +401,62 @@ function drawLockReticle(ctx, tgt, progress, locked) {
   }
   ctx.restore();
 }
-// NOTE (§4b "being-locked-by-enemy" reticle): deferred — the engine has no per-enemy
-// "locking the player" state to drive it (enemies fire missiles directly; the only incoming
-// signal is missiles.some(m=>m.enemy)). Adding it would be a gameplay change, out of this
-// visual-only pass. Wire a --warn shrinking reticle here once that state exists.
+// §4b "being-locked-by-enemy" threat reticle. updateEnemy now sets e.aimingPlayer when a fighter/boss
+// is aligned + in gun range (the same gate the gun-fire uses), so we have the per-enemy state to drive it.
+// Draws a --warn (amber) bracket around screen centre that PULSES to read as "you are being targeted",
+// plus a chevron toward the nearest aiming threat. Distinct colour from the player's own lock reticle
+// (which is danger/red). Pulse is gated by prefersReducedMotion — a steady bracket still shows.
+function drawThreatReticle(ctx, cx, cy, k, reduce) {
+  // worst (nearest) enemy currently aiming at the player; iterate only ALIVE enemies so a dead/despawned
+  // one can never leave a stale warning on screen
+  let worst = null, wd = Infinity, count = 0;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !e.aimingPlayer) continue;
+    count++;
+    const d = player.group.position.distanceToSquared(e.group.position);
+    if (d < wd) { wd = d; worst = e; }
+  }
+  if (!count) return;
+
+  // pulse 0..1 (suppressed to a steady value under reduced-motion — the warning itself still shows)
+  const pulse = reduce ? 0.85 : 0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 260));
+  const r = 26 * k, len = 9 * k;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(' + HUD.warn + ',' + pulse.toFixed(3) + ')';
+  ctx.lineWidth = 2 * k;
+  for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {   // four corner brackets framing the centre
+    const px = cx + c[0] * r, py = cy + c[1] * r;
+    ctx.beginPath();
+    ctx.moveTo(px - c[0] * len, py); ctx.lineTo(px, py); ctx.lineTo(px, py - c[1] * len);
+    ctx.stroke();
+  }
+
+  // chevron toward the nearest threat (screen-space direction to its projected position)
+  if (worst) {
+    const wp = projectPoint(worst.group.position);
+    let dx = wp.x - cx, dy = wp.y - cy;
+    if (wp.behind) { dx = -dx; dy = -dy; }   // off-screen behind: point the way you must turn
+    const m = Math.hypot(dx, dy);
+    if (m > 1) {
+      dx /= m; dy /= m;
+      const cxr = cx + dx * (r + 12 * k), cyr = cy + dy * (r + 12 * k);
+      const ax = -dy, ay = dx, w = 6 * k, h = 9 * k;   // perpendicular for the chevron base
+      ctx.fillStyle = 'rgba(' + HUD.warn + ',' + pulse.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.moveTo(cxr + dx * h, cyr + dy * h);
+      ctx.lineTo(cxr + ax * w, cyr + ay * w);
+      ctx.lineTo(cxr - ax * w, cyr - ay * w);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // label (localized) under the bracket; show the threat count when more than one enemy is aiming
+  ctx.fillStyle = 'rgba(' + HUD.warn + ',0.95)';
+  ctx.font = 'bold ' + (11 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('⚠ ' + t('hud.threat') + (count > 1 ? ' ×' + count : ''), cx, cy + r + 16 * k);
+  ctx.restore();
+}
 
 function drawEnemy(ctx, e, cx, cy, isNear) {
   const pos = e.group.position;

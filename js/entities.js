@@ -1131,7 +1131,7 @@ function createEnemy(type, pos, opts) {
     : rand(0.95, 1.32);                                   // bombers etc. keep the legacy roll
   const fighterFireCd = aggressive ? rand(0.45, 1.1) : rand(0.6, 2);   // aggressive fighters re-engage faster
   const e = {
-    group: mesh, type, hp, maxHp: hp, aggressive,
+    group: mesh, type, hp, maxHp: hp, aggressive, aimingPlayer: false,
     vel: new THREE.Vector3(), speed: type === 'ground' ? 0 : rand(150, 205),
     turnRate: type === 'boss' ? 0.82 : type === 'ground' ? 0 : fighterTurn,
     logicQuat: mesh.quaternion.clone(), bank: 0, baseScale: mesh.scale.x,
@@ -1325,6 +1325,7 @@ function updateEnemy(e, dt) {
   const jammed = player.jammer > 0;
 
   const visible = !player.stealth;
+  e.aimingPlayer = false;   // recomputed below when the enemy is an active gun threat to the player this frame
   if (e.state === 'engage' && visible && !scrambled) {
     const ang = nf.angleTo(toP);
     const df = DIFFS[difficulty].fire, dms = DIFFS[difficulty].missile;
@@ -1333,6 +1334,8 @@ function updateEnemy(e, dt) {
     e.fireCd -= dt;
     const gunCone = e.gunRun > 0 ? 0.34 : 0.24;
     const gunRange = e.type === 'boss' ? 2200 : 1750;
+    // threat reticle (§4b): flag when this fighter/boss is aligned + in gun range — i.e. aiming at the player NOW
+    e.aimingPlayer = enemyIsAimingPlayer({ ang, dist, gunCone, gunRange, engaged: true, canSee: visible });
     if (ang < gunCone && dist < gunRange && e.fireCd <= 0 && e.bulletAmmo > 0) {
       const wm = (wingmen.length && Math.random() < 0.34) ? firstAliveWingman() : null;
       enemyFireGun(e, wm);

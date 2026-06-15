@@ -311,6 +311,14 @@ function motionAxis(angle, offset, maxAngle) {
 // EMA low-pass: pull prev toward next by alpha (0..1). Higher alpha = snappier, less smooth.
 function emaSmooth(prev, next, alpha) { return prev + alpha * (next - prev); }
 
+// "being locked by enemy" threat test: is this enemy a real gun threat to the player THIS frame?
+// Mirrors the gun-fire gate's geometry (within the gun cone AND inside gun range) plus the same
+// gating the AI already respects: it must be engaging and able to see the player. Pure so the rule
+// is testable; updateEnemy calls it with the live ang/dist/cone/range it already computes.
+function enemyIsAimingPlayer(o) {
+  return !!(o && o.engaged && o.canSee && o.ang < o.gunCone && o.dist < o.gunRange);
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -331,5 +339,6 @@ if (typeof module !== 'undefined' && module.exports) {
     STEER, steerCommand,
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
+    enemyIsAimingPlayer,
   };
 }
