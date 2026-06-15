@@ -3,9 +3,9 @@
 Source ideas: `docs/working/superpowers/ideas/2026-06-14-feature-ideas-comparable-games.md`
 Branch: `feat/comparable-games-features` (off master). Execution: subagent-driven-development, per-feature worktree isolation, model tailored to difficulty (haiku=very-simple, sonnet=easy, opus=hard). Two-stage review (spec → quality) per feature. Sequential test-gated merge into the integration branch.
 
-## ⏸ RESUME CHECKPOINT — 2026-06-14 (updated: Wave 1 + Wave 2 MERGED; paused for /compact before Wave 3)
+## ✅ COMPLETE — 2026-06-14 (ALL 15 features merged; pushing + merging to master)
 
-**Where we are:** ✅ **Wave 1 + Wave 2 COMPLETE & MERGED** into `feat/comparable-games-features` @ `44dcf6f`. Full suite green (51 ok lines), all `js/` syntax-clean. **Next: Wave 3** (F10 AWACS, F11 mobile perf, F14 set-pieces, F15 boss rush — F15 needs F4, already merged ✓). User asked to **/compact before starting Wave 3 edits.**
+**Where we are:** ✅ **ALL THREE WAVES COMPLETE & MERGED** into `feat/comparable-games-features` @ `dbb8fca`. Full suite green (57 ok lines), all `js/` syntax-clean, headless smoke (`scripts/shot.mjs`) renders with no console errors. Wave 3 (F10 AWACS, F11 mobile perf, F14 set-pieces, F15 boss rush) done: F10/F11 cherry-picked (their isolation worktrees mis-branched off `d55e3a5`, pre-Wave-1/2 — reconciled additively, feature-self-contained); F14/F15 built in worktrees off the correct integration tip + `--no-ff` merged. F15 meta back-compat preserved (`validMeta` lenient, `loadMeta` heals — no progression wipe; verified). AWACS keys rebound F10/F11/F12 → 1/2/3 (F11/F12 are browser-reserved fullscreen/devtools). **Next: push `feat` + merge to master.**
 
 **Wave 1 merge result:** F2→F1→F3→F9→F4 merged, `npm test` green after each; F1 MIRROR-marker polish @ `31f0442`.
 
@@ -13,9 +13,9 @@ Branch: `feat/comparable-games-features` (off master). Execution: subagent-drive
   - **BLOCKER FIXED (F6+F13 meta back-compat):** F6 had made `validMeta` *require* `m.stars` → legacy saves would `freshMeta()`-wipe all progression. Reconciled with F13's pattern: `validMeta` stays **lenient** (core fields only), `freshMeta` defaults `stars{}`+`callsign`+`emblem`+`patches{}`, and `loadMeta` **heals** any missing field (no wipe). Updated source `js/meta.js` + both mirrors (`tests/meta.test.js`, `tests/stars.test.js`) byte-identical; flipped stars.test.js's old "missing stars rejected/wiped" asserts to "loads as-is, progression preserved, stars healed".
   - ⚠️ One merge commit (F6, `d546dbf`) was initially made with `git add -A`, which embedded the `.claude/worktrees/*` repos — amended out, and `.claude/worktrees/` added to `.gitignore`. Don't use `git add -A` here.
 
-**Wave-2 minor follow-ups (non-blocking, from reviews — apply in Wave 3 session):**
-- F7: `returnToHangar()` (ui.js) doesn't call `refreshDailyEntry()`, so after a daily run the hangar button shows the unlocked label until reload (the *gate* still works — `played` flag blocks a 2nd attempt). One-line fix.
-- F12: `killSfx()` (engine.js) can orphan oscillators if `audio.on` toggles false mid-call. Add an `if(!this.on) return;` guard before the post-`burst()` sawtooth create. Cosmetic/leak-only.
+**Wave-2 minor follow-ups — RESOLVED in Wave 3 session:**
+- F7: ✅ FIXED @ `81c56c6` — `returnToHangar()` now calls `refreshDailyEntry()`.
+- F12: ✅ NO-OP — `killSfx()` already guards at entry (`if (!this.on) return;` engine.js:102), strictly stronger than the requested pre-sawtooth guard; the method is synchronous so `this.on` can't toggle mid-call. No change needed.
 - F5: arrow placement not re-anchored on resize (YAGNI). F7 daily jet pick bypasses the unlock gate (intentional per agent). All headless-untestable; need a browser playtest pass eventually.
 
 Old `worktree-agent-*` (Wave 1) + `w2-*` (Wave 2) worktrees now stale — `git worktree prune` + branch cleanup after Wave 3.
