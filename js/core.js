@@ -319,6 +319,41 @@ function enemyIsAimingPlayer(o) {
   return !!(o && o.engaged && o.canSee && o.ang < o.gunCone && o.dist < o.gunRange);
 }
 
+/* ---------------- fighter archetypes (feature 2026-06: AI threat variety) ----------------
+   Replaces the single ~40% `aggressive` temperament with distinct, READABLE behavioral roles
+   so dogfights stop feeling same-y and the player must recognize + counter different threats.
+   PURE selection here; the imperative steering (lateral jukes, proactive flares, flank offsets)
+   stays in entities.js updateEnemy, gated on `e.archetype`. 'duelist' is byte-for-byte the old
+   behavior (existing `aggressive` sub-roll still applies), so early waves are unchanged in feel. */
+const ARCHETYPES = ['duelist', 'baiter', 'decoy', 'pincer'];
+// Weighted picker. duelist dominates early; baiter/decoy/pincer ramp in with wave so the opener
+// stays a clean dogfight and exotic threats appear as the run heats up. Elites/aces bias exotic
+// (their extra menace IS the gimmick) but never to zero duelists. `rng` is a 0..1 source (testable).
+function pickArchetype(rng, wave, opts) {
+  opts = opts || {};
+  const w = Math.max(0, wave || 0);
+  // exotic share climbs from ~0 at wave 1 toward a cap; elites get a flat bump on top.
+  let exotic = Math.min(0.5, 0.04 * Math.max(0, w - 1));   // wave 1 → 0, ramps ~+4%/wave, capped 50%
+  if (opts.elite) exotic = Math.min(0.7, exotic + 0.25);   // aces/elites lean exotic, still ≤70%
+  const r = rng();
+  if (r >= exotic) return 'duelist';                       // the dominant baseline
+  // split the exotic slice across the three gimmick roles (even thirds within the slice)
+  const k = exotic > 0 ? (r / exotic) : 0;
+  if (k < 1 / 3) return 'baiter';
+  if (k < 2 / 3) return 'decoy';
+  return 'pincer';
+}
+// baiter jink gate: juke hard ONLY while the player is actively locking THIS enemy AND the jink
+// cooldown has elapsed. Pure so the trigger rule is testable; updateEnemy supplies live lock state.
+function shouldJink(o) {
+  return !!(o && o.lockedByPlayer && (o.jinkCd == null || o.jinkCd <= 0));
+}
+// pincer partner sign: the flanking partner orbits the OPPOSITE way so the pair brackets the player
+// from two sides. Defaults a missing/zero self-sign to +1 → partner -1.
+function pincerSign(selfSign) {
+  return (selfSign < 0) ? 1 : -1;
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -340,5 +375,6 @@ if (typeof module !== 'undefined' && module.exports) {
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,
+    ARCHETYPES, pickArchetype, shouldJink, pincerSign,
   };
 }

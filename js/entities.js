@@ -1138,6 +1138,12 @@ function createEnemy(type, pos, opts) {
     fireCd: fighterFireCd, missileCd: rand(3, 7), flareCd: 0, trailT: 0,
     gunRun: 0, gunRunCd: rand(2.5, 5.5),
     orbitSign: Math.random() < 0.5 ? -1 : 1,
+    // fighter behavioral archetype (2026-06): duelist (baseline, keeps the `aggressive` sub-roll)
+    // / baiter (jukes to break player lock) / decoy (proactive flares + standoff) / pincer (pairs up
+    // to flank). Non-fighters always fly the duelist routine. jinkCd/pincerPartner are per-archetype
+    // scratch used by updateEnemy; pickArchetype is the PURE selector in core.js.
+    archetype: type === 'fighter' ? pickArchetype(Math.random, wave, { elite: !!(opts && opts.elite) }) : 'duelist',
+    jinkCd: 0, pincerPartner: null,
     state: 'engage', alive: true, isInCloud: false, hitFlash: 0,
     marker: type === 'drone' ? null : makeMarker(type),
     callsign: type === 'fighter' ? genCallsign() : null,
@@ -1265,11 +1271,30 @@ function updateEnemy(e, dt) {
     else if (e.marker && !e.marker.visible) e.marker.visible = true;
   }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
+  // ----- archetype scratch (2026-06): all behavior below is gated on e.archetype, so duelists run the
+  // unchanged routine. lockedByPlayer = the player is acquiring or fully locked onto THIS enemy. -----
+  e.jinkCd -= dt;
+  const lockedByPlayer = (player.lockTarget === e) || (player.lockedTarget === e);
+  if (e.archetype === 'pincer') {
+    // lazy pairing: createEnemy spawns one enemy per call, so partners link up here. Find another
+    // partnerless live pincer and bracket the player by taking the OPPOSITE orbit sign.
+    if (!e.pincerPartner || !e.pincerPartner.alive) {
+      e.pincerPartner = null;
+      for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (o !== e && o.alive && o.type === 'fighter' && o.archetype === 'pincer' && (!o.pincerPartner || !o.pincerPartner.alive)) { e.pincerPartner = o; o.pincerPartner = e; break; } }
+    }
+    if (e.pincerPartner && e.pincerPartner.alive) e.orbitSign = pincerSign(e.pincerPartner.orbitSign);
+    // a partnerless pincer just flies the duelist routine (no flank) — exactly per spec.
+  } else if (e.archetype === 'decoy' && lockedByPlayer && e.flareCd <= 0 && e.flareAmmo > 0) {
+    // proactive decoy: pop chaff the MOMENT it's locked (not only when a missile is already inbound),
+    // making the player's missiles unreliable vs it. Counter: close to gun range.
+    enemyFlares(e); e.flareCd = 2.3;
+  }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;
   if (incoming) e.state = 'evade';
   else if (dist < NEAR) e.state = 'extend';
   else if (prev === 'extend' && dist < PREF * 1.25) e.state = 'extend';
+  else if (e.archetype === 'decoy' && lockedByPlayer && dist < PREF * 1.6) e.state = 'extend';   // decoy keeps distance while locked
   else e.state = 'engage';
 
   let desired = t2;
@@ -1297,11 +1322,25 @@ function updateEnemy(e, dt) {
   }
   const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
   if (agl < 220) desired.y = Math.max(desired.y, 0.45);
+  // ----- baiter break-turn (2026-06): when the player is locking this enemy, juke HARD sideways on a
+  // short cooldown to break the lock, then settle back. Adds a big lateral offset to the heading +
+  // a transient turn-rate boost so the juke actually snaps. Counter: stay on it / lead the juke. -----
+  let turnMul = 1;
+  if (e.archetype === 'baiter' && shouldJink({ lockedByPlayer, jinkCd: e.jinkCd })) {
+    e.jinkCd = rand(1.4, 2.2);            // re-engage window between jukes (player gets a beat to re-acquire)
+    e.orbitSign = -e.orbitSign;           // flip the break direction each juke (unpredictable)
+    e._jinkT = 0.5;                       // hold the boosted turn for the snap
+  }
+  if (e._jinkT > 0) {
+    e._jinkT -= dt;
+    t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * 1.1); desired.add(t5);   // hard lateral break
+    turnMul = 1.6;
+  }
   desired.normalize();
   if (e.elite && e.sprintTimer > 0) { e.sprintTimer -= dt; e.speed = lerp(e.speed, 340, dt * 2.5); }
 
   dirToQuat(desired, q1);
-  e.logicQuat.rotateTowards(q1, e.turnRate * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun makes them wallow
+  e.logicQuat.rotateTowards(q1, e.turnRate * turnMul * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun makes them wallow; baiter jukes boost turnMul
   const nf = fwdQ(e.logicQuat, t4);
   const cross = t5.copy(fwd).cross(nf);
   const wantBank = clamp(-cross.y * 6, -1, 1);
