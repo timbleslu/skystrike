@@ -199,7 +199,7 @@ function finishTutorial() {
   tutorial.active = false; tutorial.done = true;
   if (el.tut) el.tut.classList.remove('show');
   showBanner(t('tut.done'));
-  setTimeout(() => { if (state === 'playing') showBanner(t('tut.barrelRoll'), 4); }, 2600);
+  // (barrel roll is now its own tutorial step — no parting tip banner; that double-taught it)
   setTimeout(() => { if (state === 'playing' && tutorial.done) returnToHangar(); }, 4000);
 }
 // feed one detected action event into the pure machine; re-render or finish on a step change.
@@ -708,6 +708,7 @@ function buildHangar() {
   g('manualClose').addEventListener('click', closeManual);
   g('manualAbort').addEventListener('click', abortMission);
   const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
+  const ssn = g('ssetNav'); if (ssn) ssn.addEventListener('click', e => { const b = e.target.closest('.ssetbtn'); if (b) { showSettingsSubtab(b.dataset.sset); if (audio.on) audio.ui(); } });
   g('redeploy').addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
   const trr = g('techReroll'); if (trr) trr.addEventListener('click', rerollDraft);   // FRONTIER DRAFT: reroll the 3 offers (once/visit)
@@ -995,7 +996,15 @@ function setOpMode(m) {
 function showManualTab(name) {
   document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
   document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  if (name === 'settings') showSettingsSubtab(settingsSubtab);   // restore the last settings sub-section
   if (audio.on) audio.ui();
+}
+let settingsSubtab = 'display';
+// Settings is split into Display / Controls / Audio / Gameplay sub-sections so the long list is navigable.
+function showSettingsSubtab(name) {
+  settingsSubtab = name;
+  document.querySelectorAll('#manual .sset-group').forEach(gp => gp.classList.toggle('show', gp.dataset.sset === name));
+  document.querySelectorAll('#manual .ssetbtn').forEach(b => b.classList.toggle('on', b.dataset.sset === name));
 }
 function openManual() { g('manual').classList.add('show'); showManualTab('guide'); paused = true; g('touchControls').classList.remove('show'); }
 function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
@@ -1482,6 +1491,10 @@ function applyLang() {
   setTxt('lblHudScale', t('set.hudScale'));
   setTxt('lblSkin', t('set.skin'));
   setTxt('lblPalette', t('set.palette'));
+  setTxt('ssetTab_display', t('set.tab.display'));
+  setTxt('ssetTab_controls', t('set.tab.controls'));
+  setTxt('ssetTab_audio', t('set.tab.audio'));
+  setTxt('ssetTab_game', t('set.tab.game'));
   const shs2 = g('setHudScale');
   if (shs2 && shs2.options.length >= 4) {
     shs2.options[0].textContent = t('set.hudSmall');
