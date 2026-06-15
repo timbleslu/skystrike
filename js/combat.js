@@ -878,7 +878,7 @@ function updatePlayer(dt) {
   if (down('KeyE')) rollIn -= 1;
   if (down('KeyA')) yawIn += 1;
   if (down('KeyD')) yawIn -= 1;
-  if (invertY) pitchIn = -pitchIn;   // single invert-pitch toggle (also applied to joystick + motion in controls.js)
+  if (invertY && controlScheme !== 'auto') pitchIn = -pitchIn;   // invert-pitch (manual schemes only; AUTO is directional — see controls.js)
 
   // add the shaped analog source on top so a plugged-in key always works alongside it, then clamp.
   // flightInput uses point-to-fly signs (+pitch=climb, +roll=bank right); convert to engine signs here.
