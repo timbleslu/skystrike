@@ -304,6 +304,45 @@ const TECH_TREE = [
   { id:'e5', x:6, y:6, req:'e4',  fam:'ew', cost:840, sym:'\u29BF', name:'TRACTOR FIELD',      desc:'Supply pickups are drawn toward you from range.',                  apply:p=>{ p.lootMagnet += 420; } },
   { id:'e6', x:6, y:7, req:'e5',  fam:'ew', cost:1120, sym:'\u2742', name:'GHOST PROTOCOL',    desc:'CAPSTONE \u2014 missiles rarely hold lock, special recharges another 20% faster, and the point-defense laser fires far more aggressively.', apply:p=>{ p.mslEvade = clamp(p.mslEvade + 0.3, 0, 0.95); p.special.max *= 0.8; p.pointDefense += 0.45; } },
 
+  // ===== TACTICAL group (3rd draftable trunk: Recon / Sustain / Warlord) =========
+  { id:'tbus', x:9, y:1, req:'core', fam:'sup', cost:140, sym:'⌘', name:'TACTICAL BUS',
+    desc:'+10% turn rate and +8% score. Opens the Recon, Sustain and Warlord branches.',
+    apply:p=>{ p.turnMul *= 1.10; p.scoreMul *= 1.08; } },
+
+  // ---- RECON (targeting / crit line, left of the TACTICAL trunk) ----
+  { id:'rc1', x:8, y:2, req:'tbus', fam:'sc', cost:160, sym:'◎', name:'SENSOR FUSION',
+    desc:'Missiles lock 22% faster and +8% crit chance.', apply:p=>{ p.lockSpeedMul *= 0.78; p.critChance = Math.min(0.6, p.critChance + 0.08); } },
+  { id:'rc2', x:8, y:3, req:'rc1', fam:'sc', cost:300, sym:'⌖', name:'TARGET MARKING',
+    desc:'+18% damage to any target still at full health — punish the first pass.', apply:p=>{ p.alphaMul = Math.max(p.alphaMul, 1.18); } },
+  { id:'rc3', x:8, y:4, req:['rc2','e3'], fam:'sc', cost:470, sym:'✷', name:'PREDICTIVE TRACKING',
+    desc:'+12% crit chance and crits deal at least ×2.0. (Reached via Recon OR EW.)', apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.12); p.critMul = Math.max(p.critMul, 2.0); } },
+  { id:'rc4', x:8, y:5, req:'rc3', fam:'sc', cost:880, sym:'❂', name:'DEADEYE PROTOCOL',
+    desc:'CAPSTONE — +15% crit chance, +15% cannon damage, and critical hits now DETONATE on impact.', apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.15); p.gunDmgMul *= 1.15; p.critChain = true; } },
+
+  // ---- SUSTAIN (self-repair line, centre, under the TACTICAL trunk) ----
+  { id:'ss1', x:9, y:2, req:'tbus', fam:'def', cost:150, sym:'✚', name:'COMBAT MEDIC',
+    desc:'Repair 5 HP every time you destroy something.', apply:p=>{ p.lifesteal += 5; } },
+  { id:'ss2', x:9, y:3, req:'ss1', fam:'def', cost:290, sym:'⦿', name:'SIPHON CELLS',
+    desc:'Every kill restores 5 shield.', apply:p=>{ p.shieldOnKill += 5; } },
+  { id:'ss3', x:9, y:4, req:['ss2','a3'], fam:'def', cost:470, sym:'✛', name:'REGEN MATRIX',
+    desc:'+18 max shield and +40% shield regen, recharged now. (Reached via Sustain OR Armour.)', apply:p=>{ p.maxShield += 18; p.shield = p.maxShield; p.shieldRegenMul *= 1.4; } },
+  { id:'ss4', x:9, y:5, req:'ss3', fam:'def', cost:900, sym:'❖', name:'PHOENIX CORE',
+    desc:'CAPSTONE — +40 max HP, +8 repair per kill, and overhealing now banks as bonus OVERSHIELD.', apply:p=>{ p.maxHp += 40; p.hp = p.maxHp; p.lifesteal += 8; p.vampShield = Math.max(p.vampShield, 0.5); p.overshieldCap += 40; } },
+
+  // ---- WARLORD (tempo / momentum line, right of the TACTICAL trunk) ----
+  { id:'wl1', x:10, y:2, req:'tbus', fam:'tac', cost:170, sym:'♫', name:'BATTLE RHYTHM',
+    desc:'Every point of COMBO adds +2% damage, up to +30%.', apply:p=>{ p.comboDmg = Math.max(p.comboDmg, 0.02); } },
+  { id:'wl2', x:10, y:3, req:'wl1', fam:'tac', cost:300, sym:'↯', name:'ADRENAL SURGE',
+    desc:'The lower your HP, the harder you hit — up to +30% damage near death.', apply:p=>{ p.berserk = Math.max(p.berserk, 0.3); } },
+  { id:'wl3', x:10, y:4, req:['wl2','p3'], fam:'tac', cost:480, sym:'⧖', name:'KILL MOMENTUM',
+    desc:'Each kill stokes a stacking FRENZY of fire-rate, and the world slows for a beat. (Reached via Warlord OR Propulsion.)', apply:p=>{ p.frenzyOnKill = Math.max(p.frenzyOnKill || 0, 1.2); p.frenzyMax = Math.max(p.frenzyMax || 0, 5); p.slowOnKill = Math.max(p.slowOnKill, 0.5); } },
+  { id:'wl4', x:10, y:5, req:'wl3', fam:'tac', cost:900, sym:'✪', name:'CONQUEROR',
+    desc:'CAPSTONE — +25% score, +10% all weapon damage, and instantly destroy any non-boss dropped below 12% health.', apply:p=>{ p.scoreMul *= 1.25; p.gunDmgMul *= 1.10; p.missileDmgMul *= 1.10; p.execThresh = Math.max(p.execThresh, 0.12); } },
+
+  // ---- WAR ROOM (TACTICAL convergence — reachable from either new capstone) ----
+  { id:'warroom', x:9, y:6, req:['ss4','wl4'], fam:'core', cost:1300, sym:'✧', name:'WAR ROOM',
+    desc:'FUSION — total battlefield command: +12% all weapon damage and special ability recharges 20% faster. (Sustain OR Warlord capstone.)', apply:p=>{ p.gunDmgMul *= 1.12; p.missileDmgMul *= 1.12; p.special.max *= 0.8; } },
+
   // ===== COMMAND group ===========================================================
   // ---- ECONOMY / ACE (score & research line, left of COMMAND) ----
   { id:'s1', x:8, y:2, req:'cmd', fam:'sc', tab:'armory', cost:150, sym:'\u2605', name:'ACE BONUS',          desc:'+25% score from everything.',                                      apply:p=>{ p.scoreMul *= 1.25; } },
