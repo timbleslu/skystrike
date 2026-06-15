@@ -744,6 +744,7 @@ addEventListener('keydown', e => {
     case 'KeyX': deployFlares(); break;
     case 'KeyF': cycleLock(); break;
     case 'KeyR': useSpecial(); break;
+    case 'KeyB': useSpecial(2); break;     // feature #3: equipped SLOT-2 special
     case 'KeyC': cycleCamera(); break;
     case 'KeyT': wingCommand('focus'); break;
     case 'KeyY': wingCommand('regroup'); break;

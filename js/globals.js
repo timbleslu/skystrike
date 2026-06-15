@@ -145,6 +145,7 @@ let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;
+let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
 
 let player = null;
 let enemies = [], bullets = [], missiles = [], flares = [], loots = [], particles = [], clouds = [], decoys = [];
@@ -374,7 +375,7 @@ function shakeCam(amt) { camShake = Math.max(camShake, amt); }
 
 const keys = {};
 let mouseRight = false;
-const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
+const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyB','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
 const HUDFONT = "'Share Tech Mono', monospace";
 

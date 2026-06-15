@@ -748,11 +748,23 @@ function interceptPoint(shooter, tp, tv, bs) {
 
 /* ---------------- special abilities ---------------- */
 function hasSpecial(jet) { return !!(jet && jet.ability); }
-function useSpecial() {
-  if (!hasSpecial(player.jet)) { audio.ui(); return; }
-  if (player.special.cd > 0) { audio.ui(); return; }
-  player.special.cd = player.special.max; audio.power();
-  const id = player.jet.id;
+
+// useSpecial(slot): slot 1 (default) = the NATIVE jet special (KeyR / tb-spc — behaviour unchanged);
+// slot 2 = the equipped secondary special (KeyB / tb-spc2). Each slot owns its own cooldown state
+// (player.special / player.special2); both fire the SAME id-keyed effect via applySpecialEffect, so an
+// effect is fully portable — it works no matter which airframe is currently flown.
+function useSpecial(slot) {
+  const st = (slot === 2) ? player.special2 : player.special;
+  if (!st || !st.id) { audio.ui(); return; }          // empty slot (FT-1 native, or nothing equipped) is inert
+  if (st.cd > 0) { audio.ui(); return; }
+  st.cd = st.max; audio.power();
+  applySpecialEffect(st.id);
+}
+
+// applySpecialEffect(id): fires a special's EFFECT keyed purely on the ability/jet id, INDEPENDENT of
+// player.jet — this is what lets slot 2 run another jet's ability. (Was the inline switch body of the
+// old useSpecial; the per-slot cooldown gate moved up into useSpecial.)
+function applySpecialEffect(id) {
   const pp = player.group.position;
 
   if (id === 'F-22') {
@@ -870,6 +882,7 @@ function updatePlayer(dt) {
   if (player.vectorSurge > 0) player.vectorSurge -= dt;
   if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);   // KILL FRENZY bleeds off when you stop scoring
   if (player.special.cd > 0) player.special.cd -= dt;
+  if (player.special2 && player.special2.cd > 0) player.special2.cd -= dt;   // SLOT 2 recharge (feature #3)
   if (player.damageFlash > 0) player.damageFlash -= dt;
   if (player.lockFlash > 0) player.lockFlash -= dt;   // VISUAL-ONLY lock-snap overshoot timer (hud.js drawLockReticle)
   if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }

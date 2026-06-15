@@ -125,7 +125,7 @@ function cacheEl() {
   el = {
     hp: g('hpfill'), thr: g('thrfill'), shd: g('shfill'), spd: g('spd'), alt: g('alt'),
     score: g('score'), wave: g('wave'), combo: g('combo'), tp: g('tp'),
-    flares: g('flares'), missiles: g('missiles'), bullets: g('bullets'), special: g('special'),
+    flares: g('flares'), missiles: g('missiles'), bullets: g('bullets'), special: g('special'), special2: g('special2'),
     hpbar: g('hpbar'), banner: g('banner'), sidebar: g('wingSidebar'),
     wPull: g('w_pull'), wMissile: g('w_missile'), wHighG: g('w_highg'), wStealth: g('w_stealth'), wLock: g('w_lock'), wDrone: g('w_drone'),
     vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
@@ -288,6 +288,21 @@ function updateDom(dt) {
   if (!hasSpecial(player.jet)) { el.special.textContent = t('hud.noSpecial'); el.special.classList.remove('ready'); }
   else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + t('hud.ready'); el.special.classList.add('ready'); }
   else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + t('hud.sec'); el.special.classList.remove('ready'); }
+  // SLOT 2 chip (feature #3): hidden when nothing equipped, else mirrors the slot-1 name + READY/countdown.
+  // The mobile SPC2 button mirrors the chip's visibility (only shown when something is equipped).
+  if (el.special2) {
+    const s2 = player.special2;
+    const equipped = !!(s2 && s2.id);
+    if (!equipped) { el.special2.style.display = 'none'; }
+    else {
+      el.special2.style.display = '';
+      const j2 = JETS.find(j => j.id === s2.id);
+      const nm = j2 ? jetText(j2, 'ability') : s2.id;
+      if (s2.cd <= 0) { el.special2.textContent = nm + ' \u25B8 ' + t('hud.ready'); el.special2.classList.add('ready'); }
+      else { el.special2.textContent = nm + ' \u25B8 ' + Math.ceil(s2.cd) + t('hud.sec'); el.special2.classList.remove('ready'); }
+    }
+    const tb2 = g('tb-spc2'); if (tb2) tb2.style.display = (equipped && isTouchEnabled) ? '' : 'none';
+  }
   updateWingmanSidebar();
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
@@ -730,6 +745,34 @@ function initOnboarding() {
   g('langSelect').classList.add('show');
 }
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
+
+/* ---------------- SLOT-2 special equip (feature #3) ----------------
+   The set of jet ids the player has UNLOCKED, used as the source pool for slot-2 equippable
+   specials (mirrors the hangar's own jetUnlocked() gate so the picker only offers owned airframes). */
+function unlockedJetIds() {
+  const out = [];
+  for (let k = 0; k < JETS.length; k++) if (jetUnlocked(JETS[k].id)) out.push(JETS[k].id);
+  return out;
+}
+// equipSpecial2(p, id, currentJetId): fill p.special2 from a chosen equip id, validated against the
+// equippable pool (unlocked, real ability, not the current jet). Stale/invalid/null → empty inert slot.
+// Cooldown starts ready (cd=0); max is the raw SPECIAL_CD (NO OVERCLOCK/GHOST mods — those are slot-1 only).
+function equipSpecial2(p, id, currentJetId) {
+  if (!p) return;
+  const ok = isEquippableSpecial(id, unlockedJetIds(), JETS, currentJetId);
+  p.special2 = ok
+    ? { id: id, cd: 0, max: specialCooldownMax(id, SPECIAL_CD, 15) }
+    : { id: null, cd: 0, max: 15 };
+}
+// setSpecial2(id): hangar-side setter — persists the equip (via saveSettings, the selectedJet seam)
+// and re-renders the card so the chosen ability shows. `null`/'' clears the slot.
+function setSpecial2(id) {
+  special2Id = (id && id !== '') ? id : null;
+  saveSettings();
+  renderJetCard(selectedJet);
+  if (audio.on) audio.ui();
+}
+
 function renderJetCard(i) {
   const j = JETS[i];
   g('jetCard').innerHTML =
@@ -756,9 +799,37 @@ function renderJetCard(i) {
       '</div>' +
       '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
       '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
+      '<div id="special2Row" class="special2row"></div>' +
       '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
+  renderSpecial2Picker(i);
   renderJetMeta(i);
+}
+// SLOT-2 equip picker (feature #3): a compact <select> offering every UNLOCKED jet's ability except
+// this jet's own (that is slot 1). Persists via setSpecial2 → saveSettings (the selectedJet seam).
+function renderSpecial2Picker(i) {
+  const wrap = g('special2Row'); if (!wrap) return;
+  const pool = equippableSpecials(unlockedJetIds(), JETS, JETS[i].id);
+  if (!pool.length) {                                   // nothing to equip yet — surface why, no control
+    wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
+                     '<div class="cabilitydesc">' + t('card.special2NoneAvail') + '</div>';
+    return;
+  }
+  // drop a stale saved equip from the rendered selection (e.g. now-current jet / locked) without persisting
+  const curId = isEquippableSpecial(special2Id, unlockedJetIds(), JETS, JETS[i].id) ? special2Id : '';
+  let opts = '<option value=""' + (curId === '' ? ' selected' : '') + '>' + t('card.special2None') + '</option>';
+  for (let k = 0; k < pool.length; k++) {
+    const p = pool[k], jk = JETS.find(j => j.id === p.id);
+    const nm = jk ? jetText(jk, 'ability') : p.name;
+    opts += '<option value="' + p.id + '"' + (curId === p.id ? ' selected' : '') + '>' + nm + '</option>';
+  }
+  let html = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
+             '<select id="special2Sel" class="special2sel">' + opts + '</select>';
+  const chosen = curId ? JETS.find(j => j.id === curId) : null;
+  html += '<div class="cabilitydesc">' + (chosen ? jetText(chosen, 'abilityDesc') : t('card.special2Hint')) + '</div>';
+  wrap.innerHTML = html;
+  const sel = g('special2Sel');
+  if (sel) sel.addEventListener('change', e => setSpecial2(e.target.value));
 }
 // §5c: LAUNCH carries the current loadout as a subtitle line (difficulty · env · mode)
 function refreshLaunchSub() {
@@ -920,6 +991,7 @@ function startGame(i, daily, rush) {
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
   if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
+  equipSpecial2(player, special2Id, JETS[i].id);   // feature #3: load the equipped SLOT-2 special (or leave empty/inert if none/stale); slot 1 untouched
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
@@ -1169,6 +1241,7 @@ function loadSettings() {
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
     if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
+    if (typeof s.special2Id === 'string' || s.special2Id === null) special2Id = s.special2Id;   // feature #3: equipped SLOT-2 special (validated against the unlocked pool at equip/launch time)
   } catch (e) {}
 }
 // retranslate all static DOM text + re-render dynamic panels for the current LANG
@@ -1398,7 +1471,7 @@ function applyHudScale() {
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
+      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
     }));

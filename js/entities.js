@@ -1040,7 +1040,9 @@ function createPlayer(idx) {
     execBlast: 0,                                     // HEADSMAN: executions detonate for this damage
     cheatDeath: false, _cheatUsed: false,             // TACTICS capstone: survive one lethal blow per wave
     tp: 0, tech: ['core'], techRepeat: {}, rpMul: 1,   // research points + purchased nodes (root owned free)
-    special: { cd: 0, max: SPECIAL_CD[j.id] || 15 },
+    special: { id: j.ability ? j.id : null, cd: 0, max: SPECIAL_CD[j.id] || 15 },   // SLOT 1 = native jet special (id null on FT-1 → inert)
+    special2: { id: null, cd: 0, max: 15 },            // SLOT 2 = equipped secondary special; startGame fills id+max from the saved equip
+
     damageFlash: 0, shake: 0, hurtDir: null, hurtT: 0,
     _gpwsT: 0, _missT: 0, _lockT: 0, _trailT: 0, _look: null, _lbPrev: false, _wakeT: 0,
   };

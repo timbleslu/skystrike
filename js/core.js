@@ -354,6 +354,57 @@ function pincerSign(selfSign) {
   return (selfSign < 0) ? 1 : -1;
 }
 
+/* ---------------- 2nd SPECIAL slot (feature #3) ----------------
+   Pure helpers for the equippable secondary special. The EFFECT (THREE/spawn/DOM) stays in
+   combat.js `applySpecialEffect`; only the data logic — which abilities can be equipped, and the
+   cooldown-ready gate — lives here so it is require-safe + testable. */
+
+// equippableSpecials(unlockedJetIds, jetsRoster, currentJetId) → [{id, name}]
+// The pool of abilities the player may equip into SLOT 2: every jet they have UNLOCKED that
+// carries a real ability (FT-1's null ability is excluded), MINUS the currently-flown jet (its own
+// ability is already slot 1, so re-equipping it would be a redundant duplicate). Order follows the
+// roster. `unlockedJetIds` may be an array OR a {id:true} map; both are accepted.
+function equippableSpecials(unlockedJetIds, jetsRoster, currentJetId) {
+  const has = Array.isArray(unlockedJetIds)
+    ? (id => unlockedJetIds.indexOf(id) !== -1)
+    : (id => !!(unlockedJetIds && unlockedJetIds[id]));
+  const out = [];
+  const roster = jetsRoster || [];
+  for (let i = 0; i < roster.length; i++) {
+    const j = roster[i];
+    if (!j || !j.ability) continue;          // skip the FT-1 null ability (and any future ability-less jet)
+    if (j.id === currentJetId) continue;      // skip the native jet — that ability is slot 1
+    if (!has(j.id)) continue;                 // skip jets the player has not unlocked
+    out.push({ id: j.id, name: j.ability });
+  }
+  return out;
+}
+
+// isEquippableSpecial(id, unlockedJetIds, jetsRoster, currentJetId) → bool
+// True iff `id` is a currently-valid slot-2 choice (in the equippable pool). Used to reject a stale
+// saved equip (e.g. a jet that is no longer unlocked, or the now-current jet) and clear the slot.
+function isEquippableSpecial(id, unlockedJetIds, jetsRoster, currentJetId) {
+  if (!id) return false;
+  const pool = equippableSpecials(unlockedJetIds, jetsRoster, currentJetId);
+  for (let i = 0; i < pool.length; i++) if (pool[i].id === id) return true;
+  return false;
+}
+
+// specialCooldownMax(id, cdTable, fallback) → seconds. Raw per-id recharge time for a slot, read
+// from the SPECIAL_CD table. No tech mods here (OVERCLOCK/GHOST apply to slot 1 only, in globals).
+function specialCooldownMax(id, cdTable, fallback) {
+  const fb = (typeof fallback === 'number') ? fallback : 15;
+  if (!id || !cdTable) return fb;
+  const v = cdTable[id];
+  return (typeof v === 'number' && v > 0) ? v : fb;
+}
+
+// specialSlotReady(slot) → bool. A slot can fire iff it holds an ability (id truthy) and its
+// cooldown has fully recharged (cd <= 0). An empty/unequipped slot is never ready (inert).
+function specialSlotReady(slot) {
+  return !!(slot && slot.id && slot.cd <= 0);
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -376,5 +427,6 @@ if (typeof module !== 'undefined' && module.exports) {
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,
     ARCHETYPES, pickArchetype, shouldJink, pincerSign,
+    equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
   };
 }
