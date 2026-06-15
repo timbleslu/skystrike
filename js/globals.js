@@ -555,7 +555,7 @@ let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude
 //   'auto'    (default) = bank-hold like pointer + sin(bank)*autoPitchGain back-pressure -> banking auto-turns.
 //   'pointer'           = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
-let controlScheme = 'rate';
+let controlScheme = 'auto';
 let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
 // point-to-steer tunables (only combat.js reads these). maxBank ≈ 80°. Verified stable (negative-feedback bank-hold).
 const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoPitchGain: 0.6 };
