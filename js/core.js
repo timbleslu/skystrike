@@ -510,6 +510,68 @@ function draftOffer(opts) {
   return { offer, pity: pityOut };
 }
 
+/* ---------------- non-combat mission cores (feature 2026-06: RECON + STEALTH) ----------------
+   A shared waypoint primitive backs two NON-kill objectives so missions stop being all "kill things":
+   RECON = fly through N waypoints; STEALTH = reach an extraction waypoint without being detected.
+   PURE here (hit-test + detection math over plain {x,y,z} data); the POSITIONING of waypoints and the
+   per-frame "am I firing / being aimed at" reads stay impure in missions.js. Mirrored test:
+   tests/recon-stealth.test.js (imports the REAL impl below — no byte copy). */
+
+// squared planar+vertical distance between two plain {x,y,z} points (no THREE — keep require-safe)
+function _wpDist2(a, b) {
+  const dx = a.x - b.x, dy = (a.y || 0) - (b.y || 0), dz = a.z - b.z;
+  return dx * dx + dy * dy + dz * dz;
+}
+
+// Flip a waypoint's hit flag once the player passes within hitRadius; idempotent (a hit waypoint
+// STAYS hit). Returns the same array (mutated in place) plus the running hitCount and the index of
+// the next unhit waypoint (-1 when all are hit). playerPos/waypoints are plain {x,y,z[,hit]}.
+function reconProgress(waypoints, playerPos, hitRadius) {
+  const r2 = hitRadius * hitRadius;
+  let hitCount = 0, nextIndex = -1;
+  for (let i = 0; i < waypoints.length; i++) {
+    const w = waypoints[i];
+    if (!w.hit && _wpDist2(w, playerPos) <= r2) w.hit = true;
+    if (w.hit) hitCount++;
+    else if (nextIndex === -1) nextIndex = i;
+  }
+  return { waypoints: waypoints, hitCount: hitCount, nextIndex: nextIndex };
+}
+
+// First still-unhit waypoint (for the HUD pointer), or null when the path is complete.
+function nextWaypoint(waypoints) {
+  for (let i = 0; i < waypoints.length; i++) if (!waypoints[i].hit) return waypoints[i];
+  return null;
+}
+
+// Detection-meter delta for the stealth mission. CONTRACT: returns the RAW signed delta for this
+// frame — the CALLER clamps the running meter to 0..1. The meter RISES while the player is firing
+// weapons OR while any enemy is aiming at the player (spotted); otherwise it DECAYS slowly.
+function detectionDelta(o) {
+  const dt = o.dt || 0;
+  const rise = (o.riseRate == null ? 1 : o.riseRate);
+  const decay = (o.decayRate == null ? 1 : o.decayRate);
+  if (o.firing || o.beingAimed) return rise * dt;
+  return -decay * dt;
+}
+
+// Pure win/fail predicates so the resolve logic is testable without THREE/DOM.
+// RECON wins when every waypoint is hit. STEALTH wins when the extraction waypoint is reached with
+// the detection meter still under the alarm threshold; it FAILS the instant the meter hits 1 (alarm).
+function reconWon(m) {
+  const w = (m.params && m.params.waypoints) || [];
+  if (!w.length) return false;
+  for (let i = 0; i < w.length; i++) if (!w[i].hit) return false;
+  return true;
+}
+function stealthFailed(m) {
+  return ((m.params && m.params.detect) || 0) >= 1;
+}
+function stealthWon(m) {
+  if (stealthFailed(m)) return false;
+  return reconWon(m);   // reuse: the extraction goal is a (1-waypoint) recon path
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -531,6 +593,7 @@ if (typeof module !== 'undefined' && module.exports) {
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,
+    reconProgress, nextWaypoint, detectionDelta, reconWon, stealthWon, stealthFailed,
     ARCHETYPES, pickArchetype, shouldJink, pincerSign,
     equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
     DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,

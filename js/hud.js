@@ -145,13 +145,17 @@ function drawHUD() {
 
   // active sector-mission objective readout (top-centre), tinted by urgency / outcome
   if (typeof mission !== 'undefined' && mission && mission.status === 'active') {
-    const timed = (mission.type === 'intercept' && mission.timer <= 10);
+    const detHot = (mission.type === 'stealth' && (mission.params.detect || 0) >= 0.6);
+    const timed = (mission.type === 'intercept' && mission.timer <= 10) || detHot;
     ctx.fillStyle = timed ? 'rgba(' + HUD.warn + ',0.95)' : 'rgba(' + HUD.primary + ',0.95)';
     ctx.font = 'bold ' + (15 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     let line = objectiveText(mission);
     if (mission.type === 'intercept') line += '   ⏱ ' + fmtClock(Math.max(0, mission.timer));
     ctx.fillText(line, cx, 14);
     ctx.textBaseline = 'middle';
+    // recon/stealth: point the objective marker at the next waypoint + (stealth) draw the detection bar
+    if (mission.type === 'recon' || mission.type === 'stealth') drawMissionWaypoint(ctx, cx, cy, k, reduce);
+    if (mission.type === 'stealth') drawDetectionBar(ctx, cx, k);
   }
 
   drawStarObjectives(ctx, cx);   // small secondary-objective (star) checklist, top-centre
@@ -311,6 +315,52 @@ function drawWingman(ctx, w, cx, cy) {
     ctx.restore();
   }
   ctx.lineWidth = 2;
+}
+
+// recon/stealth objective pointer: a diamond on the next waypoint when on-screen, or an edge
+// arrowhead aiming you toward it when off-screen. Reuses projectPoint + the pure nextWaypoint
+// (core.js) — the SAME world-projected-marker idiom as the escort/objective markers (no new mesh).
+function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
+  const wp = nextWaypoint(mission.params.waypoints || []);
+  if (!wp) return;
+  const p = projectPoint(wp);
+  const col = mission.type === 'stealth' ? HUD.primaryBright : HUD.velvec;   // distinct from danger/lock red
+  const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
+  // gentle pulse (steady under reduced-motion — the marker itself always shows)
+  const pulse = reduce ? 0.85 : 0.55 + 0.35 * Math.abs(Math.sin(performance.now() / 320));
+  ctx.save();
+  ctx.strokeStyle = 'rgba(' + col + ',' + pulse.toFixed(3) + ')'; ctx.lineWidth = 2 * k;
+  if (onScreen) {
+    const s = 13 * k, x = p.x, y = p.y;
+    ctx.beginPath();   // hollow diamond on the waypoint
+    ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(' + col + ',0.6)';
+    ctx.beginPath(); ctx.arc(x, y, 2.4 * k, 0, TWO_PI); ctx.fill();
+  } else {
+    const ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
+    const ex = cx + Math.cos(ang) * (W / 2 - 48), ey = cy + Math.sin(ang) * (H / 2 - 48);
+    ctx.translate(ex, ey); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(13 * k, 0); ctx.lineTo(-9 * k, -7 * k); ctx.lineTo(-9 * k, 7 * k); ctx.closePath(); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.lineWidth = 2;
+}
+
+// stealth detection bar (top-centre, just under the objective line). The fill always renders;
+// only the SPOTTED flash is motion-gated. Colour ramps ok→reward→warn→danger as the alarm climbs.
+function drawDetectionBar(ctx, cx, k) {
+  const det = clamp(mission.params.detect || 0, 0, 1);
+  const bw = 150 * k, bh = 6 * k, bx = cx - bw / 2, by = 36 * k;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, bh);
+  const col = det < 0.4 ? HUD.ok : det < 0.7 ? HUD.reward : det < 0.9 ? HUD.warn : HUD.danger;
+  // near-alarm flash is gated by reduced-motion; the solid fill below always shows the level
+  const reduce = (typeof prefersReducedMotion === 'function') && prefersReducedMotion();
+  const a = (det >= 0.9 && !reduce) ? (0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 120))) : 0.95;
+  ctx.fillStyle = 'rgba(' + col + ',' + a.toFixed(3) + ')'; ctx.fillRect(bx, by, bw * det, bh);
+  ctx.strokeStyle = 'rgba(' + HUD.dim + ',0.7)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, bw, bh);
+  ctx.restore();
 }
 
 function drawHorizon(ctx, cx, cy) {

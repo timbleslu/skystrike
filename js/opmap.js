@@ -13,8 +13,8 @@ function genOpMap(groundOn) {
   return [
     ['FURBALL', 'INTERCEPT'],
     [strike, 'ESCORT'],
-    ['DEFEND', 'FURBALL'],
-    ['DEPOT', 'INTERCEPT'],
+    ['DEFEND', 'RECON'],     // non-combat photo-pass alt (FURBALL still reachable in stage 1)
+    ['DEPOT', 'STEALTH'],    // no-kill infiltration alt (INTERCEPT still reachable in stage 1)
     ['ESCORT', strike],
     ['ELITE', 'DEFEND'],
     ['FINAL'],
@@ -28,6 +28,8 @@ function sectorMission(type) {
   if (type === 'STRIKE') return 'strike';
   if (type === 'ESCORT') return 'escort';
   if (type === 'DEFEND') return 'defend';
+  if (type === 'RECON') return 'recon';
+  if (type === 'STEALTH') return 'stealth';
   if (type === 'ELITE') return 'none';
   if (type === 'DEPOT') return 'none';
   return 'boss';   // FINAL
@@ -41,6 +43,8 @@ function sectorPlan(type, wave) {
   if (type === 'STRIKE')    return { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'strike', weather: 'storm', tod: 0 };
   if (type === 'ESCORT')    return { fighters: 3, aces: wave >= 8 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'escort', weather: 'clear', tod: 0 };
   if (type === 'DEFEND')    return { fighters: 3, aces: 0, bombers: wave >= 8 ? 2 : 1, ground: false, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'defend', weather: 'storm', tod: 1 };
+  if (type === 'RECON')     return { fighters: 2, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: false, mission: 'recon', weather: 'clear', tod: 0 };   // non-combat photo-pass: light contact, kills not required
+  if (type === 'STEALTH')   return { fighters: 2, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: false, mission: 'stealth', weather: 'fog', tod: 2 };   // no-kill infiltration: patrols that can SPOT you raise the alarm
   if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, hostileAce: true,  mission: 'none', weather: 'fog', tod: 2 };
   if (type === 'DEPOT')     return { fighters: 0, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: true, hostileAce: false, mission: 'none', weather: 'clear', tod: 1 };
   return { fighters: 4, aces: 2, bombers: 0, ground: false, boss: true, rival: false, depot: false, hostileAce: false, mission: 'boss', weather: 'storm', tod: 2 };   // FINAL

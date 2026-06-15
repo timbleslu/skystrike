@@ -6,16 +6,20 @@
    (banners, sector resolve) lives below the pure core. */
 
 // ---- BEGIN MIRROR (js/missions.js) ----
-const MISSION_TYPES = ['sweep', 'intercept', 'escort', 'defend', 'strike'];
+// recon + stealth (2026-06) are the first NON-combat verbs: fly waypoints / sneak to extraction.
+const MISSION_TYPES = ['sweep', 'intercept', 'escort', 'defend', 'strike', 'recon', 'stealth'];
 
 // op-map sector type -> mission type. Pure + deterministic.
 // ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
+// RECON/STEALTH are non-combat objective sectors (no kills required).
 function missionForSector(type) {
   if (type === 'FURBALL') return 'sweep';
   if (type === 'INTERCEPT') return 'intercept';
   if (type === 'STRIKE') return 'strike';
   if (type === 'ESCORT') return 'escort';
   if (type === 'DEFEND') return 'defend';
+  if (type === 'RECON') return 'recon';
+  if (type === 'STEALTH') return 'stealth';
   if (type === 'ELITE') return 'none';
   if (type === 'DEPOT') return 'none';
   if (type === 'FINAL') return 'boss';
@@ -87,6 +91,37 @@ const MISSIONS = {
       return 'active';
     },
   },
+  // RECON (non-combat): fly through N waypoints. `waypoints` is filled with positions by the
+  // impure spawner in the runtime glue; updateMission hit-tests them via the pure reconProgress.
+  // target = N (count); progress = waypoints hit. Generous soft timer so it can't stall a sector.
+  recon: {
+    setup: function (wave, rng) {
+      const n = wave >= 8 ? 5 : 4;
+      return { target: n, timer: 120, params: { waypoints: [], count: n, hitRadius: 320 } };
+    },
+    onKill: function (e, m) {},
+    onTick: function (dt, m) { m.timer -= dt; },
+    winFail: function (m) {
+      if (reconWon(m)) return 'won';
+      if (m.timer <= 0) return 'failed';
+      return 'active';
+    },
+  },
+  // STEALTH (no-kill): reach the extraction waypoint without the detection meter (params.detect,
+  // 0..1) hitting 1. detect rises while firing weapons OR while any enemy is aiming at you, decays
+  // otherwise (ticked impurely in updateMission via the pure detectionDelta). Pure win/fail below.
+  stealth: {
+    setup: function (wave, rng) {
+      return { target: 1, timer: 0, params: { waypoints: [], count: 1, hitRadius: 360, detect: 0, riseRate: 0.45, decayRate: 0.18 } };
+    },
+    onKill: function (e, m) {},
+    onTick: function (dt, m) {},
+    winFail: function (m) {
+      if (stealthFailed(m)) return 'failed';
+      if (stealthWon(m)) return 'won';
+      return 'active';
+    },
+  },
 };
 
 function startMission(type, wave, rng) {
@@ -130,6 +165,12 @@ function objectiveText(m) {
   if (m.type === 'defend')    return t('mission.defend') + ' ' + fmtClock(Math.max(0, m.timer));
   if (m.type === 'strike')    return t('mission.strike');
   if (m.type === 'sweep')     return t('mission.sweep') + ' ' + m.progress + '/' + m.target;
+  if (m.type === 'recon')     return t('mission.recon') + ' ' + m.progress + '/' + m.target;
+  if (m.type === 'stealth') {
+    const det = Math.round(((m.params.detect || 0)) * 100);
+    const tag = det >= 60 ? t('mission.stealth.spotted') : t('mission.stealth.undetected');
+    return t('mission.stealth') + ' — ' + tag + ' ' + det + '%';
+  }
   return '';
 }
 function fmtClock(sec) { sec = Math.ceil(sec); return Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2); }
@@ -148,6 +189,8 @@ function startSectorMission(plan, wave) {
   mission = startMission(type, wave, Math.random);
   if (type === 'escort') spawnEscortConvoy(mission, wave);
   if (type === 'defend') spawnDefendAsset(mission, wave);
+  if (type === 'recon') spawnReconWaypoints(mission, wave);
+  if (type === 'stealth') spawnStealthExtraction(mission, wave);
   // F14: a set-piece leads with its own authored intro line instead of the generic objective header
   if (setpieceActive && SETPIECES[setpieceActive]) showBanner(t(SETPIECES[setpieceActive].intro));
   else showBanner(tf('banner.missionStart', { name: missionName(type) }));
@@ -185,6 +228,29 @@ function spawnDefendAsset(m, wave) {
   });
 }
 
+// recon: lay N waypoints in a ring around the player's spawn at flight altitude. POSITIONING is
+// impure (reads spawn pos); the hit-test is the PURE reconProgress (core.js), ticked in updateMission.
+// Waypoints are plain {x,y,z,hit} so the pure primitive stays THREE-free (no Vector3).
+function spawnReconWaypoints(m, wave) {
+  const p = player.group.position;
+  const start = rand(0, TWO_PI);
+  const wps = [];
+  for (let k = 0; k < m.params.count; k++) {
+    const ang = start + (k / m.params.count) * TWO_PI + rand(-0.25, 0.25);
+    const r = rand(1800, 3600);
+    wps.push({ x: p.x + Math.cos(ang) * r, y: clamp(p.y + rand(-300, 500), 400, 2400), z: p.z + Math.sin(ang) * r, hit: false });
+  }
+  m.params.waypoints = wps;
+}
+
+// stealth: one extraction waypoint placed far out — the player must reach it undetected. Same plain
+// {x,y,z,hit} shape feeding the pure waypoint primitive (1-waypoint path = the extraction goal).
+function spawnStealthExtraction(m, wave) {
+  const p = player.group.position;
+  const ang = rand(0, TWO_PI), r = rand(4200, 5200);
+  m.params.waypoints = [{ x: p.x + Math.cos(ang) * r, y: clamp(p.y + rand(-200, 400), 400, 2400), z: p.z + Math.sin(ang) * r, hit: false }];
+}
+
 /* ---------------- per-frame update + resolution ----------------
    Ticked from animate() while playing. Recomputes live state for escort/defend, ticks the
    pure machine, then resolves win/fail once (banner + sector flow). */
@@ -214,6 +280,20 @@ function updateMission(dt) {
       if (pressure > 0) { a.hp -= pressure * 6 * dt; if (a.hp <= 0) { a.hp = 0; a.alive = false; killEnemy(a, false); } }
       mission.params.assetHp = a.hp;
     } else if (a) { mission.params.assetHp = 0; }
+  } else if (mission.type === 'recon') {
+    // pure hit-test against the player position; progress mirrors the waypoint hit-count
+    const r = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
+    mission.progress = r.hitCount;
+  } else if (mission.type === 'stealth') {
+    // detection: rises while firing weapons OR while any enemy is aiming at you, decays otherwise.
+    // player.firingT (combat.js) > 0 means a gun/missile left the rail in the last few frames.
+    let beingAimed = false;
+    for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.aimingPlayer) { beingAimed = true; break; } }
+    const firing = (player.firingT || 0) > 0;
+    const d = detectionDelta({ firing: firing, beingAimed: beingAimed, dt: dt, riseRate: mission.params.riseRate, decayRate: mission.params.decayRate });
+    mission.params.detect = clamp((mission.params.detect || 0) + d, 0, 1);
+    // reach the extraction waypoint (pure hit-test); win/fail resolved by the pure stealth predicates
+    reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
   }
   tickMission(mission, dt);
   if (mission.status === 'won') onMissionResolved(true);

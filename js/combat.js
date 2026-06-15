@@ -36,6 +36,7 @@ function fireGun() {
   const mz = player.group.userData.muzzle;
   if (mz) { mz.visible = true; mz.scale.setScalar(rand(11, 18)); mz.material.rotation = rand(0, TWO_PI); player.muzzleT = 0.045; }
   player.shake = Math.max(player.shake, 0.12);
+  player.firingT = 0.12;   // "weapon fired this frame" tell for the stealth detection meter (missions.js)
   audio.gun();
   haptic(8);
   run.shots += used;
@@ -89,6 +90,7 @@ function fireMissile() {
   }
   const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul() * (1 + 0.3 * frenzyAmt());
   player.missileCd = 0.55;
+  player.firingT = 0.12;   // missile launch also trips the stealth detection meter (missions.js)
   const salvo = 1 + (player.mslSwarm || 0);   // SWARM RACK looses extra birds — bonus birds are free, only 1 leaves the rack
   const baseDir = fwdOf(player.group, t1).clone();
   for (let s = 0; s < salvo; s++) {
@@ -886,6 +888,7 @@ function updatePlayer(dt) {
   if (player.damageFlash > 0) player.damageFlash -= dt;
   if (player.lockFlash > 0) player.lockFlash -= dt;   // VISUAL-ONLY lock-snap overshoot timer (hud.js drawLockReticle)
   if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
+  if (player.firingT > 0) player.firingT -= dt;   // decays the stealth "firing" tell set in fireGun/fireMissile
   if (player.shake > 0) player.shake -= dt;
   if (player.comboTimer > 0) { player.comboTimer -= dt; if (player.comboTimer <= 0) player.combo = 0; }
   if (player.shieldT > 0) player.shieldT -= dt;
