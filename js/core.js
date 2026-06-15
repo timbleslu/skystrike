@@ -98,11 +98,11 @@ function betterTime(prev, next) {
 //   0 = pitch, 1 = throttle (>0.6), 2 = guns fired, 3 = missile (lock + fire), 4 = DONE.
 // Each step's REQUIRED event advances it by one; the 'skip' event jumps straight to DONE
 // from any step. Pure + monotonic: an event that does not match the current step is ignored,
-// the step index never decreases, and DONE (4) is a terminal absorbing state.
-const TUTORIAL_STEPS = ['pitch', 'throttle', 'guns', 'missile'];
-const TUTORIAL_DONE = TUTORIAL_STEPS.length;   // 4
+// the step index never decreases, and DONE (5) is a terminal absorbing state.
+const TUTORIAL_STEPS = ['pitch', 'throttle', 'guns', 'missile', 'roll'];
+const TUTORIAL_DONE = TUTORIAL_STEPS.length;   // 5
 // the event that satisfies each step, by step index
-const TUTORIAL_EVENT_FOR_STEP = ['pitched', 'throttled', 'fired', 'missile'];
+const TUTORIAL_EVENT_FOR_STEP = ['pitched', 'throttled', 'fired', 'missile', 'rolled'];
 // PURE — given the current step and an input event, return the next step (0..TUTORIAL_DONE).
 // Never regresses; only the current step's matching event (or 'skip') advances it.
 function tutorialNext(step, event) {

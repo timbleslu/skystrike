@@ -697,7 +697,8 @@ function handleBossRush(dt) {
      step 0 pitch    : nose pitching (|pitchRate| past a clear threshold)
      step 1 throttle : throttle pushed past 0.6
      step 2 guns     : the run shot counter ticked up since we started/last advanced
-     step 3 missile  : a full lock was achieved AND a missile was launched since baseline */
+     step 3 missile  : a full lock was achieved AND a missile was launched since baseline
+     step 4 roll     : a barrel roll is mid-animation (double-tap Q/E → barrelRollAnim > 0) */
 function tickTutorial() {
   if (typeof tutorial === 'undefined' || !tutorial.active || tutorial.done || !player) return;
   const step = TUTORIAL_STEPS[tutorial.step];
@@ -709,6 +710,8 @@ function tickTutorial() {
     if ((run.shots || 0) > tutorial.prevShots) { tutorial.prevMissiles = run.missiles || 0; advanceTutorial('fired'); }
   } else if (step === 'missile') {
     if (player.lockedTarget && (run.missiles || 0) > tutorial.prevMissiles) advanceTutorial('missile');
+  } else if (step === 'roll') {
+    if (barrelRollAnim > 0) advanceTutorial('rolled');   // the 360° snap-roll is actually executing
   }
 }
 

@@ -361,9 +361,9 @@ function reqSatisfied(node, ownsFn, byId, groundOn) {
    toward a goal's prereq path; REROLL re-rolls once per visit; PITY force-includes a long-skipped node.
    Pure draft logic lives in core.js (frontierEligible/prereqPath/draftOffer); this is just the glue.
    Reset in startGame(). Scoped to the TECH tab only — the ARMORY tab keeps its full-list behaviour. */
-let draftState = { seed: 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {} };
+let draftState = { seed: 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {}, selected: null };
 function resetDraftState() {
-  draftState = { seed: (Math.random() * 0x7fffffff) | 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {} };
+  draftState = { seed: (Math.random() * 0x7fffffff) | 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {}, selected: null };
 }
 function inOffer(id) { return draftState.offer.indexOf(id) >= 0; }
 // the per-visit frontier: currently-unlockable, unowned (repeatables stay), applicable tech-tab nodes.
@@ -400,6 +400,7 @@ function openTechScreen() {
   draftState.visit++;
   draftState.drafted = false;
   draftState.rerollUsed = false;
+  draftState.selected = null;          // no pick chosen yet this visit
   rollDraftOffer(0);
   document.querySelectorAll('.tech-tab').forEach(b => { b.classList.toggle('active', b.dataset.tab === 'tech'); b.onclick = () => switchTechTab(b.dataset.tab); });
   renderTechTree(true);
@@ -454,12 +455,14 @@ function renderTechTree(recenter) {
     const st = draftDisplayState(n, raw);   // FRONTIER DRAFT: gate buyability to this visit's offer
     const p = nodeXY(n), ac = FAM_C[n.fam] || '#ffb938';
     const cost = nodeCost(n);
-    const costTxt = n.id === 'core' ? t('tech.core') : raw === 'bought' ? t('tech.owned') : raw === 'na' ? t('tech.na')
+    const offered = inOffer(n.id) && (raw === 'avail' || raw === 'cantafford');   // one of the 3 frontier picks
+    const selected = offered && draftState.selected === n.id;                     // the pick chosen this visit
+    const passed = offered && draftState.selected && !selected;                   // a fellow offer, set aside
+    const pinned = draftState.pin === n.id;
+    const costTxt = selected ? t('tech.drafted') : n.id === 'core' ? t('tech.core') : raw === 'bought' ? t('tech.owned') : raw === 'na' ? t('tech.na')
       : st === 'lockvisit' ? t('tech.lockVisit') : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
-    const offered = inOffer(n.id) && (raw === 'avail' || raw === 'cantafford');   // one of the 3 frontier picks
-    const pinned = draftState.pin === n.id;
-    const cls = 'tnode ' + st + (n.repeat ? ' rep' : '') + (offered ? ' offered' : '') + (pinned ? ' pinned' : '');
+    const cls = 'tnode ' + st + (n.repeat ? ' rep' : '') + (offered ? ' offered' : '') + (selected ? ' selected' : '') + (passed ? ' passed' : '') + (pinned ? ' pinned' : '');
     nodes += '<div class="' + cls + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
       badge +
       (pinned ? '<span class="tn-pin">\u25C8</span>' : '') +
@@ -483,15 +486,22 @@ function renderTechTree(recenter) {
 }
 // FRONTIER DRAFT control bar: pin readout + reroll button state. Lives in #draftBar (index.html).
 function renderDraftBar() {
+  const sel = draftState.selected ? TECH_BY_ID[draftState.selected] : null;
+  const hint = g('techhint');
+  if (hint && techTab === 'tech') hint.textContent = t('tech.hintTree');
   const pinEl = g('draftPin');
   if (pinEl) {
-    pinEl.textContent = draftState.pin
-      ? tf('tech.pinned', { name: techText(TECH_BY_ID[draftState.pin], 'name') })
-      : t('tech.pinHint');
-    pinEl.classList.toggle('active', !!draftState.pin);
+    pinEl.textContent = sel
+      ? tf('tech.selectedHint', { name: techText(sel, 'name') })          // a pick is staged → explain confirm/switch
+      : draftState.pin
+        ? tf('tech.pinned', { name: techText(TECH_BY_ID[draftState.pin], 'name') })
+        : t('tech.pinHint');
+    pinEl.classList.toggle('active', !!sel || !!draftState.pin);
   }
+  const dep = g('techDeploy');
+  if (dep) dep.textContent = sel ? tf('tech.deployPick', { name: techText(sel, 'name') }) : t('tech.deployBank');
   const rr = g('techReroll');
-  if (rr) { rr.disabled = draftState.rerollUsed; rr.textContent = t('tech.reroll'); }
+  if (rr) { rr.disabled = draftState.rerollUsed || !!sel; rr.textContent = t('tech.reroll'); }   // can't reroll once a pick is staged
 }
 // PIN: clicking a non-offered tree node sets it as the goal (offers bias toward its prereq path).
 // Clicking the already-pinned node clears the pin. Pin persists across visits within the run.
@@ -503,7 +513,7 @@ function togglePin(id) {
 }
 // REROLL: once per visit, re-roll this visit's offer with a fresh sub-seed (pity + pin still applied).
 function rerollDraft() {
-  if (draftState.rerollUsed) { audio.ui(); return; }
+  if (draftState.rerollUsed || draftState.selected) { audio.ui(); return; }   // no reroll after a pick is staged
   draftState.rerollUsed = true;
   rollDraftOffer(draftState.visit * 7 + 1);   // non-zero salt → a different draw than the visit's first roll
   audio.ui();
@@ -550,8 +560,16 @@ let pendingWingNode = null;
 function buyNode(node) {
   if (!choosingUpgrade || !player || !node) return;
   if (nodeState(node) !== 'avail') { audio.ui(); return; }
-  // FRONTIER DRAFT: on the TECH tab, only this visit's 3 offered nodes are buyable (armory is unrestricted).
-  if (techTab === 'tech' && !inOffer(node.id)) { audio.ui(); return; }
+  // FRONTIER DRAFT: on the TECH tab you DRAFT one of the 3 offers — tapping stages it (toggle), and the
+  // commit + wing-picker happen at DEPLOY. This makes "one pick per wave" visible (the rest grey out).
+  if (techTab === 'tech') {
+    if (!inOffer(node.id)) { audio.ui(); return; }
+    draftState.selected = (draftState.selected === node.id) ? null : node.id;
+    audio.ui();
+    renderTechTree(false);
+    return;
+  }
+  // ARMORY tab: unrestricted, buy-as-many. Wing nodes never live here, but keep the guard for safety.
   if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
   commitNode(node);
 }
@@ -564,12 +582,11 @@ function commitNode(node) {
   else { player.tech.push(node.id); player.upgrades.push(node.id); }
   audio.power(); empFlash = 0.26;
   showBanner(tf('banner.researched', { name: techText(node, 'name') }));
-  // FRONTIER DRAFT: picking an offered TECH-tab node is the visit's ONE draft pick → commit + deploy.
-  // (Armory keeps buy-multiple; only the draft tab is pick-exactly-one.)
+  // FRONTIER DRAFT: a committed TECH-tab node is the visit's ONE draft pick — clear its pity debt + latch
+  // 'drafted'. Deploy is driven explicitly by deployFromTech (the player confirms). Armory keeps buy-multiple.
   if (techTab === 'tech') {
-    draftState.pity[node.id] = 0;   // a picked frontier node clears its pity debt
+    draftState.pity[node.id] = 0;
     draftState.drafted = true;
-    deployFromTech();
     return;
   }
   renderArmory();
@@ -593,6 +610,8 @@ function confirmWingPick(i) {
   if (!node) return;
   pendingWingShape = JETS[i].shape;
   commitNode(node);
+  // a drafted wing node opens this picker mid-DEPLOY; once the jet is chosen, finish the deploy it paused.
+  if (choosingUpgrade && techTab === 'tech') deployFromTech();
 }
 
 function closeWingPicker() {
@@ -640,6 +659,16 @@ function applyDepot() {
 }
 function deployFromTech() {
   if (!choosingUpgrade) return;
+  // FRONTIER DRAFT: commit the ONE staged pick (if any) before leaving. No pick = bank RP.
+  // Wing nodes open the jet picker first; confirmWingPick re-enters deploy once the jet is chosen.
+  if (draftState && draftState.selected) {
+    const pick = TECH_BY_ID[draftState.selected];
+    draftState.selected = null;
+    if (pick && nodeState(pick) === 'avail' && inOffer(pick.id)) {
+      if (WING_NODES.has(pick.id)) { openWingPicker(pick); return; }
+      commitNode(pick);
+    }
+  }
   pendingUpgrades = null;
   g('upgrade').classList.remove('show');
   choosingUpgrade = false; paused = false;
