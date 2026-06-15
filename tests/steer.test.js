@@ -33,7 +33,7 @@ function steerCommand(scheme, intent, currentBank, t) {
     rollCmd = clamp(t.bankGain * (targetBank - cb) / t.maxBank, -1, 1);  // proportional bank-hold
   }
   if (scheme === 'auto') {
-    return { pitchCmd: clamp(pitchCmd + Math.sin(cb) * t.autoPitchGain, -1, 1), rollCmd };
+    return { pitchCmd: clamp(pitchCmd - Math.abs(Math.sin(cb)) * t.autoPitchGain, -1, 1), rollCmd };
   }
   return { pitchCmd, rollCmd };
 }
@@ -110,17 +110,22 @@ assert.strictEqual(steerCommand('auto', { pitch: 0, roll: 0 }, 0, STEER).pitchCm
 assert.strictEqual(steerCommand('auto', { pitch: 0.3, roll: 0 }, 0, STEER).pitchCmd, 0.3,
   'auto: wings-level + pitch intent -> pitchCmd passes through');
 
-// positive bank (banked right) -> sin(cb)>0 -> pitchCmd > intent.pitch (back-pressure to complete turn)
+// banked EITHER way -> a CONSTANT nose-up pull: pitchCmd drops below intent.pitch by autoPitchGain*|sin(cb)|.
+// (combat applies pitchIn = -pitchCmd, so negative pitchCmd = nose up. Direction-INDEPENDENT so heading turns
+//  in the BANK direction; a signed sin(cb) term would cancel to a single turn direction regardless of stick side.)
 const autoBankRight = steerCommand('auto', { pitch: 0, roll: 0.6 }, 0.8, STEER);
-assert.ok(autoBankRight.pitchCmd > 0, 'auto: positive bank -> pitchCmd > 0 (auto back-pressure)');
+assert.ok(autoBankRight.pitchCmd < 0, 'auto: positive bank -> pitchCmd < 0 (constant nose-up pull)');
 
-// negative bank (banked left) -> sin(cb)<0 -> pitchCmd < intent.pitch
 const autoBankLeft = steerCommand('auto', { pitch: 0, roll: -0.6 }, -0.8, STEER);
-assert.ok(autoBankLeft.pitchCmd < 0, 'auto: negative bank -> pitchCmd < 0 (auto back-pressure mirrored)');
+assert.ok(autoBankLeft.pitchCmd < 0, 'auto: negative bank -> pitchCmd < 0 (same pull, mirrored bank)');
+
+// the pull is SYMMETRIC in bank sign (direction-independent): equal/opposite banks give identical pitchCmd
+assert.ok(Math.abs(autoBankRight.pitchCmd - autoBankLeft.pitchCmd) < 1e-12,
+  'auto: back-pressure pull is symmetric in bank sign');
 
 // auto pitchCmd is clamped to [-1, 1]
-const autoSat = steerCommand('auto', { pitch: 1, roll: 0 }, Math.PI / 2, STEER);
-assert.ok(autoSat.pitchCmd <= 1, 'auto: pitchCmd clamped at +1');
+const autoSat = steerCommand('auto', { pitch: -1, roll: 0 }, Math.PI / 2, STEER);
+assert.ok(autoSat.pitchCmd >= -1, 'auto: pitchCmd clamped at -1');
 
 // rollCmd in 'auto' uses identical bank-hold logic as 'pointer'
 const autoRollBelow = steerCommand('auto', { pitch: 0, roll: rollIntent }, targetBank - 0.5, STEER);

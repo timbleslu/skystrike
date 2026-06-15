@@ -552,7 +552,7 @@ let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live
 let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
 // flight control scheme — how combat.js INTERPRETS the flightInput seam (orthogonal to touch/motion source).
-//   'auto'    (default) = bank-hold like pointer + sin(bank)*autoPitchGain back-pressure -> banking auto-turns.
+//   'auto'    (default) = bank-hold like pointer + a CONSTANT nose-up pull when banked -> banking carves a turn in the bank direction.
 //   'pointer'           = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
 let controlScheme = 'auto';
@@ -566,7 +566,11 @@ const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06,
 //   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
 //   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
 //               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
-//   'auto'    : same bank-hold as pointer; also adds sin(currentBank)*autoPitchGain to pitchCmd so banking auto-turns.
+//   'auto'    : same bank-hold as pointer; also subtracts |sin(currentBank)|*autoPitchGain from pitchCmd — a CONSTANT
+//              nose-up pull whenever banked (combat applies pitchIn = -pitchCmd, so this pulls the nose UP). The pull
+//              is direction-INDEPENDENT (|sin|), so heading turns in the BANK direction. A signed sin(cb) term fails:
+//              it makes pitchRate flip with bank while the banked-pitch->heading coupling (~sin(bank)) also flips, so
+//              they cancel to heading ~ -sin^2(bank) -> the jet always turned the SAME way regardless of stick side.
 function steerCommand(scheme, intent, currentBank, t) {
   const pitchCmd = intent.pitch;
   if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
@@ -579,7 +583,7 @@ function steerCommand(scheme, intent, currentBank, t) {
     rollCmd = clamp(t.bankGain * (targetBank - cb) / t.maxBank, -1, 1);  // proportional bank-hold
   }
   if (scheme === 'auto') {
-    return { pitchCmd: clamp(pitchCmd + Math.sin(cb) * t.autoPitchGain, -1, 1), rollCmd };
+    return { pitchCmd: clamp(pitchCmd - Math.abs(Math.sin(cb)) * t.autoPitchGain, -1, 1), rollCmd };
   }
   return { pitchCmd, rollCmd };
 }
