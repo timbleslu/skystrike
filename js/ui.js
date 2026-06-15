@@ -621,6 +621,7 @@ function finishTutorial() {
   if (el.tut) el.tut.classList.remove('show');
   showBanner(t('tut.done'));
   setTimeout(() => { if (state === 'playing') showBanner(t('tut.barrelRoll'), 4); }, 2600);
+  setTimeout(() => { if (state === 'playing' && tutorial.done) returnToHangar(); }, 4000);
 }
 // feed one detected action event into the pure machine; re-render or finish on a step change.
 function advanceTutorial(event) {
@@ -1125,6 +1126,7 @@ function initOnboarding() {
     onboarding = false;
     store.set('skystrike_onboarded', '1');
     if (audio.on) audio.ui();
+    startGame(0);
   });
   if (isReturningPlayer) {     // already onboarded, or a returning player from before onboarding existed
     store.set('skystrike_onboarded', '1');
@@ -1622,6 +1624,7 @@ function applyLang() {
   setTxt('manH_Hud', t('manual.hHud')); setTxt('manH_Wingman', t('manual.hWingman'));
   setTxt('manH_Enemies', t('manual.hEnemies')); setTxt('manH_Tech', t('manual.hTech'));
   setTxt('manH_Settings', t('manual.hSettings'));
+  setTxt('manH_Sorties', t('manual.hSorties')); setTxt('manH_Special', t('manual.hSpecial')); setTxt('manH_Missions', t('manual.hMissions'));
   setTxt('manTab_guide', t('manual.tabGuide')); setTxt('manTab_systems', t('manual.tabSystems'));
   setTxt('manTab_tactics', t('manual.tabTactics')); setTxt('manTab_settings', t('manual.tabSettings'));
   // settings labels
@@ -1676,6 +1679,7 @@ function applyLang() {
   setHTML('manUL_Flight', 'manBody.flight'); setHTML('manUL_Combat', 'manBody.combat'); setHTML('manP_Lock', 'manBody.lock');
   setHTML('manUL_Stats', 'manBody.stats'); setHTML('manUL_Hud', 'manBody.hud'); setHTML('manUL_Wingman', 'manBody.wingman');
   setHTML('manUL_Enemies', 'manBody.enemies'); setHTML('manP_Tech', 'manBody.tech');
+  setHTML('manUL_Sorties', 'manBody.sorties'); setHTML('manUL_Special', 'manBody.special'); setHTML('manUL_Missions', 'manBody.missions');
   // re-render dynamic panels that bake text in
   if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
   if (typeof selectedJet === 'number') renderJetCard(selectedJet);

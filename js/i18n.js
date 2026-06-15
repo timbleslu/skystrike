@@ -44,7 +44,7 @@ const I18N = {
     'onboard.continue': '▶ CONTINUE TO HANGAR',
     /* ---- first-run guided tutorial (F5) ---- */
     'tut.title': 'FLIGHT TRAINING',
-    'tut.pitch': 'Pull back — press W to pitch your nose up and climb.',
+    'tut.pitch': 'Pull back — press S to pitch your nose up and climb.',
     'tut.pitchTouch': 'Pull back — drag the stick down to pitch your nose up and climb.',
     'tut.throttle': 'Open the throttle — hold SHIFT to push power past 60%.',
     'tut.throttleTouch': 'Open the throttle — hold the THROTTLE button to push power past 60%.',
@@ -268,6 +268,9 @@ const I18N = {
     'manual.hTech': 'R&D Tech Tree',
     'manual.hSettings': 'Settings',
     'manual.awacs': 'AWACS Support',
+    'manual.hSorties': 'Sorties & Scoring',
+    'manual.hSpecial': 'Special Abilities',
+    'manual.hMissions': 'Mission Objectives',
     'manual.tabGuide': 'Guide',
     'manual.tabSystems': 'Systems',
     'manual.tabTactics': 'Tactics',
@@ -324,6 +327,9 @@ const I18N = {
     'manBody.enemies': '<li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs — they now carry a real cannon magazine and a single missile, so expect to be shot at.</li><li><b>Crimson drones</b> — cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers — keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li><li><b>Gold ACE</b> — an elite with more ammo that shrugs off a single missile; wear it down.</li><li><b>Bombers</b> pack a heavy cannon, two missiles &amp; a few flares.</li><li><b>Orange turrets</b> are ground SAM sites (missiles only).</li><li><b>Magenta BOSS</b> (every 4th wave) now cycles <em>telegraphed</em> special attacks — radial MISSILE BARRAGE, deployed DRONE SWARMS, and a close-range SHOCKWAVE PULSE — then enrages at low health. Watch for the warning, then break away or pop countermeasures.</li><li>Enemy ammo still runs dry — a disarmed foe is just a target.</li>',
     'manBody.tech': 'You earn <em>research points (RP)</em> — shown as <b>R&amp;D</b> on the HUD — only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> — a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all — press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.',
     'manBody.awacs': '<b>AWACS SUPPORT (keys 1 / 2 / 3)</b><br>Three radio calls per sector, each spends Research Points (RP). <b>1 — ORBITAL STRIKE</b> (140 RP): destroys the nearest enemy instantly (bosses immune). <b>2 — EMERGENCY RESUPPLY</b> (90 RP): refills missiles and flares. <b>3 — JAMMING</b> (70 RP): 8 seconds of total enemy-missile blindness. Strike and Resupply allow one call each per sector; Jamming allows two. Uses reset every sector — watch the HUD chips for remaining calls.',
+    'manBody.sorties': '<li>Each sortie lasts until your aircraft is destroyed — survive as long as possible and clear waves to advance sectors.</li><li><b>Score</b> rises with every kill; multi-kill combos, no-damage waves, and accuracy bonuses all multiply your tally.</li><li><b>RP (Research Points)</b> are earned only from personal kills and damage. After each wave, spend RP in the R&amp;D screen to upgrade for the run.</li><li><b>SP (Strategic Points)</b> accumulate between sorties — spend them on persistent upgrades, new aircraft, and paint schemes in Command Progression.</li><li>A sector boss spawns every 4th wave. Defeat it to advance the sector and reset AWACS support calls.</li>',
+    'manBody.special': '<li>Press <b>R</b> to activate the unique special ability of your airframe. The <em>SPECIAL</em> gauge on the HUD shows charge — abilities recharge automatically.</li><li><b>Stealth cloak</b> (F-35, F-22): vanish from enemy radar for 8s and break all incoming missile locks. Clouds extend the cloaking effect.</li><li><b>Afterburner burst</b>: explosive thrust that can break missile tracks — most effective at low speed when evading pursuit.</li><li><b>CCA drone swarm</b> (F-47): deploys electric-blue autonomous attack drones that immediately acquire and engage targets (~16s duration).</li><li><b>Directed laser</b>: a sustained-beam precision weapon ideal against high-HP targets and bosses.</li><li>Each aircraft card in the hangar describes its passive perk and active ability.</li>',
+    'manBody.missions': '<li>Radio calls during a sortie announce optional <b>mission objectives</b>. Complete them for bonus RP and SP — or ignore them and focus on survival.</li><li><b>STRIKE</b>: destroy a marked high-value target. Immune to AWACS orbital strike.</li><li><b>ESCORT</b>: protect convoy units from enemy attack. Escort unit kills do not count toward your tally.</li><li><b>INTERCEPT</b>: shoot down marked bombers before they leave the sector.</li><li><b>SWEEP</b>: eliminate all enemies within the wave.</li><li><b>BOSS ACE</b>: defeat the wave boss. Expires if you advance past the wave.</li><li>Complete 5 missions in one run to earn the <em>TACTICIAN</em> achievement.</li>',
 
     /* ---- meta-progression (SP currency, perks, jet/skin unlocks, achievements) ---- */
     'meta.title': 'COMMAND PROGRESSION',
@@ -409,7 +415,7 @@ const I18N = {
     'onboard.continue': '▶ 进入机库',
     /* ---- 首次引导教程 (F5) ---- */
     'tut.title': '飞行训练',
-    'tut.pitch': '拉杆爬升 —— 按 W 抬起机头向上爬升。',
+    'tut.pitch': '拉杆爬升 —— 按 S 抬起机头向上爬升。',
     'tut.pitchTouch': '拉杆爬升 —— 向下拖动摇杆抬起机头爬升。',
     'tut.throttle': '加大油门 —— 按住 SHIFT 将动力推过 60%。',
     'tut.throttleTouch': '加大油门 —— 按住「油门」键将动力推过 60%。',
@@ -619,6 +625,9 @@ const I18N = {
     'manual.hTech': '研发科技树',
     'manual.hSettings': '设置',
     'manual.awacs': 'AWACS 支援',
+    'manual.hSorties': '出击与评分',
+    'manual.hSpecial': '特殊能力',
+    'manual.hMissions': '任务目标',
     'manual.tabGuide': '指南',
     'manual.tabSystems': '系统',
     'manual.tabTactics': '战术',
@@ -674,6 +683,9 @@ const I18N = {
     'manBody.enemies': '<li><b>红色战机</b>会保持距离并盘旋，然后投入扫射式机炮攻击——它们现在携带真正的机炮弹药与一枚导弹，所以预料会遭到还击。</li><li><b>深红色无人机</b>——廉价的神风蜂群，无视机炮，只会<em>径直撞向你</em>。单个脆弱，成群致命——保持机动，用机炮扫射，或借助云层切断其视线。</li><li><b>金色王牌</b>——弹药更多的精英，能扛下单枚导弹；逐步消耗它。</li><li><b>轰炸机</b>配备重型机炮、两枚导弹与少量干扰弹。</li><li><b>橙色炮塔</b>是地面防空导弹据点（仅发射导弹）。</li><li><b>洋红色首领</b>（每第4波）现在会循环施放<em>有预兆的</em>特殊攻击——放射状导弹弹幕、部署无人机蜂群、以及近距离冲击波脉冲——并在低血量时狂暴。注意警告，然后规避或释放对抗措施。</li><li>敌方弹药同样会耗尽——被缴械的敌人不过是个靶子。</li>',
     'manBody.tech': '你仅能从<em>你亲自造成的</em>伤害、击杀与助攻中获得<em>研究点数（RP）</em>——在平显上显示为<b>研发</b>。僚机或CCA无人机的击杀不会给你任何点数。清除一波后会打开<b>研发界面</b>：将RP花费在五条分支上（机炮、导弹、机体、电子战、指挥）。每条分支都是一条<em>路线</em>——只有购买了上一个节点，下一个才会解锁。购买<em>在整局内永久生效</em>，因此每次出击都能打造不同的战机。能买多少就买多少，或者一个都不买——按<b>出击</b>（或<b>回车</b>）进入下一波。',
     'manBody.awacs': '<b>AWACS 支援（按键 1 / 2 / 3）</b><br>每区段三次无线电呼叫，各消耗研发点（RP）。<b>1 — 轨道打击</b>（140 RP）：立即摧毁最近的敌机（Boss 免疫）。<b>2 — 紧急补给</b>（90 RP）：补满导弹与干扰弹。<b>3 — 电子干扰</b>（70 RP）：8 秒内敌方导弹完全失灵。打击与补给每区段各一次，干扰两次。每区段重置 —— 注意 HUD 上的剩余次数。',
+    'manBody.sorties': '<li>每次出击持续至飞机被击落——尽可能生存并清除波次推进区段。</li><li><b>分数</b>随击落数增加；连续击杀、无伤通关与命中精度均有倍率加成。</li><li><b>研究点数（RP）</b>仅来自你亲自造成的击杀与伤害。每波结束后在研发界面花费RP升级当局配置。</li><li><b>战略点数（SP）</b>在出击间持续累计——在"指挥进展"中花费SP购买持久升级、新飞机和涂装。</li><li>每第4波出现区段Boss。击败Boss后推进区段并重置AWACS支援次数。</li>',
+    'manBody.special': '<li>按 <b>R</b> 激活本机的专属特殊能力。HUD上的<em>特殊</em>槽显示充能进度——能力自动充能。</li><li><b>隐身遮蔽</b>（F-35、F-22）：从敌方雷达上消失8秒并破除所有来袭导弹锁定。云层可延长遮蔽效果。</li><li><b>加力爆发</b>：爆发性推力可摆脱导弹追踪——低速逃脱时效果最佳。</li><li><b>CCA无人机蜂群</b>（F-47）：部署电蓝色自主攻击无人机，立即锁定并攻击目标（约16秒）。</li><li><b>定向激光</b>：发射持续光束的精密武器，对高生命值目标和Boss最为有效。</li><li>机库中各飞机卡片说明了其被动特性和主动能力。</li>',
+    'manBody.missions': '<li>出击中的无线电呼叫会宣布可选的<b>任务目标</b>。完成任务可获得额外RP和SP——也可无视，专注生存。</li><li><b>打击</b>：摧毁标记的高价值目标。对AWACS轨道打击免疫。</li><li><b>护航</b>：保护护送单位免遭敌方攻击。护卫单位的击杀不计入你的统计。</li><li><b>拦截</b>：在标记轰炸机离开区段前将其击落。</li><li><b>清扫</b>：消灭本波内所有敌机。</li><li><b>Boss王牌</b>：击败本波Boss。推进超过该波次后任务失效。</li><li>单次出击完成5个任务可解锁<em>战术家</em>成就。</li>',
 
     /* JETS data-table overrides — name/ability kept in English (fall back to obj field) */
     jet: {
