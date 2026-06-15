@@ -725,9 +725,9 @@ addEventListener('keydown', e => {
     case 'KeyC': cycleCamera(); break;
     case 'KeyT': wingCommand('focus'); break;
     case 'KeyY': wingCommand('regroup'); break;
-    case 'F10': awacsAction('strike'); break;     // AWACS orbital strike
-    case 'F11': awacsAction('resupply'); break;   // AWACS emergency resupply
-    case 'F12': awacsAction('jam'); break;        // AWACS jamming
+    case 'Digit1': awacsAction('strike'); break;     // AWACS orbital strike (key 1)
+    case 'Digit2': awacsAction('resupply'); break;   // AWACS emergency resupply (key 2)
+    case 'Digit3': awacsAction('jam'); break;        // AWACS jamming (key 3)
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });

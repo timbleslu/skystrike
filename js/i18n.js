@@ -95,7 +95,7 @@ const I18N = {
     'touch.thr': 'THR', 'touch.brk': 'BRK', 'touch.cam': 'CAM', 'touch.lck': 'LOCK',
     'touch.aws': 'STRK', 'touch.ars': 'RSPLY', 'touch.ajm': 'JAM',
 
-    /* ---- AWACS support calls (F10/F11/F12) ---- */
+    /* ---- AWACS support calls (keys 1/2/3) ---- */
     'awacs.title': 'AWACS', 'awacs.strike': 'ORBITAL STRIKE', 'awacs.resupply': 'EMERGENCY RESUPPLY', 'awacs.jam': 'JAMMING',
     'awacs.noRp': 'AWACS: NOT ENOUGH RP', 'awacs.empty': 'AWACS: NO CALLS LEFT THIS SECTOR',
 

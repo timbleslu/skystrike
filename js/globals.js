@@ -487,7 +487,7 @@ function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
 
 const keys = {};
 let mouseRight = false;
-const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','F10','F11','F12','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
+const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
 const HUDFONT = "'Share Tech Mono', monospace";
 
