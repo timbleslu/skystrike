@@ -661,28 +661,27 @@ function nearestNonBossEnemy() {
 // awacsCall() resolver (globals.js, mirrored in tests/awacs.test.js); this glue applies the effect.
 function awacsAction(key) {
   if (!player) return false;
-  const res = awacsCall({ rp: player.tp, uses: awacsUses }, AWACS_COSTS, AWACS_USES_MAX, key);
+  // Pure decision (core.js awacsResolve): affordability + per-sector cap + which effect + which banner.
+  const res = awacsResolve({ rp: player.tp, uses: awacsUses }, AWACS_COSTS, AWACS_USES_MAX, key);
   if (!res.ok) {
-    if (res.reason === 'noRp') { showBanner(t('awacs.noRp')); audio.warn(); }
-    else if (res.reason === 'empty') { showBanner(t('awacs.empty')); audio.warn(); }
-    else audio.ui();
+    if (res.banner) { showBanner(t(res.banner)); audio.warn(); }   // noRp / empty
+    else audio.ui();                                               // unknown key — neutral blip
     return false;
   }
   player.tp = res.rp; awacsUses = res.uses;   // commit the deduction + use spend
-  if (key === 'strike') {
+  // imperative application of the resolved effect (game-state mutation only; decision already made)
+  if (res.effect === 'strike') {
     const tgt = nearestNonBossEnemy();
     if (tgt) { explode(tgt.group.position, true); killEnemy(tgt, true); }
     empFlash = Math.max(empFlash, 0.45);
-    showBanner(t('awacs.strike')); audio.power();
-  } else if (key === 'resupply') {
+  } else if (res.effect === 'resupply') {
     player.bullets = player.maxBullets;
     player.flares = player.maxFlares;
     player.missiles = player.maxMissiles;
-    showBanner(t('awacs.resupply')); audio.power();
-  } else if (key === 'jam') {
+  } else if (res.effect === 'jam') {
     player.jammer = Math.max(player.jammer, AWACS_JAM_TIME);   // reuse the SPECTRA jam pathway (updateMissiles blinds enemy missiles while jammer>0)
-    showBanner(t('awacs.jam')); audio.power();
   }
+  showBanner(t(res.banner)); audio.power();
   return true;
 }
 function cycleLock() {

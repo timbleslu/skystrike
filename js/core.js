@@ -162,6 +162,21 @@ function awacsCall(state, costs, max, key) {
   uses[key] = used + 1;
   return { ok: true, reason: 'ok', rp: state.rp - cost, uses: uses };
 }
+// AWACS effect/banner table — which outcome a SUCCESSFUL call applies, and its banner i18n key.
+const AWACS_EFFECTS = { strike: 'awacs.strike', resupply: 'awacs.resupply', jam: 'awacs.jam' };
+// PURE adapter decision: wrap awacsCall, then attach what combat.js must imperatively do. On success
+// `effect` is the call key (strike/resupply/jam) and `banner` its success message; combat.js commits
+// {rp, uses} and applies `effect`. On failure `effect` is null and `banner` is the failure message
+// key (or null for an unknown key → caller plays a neutral ui sound). The ENTIRE "which message,
+// which effect, allowed?" decision lives here (tested); combat.js only mutates game state + plays SFX.
+function awacsResolve(state, costs, max, key) {
+  const r = awacsCall(state, costs, max, key);
+  if (!r.ok) {
+    const banner = r.reason === 'noRp' ? 'awacs.noRp' : r.reason === 'empty' ? 'awacs.empty' : null;
+    return { ok: false, reason: r.reason, rp: r.rp, uses: r.uses, effect: null, banner };
+  }
+  return { ok: true, reason: 'ok', rp: r.rp, uses: r.uses, effect: key, banner: AWACS_EFFECTS[key] };
+}
 
 /* ---------------- barrel-roll pure helpers (F-barrel) ---------------- */
 // Returns true if the gap between now and lastTapTime is within threshold (double-tap detected).
@@ -256,7 +271,7 @@ if (typeof module !== 'undefined' && module.exports) {
     TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,
     makeRng, dailySeedFor,
     CAMSHAKE_RATE, CAMSHAKE_K, decayShake,
-    AWACS_COSTS, AWACS_USES_MAX, AWACS_JAM_TIME, awacsCall,
+    AWACS_COSTS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
     GFX_TIERS, resolveQuality,
