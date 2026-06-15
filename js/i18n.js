@@ -42,6 +42,18 @@ const I18N = {
     'onboard.touch': 'Touchscreen controls auto-detect and activate on mobile devices.',
     'onboard.more': 'Full reference, aircraft briefs and Settings live in the FLIGHT MANUAL (▣ CONTROLS & MANUAL in the hangar).',
     'onboard.continue': '▶ CONTINUE TO HANGAR',
+    /* ---- first-run guided tutorial (F5) ---- */
+    'tut.title': 'FLIGHT TRAINING',
+    'tut.pitch': 'Pull back — press W to pitch your nose up and climb.',
+    'tut.pitchTouch': 'Pull back — drag the stick down to pitch your nose up and climb.',
+    'tut.throttle': 'Open the throttle — hold SHIFT to push power past 60%.',
+    'tut.throttleTouch': 'Open the throttle — hold the THROTTLE button to push power past 60%.',
+    'tut.guns': 'Fire the cannon — hold SPACE to let off a burst.',
+    'tut.gunsTouch': 'Fire the cannon — hold the GUN button to let off a burst.',
+    'tut.missile': 'Lock & fire — press F to lock a target, then G to launch a missile.',
+    'tut.missileTouch': 'Lock & fire — tap LOCK to designate a target, then MISSILE to launch.',
+    'tut.skip': 'SKIP',
+    'tut.done': 'TRAINING COMPLETE — good hunting, pilot.',
 
     /* ---- hud labels ---- */
     'hud.guns': 'GUNS',
@@ -61,7 +73,7 @@ const I18N = {
     'hud.droneSwarm': '⚠ DRONE SWARM ⚠',
     'hud.highG': 'HIGH-G PULL',
     'hud.stealthActive': 'STEALTH ACTIVE',
-    'hud.hp': 'HP', 'hud.shd': 'SHD', 'hud.thr': 'THR',
+    'hud.hp': 'HP', 'hud.shd': 'SHD', 'hud.thr': 'THR', 'hud.ab': 'AB',
     'hud.score': 'Score', 'hud.rd': 'R&D', 'hud.wave': 'Wave', 'hud.combo': 'Combo',
     'hud.knots': 'Knots', 'hud.ft': 'Ft',
     'hud.gun': 'Gun', 'hud.flares': 'Flares', 'hud.msl': 'Msl',
@@ -81,6 +93,11 @@ const I18N = {
     /* ---- touch buttons ---- */
     'touch.gun': 'GUN', 'touch.msl': 'MSL', 'touch.flr': 'FLR', 'touch.spc': 'SPC',
     'touch.thr': 'THR', 'touch.brk': 'BRK', 'touch.cam': 'CAM', 'touch.lck': 'LOCK',
+    'touch.aws': 'STRK', 'touch.ars': 'RSPLY', 'touch.ajm': 'JAM',
+
+    /* ---- AWACS support calls (keys 1/2/3) ---- */
+    'awacs.title': 'AWACS', 'awacs.strike': 'ORBITAL STRIKE', 'awacs.resupply': 'EMERGENCY RESUPPLY', 'awacs.jam': 'JAMMING',
+    'awacs.noRp': 'AWACS: NOT ENOUGH RP', 'awacs.empty': 'AWACS: NO CALLS LEFT THIS SECTOR',
 
     /* ---- killstreak callouts ---- */
     'ks.5': 'KILLSTREAK', 'ks.10': 'RAMPAGE', 'ks.15': 'UNSTOPPABLE', 'ks.20': 'GODLIKE',
@@ -92,7 +109,10 @@ const I18N = {
     'banner.waveClear': 'WAVE {n} CLEAR',
     'banner.bossIncoming': '⚠ BOSS INCOMING ⚠',
     'banner.bossEnraged': '⚠ BOSS ENRAGED ⚠',
+    'banner.bossPhase2': '⚠ BOSS ENRAGED — PHASE 2 ⚠',
+    'banner.bossPhase3': '☠ BOSS OVERDRIVE — PHASE 3 ☠',
     'banner.aceInbound': '★ ACE INBOUND ★',
+    'banner.hostileAceInbound': '☠ HOSTILE ACE INBOUND — {name} ☠',
     'banner.bomberDetected': '⚑ BOMBER DETECTED ⚑',
     'banner.strikeWave': '⚒ STRIKE WAVE — FLATTEN THE SITE ⚒',
     'banner.finalTarget': '⚠ FINAL TARGET ⚠',
@@ -100,6 +120,15 @@ const I18N = {
     'banner.missionStart': '▣ OBJECTIVE — {name} ▣',
     'banner.missionComplete': '✔ OBJECTIVE COMPLETE ✔',
     'banner.missionFailedObj': '✘ OBJECTIVE FAILED ✘',
+    'setpiece.carrier': 'CARRIER GROUP',
+    'setpiece.carrier.intro': '◆ SET-PIECE — CARRIER GROUP: punch through the interceptor screen ◆',
+    'setpiece.carrier.outro': '✔ CARRIER SCREEN BROKEN ✔',
+    'setpiece.samCorridor': 'SAM CORRIDOR',
+    'setpiece.samCorridor.intro': '◆ SET-PIECE — SAM CORRIDOR: outrun the barrage, flatten the site ◆',
+    'setpiece.samCorridor.outro': '✔ CORRIDOR CLEARED ✔',
+    'setpiece.bomberRun': 'BOMBER RUN',
+    'setpiece.bomberRun.intro': '◆ SET-PIECE — BOMBER RUN: shepherd the wing through the SAM lanes ◆',
+    'setpiece.bomberRun.outro': '✔ BOMBERS THROUGH ✔',
     'mission.name.sweep': 'AIR SUPERIORITY',
     'mission.name.intercept': 'INTERCEPT',
     'mission.name.escort': 'ESCORT',
@@ -128,6 +157,7 @@ const I18N = {
     'banner.missileBarrage': '⚠ MISSILE BARRAGE ⚠',
     'banner.droneDeploy': '⚠ DRONE DEPLOY ⚠',
     'banner.supplyCrate': '◈ SUPPLY CRATE ◈',
+    'banner.evade': '⟳ EVASIVE ROLL ⟳',
     'banner.guardianAngel': '✝ GUARDIAN ANGEL ✝',
     'banner.reactivePulse': '◈ REACTIVE PULSE',
     'banner.bossDestroyed': '◆ BOSS DESTROYED ◆',
@@ -141,6 +171,17 @@ const I18N = {
     'banner.dewLance': 'DEW LANCE · FIRING',
     'banner.wingFocus': '▸ FLIGHT: FOCUS FIRE', 'banner.wingRegroup': '▸ FLIGHT: REGROUP',
     'banner.wingNone': 'NO ESCORTS AIRBORNE', 'banner.wingNoTarget': 'NO TARGET TO FOCUS',
+
+    /* ---- mission grading ---- */
+    'grade.title': 'MISSION RATING',
+    'grade.bonus': 'SP BONUS',
+
+    /* ---- star objectives ---- */
+    'stars.title': 'OBJECTIVES',
+    'stars.best': 'BEST {n}/3',
+    'stars.obj.kills': 'CLEAR 60% OF FOES',
+    'stars.obj.noDamage': 'A FULL WAVE, NO DAMAGE',
+    'stars.obj.rescue': 'COMPLETE AN OBJECTIVE',
 
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
@@ -256,6 +297,8 @@ const I18N = {
     'set.btnOpacity': 'Button opacity',
     'set.btnLayout': 'Button layout',
     'set.blRight': 'Right', 'set.blLeft': 'Left', 'set.blCompact': 'Compact',
+    'set.gfx': 'Graphics quality',
+    'set.gfxAuto': 'Auto', 'set.gfxLow': 'Low', 'set.gfxHigh': 'High',
     'set.motionDenied': 'Motion permission denied — using Touch controls.',
     'set.motionUnsupported': 'Motion sensor unavailable — using Touch controls.',
     'set.controlScheme': 'Steering',
@@ -296,7 +339,29 @@ const I18N = {
     'meta.maxed': 'MAX LEVEL',
     'meta.requires': 'REQUIRES {r}',
     'meta.buyLvl': 'UPGRADE — {c} SP',
+    'pilot.callsign': 'CALLSIGN',
+    'pilot.emblem': 'EMBLEM',
+    'pilot.placeholder': 'ENTER CALLSIGN',
+    'pilot.buy': 'UNLOCK — {c} SP',
+    'pilot.locked': 'LOCKED',
+    'pilot.needAch': 'REQUIRES: {a}',
     'banner.achUnlocked': '★ {n} ACHIEVEMENT(S) UNLOCKED ★',
+    /* ---- daily seeded challenge (F7) ---- */
+    'daily.title': '◆ DAILY CHALLENGE',
+    'daily.sub': 'Everyone flies the same seed today — one attempt. Date {date}.',
+    'daily.play': '▶ FLY TODAY’S SORTIE',
+    'daily.done': '✔ FLOWN TODAY',
+    'daily.best': 'TODAY’S BEST {best}',
+    'daily.locked': 'COME BACK TOMORROW FOR A NEW SEED',
+
+    /* ---- Boss Rush (F15) ---- */
+    'bossrush.title': '☠ BOSS RUSH',
+    'bossrush.start': '☠ BOSS RUSH',
+    'bossrush.locked': '☠ BOSS RUSH — CLEAR THE CAMPAIGN TO UNLOCK',
+    'bossrush.sub': 'All bosses, one life, fixed loadout. Beat the clock.',
+    'bossrush.best': 'BEST TIME {t}',
+    'bossrush.wave': 'BOSS {n} / {total}',
+    'bossrush.cleared': 'GAUNTLET CLEARED — {t}',
 
     /* meta data strings (perks / achievements / skins) — canonical EN copy (no fields in meta.js tables) */
     meta: {
@@ -335,6 +400,18 @@ const I18N = {
     'onboard.touch': '在移动设备上将自动检测并启用触屏操控。',
     'onboard.more': '完整操作参考、机型简报与设置均在《飞行手册》中（机库内点击「▣ 操作与手册」）。',
     'onboard.continue': '▶ 进入机库',
+    /* ---- 首次引导教程 (F5) ---- */
+    'tut.title': '飞行训练',
+    'tut.pitch': '拉杆爬升 —— 按 W 抬起机头向上爬升。',
+    'tut.pitchTouch': '拉杆爬升 —— 向下拖动摇杆抬起机头爬升。',
+    'tut.throttle': '加大油门 —— 按住 SHIFT 将动力推过 60%。',
+    'tut.throttleTouch': '加大油门 —— 按住「油门」键将动力推过 60%。',
+    'tut.guns': '开火射击 —— 按住空格扫射一轮机炮。',
+    'tut.gunsTouch': '开火射击 —— 按住「机炮」键扫射一轮。',
+    'tut.missile': '锁定并发射 —— 按 F 锁定目标，再按 G 发射导弹。',
+    'tut.missileTouch': '锁定并发射 —— 点「锁定」指定目标，再点「导弹」发射。',
+    'tut.skip': '跳过',
+    'tut.done': '训练完成 —— 祝你好运，飞行员。',
 
     'hud.guns': '可射击',
     'hud.locking': '锁定中',
@@ -353,7 +430,7 @@ const I18N = {
     'hud.droneSwarm': '⚠ 无人机蜂群 ⚠',
     'hud.highG': '高过载',
     'hud.stealthActive': '隐身启动',
-    'hud.hp': '血量', 'hud.shd': '护盾', 'hud.thr': '油门',
+    'hud.hp': '血量', 'hud.shd': '护盾', 'hud.thr': '油门', 'hud.ab': '加力',
     'hud.score': '分数', 'hud.rd': '研发', 'hud.wave': '波次', 'hud.combo': '连击',
     'hud.knots': '节', 'hud.ft': '英尺',
     'hud.gun': '机炮', 'hud.flares': '干扰弹', 'hud.msl': '导弹',
@@ -370,6 +447,11 @@ const I18N = {
 
     'touch.gun': '机炮', 'touch.msl': '导弹', 'touch.flr': '干扰', 'touch.spc': '技能',
     'touch.thr': '加速', 'touch.brk': '减速', 'touch.cam': '镜头', 'touch.lck': '锁定',
+    'touch.aws': '打击', 'touch.ars': '补给', 'touch.ajm': '干扰',
+
+    /* ---- AWACS support calls ---- */
+    'awacs.title': '预警机', 'awacs.strike': '轨道打击', 'awacs.resupply': '紧急补给', 'awacs.jam': '电子干扰',
+    'awacs.noRp': '预警机：研发点不足', 'awacs.empty': '预警机：本区呼叫次数已用尽',
 
     'ks.5': '连杀', 'ks.10': '狂暴', 'ks.15': '势不可挡', 'ks.20': '神一般',
 
@@ -379,7 +461,10 @@ const I18N = {
     'banner.waveClear': '第 {n} 波已清除',
     'banner.bossIncoming': '⚠ 首领来袭 ⚠',
     'banner.bossEnraged': '⚠ 首领狂暴 ⚠',
+    'banner.bossPhase2': '⚠ 首领狂暴 — 第二阶段 ⚠',
+    'banner.bossPhase3': '☠ 首领超载 — 第三阶段 ☠',
     'banner.aceInbound': '★ 王牌来袭 ★',
+    'banner.hostileAceInbound': '☠ 敌方王牌来袭 — {name} ☠',
     'banner.bomberDetected': '⚑ 发现轰炸机 ⚑',
     'banner.strikeWave': '⚒ 对地打击波 — 夷平据点 ⚒',
     'banner.finalTarget': '⚠ 最终目标 ⚠',
@@ -387,6 +472,15 @@ const I18N = {
     'banner.missionStart': '▣ 任务目标 — {name} ▣',
     'banner.missionComplete': '✔ 任务目标完成 ✔',
     'banner.missionFailedObj': '✘ 任务目标失败 ✘',
+    'setpiece.carrier': '航母战斗群',
+    'setpiece.carrier.intro': '◆ 特别行动 — 航母战斗群：突破拦截机防线 ◆',
+    'setpiece.carrier.outro': '✔ 已突破航母防线 ✔',
+    'setpiece.samCorridor': '防空走廊',
+    'setpiece.samCorridor.intro': '◆ 特别行动 — 防空走廊：冲出弹幕，夷平据点 ◆',
+    'setpiece.samCorridor.outro': '✔ 走廊已肃清 ✔',
+    'setpiece.bomberRun': '轰炸航线',
+    'setpiece.bomberRun.intro': '◆ 特别行动 — 轰炸航线：护送机群穿越防空火力网 ◆',
+    'setpiece.bomberRun.outro': '✔ 轰炸机已安全通过 ✔',
     'mission.name.sweep': '夺取制空权',
     'mission.name.intercept': '拦截',
     'mission.name.escort': '护航',
@@ -415,6 +509,7 @@ const I18N = {
     'banner.missileBarrage': '⚠ 导弹弹幕 ⚠',
     'banner.droneDeploy': '⚠ 无人机部署 ⚠',
     'banner.supplyCrate': '◈ 补给箱 ◈',
+    'banner.evade': '⟳ 规避翻滚 ⟳',
     'banner.guardianAngel': '✝ 守护天使 ✝',
     'banner.reactivePulse': '◈ 反应脉冲',
     'banner.bossDestroyed': '◆ 首领已摧毁 ◆',
@@ -428,6 +523,16 @@ const I18N = {
     'banner.dewLance': 'DEW LANCE · 开火',
     'banner.wingFocus': '▸ 编队：集火', 'banner.wingRegroup': '▸ 编队：归队',
     'banner.wingNone': '无僚机在空', 'banner.wingNoTarget': '无可集火目标',
+
+    'grade.title': '任务评级',
+    'grade.bonus': 'SP 奖励',
+
+    /* ---- star objectives ---- */
+    'stars.title': '目标',
+    'stars.best': '最佳 {n}/3',
+    'stars.obj.kills': '消灭 60% 的敌人',
+    'stars.obj.noDamage': '一整波无伤通过',
+    'stars.obj.rescue': '完成一个任务目标',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',
@@ -535,6 +640,8 @@ const I18N = {
     'set.btnOpacity': '按钮不透明度',
     'set.btnLayout': '按钮布局',
     'set.blRight': '右手', 'set.blLeft': '左手', 'set.blCompact': '紧凑',
+    'set.gfx': '画质',
+    'set.gfxAuto': '自动', 'set.gfxLow': '低', 'set.gfxHigh': '高',
     'set.motionDenied': '体感权限被拒绝 — 改用触屏操控。',
     'set.motionUnsupported': '运动传感器不可用 — 改用触屏操控。',
     'set.controlScheme': '转向方式',
@@ -716,7 +823,29 @@ const I18N = {
     'meta.maxed': '已满级',
     'meta.requires': '需要 {r}',
     'meta.buyLvl': '升级 — {c} 点',
+    'pilot.callsign': '呼号',
+    'pilot.emblem': '徽标',
+    'pilot.placeholder': '输入呼号',
+    'pilot.buy': '解锁 — {c} 点',
+    'pilot.locked': '已锁定',
+    'pilot.needAch': '需要：{a}',
     'banner.achUnlocked': '★ 解锁 {n} 项成就 ★',
+    /* ---- 每日挑战 (F7) ---- */
+    'daily.title': '◆ 每日挑战',
+    'daily.sub': '今天所有人飞同一个种子 — 仅一次机会。日期 {date}。',
+    'daily.play': '▶ 出击今日任务',
+    'daily.done': '✔ 今日已完成',
+    'daily.best': '今日最佳 {best}',
+    'daily.locked': '明天再来挑战新种子',
+
+    /* ---- 首领连战 (F15) ---- */
+    'bossrush.title': '☠ 首领连战',
+    'bossrush.start': '☠ 首领连战',
+    'bossrush.locked': '☠ 首领连战 — 通关战役后解锁',
+    'bossrush.sub': '全部首领，一条命，固定配置。挑战最快用时。',
+    'bossrush.best': '最佳用时 {t}',
+    'bossrush.wave': '首领 {n} / {total}',
+    'bossrush.cleared': '连战通关 — {t}',
 
     meta: {
       'hull':     { name: '强化机体',   desc: '每次出击开始时拥有更高的机体强度（每级 +6% 最大生命）。' },

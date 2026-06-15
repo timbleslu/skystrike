@@ -46,6 +46,72 @@ class AudioEngine {
     this.eO2.frequency.setTargetAtTime(f * 1.5, t, 0.2);
     this.eLP.frequency.setTargetAtTime(240 + thr * 480 + sf * 220, t, 0.2);
   }
+  // Per-jet engine timbre table: baseAdd shifts the idle pitch, ratio scales the 2nd oscillator,
+  // lpAdd opens/closes the filter for brighter vs throatier tones.
+  // Jets grouped by character: twin-whine (hi ratio), heavy (lo base), agile (mid/bright).
+  static jetEngParams(id) {
+    const P = {
+      'FT-1':   { baseAdd:  0, ratio: 1.50, lpAdd:   0 },   // baseline
+      'F-22':   { baseAdd: -6, ratio: 1.48, lpAdd: -30 },   // deep stealth growl
+      'SU-57':  { baseAdd: 10, ratio: 1.62, lpAdd:  40 },   // twin-whine nacelles
+      'J-20':   { baseAdd:  4, ratio: 1.58, lpAdd:  20 },   // twin-whine canard
+      'F-35':   { baseAdd: -4, ratio: 1.44, lpAdd: -20 },   // single fat engine, duller
+      'EFT':    { baseAdd:  8, ratio: 1.60, lpAdd:  30 },   // Typhoon twin scream
+      'RAFALE': { baseAdd:  6, ratio: 1.56, lpAdd:  20 },   // Rafale snappy
+      'TEJAS':  { baseAdd: -2, ratio: 1.45, lpAdd: -10 },   // light single, quieter
+      'FA18':   { baseAdd:  2, ratio: 1.52, lpAdd:  10 },   // Hornet mid-growl
+      'J-36':   { baseAdd:-10, ratio: 1.40, lpAdd: -50 },   // flying wing, buried exhaust, deep
+      'F-47':   { baseAdd:-12, ratio: 1.38, lpAdd: -60 },   // 6th-gen ultra-deep
+      'NGAD':   { baseAdd: -8, ratio: 1.42, lpAdd: -40 },   // demonstrator, slightly lighter
+      'J-50':   { baseAdd:  3, ratio: 1.54, lpAdd:  10 },   // lambda wing, slight whine
+    };
+    return P[id] || P['FT-1'];
+  }
+  setEngineJet(jetId, thr, sf) {
+    if (!this.on) return;
+    const p = AudioEngine.jetEngParams(jetId);
+    const t = this.ctx.currentTime;
+    this.engGain.gain.setTargetAtTime(0.028 + thr * 0.042, t, 0.2);
+    const f = 48 + p.baseAdd + thr * 56 + sf * 28;
+    this.eO1.frequency.setTargetAtTime(f, t, 0.2);
+    this.eO2.frequency.setTargetAtTime(f * p.ratio, t, 0.2);
+    this.eLP.frequency.setTargetAtTime(240 + p.lpAdd + thr * 480 + sf * 220, t, 0.2);
+  }
+  // Rising sweep (300→1600 Hz, 0.32s) then a held locked tone (1800 Hz, 0.18s) — fires ONCE on lock edge.
+  lockTone() {
+    if (!this.on) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    // sweep: sine rising 300→1600
+    const os = ctx.createOscillator(), gs = ctx.createGain();
+    os.type = 'sine'; os.frequency.setValueAtTime(300, now);
+    os.frequency.exponentialRampToValueAtTime(1600, now + 0.30);
+    gs.gain.setValueAtTime(0.0001, now);
+    gs.gain.linearRampToValueAtTime(0.13, now + 0.005);
+    gs.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+    os.connect(gs); gs.connect(this.master); os.start(now); os.stop(now + 0.35);
+    // locked tone: steady 1800 Hz sine, short attack/release
+    const ol = ctx.createOscillator(), gl = ctx.createGain();
+    ol.type = 'sine'; ol.frequency.value = 1800;
+    gl.gain.setValueAtTime(0.0001, now + 0.28);
+    gl.gain.linearRampToValueAtTime(0.15, now + 0.30);
+    gl.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
+    ol.connect(gl); gl.connect(this.master); ol.start(now + 0.28); ol.stop(now + 0.50);
+  }
+  // Crunch burst (filtered noise) + descending engine fade (saw 160→30 Hz) — fires on player kill.
+  killSfx() {
+    if (!this.on) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    // crunch: bandpass noise burst (harsh metallic)
+    this.burst(0.18, 0.28, 'bandpass', 1800, 400);
+    // descending engine fade: sawtooth 160→30 Hz
+    const od = ctx.createOscillator(), gd = ctx.createGain();
+    od.type = 'sawtooth'; od.frequency.setValueAtTime(160, now);
+    od.frequency.exponentialRampToValueAtTime(30, now + 0.45);
+    gd.gain.setValueAtTime(0.0001, now);
+    gd.gain.linearRampToValueAtTime(0.12, now + 0.008);
+    gd.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+    od.connect(gd); gd.connect(this.master); od.start(now); od.stop(now + 0.52);
+  }
   blip(freq, dur, type, gain, slideTo) {
     if (!this.on) return;
     const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain();
@@ -122,6 +188,7 @@ function initThree() {
   sun.shadow.camera.right = sun.shadow.camera.top = 650;
   sun.shadow.camera.near = 50; sun.shadow.camera.far = 6000;
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 2.5;
+  refreshGfxTier(); applyGfxQuality();   // F11: pick render tier + size the shadow map for it (low = cheaper shadows)
   scene.add(sun.target);
   const rim = new THREE.DirectionalLight(0x77a8ff, 0.55);
   rim.position.set(-0.5, 0.35, -0.9).multiplyScalar(2000); scene.add(rim); rimLight = rim;
@@ -145,6 +212,20 @@ function onResize() {
   renderer.setSize(W, H);
   const c = document.getElementById('h2d'); c.width = W; c.height = H;
   if(isTouchEnabled) initTouchControls();
+}
+
+// F11 mobile perf — apply the resolved gfxTier to the sun shadow (resolution + frustum depth). VISUAL-ONLY:
+// no light direction, scene contents, or gameplay change — just a cheaper shadow pass on the low tier. Idempotent
+// (safe to call on every settings change). Disposing the existing shadow.map forces Three to reallocate it at the
+// new mapSize on the next render; the far plane shrink also tightens depth precision for the closer mid-range view.
+function applyGfxQuality() {
+  if (!sun) return;
+  const low = gfxTier === 'low';
+  const res = low ? 1024 : 2048;
+  sun.shadow.mapSize.set(res, res);
+  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }   // force realloc at the new resolution
+  sun.shadow.camera.far = low ? 3000 : 6000;
+  sun.shadow.camera.updateProjectionMatrix();
 }
 
 function buildSky() {

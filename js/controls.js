@@ -239,6 +239,14 @@ function initTouchControls() {
   function joyEnd(e) {
     for (let i = 0; i < e.changedTouches.length; i++) {
       if (e.changedTouches[i].identifier === joyTouchId) {
+        // Barrel-roll touch double-tap: release with strong lateral deflection twice within threshold
+        if (state === 'playing' && !paused && Math.abs(touchInput.x) > 0.6) {
+          const now = performance.now() / 1000;
+          if (rollDetect(now, barrelRollLastTouchTap, BARREL_ROLL_THRESHOLD) && rollCooldownGate(barrelRollCooldown)) {
+            barrelRollRequest = true;
+          }
+          barrelRollLastTouchTap = now;
+        }
         joyActive = false; joyTouchId = null; touchInput.x = 0; touchInput.y = 0;
         if (joyStick) joyStick.style.transform = `translate(0px, 0px)`;
         if (joyBase) joyBase.classList.remove('floating');
@@ -266,6 +274,9 @@ function initTouchControls() {
   bindBtn('tb-spc', 'spc', () => { if (state === 'playing' && !paused) useSpecial(); });
   bindBtn('tb-lck', 'lck', () => { if (state === 'playing' && !paused) cycleLock(); });
   bindBtn('tb-cam', 'cam', () => { if (state === 'playing' && !paused) cycleCamera(); });
+  bindBtn('tb-aws', 'aws', () => { if (state === 'playing' && !paused) awacsAction('strike'); });    // AWACS orbital strike
+  bindBtn('tb-ars', 'ars', () => { if (state === 'playing' && !paused) awacsAction('resupply'); });   // AWACS resupply
+  bindBtn('tb-ajm', 'ajm', () => { if (state === 'playing' && !paused) awacsAction('jam'); });        // AWACS jamming
 
   applyButtonStyle();
 }

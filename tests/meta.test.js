@@ -80,10 +80,35 @@ const ACHIEVEMENTS = [
   { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
 ];
 
+const EMBLEMS = [
+  { id: 'wings',    gate: 'free' },
+  { id: 'skull',    gate: 'sp',  cost: 80 },
+  { id: 'star',     gate: 'sp',  cost: 80 },
+  { id: 'dragon',   gate: 'ach', ach: 'bossSlayer' },
+  { id: 'ace',      gate: 'ach', ach: 'acePilot' },
+];
+/* uppercase, strip non-A-Z0-9, clamp to 8 chars. Empty string is valid (anonymous). */
+function sanitizeCallsign(str) {
+  if (!str) return '';
+  return String(str).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+/* true if the emblem is accessible to the player given current meta state. */
+function emblemUnlocked(id, m) {
+  if (!m) return false;
+  for (var j = 0; j < EMBLEMS.length; j++) {
+    var e = EMBLEMS[j];
+    if (e.id !== id) continue;
+    if (e.gate === 'free') return true;
+    if (e.gate === 'sp') return !!(m.patches && m.patches[id]);
+    if (e.gate === 'ach') return !!(m.ach && m.ach[e.ach]);
+    return false;
+  }
+  return false;
+}
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -96,8 +121,33 @@ function loadMeta() {
     meta = validMeta(m) ? m : freshMeta();
   } catch (e) { meta = freshMeta(); }
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
+  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) / boss-rush (F15) — keep progression, never wipe
+  if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
+  if (typeof meta.callsign !== 'string') meta.callsign = '';
+  if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
+  if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
+  if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
+  if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
+
+// ---- mirror of js/globals.js boss-rush pure core (keep byte-identical between the MIRROR markers) ----
+// === MIRROR START (globals.js boss-rush core) ===
+const BOSS_RUSH_POOL = ['boss', 'boss', 'boss', 'boss', 'boss'];
+const BOSS_RUSH_TOTAL = BOSS_RUSH_POOL.length;   // bosses to clear for a full run
+function bossRushNext(index) {
+  if (index < 0 || index >= BOSS_RUSH_POOL.length) return null;
+  return BOSS_RUSH_POOL[index];
+}
+function bossRushDone(killed, total) {
+  return killed >= total;
+}
+function betterTime(prev, next) {
+  if (!(next > 0)) return prev > 0 ? prev : 0;     // invalid new time: keep the old record (or 0)
+  if (!(prev > 0)) return next;                    // no prior record: the new time is the record
+  return next < prev ? next : prev;                // otherwise keep the smaller
+}
+// === MIRROR END ===
 
 function perkLevel(id) { return (meta && meta.perks[id]) || 0; }
 function perkMaxed(id) { const d = META_BY_ID[id]; return !!d && perkLevel(id) >= d.max; }
@@ -333,10 +383,139 @@ assert.strictEqual(meta.sp, 777, 'SP persisted across load');
 assert.strictEqual(meta.perks.hull, 3, 'perk level persisted');
 assert.strictEqual(meta.jets['J-20'], true, 'unlocked jet persisted');
 // starter jets always re-added even if a save omits one
-_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} });
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {}, stars: {} });
 loadMeta();
 assert.strictEqual(meta.jets['FT-1'], true, 'starter jets re-seeded on load');
 console.log('ok - validMeta rejects malformed blobs; persistence round-trips; starters re-seeded');
+
+// ============================================================================
+//  sanitizeCallsign — uppercase, charset filter, length clamp, empty ok
+// ============================================================================
+assert.strictEqual(sanitizeCallsign(''), '', 'empty input -> empty');
+assert.strictEqual(sanitizeCallsign(null), '', 'null -> empty');
+assert.strictEqual(sanitizeCallsign(undefined), '', 'undefined -> empty');
+assert.strictEqual(sanitizeCallsign('ace'), 'ACE', 'lowercases to upper');
+assert.strictEqual(sanitizeCallsign('Maverick1'), 'MAVERICK', 'clamps to 8 chars');
+assert.strictEqual(sanitizeCallsign('VIPER'), 'VIPER', 'already-clean passthrough');
+assert.strictEqual(sanitizeCallsign('gh0st-1'), 'GH0ST1', 'strips non-alphanumeric');
+assert.strictEqual(sanitizeCallsign('a!b@c#d$e%f^'), 'ABCDEF', 'strips special chars, no overflow');
+assert.strictEqual(sanitizeCallsign('12345678extra'), '12345678', '8-digit numeric clamp');
+assert.strictEqual(sanitizeCallsign('   HELLO   '), 'HELLO', 'spaces stripped');
+console.log('ok - sanitizeCallsign: uppercase, A-Z0-9 filter, 8-char clamp, empty valid');
+
+// ============================================================================
+//  emblemUnlocked — free always true, SP-gated needs patch, ach-gated needs achievement
+// ============================================================================
+meta = freshMeta();
+assert.strictEqual(emblemUnlocked('wings', meta), true, 'free emblem always unlocked');
+assert.strictEqual(emblemUnlocked('skull', meta), false, 'sp-gated emblem locked without patch');
+assert.strictEqual(emblemUnlocked('star', meta), false, 'sp-gated star locked without patch');
+assert.strictEqual(emblemUnlocked('dragon', meta), false, 'ach-gated dragon locked without achievement');
+assert.strictEqual(emblemUnlocked('ace', meta), false, 'ach-gated ace locked without achievement');
+assert.strictEqual(emblemUnlocked('nonexistent', meta), false, 'unknown emblem is false');
+assert.strictEqual(emblemUnlocked('wings', null), false, 'null meta is false');
+// SP-gated unlocks with patch ownership
+meta = freshMeta(); meta.patches.skull = true;
+assert.strictEqual(emblemUnlocked('skull', meta), true, 'skull unlocked after patch owned');
+assert.strictEqual(emblemUnlocked('star', meta), false, 'star still locked (diff patch)');
+// ach-gated unlocks with achievement
+meta = freshMeta(); meta.ach.bossSlayer = true;
+assert.strictEqual(emblemUnlocked('dragon', meta), true, 'dragon unlocked after bossSlayer');
+assert.strictEqual(emblemUnlocked('ace', meta), false, 'ace still locked (diff ach)');
+meta.ach.acePilot = true;
+assert.strictEqual(emblemUnlocked('ace', meta), true, 'ace unlocked after acePilot');
+console.log('ok - emblemUnlocked: free=always, sp-gated=patch, ach-gated=achievement');
+
+// ============================================================================
+//  validMeta + freshMeta include callsign/emblem/patches fields
+// ============================================================================
+const fm = freshMeta();
+assert.strictEqual(fm.callsign, '', 'fresh meta callsign is empty string');
+assert.strictEqual(fm.emblem, 'wings', 'fresh meta emblem is wings');
+assert.ok(fm.patches && typeof fm.patches === 'object', 'fresh meta patches is object');
+assert.ok(validMeta(fm), 'fresh meta with new fields validates');
+// validMeta accepts legacy saves (missing callsign/emblem/patches) — backwards-compat
+const legacy = { v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} };
+assert.ok(validMeta(legacy), 'legacy save without callsign/emblem/patches still validates');
+// round-trip through JSON preserves new fields
+meta = freshMeta(); meta.callsign = 'VIPER'; meta.emblem = 'skull'; meta.patches.skull = true; saveMeta();
+meta = null; loadMeta();
+assert.strictEqual(meta.callsign, 'VIPER', 'callsign persists across save/load');
+assert.strictEqual(meta.emblem, 'skull', 'emblem persists across save/load');
+assert.strictEqual(meta.patches.skull, true, 'patch ownership persists across save/load');
+// loadMeta heals legacy saves missing the new fields
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} });
+loadMeta();
+assert.strictEqual(meta.callsign, '', 'legacy save healed: callsign defaults to empty');
+assert.strictEqual(meta.emblem, 'wings', 'legacy save healed: emblem defaults to wings');
+assert.ok(typeof meta.patches === 'object', 'legacy save healed: patches defaults to object');
+console.log('ok - validMeta accepts + defaults new fields; legacy saves heal on load');
+
+// ============================================================================
+//  boss-rush (F15): unlock flag + best-time persistence + back-compat (NO progression wipe)
+// ============================================================================
+// fresh meta starts locked with no recorded time
+meta = freshMeta();
+assert.strictEqual(meta.bossRushUnlocked, false, 'boss-rush starts locked on a fresh meta');
+assert.strictEqual(meta.bossRushBest, 0, 'no boss-rush record on a fresh meta');
+// unlock flag + best time persist across save/load
+meta = freshMeta(); meta.sp = 90; meta.bossRushUnlocked = true; meta.bossRushBest = 142; saveMeta();
+meta = null; loadMeta();
+assert.strictEqual(meta.bossRushUnlocked, true, 'boss-rush unlock persists across load');
+assert.strictEqual(meta.bossRushBest, 142, 'boss-rush best time persists across load');
+assert.strictEqual(meta.sp, 90, 'SP intact alongside the new boss-rush fields');
+// CRITICAL back-compat: a legacy save WITHOUT any boss-rush fields still validates, keeps
+// its progression (sp/perks/jets), and heals the new fields to defaults — never wipes.
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 555, jets: { 'J-20': true }, skins: {}, perks: { hull: 4 }, ach: {} });
+assert.ok(validMeta(JSON.parse(_kv[META_KEY])), 'legacy save (no boss-rush fields) still validates — validMeta stayed lenient');
+loadMeta();
+assert.strictEqual(meta.sp, 555, 'legacy save keeps its SP (no progression wipe)');
+assert.strictEqual(meta.perks.hull, 4, 'legacy save keeps its perk levels');
+assert.strictEqual(meta.jets['J-20'], true, 'legacy save keeps its unlocked jets');
+assert.strictEqual(meta.bossRushUnlocked, false, 'legacy save healed: boss-rush locked by default');
+assert.strictEqual(meta.bossRushBest, 0, 'legacy save healed: boss-rush best defaults to 0');
+console.log('ok - boss-rush: unlock+best persist; legacy save without fields keeps progression + heals');
+
+// ---- pure boss-rush sequence/timing helpers (globals.js) ----
+// sequence: legs 0..TOTAL-1 spawn a boss; out-of-range yields null (no spawn)
+assert.strictEqual(bossRushNext(0), 'boss', 'first leg spawns a boss');
+assert.strictEqual(bossRushNext(BOSS_RUSH_TOTAL - 1), 'boss', 'last leg spawns a boss');
+assert.strictEqual(bossRushNext(BOSS_RUSH_TOTAL), null, 'past the end: no boss to spawn');
+assert.strictEqual(bossRushNext(-1), null, 'negative index: no spawn');
+assert.ok(BOSS_RUSH_TOTAL >= 1, 'the gauntlet has at least one boss');
+// completion: done only once killed reaches total (saturating)
+assert.strictEqual(bossRushDone(0, BOSS_RUSH_TOTAL), false, 'not done with zero kills');
+assert.strictEqual(bossRushDone(BOSS_RUSH_TOTAL - 1, BOSS_RUSH_TOTAL), false, 'not done one boss short');
+assert.strictEqual(bossRushDone(BOSS_RUSH_TOTAL, BOSS_RUSH_TOTAL), true, 'done at exactly total');
+assert.strictEqual(bossRushDone(BOSS_RUSH_TOTAL + 2, BOSS_RUSH_TOTAL), true, 'done stays true past total');
+// best time: lower wins; 0 means "no record" so the first finish always sets it
+assert.strictEqual(betterTime(0, 120), 120, 'first finish sets the record');
+assert.strictEqual(betterTime(120, 95), 95, 'a faster run replaces the record');
+assert.strictEqual(betterTime(95, 120), 95, 'a slower run does not replace the record');
+assert.strictEqual(betterTime(100, 0), 100, 'an invalid (0) new time keeps the old record');
+assert.strictEqual(betterTime(0, 0), 0, 'no record and no valid time stays 0');
+assert.strictEqual(betterTime(100, -5), 100, 'a negative new time keeps the old record');
+console.log('ok - boss-rush pure helpers: sequence bounds, saturating completion, lower-wins best time');
+
+// ---- byte-identity guard for the boss-rush MIRROR block in globals.js ----
+const gsrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'globals.js'), 'utf8');
+function bodyOfIn(fnName, text) {
+  const start = text.indexOf('function ' + fnName + '(');
+  assert.ok(start !== -1, 'globals.js defines function ' + fnName);
+  let i = text.indexOf('{', start), depth = 0, end = -1;
+  for (; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
+  }
+  return text.slice(start, end);
+}
+for (const fn of ['bossRushNext', 'bossRushDone', 'betterTime']) {
+  const mine = eval('(' + fn + ').toString()').replace(/^[^(]*\(/, 'function ' + fn + '(').replace(/\r\n/g, '\n').trim();
+  const theirs = bodyOfIn(fn, gsrc).replace(/\r\n/g, '\n').trim();
+  assert.strictEqual(theirs.replace(/\s+/g, ' '), mine.replace(/\s+/g, ' '), fn + ' in globals.js must match the mirror (ignoring whitespace)');
+}
+assert.ok(/const BOSS_RUSH_POOL\s*=/.test(gsrc), 'globals.js defines BOSS_RUSH_POOL');
+console.log('ok - boss-rush mirrors (bossRushNext/bossRushDone/betterTime) match globals.js source');
 
 // ============================================================================
 //  byte-identity guard: mirrored fns must match js/meta.js verbatim (whitespace-insensitive)
@@ -355,7 +534,8 @@ function bodyOf(fnName, text) {
 function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
 const strip = (x) => x.replace(/\s+/g, ' ');
 for (const fn of ['spAward', 'perkCost', 'applyMetaPerks', 'validMeta', 'freshMeta', 'buyPerk',
-                  'buyJet', 'buySkin', 'grantAch', 'checkAchievements', 'jetUnlocked', 'skinOwned']) {
+                  'buyJet', 'buySkin', 'grantAch', 'checkAchievements', 'jetUnlocked', 'skinOwned',
+                  'sanitizeCallsign', 'emblemUnlocked']) {
   const mine = norm(eval('(' + fn + ').toString()').replace(/^[^(]*\(/, 'function ' + fn + '('));
   const theirs = norm(bodyOf(fn, src));
   assert.strictEqual(strip(theirs), strip(mine), fn + ' in meta.js must match the mirror (ignoring whitespace)');

@@ -118,6 +118,7 @@ function tickMission(m, dt) {
 
 /* ---------------- runtime glue (browser only; not mirrored) ---------------- */
 let mission = null;     // active mission state, or null for sweep-only / non-mission sectors
+let setpieceActive = null;   // F14: id of the authored set-piece running this sector (or null for procedural)
 
 // objective readout for the HUD/banner; localized. timer mm:ss for timed types.
 function objectiveText(m) {
@@ -139,12 +140,15 @@ function missionName(type) { return t('mission.name.' + type) !== 'mission.name.
    from sectorPlan() — escort/defend are first-class sectors now (no roll).
    'none' (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
 function startSectorMission(plan, wave) {
+  setpieceActive = plan.setpiece || null;   // F14: tag the resolution path when this node is an authored set-piece
   const type = plan.mission;
   if (type === 'none' || type === 'boss' || !MISSIONS[type]) { mission = null; return; }
   mission = startMission(type, wave, Math.random);
   if (type === 'escort') spawnEscortConvoy(mission, wave);
   if (type === 'defend') spawnDefendAsset(mission, wave);
-  showBanner(tf('banner.missionStart', { name: missionName(type) }));
+  // F14: a set-piece leads with its own authored intro line instead of the generic objective header
+  if (setpieceActive && SETPIECES[setpieceActive]) showBanner(t(SETPIECES[setpieceActive].intro));
+  else showBanner(tf('banner.missionStart', { name: missionName(type) }));
   showBanner(objectiveText(mission));
 }
 
@@ -220,7 +224,9 @@ function missionSiteDown() { if (mission && mission.type === 'strike') mission.p
 function onMissionResolved(won) {
   if (won) {
     if (typeof run !== 'undefined' && run) run.missions = (run.missions || 0) + 1;   // feeds spAward / achievement at run end
-    showBanner(t('banner.missionComplete'));
+    // F14: an authored set-piece shows its own outro line; procedural objectives use the generic one
+    showBanner(setpieceActive ? t(setpieceOutcome(setpieceActive, true)) : t('banner.missionComplete'));
+    setpieceActive = null;
     audio.power(); empFlash = Math.max(empFlash, 0.35);
     // pay a small RP/score bonus for completing the objective (meta SP follows from run stats at run end)
     const bonus = Math.round((40 + wave * 4) * (player.rpMul || 1));
@@ -230,6 +236,7 @@ function onMissionResolved(won) {
     if (mission.type !== 'sweep') clearMissionLeftovers();
   } else {
     showBanner(t('banner.missionFailedObj'));
+    setpieceActive = null;
     audio.warn();
     if (typeof gameOver === 'function') { gameOver(); }
   }

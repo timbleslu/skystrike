@@ -48,6 +48,7 @@ canvas{display:block}
 .meter.shd>div{background:linear-gradient(90deg,#7fd8ff,#cdeeff);box-shadow:0 0 10px #7fd8ffaa}
 #hpbar.low .meter.hp>div{background:linear-gradient(90deg,#ff394b,#ff8c2b);box-shadow:0 0 14px #ff394b;animation:lowblink .5s infinite}
 @keyframes lowblink{50%{opacity:.45}}
+.ab-chip{font-size:11px;font-weight:bold;padding:2px 6px;background:rgba(255,200,80,0.85);color:#000;border-radius:3px;font-family:var(--disp);text-shadow:none;letter-spacing:1px}
 
 .tr{top:0;right:0;text-align:right;display:flex;gap:24px}
 .stat b{font-family:var(--disp);font-weight:900;font-size:24px;color:var(--txt);text-shadow:0 0 12px rgba(25,240,212,.55);line-height:1}
@@ -210,6 +211,8 @@ canvas{display:block}
 .hbtns{display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap}
 .ghostbtn{background:transparent;border:1px solid rgba(91,138,134,.5);color:var(--cy);font-family:var(--disp);letter-spacing:2px;font-size:12px;padding:14px 22px;cursor:pointer;transition:.2s;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)}
 .ghostbtn:hover{border-color:var(--cy);background:rgba(25,240,212,.08);box-shadow:0 0 18px rgba(25,240,212,.2)}
+.ghostbtn.disabled,.ghostbtn:disabled{opacity:.45;cursor:not-allowed;color:var(--dim);box-shadow:none}
+.ghostbtn.disabled:hover,.ghostbtn:disabled:hover{border-color:rgba(91,138,134,.5);background:transparent;box-shadow:none}
 #manual{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(circle at 50% 25%,rgba(8,20,30,.97),rgba(2,5,10,.99));backdrop-filter:blur(6px);overflow:auto;padding:40px 24px}
 #manual.show{display:block}
 #manual .mwrap{max-width:1000px;margin:0 auto}
@@ -271,6 +274,17 @@ canvas{display:block}
 .gowrap h1{font-family:var(--disp);font-weight:900;font-size:clamp(40px,8vw,86px);letter-spacing:10px;color:var(--red);text-shadow:0 0 40px rgba(255,57,75,.6)}
 .gostats{font-family:var(--disp);letter-spacing:4px;font-size:18px;margin:20px 0 30px;color:var(--txt)}
 .gostats b{color:var(--cy);font-size:28px;margin:0 8px}
+.gograde{display:flex;flex-direction:column;align-items:center;margin:18px 0 10px;gap:4px}
+.grade-title{font-family:var(--disp);font-size:9px;letter-spacing:3px;color:var(--dim);text-transform:uppercase}
+.grade-letter{font-family:var(--disp);font-weight:900;font-size:clamp(56px,10vw,96px);line-height:1;letter-spacing:6px;color:var(--cy);text-shadow:0 0 40px rgba(25,240,212,.7)}
+.grade-bonus{font-family:var(--disp);font-size:12px;letter-spacing:4px;color:var(--yel)}
+.gostars{display:flex;flex-direction:column;align-items:center;margin:6px 0 10px;gap:3px}
+.stars-title{font-family:var(--disp);font-size:9px;letter-spacing:3px;color:var(--dim);text-transform:uppercase}
+.stars-pips{font-size:clamp(22px,4vw,32px);line-height:1;letter-spacing:6px;color:var(--yel);text-shadow:0 0 24px rgba(255,210,80,.6)}
+.stars-note{font-family:var(--disp);font-size:11px;letter-spacing:3px;color:var(--dim)}
+.gospbox{font-family:var(--disp);letter-spacing:3px;font-size:14px;margin:10px 0 22px;color:var(--dim)}
+.gospbox b{color:var(--cy);font-size:22px;margin:0 6px}
+.gospsep{margin:0 4px;color:var(--dim)}
 #gameover button{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:6px;color:var(--ink);padding:15px 50px;border:none;cursor:pointer;
   background:linear-gradient(90deg,var(--red),var(--warn));clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);box-shadow:0 0 30px rgba(255,57,75,.5)}
 #gameover button:hover{transform:scale(1.04)}
@@ -387,6 +401,28 @@ canvas{display:block}
 .ob-continue{display:block;margin:26px auto 0;background:transparent;border:1px solid var(--cy);color:var(--cy);font-family:var(--disp);letter-spacing:3px;font-size:16px;padding:15px 44px;cursor:pointer;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%)}
 .ob-continue:hover{background:rgba(25,240,212,.1)}
 @media(max-width:640px){.ob-grid{grid-template-columns:1fr}}
+/* first-run guided tutorial (F5): non-blocking HUD overlay (only #tutSkip is interactive) */
+#tutorial{position:fixed;inset:0;z-index:55;display:none;pointer-events:none}
+#tutorial.show{display:block}
+#tutCard{position:absolute;left:50%;bottom:14%;transform:translateX(-50%);max-width:min(620px,86vw);
+  background:linear-gradient(180deg,rgba(6,18,26,.94),rgba(3,8,14,.96));border:1px solid var(--cy);
+  box-shadow:0 0 26px rgba(25,240,212,.35),inset 0 0 18px rgba(25,240,212,.06);
+  padding:16px 20px 18px;text-align:center;
+  clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%)}
+.tut-step{font-family:var(--mono);letter-spacing:3px;font-size:11px;color:var(--cy);opacity:.85;margin-bottom:6px}
+.tut-text{font-family:var(--disp);letter-spacing:1px;font-size:16px;line-height:1.45;color:#eafffb;text-shadow:0 0 14px rgba(25,240,212,.4)}
+.tut-skip{pointer-events:auto;margin-top:14px;background:transparent;border:1px solid rgba(91,138,134,.6);
+  color:var(--dim);font-family:var(--mono);letter-spacing:3px;font-size:11px;padding:7px 22px;cursor:pointer;transition:color .15s,border-color .15s}
+.tut-skip:hover{color:var(--cy);border-color:var(--cy)}
+/* pointer arrow: positioned by JS via left/top; default points down at a HUD element */
+#tutArrow{position:absolute;width:0;height:0;display:none;
+  border-left:13px solid transparent;border-right:13px solid transparent;border-top:20px solid var(--cy);
+  filter:drop-shadow(0 0 8px rgba(25,240,212,.8));transform:translate(-50%,0);
+  animation:tutBob 1s ease-in-out infinite}
+#tutArrow.show{display:block}
+#tutArrow.up{border-top:0;border-bottom:20px solid var(--cy)}
+@keyframes tutBob{0%,100%{margin-top:0}50%{margin-top:7px}}
+@media(max-width:640px){#tutCard{bottom:20%}.tut-text{font-size:14px}}
 /* settings language toggle */
 .langtog{display:flex;gap:8px}
 .langbtn{background:transparent;border:1px solid rgba(91,138,134,.5);color:var(--txt);font-family:var(--mono);font-size:12px;padding:5px 12px;cursor:pointer}
@@ -456,3 +492,17 @@ canvas{display:block}
 .jmskin.on{border-color:var(--cy);box-shadow:0 0 10px rgba(25,240,212,.6)}
 .jmskin.locked{opacity:.7}
 .jmsklk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:#fff;background:rgba(0,0,0,.45);border-radius:50%}
+/* ---- pilot callsign + emblem panel (F13) ---- */
+#pilotPanel{margin:8px 0 4px;border:1px solid rgba(91,138,134,.25);background:rgba(10,22,30,.4);padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.pilotRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(25,240,212,.35);color:var(--cy);font-family:var(--mono);font-size:13px;letter-spacing:3px;padding:6px 10px;width:140px;text-transform:uppercase;outline:none;transition:.15s}
+#callsignInput:focus{border-color:var(--cy);background:rgba(4,9,14,.9)}
+#emblemGrid{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.emblembtn{width:38px;height:38px;border:2px solid rgba(91,138,134,.4);background:rgba(4,9,14,.6);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;padding:0}
+.emblembtn:hover{border-color:var(--cy)}
+.emblembtn.active{border-color:var(--cy);background:rgba(25,240,212,.1);box-shadow:0 0 8px rgba(25,240,212,.4)}
+.emblembtn.elocked{opacity:.55;cursor:default}
+.emblembtn.elocked:hover{border-color:rgba(91,138,134,.4)}
+.emblemcost{position:absolute;bottom:1px;right:2px;font-size:8px;font-family:var(--mono);color:var(--yel);line-height:1}
+/* gameover pilot line */
+.gopilot{font-family:var(--disp);font-size:15px;letter-spacing:3px;color:var(--cy);text-align:center;min-height:22px;margin-bottom:4px}

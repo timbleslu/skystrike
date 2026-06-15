@@ -11,3 +11,6 @@ graphify-out/
 # claude-mem auto-sidecars (machine-local mem logs, not source) — keep only root CLAUDE.md
 **/CLAUDE.md
 !/CLAUDE.md
+
+# local subagent worktrees (never commit)
+.claude/worktrees/

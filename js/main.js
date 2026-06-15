@@ -5,14 +5,21 @@ function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
 function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
 function nextWave() {
   wave++;
+  noDamageWave = true;   // arm the per-wave no-damage star tracker; damagePlayer clears it on a hit
   player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls refresh each sector/wave (F10)
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
   if (opMode && opSector) {
-    const plan = sectorPlan(opSector, wave);
+    let plan = sectorPlan(opSector, wave);
+    // F14: certain campaign nodes run an AUTHORED set-piece instead of procedural waves. The
+    // current sector sits at stage opStage-1 (launchSector already advanced opStage past it).
+    // Fire once on the sector's first entry, then fold the encounter onto the plan.
+    const spId = setpieceFor(opSector, opStage - 1);
+    if (spId && !run.setpieceDone[opSector]) { run.setpieceDone[opSector] = true; plan = setpiecePlan(spId, plan); }
     strikeWaveActive = plan.ground;
     applyWeather(rollWeather(weatherSeed + wave)); applyTimeOfDay(plan.tod);   // random weather per wave, TOD fixed to sector type
-    startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset
+    startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset (+ set-piece intro)
     const sectorLine = plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) });
     const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);   // intro line names the condition
     for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
@@ -23,6 +30,8 @@ function nextWave() {
     if (plan.ground) queueStrikeSite(wave);
     if (plan.rival && rivalEnabled && !plan.boss) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
     else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+    // F8: named hostile ace — spawns once per sector (guarded by run.sectorAceSpawned)
+    if (plan.hostileAce && !run.sectorAceSpawned[opSector]) { run.sectorAceSpawned[opSector] = true; pendingSpawns.push(spawnHostileAce); }
     return;
   }
   applyWeather(rollWeather(weatherSeed + wave));
@@ -78,6 +87,24 @@ function spawnAce() {
   e.bulletAmmo = 75; e.missileAmmo = 2; e.flareAmmo = 1;
   styleElite(e, 0xffcf3a, 0x4a3300, 0.9, 0xffd24d, 0xffd24d);
   showBanner(t('banner.aceInbound'));
+}
+function spawnHostileAce() {
+  const aceEntry = hostileAceFor(opSector);
+  if (!aceEntry) return;
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool() });
+  e.elite = true;
+  e.aceName = jetNameForShape(e.shapeKey);
+  e.callsign = aceEntry.callsign;
+  e.hostileAce = true;
+  e.desprintUsed = false; e.sprintTimer = 0;
+  const baseHp = 170 + wave * 9;
+  e.hp = e.maxHp = Math.round(baseHp * aceEntry.hpMul);
+  e.turnRate = aceEntry.turnRate;
+  e.speed = (e.speed || 280) * aceEntry.speed;
+  e.gunRunCd = rand(1.2, 2.5);
+  e.bulletAmmo = 90; e.missileAmmo = 3; e.flareAmmo = 2;
+  styleElite(e, 0xd44fff, 0x330044, 1.0, 0xcc55ff, 0xcc44ff);
+  showBanner(tf('banner.hostileAceInbound', { name: aceEntry.callsign }));
 }
 function spawnRival() {
   const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape] });
@@ -196,7 +223,7 @@ function updateBossSpecials(e, dt, dist) {
       e.attack = null;
       if (u.core) u.core.material.emissiveIntensity = 1.2;
       if (u.ring) u.ring.scale.setScalar(1);
-      e.specialCd = e.enraged ? rand(3.5, 5.5) : rand(6, 9);
+      e.specialCd = e.phase >= 3 ? rand(2.6, 4.2) : e.phase >= 2 ? rand(3.5, 5.5) : rand(6, 9);
     }
     return;
   }
@@ -222,12 +249,13 @@ function updateBossSpecials(e, dt, dist) {
 
 function fireBossAttack(e, dist) {
   const pp = e.group.position;
-  const enr = e.enraged;
+  const enr = e.phase >= 2;   // phase 2 keeps the legacy "enraged" intensity; phase 3 pushes further
+  const p3 = e.phase >= 3;
   if (e.attack === 'barrage') {
     // radial fan of homing missiles — wide spread so positioning + flares matter
-    const count = enr ? 12 : 8;
+    const count = p3 ? 16 : enr ? 12 : 8;
     const fwd = fwdQ(e.logicQuat, t3);
-    const spread = enr ? 2.6 : 1.9;
+    const spread = p3 ? 3.1 : enr ? 2.6 : 1.9;
     for (let i = 0; i < count; i++) {
       const a = (count > 1 ? (i / (count - 1) - 0.5) : 0) * spread;
       const dir = t1.copy(fwd).applyAxisAngle(UPV, a);
@@ -236,16 +264,16 @@ function fireBossAttack(e, dist) {
     }
     audio.missile(); audio.blip(220, 0.3, 'sawtooth', 0.12, 70);
   } else if (e.attack === 'drones') {
-    spawnDroneSwarm(enr ? 5 : 3, pp);          // plays its own banner + audio
+    spawnDroneSwarm(p3 ? 6 : enr ? 5 : 3, pp);          // plays its own banner + audio
   } else if (e.attack === 'pulse') {
     spawnBigRing(pp, 0xff39c8, 150);
     empFlash = 0.5;
     audio.explode(true); audio.blip(120, 0.5, 'sine', 0.16, 40);
     // instant close-range AoE — the telegraph gave the player time to break away
     if (player.invuln <= 0 && pp.distanceTo(player.group.position) < 900) {
-      damagePlayer(enr ? 38 : 26, pp);
+      damagePlayer(p3 ? 46 : enr ? 38 : 26, pp);
     }
-    for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (w.alive && pp.distanceToSquared(w.group.position) < 810000) damageWingman(w, enr ? 70 : 50); }
+    for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (w.alive && pp.distanceToSquared(w.group.position) < 810000) damageWingman(w, p3 ? 85 : enr ? 70 : 50); }
   }
 }
 
@@ -436,6 +464,25 @@ function updateCCA(w, dt) {
   }
 }
 
+// F11 mobile perf — draw-distance cull of distant enemy meshes. VISUAL-ONLY: toggles e.group.visible, NEVER
+// despawns (markers/locks/AI keep running on hidden foes). High tier forces everything visible (so toggling
+// quality high mid-run instantly restores draw). Inactive (non-boss, non-rival) jets hide sooner as a cheap
+// far-LOD; bosses/rivals stay drawn (they anchor the fight and are rarely beyond cull range).
+function cullDistantEnemies() {
+  if (!player || !player.group) return;
+  const high = gfxTier !== 'low';
+  const px = player.group.position;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !e.group) continue;
+    if (high) { if (!e.group.visible) e.group.visible = true; continue; }
+    if (e.type === 'boss' || e.rival) { if (!e.group.visible) e.group.visible = true; continue; }
+    const inactiveJet = e.type !== 'ground';   // air fodder/drones/bombers get the tighter LOD band
+    const r = inactiveJet ? GFX_CULL_JET : GFX_CULL_FAR;
+    const vis = e.group.position.distanceToSquared(px) <= r * r;
+    if (e.group.visible !== vis) e.group.visible = vis;
+  }
+}
 function updateWingmen(dt) {
   for (let i = wingmen.length - 1; i >= 0; i--) {
     const w = wingmen[i];
@@ -586,6 +633,7 @@ function handleWaves(dt) {
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
     // a mission sector stays open until its objective resolves (escort exit / defend hold / etc.)
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0 && !(mission && mission.status === 'active')) {
+      if (noDamageWave) run.cleanWaves = (run.cleanWaves || 0) + 1;   // cleared a full wave untouched → no-damage star progress
       betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
       if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       openTechScreen();   // open the R&D tech tree before the next wave
@@ -595,6 +643,54 @@ function handleWaves(dt) {
     if (waveTimer <= 0) { betweenWaves = false; nextWave(); }
   }
   processSpawnQueue(SPAWN_PER_FRAME);   // build a few queued enemies this frame
+}
+
+/* Boss-rush (F15): replaces the wave/tech loop. No waves, no R&D tech tree, no op-map — just the
+   fixed boss gauntlet flown back-to-back. The next boss spawns once the arena is clear; the run
+   completes when every boss in BOSS_RUSH_POOL has been defeated. bossRushIndex counts spawned legs;
+   bossRushKilled (run.boss) counts defeats. Timed from bossRushT0 for the local best-time board. */
+function spawnBossRushBoss() {
+  const kind = bossRushNext(bossRushIndex);   // pure: the boss type for this leg (or null when done)
+  if (!kind) return;
+  spawnBoss();                                // reuse the F4 multi-phase boss spawner
+  bossRushIndex++;
+  showBanner(tf('bossrush.wave', { n: bossRushIndex, total: BOSS_RUSH_TOTAL }));
+}
+function handleBossRush(dt) {
+  processSpawnQueue(SPAWN_PER_FRAME);
+  if (bossRushDone(run.boss, BOSS_RUSH_TOTAL)) {   // every boss defeated → finish + record time
+    if (state === 'playing') bossRushComplete();
+    return;
+  }
+  const bossAlive = enemies.some(e => e.alive && e.type === 'boss');
+  if (!bossAlive && pendingSpawns.length === 0) {
+    if (bossRushIndex < BOSS_RUSH_TOTAL) {         // arena clear and more bosses to come → next leg
+      betweenWaves = true; waveTimer -= dt;
+      if (waveTimer <= 0) { waveTimer = 3; spawnBossRushBoss(); betweenWaves = false; }
+    }
+  }
+}
+
+/* First-run guided tutorial (F5): each frame, detect whether the player performed the CURRENT
+   step's action from live player/run state and feed the matching event to the pure step machine
+   (advanceTutorial → tutorialNext, ui.js/globals.js). Detection is action-based so the prompt only
+   advances once the pilot actually does the thing — works identically for keyboard and touch input.
+     step 0 pitch    : nose pitching (|pitchRate| past a clear threshold)
+     step 1 throttle : throttle pushed past 0.6
+     step 2 guns     : the run shot counter ticked up since we started/last advanced
+     step 3 missile  : a full lock was achieved AND a missile was launched since baseline */
+function tickTutorial() {
+  if (typeof tutorial === 'undefined' || !tutorial.active || tutorial.done || !player) return;
+  const step = TUTORIAL_STEPS[tutorial.step];
+  if (step === 'pitch') {
+    if (Math.abs(player.pitchRate || 0) > 0.25) advanceTutorial('pitched');
+  } else if (step === 'throttle') {
+    if ((player.throttle || 0) > 0.6) advanceTutorial('throttled');
+  } else if (step === 'guns') {
+    if ((run.shots || 0) > tutorial.prevShots) { tutorial.prevMissiles = run.missiles || 0; advanceTutorial('fired'); }
+  } else if (step === 'missile') {
+    if (player.lockedTarget && (run.missiles || 0) > tutorial.prevMissiles) advanceTutorial('missile');
+  }
 }
 
 /* ---------------- input ---------------- */
@@ -613,6 +709,14 @@ addEventListener('keydown', e => {
     if (e.code === 'Enter')      { e.preventDefault(); startGame(selectedJet); return; }
   }
   if (state !== 'playing' || e.repeat || paused) return;
+  // Barrel-roll double-tap: Q or E pressed twice within BARREL_ROLL_THRESHOLD seconds
+  if (e.code === 'KeyQ' || e.code === 'KeyE') {
+    const now = performance.now() / 1000;
+    if (rollDetect(now, barrelRollLastKeyTap, BARREL_ROLL_THRESHOLD) && rollCooldownGate(barrelRollCooldown)) {
+      barrelRollRequest = true;
+    }
+    barrelRollLastKeyTap = now;
+  }
   switch (e.code) {
     case 'KeyG': fireMissile(); break;
     case 'KeyX': deployFlares(); break;
@@ -621,6 +725,9 @@ addEventListener('keydown', e => {
     case 'KeyC': cycleCamera(); break;
     case 'KeyT': wingCommand('focus'); break;
     case 'KeyY': wingCommand('regroup'); break;
+    case 'Digit1': awacsAction('strike'); break;     // AWACS orbital strike (key 1)
+    case 'Digit2': awacsAction('resupply'); break;   // AWACS emergency resupply (key 2)
+    case 'Digit3': awacsAction('jam'); break;        // AWACS jamming (key 3)
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -656,16 +763,19 @@ function animate() {
     readFlightInput();   // compose touch/motion into flightInput before the player update consumes it
     updateWeather(dt * ts);   // advance turbulence phase + storm lightning before the player update reads it
     updatePlayer(dt);
+    tickTutorial();   // first-run guided tutorial: gate stepped prompts on the player's own actions
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
+    cullDistantEnemies();   // F11: low tier hides far enemy meshes (.visible only; AI/markers/locks untouched)
     updateWingmen(dt * ts);
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);
     updateMission(dt * ts);   // tick the active sector mission + resolve win/fail
-    handleWaves(dt);
+    if (bossRush) handleBossRush(dt);   // F15: fixed boss gauntlet — no waves / tech tree / op-map
+    else handleWaves(dt);
     maybeSpawnCrate(dt);
     updateCamera(dt);
     updatePlayerShadow();
-    audio.setEngine(player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
+    audio.setEngineJet(player.jet && player.jet.id, player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
     drawHUD(); drawRadar(); updateDom(dt);
   } else if (state === 'dead') {
     updateParticles(dt);

@@ -16,7 +16,7 @@
   <div class="panel tl">
     <div class="barrow" id="hpbar"><span class="lab" id="lblHp">HP</span><div class="meter hp"><div id="hpfill" style="width:100%"></div></div></div>
     <div class="barrow"><span class="lab" id="lblShd">SHD</span><div class="meter shd"><div id="shfill" style="width:100%"></div></div></div>
-    <div class="barrow"><span class="lab" id="lblThr">THR</span><div class="meter thr"><div id="thrfill" style="width:60%"></div></div></div>
+    <div class="barrow"><span class="lab" id="lblThr">THR</span><div class="meter thr"><div id="thrfill" style="width:60%"></div></div><span class="ab-chip" id="abIndicator" style="display:none">AB</span></div>
   </div>
   <div class="panel tr">
     <div class="stat"><span class="lab" id="lblScore">Score</span><b id="score">0</b></div>
@@ -67,6 +67,9 @@
   <div class="t-btn" id="tb-brk">BRK</div>
   <div class="t-btn" id="tb-cam">CAM</div>
   <div class="t-btn" id="tb-lck">LOCK</div>
+  <div class="t-btn" id="tb-aws">STRK</div>
+  <div class="t-btn" id="tb-ars">RSPLY</div>
+  <div class="t-btn" id="tb-ajm">JAM</div>
 </div>
 
 <div id="vignette" class="overlay"></div>
@@ -80,6 +83,16 @@
     <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
     <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
     <div id="hangarSp"><span id="hangarSpLbl">STRATEGIC POINTS</span> <b id="hangarSpVal">0</b></div>
+    <div id="pilotPanel">
+      <div class="pilotRow">
+        <span id="lblCallsign" class="dlab">CALLSIGN</span>
+        <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+      </div>
+      <div class="pilotRow">
+        <span id="lblEmblem" class="dlab">EMBLEM</span>
+        <div id="emblemGrid"></div>
+      </div>
+    </div>
     <div id="diffsel">
       <span id="lblDiff" class="dlab">DIFFICULTY</span>
       <div class="dbtns">
@@ -116,9 +129,13 @@
     <div id="rivalBoard"><div id="rbTitle" class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
     <div class="hbtns">
       <button id="launch">&#9654; LAUNCH MISSION</button>
+      <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>
+      <button id="bossRushBtn" class="ghostbtn disabled" disabled>&#9760; BOSS RUSH</button>
       <button id="metaBtn" class="ghostbtn">&#9650; COMMAND &amp; PROGRESSION</button>
       <button id="manualBtn" class="ghostbtn">&#9636; CONTROLS &amp; MANUAL</button>
     </div>
+    <div id="dailyNote" class="controls"><span id="dailyNoteTxt"></span></div>
+    <div id="bossRushNote" class="controls"></div>
     <div class="controls">
       <span id="hangarCtl1"></span><br>
       <span id="hangarCtl2"></span><br>
@@ -130,6 +147,7 @@
 <div id="gameover">
   <div class="gowrap">
     <h1>MISSION FAILED</h1>
+    <div id="go_pilot" class="gopilot"></div>
     <div class="gostats"><span id="goLblScore">SCORE</span> <b id="go_score">0</b> &middot; <span id="goLblWave">WAVE</span> <b id="go_wave">0</b> &middot; <span id="goLblBest">BEST</span> <b id="go_best">0</b></div>
     <div class="debrief">
       <div><span id="goLblKills">Kills</span><b id="go_kills">0</b></div>
@@ -137,6 +155,8 @@
       <div><span id="goLblMsl">Missiles</span><b id="go_msl">0</b></div>
       <div><span id="goLblTime">Time</span><b id="go_time">0:00</b></div>
     </div>
+    <div id="go_grade" class="gograde"><span class="grade-title" id="goLblGrade">MISSION RATING</span><span class="grade-letter">C</span><span class="grade-bonus">SP BONUS x1.00</span></div>
+    <div id="go_stars" class="gostars"><span class="stars-title" id="goLblStars">OBJECTIVES</span><span class="stars-pips">☆☆☆</span><span class="stars-note">0 / 3</span></div>
     <div class="gospbox"><span id="goLblSp">STRATEGIC POINTS EARNED</span> <b id="go_sp">+0</b> <span class="gospsep">&middot;</span> <span id="goLblSpTotal">BANKED</span> <b id="go_spTotal">0</b></div>
     <button id="redeploy">&#9654; REDEPLOY</button>
   </div>
@@ -301,6 +321,7 @@
         <div class="srow"><label id="lblHaptics" for="setHaptics">Haptic feedback (vibration)</label><input id="setHaptics" type="checkbox"></div>
         <div class="srow"><label id="lblBtnOpacity" for="setBtnOpacity">Button opacity</label><input id="setBtnOpacity" type="range" min="40" max="100" value="80"></div>
         <div class="srow"><label id="lblBtnLayout">Button layout</label><div class="segtog" id="btnLayoutTog"><button class="segbtn" data-bl="right">Right</button><button class="segbtn" data-bl="left">Left</button><button class="segbtn" data-bl="compact">Compact</button></div></div>
+        <div class="srow"><label id="lblGfx">Graphics quality</label><div class="segtog" id="gfxQualityTog"><button class="segbtn" data-gq="auto">Auto</button><button class="segbtn" data-gq="low">Low</button><button class="segbtn" data-gq="high">High</button></div></div>
         <div class="srow"><label id="lblVol" for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
         <div class="srow"><label id="lblInvert" for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
         <div class="srow"><label id="lblAutoLock" for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
@@ -364,6 +385,16 @@
     <p id="obTouch" class="ob-note"></p>
     <p id="obMore" class="ob-note"></p>
     <button id="obContinue" class="ob-continue">▶ CONTINUE</button>
+  </div>
+</div>
+
+<!-- first-run guided tutorial (F5): non-blocking HUD overlay; only #tutSkip is interactive -->
+<div id="tutorial">
+  <div id="tutArrow"></div>
+  <div id="tutCard">
+    <div id="tutStep" class="tut-step">1/4</div>
+    <div id="tutText" class="tut-text"></div>
+    <button id="tutSkip" class="tut-skip">SKIP</button>
   </div>
 </div>
 

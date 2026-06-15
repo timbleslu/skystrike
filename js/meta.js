@@ -32,6 +32,58 @@ function spAward(run, player) {
   return Math.max(0, Math.floor(sp));
 }
 
+/* ---------------- run grading (PURE — mirrored byte-identical in tests/grading.test.js) ----------------
+   Grades the completed run on kill efficiency, time, damage taken, and objectives. Returns
+   { letter, mult, score } where letter is S/A/B/C and mult is the SP bonus multiplier.
+   Callers must stamp run.waveReached + run.timeSecs before calling so this stays pure. */
+function gradeRun(run, player) {
+  if (!run) return { letter: 'C', mult: 1.0, score: 0 };
+  var waves = Math.max(1, run.waveReached || 1);
+  var expected = waves * 4;
+  var kills = (run.kills || 0) + (run.ground || 0) + (run.boss || 0);
+  var killScore = Math.min(1, kills / expected);
+  var secs = Math.max(1, run.timeSecs || 1);
+  var timeScore = Math.min(1, (waves * 30) / secs);
+  var maxDmg = 300 + waves * 60;
+  var dmgScore = Math.max(0, 1 - (run.damageTaken || 0) / maxDmg);
+  var missionScore = Math.min(1, (run.missions || 0) / Math.max(1, Math.floor(waves / 2)));
+  var total = killScore * 0.40 + timeScore * 0.20 + dmgScore * 0.25 + missionScore * 0.15;
+  var letter, mult;
+  if (total >= 0.85)      { letter = 'S'; mult = 1.5; }
+  else if (total >= 0.65) { letter = 'A'; mult = 1.3; }
+  else if (total >= 0.40) { letter = 'B'; mult = 1.15; }
+  else                    { letter = 'C'; mult = 1.0; }
+  return { letter: letter, mult: mult, score: total };
+}
+
+/* ---------------- star objectives (PURE — mirrored byte-identical in tests/stars.test.js) ----------------
+   1–3 secondary stars per run from three independent, checkable conditions over the existing
+   `run` stats (kill efficiency / a full no-damage wave / objectives completed). Callers stamp
+   run.waveReached first (as for spAward/gradeRun). run.cleanWaves counts waves cleared without
+   taking a hit (tracked in main.js via the noDamageWave flag). Returns an integer 0..3. */
+const STAR_KILL_FRAC = 0.6;   // ≥60% of the wave-scaled expected kills earns the kills star
+function evalStars(run, player) {
+  if (!run) return 0;
+  var stars = 0;
+  var waves = Math.max(1, run.waveReached || 1);
+  var expected = waves * 4;
+  var kills = (run.kills || 0) + (run.ground || 0) + (run.boss || 0);
+  if (kills / expected >= STAR_KILL_FRAC) stars++;          // kill efficiency
+  if ((run.cleanWaves || 0) >= 1) stars++;                  // a full wave with no damage taken
+  if ((run.missions || 0) >= 1) stars++;                    // objectives / pilots rescued
+  return stars;
+}
+/* Record `stars` as the per-jet best in meta.stars[jetId] (never regresses); returns the new best.
+   Lazy-creates the stars map so a meta predating this field still works. PURE over (meta, args). */
+function bestStars(m, jetId, stars) {
+  if (!m || !jetId) return stars > 0 ? stars : 0;
+  if (!m.stars) m.stars = {};
+  var prev = m.stars[jetId] || 0;
+  var best = stars > prev ? stars : prev;
+  m.stars[jetId] = best;
+  return best;
+}
+
 /* ---------------- meta-upgrade perk tree ----------------
    Each perk is a bounded persistent edge applied at run start. apply(p, lvl) mutates the freshly
    spawned player; lvl 0 is a no-op (perk not owned). Costs scale with level via perkCost. */
@@ -94,13 +146,69 @@ const ACHIEVEMENTS = [
   { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
 ];
 
+/* ---------------- callsign + emblem (F13) ----------------
+   PURE helpers — mirrored byte-identical in tests/meta.test.js.
+   EMBLEMS: each patch has a gate type: 'free', 'sp' (cost = gate value), or 'ach' (achievement id). */
+const EMBLEMS = [
+  { id: 'wings',    gate: 'free' },
+  { id: 'skull',    gate: 'sp',  cost: 80 },
+  { id: 'star',     gate: 'sp',  cost: 80 },
+  { id: 'dragon',   gate: 'ach', ach: 'bossSlayer' },
+  { id: 'ace',      gate: 'ach', ach: 'acePilot' },
+];
+/* uppercase, strip non-A-Z0-9, clamp to 8 chars. Empty string is valid (anonymous). */
+function sanitizeCallsign(str) {
+  if (!str) return '';
+  return String(str).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+/* true if the emblem is accessible to the player given current meta state. */
+function emblemUnlocked(id, m) {
+  if (!m) return false;
+  for (var j = 0; j < EMBLEMS.length; j++) {
+    var e = EMBLEMS[j];
+    if (e.id !== id) continue;
+    if (e.gate === 'free') return true;
+    if (e.gate === 'sp') return !!(m.patches && m.patches[id]);
+    if (e.gate === 'ach') return !!(m.ach && m.ach[e.ach]);
+    return false;
+  }
+  return false;
+}
+/* buy a SP-gated patch. Returns true on success. */
+function buyPatch(id) {
+  if (!meta) return false;
+  var def = null;
+  for (var j = 0; j < EMBLEMS.length; j++) { if (EMBLEMS[j].id === id) { def = EMBLEMS[j]; break; } }
+  if (!def || def.gate !== 'sp') return false;
+  if (meta.patches && meta.patches[id]) return false;      // already owned
+  if (meta.sp < def.cost) return false;
+  meta.sp -= def.cost;
+  if (!meta.patches) meta.patches = {};
+  meta.patches[id] = true;
+  saveMeta();
+  return true;
+}
+/* set the active emblem (must be unlocked). */
+function setEmblem(id) {
+  if (!meta || !emblemUnlocked(id, meta)) return false;
+  meta.emblem = id;
+  saveMeta();
+  return true;
+}
+/* set callsign (sanitizes before saving). */
+function setCallsign(str) {
+  if (!meta) return;
+  meta.callsign = sanitizeCallsign(str);
+  saveMeta();
+}
+
 /* ---------------- persistence ----------------
    Only meta.js touches storage for the meta blob (via store.get/set). validMeta guards a loaded
    blob; malformed/legacy data falls back to a fresh meta. Mirrored byte-identical in tests. */
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {} };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -114,6 +222,13 @@ function loadMeta() {
   } catch (e) { meta = freshMeta(); }
   // ensure starter jets are always present even if an older save predates one
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
+  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) / boss-rush (F15) — keep progression, never wipe
+  if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
+  if (typeof meta.callsign !== 'string') meta.callsign = '';
+  if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
+  if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
+  if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
+  if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 

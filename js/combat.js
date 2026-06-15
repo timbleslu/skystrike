@@ -185,7 +185,7 @@ function updateMissiles(dt, ts) {
       if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) {
         let mDmg = m.dmg;
         if (m.fromGround && player.bellyArmor) mDmg *= player.bellyArmor;   // BELLY ARMOR
-        damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
+        shakeCam(0.5); damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
       }
     } else {
       for (let k = 0; k < enemies.length; k++) {
@@ -466,10 +466,12 @@ function damagePlayer(amt, src) {
   if (player.invuln > 0) return;
   amt *= DIFFS[difficulty].dmg;
   if (player.dmgReduce) amt *= (1 - player.dmgReduce);   // GUARDIAN SYSTEM upgrade
+  run.damageTaken = (run.damageTaken || 0) + amt;
+  noDamageWave = false;   // a hit landed this wave — the no-damage star is off for it (star objectives)
   player.shieldT = 4.0;
   const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, amt); player.shield -= s; amt -= s; }
-  player.hp -= amt; player.damageFlash = 0.5; player.shake = Math.max(player.shake, 0.4);
+  player.hp -= amt; player.damageFlash = 0.5; player.shake = Math.max(player.shake, 0.4); shakeCam(0.5);
   if (src) { player.hurtDir = new THREE.Vector3().copy(src).sub(player.group.position).normalize(); player.hurtT = 1.0; }
   audio.hurt();
   haptic(60);
@@ -531,12 +533,30 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
     e.hp = 0; spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
     if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
   }
-  if (e.type === 'boss' && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.35) {
-    e.enraged = true; e.turnRate *= 1.3; empFlash = 0.45; showBanner(t('banner.bossEnraged'));
-    if (e.group.userData.body) e.group.userData.body.emissiveIntensity = 1.8;
+  if (e.type === 'boss' && e.hp > 0) {
+    // HP thresholds drive a once-per-phase state machine (bossPhaseFor/nextBossPhase, globals.js).
+    // nextBossPhase never regresses and only advances, so a transition fires exactly once even if
+    // HP oscillates near a boundary (lifesteal etc.) — and a big hit can skip straight to phase 3.
+    const np = nextBossPhase(e.phase, e.hp / e.maxHp);
+    while (e.phase < np) bossEnterPhase(e, e.phase + 1);   // step through each crossed phase in order
   }
   if (e.hp <= 0) killEnemy(e, byPlayer, byCCA);
   else if (byPlayer) haptic(6);   // light buzz on landing a non-fatal hit (kills buzz via killEnemy)
+}
+// Boss crosses an HP threshold -> escalate. Idempotent per phase (the caller guards via
+// nextBossPhase). Bumps aggression (turnRate; fire-rate/specials read e.phase elsewhere) and
+// fires a visual cue + banner + screen shake. Reusable by a future Boss-Rush mode.
+function bossEnterPhase(e, ph) {
+  e.phase = ph;
+  e.turnRate *= 1.18;                                    // each phase is a little twitchier
+  empFlash = Math.max(empFlash, ph >= 3 ? 0.6 : 0.45);  // afterburner-ignition screen flash
+  if (e.group.userData.body) e.group.userData.body.emissiveIntensity = ph >= 3 ? 2.4 : 1.8;
+  if (e.group.userData.core) e.group.userData.core.material.emissiveIntensity = ph >= 3 ? 5.5 : 3.5;
+  if (ph >= 3) for (let i = 0; i < 6; i++) spawnSmoke(e.group.position, 0xff5a8a, 2.2);   // armor shed
+  showBanner(t(ph >= 3 ? 'banner.bossPhase3' : 'banner.bossPhase2'));
+  audio.power(); audio.warn();
+  haptic([40, 30, 60]);
+  if (typeof shakeCam === 'function') shakeCam(ph >= 3 ? 1.0 : 0.8);   // shakeCam may not be merged yet
 }
 function tpBaseFor(e) {
   return e.type === 'boss' ? TP.boss : e.type === 'bomber' ? TP.bomber : e.elite ? TP.ace
@@ -546,7 +566,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
-  if (byPlayer) haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20);
+  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(0.25); audio.killSfx(); }
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
@@ -625,6 +645,46 @@ function nearestEnemyInFront(coneDot) {
   }
   return best;
 }
+// nearest LIVE non-boss enemy in any direction (AWACS orbital strike targets it; bosses are immune).
+function nearestNonBossEnemy() {
+  let best = null, bd = Infinity;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive || e.type === 'boss') continue;
+    const d = t4.copy(e.group.position).sub(player.group.position).length();
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+
+/* ---------------- AWACS support calls (F10/F11/F12) ---------------- */
+// Spend RP (player.tp) on a capped-per-sector radio call. The cost/cap math is the pure
+// awacsCall() resolver (globals.js, mirrored in tests/awacs.test.js); this glue applies the effect.
+function awacsAction(key) {
+  if (!player) return false;
+  const res = awacsCall({ rp: player.tp, uses: awacsUses }, AWACS_COSTS, AWACS_USES_MAX, key);
+  if (!res.ok) {
+    if (res.reason === 'noRp') { showBanner(t('awacs.noRp')); audio.warn(); }
+    else if (res.reason === 'empty') { showBanner(t('awacs.empty')); audio.warn(); }
+    else audio.ui();
+    return false;
+  }
+  player.tp = res.rp; awacsUses = res.uses;   // commit the deduction + use spend
+  if (key === 'strike') {
+    const tgt = nearestNonBossEnemy();
+    if (tgt) { explode(tgt.group.position, true); killEnemy(tgt, true); }
+    empFlash = Math.max(empFlash, 0.45);
+    showBanner(t('awacs.strike')); audio.power();
+  } else if (key === 'resupply') {
+    player.bullets = player.maxBullets;
+    player.flares = player.maxFlares;
+    player.missiles = player.maxMissiles;
+    showBanner(t('awacs.resupply')); audio.power();
+  } else if (key === 'jam') {
+    player.jammer = Math.max(player.jammer, AWACS_JAM_TIME);   // reuse the SPECTRA jam pathway (updateMissiles blinds enemy missiles while jammer>0)
+    showBanner(t('awacs.jam')); audio.power();
+  }
+  return true;
+}
 function cycleLock() {
   const fwd = fwdOf(player.group, t3);
   const cand = [];
@@ -662,7 +722,7 @@ function updateLockOn(dt) {
     player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1)));   // weather slows lock-on
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
-    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lock(); audio.blip(1850, 0.14, 'sine', 0.13); haptic([18, 40, 18]); }
+    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); }
   } else {
     player.lockProgress = Math.max(0, player.lockProgress - dt / (LOCK_TIME * 0.5));
     if (player.lockProgress < 1) player.lockedTarget = null;
@@ -795,6 +855,8 @@ function updatePlayer(dt) {
   if (player.empBurst > 0) player.empBurst -= dt;
   if (player.stealthField > 0) player.stealthField -= dt;
   if (player.invuln > 0) player.invuln -= dt;
+  if (barrelRollCooldown > 0) barrelRollCooldown -= dt;
+  if (barrelRollAnim > 0) barrelRollAnim -= dt;
   if (player.jammer > 0) player.jammer -= dt;
   if (player.slow > 0) player.slow -= dt;
   if (player.dewLance > 0) player.dewLance -= dt;
@@ -828,6 +890,16 @@ function updatePlayer(dt) {
   pitchIn = clamp(pitchIn - cmd.pitchCmd, -1, 1);   // +pitchCmd (climb) -> -pitchIn (nose up, = W)
   rollIn = clamp(rollIn - cmd.rollCmd, -1, 1);      // +rollCmd (bank right / bank-hold) -> -rollIn (= E)
 
+  // Barrel-roll evasive maneuver: consume the request flag set by controls/main keydown
+  if (barrelRollRequest) {
+    barrelRollRequest = false;
+    barrelRollAnim = BARREL_ROLL_DURATION;
+    barrelRollCooldown = BARREL_ROLL_COOLDOWN;
+    player.invuln = Math.max(player.invuln, BARREL_ROLL_INVULN);
+    haptic(80);
+    if (typeof showBanner === 'function') showBanner(t('banner.evade'), 1.2);
+  }
+
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;
   player.highG = brake && (down('KeyS') || (isTouchEnabled && flightInput.pitch < -0.5));
@@ -838,6 +910,13 @@ function updatePlayer(dt) {
   const tgtYaw = yawIn * tb * 0.5;
   player.pitchRate = damp(player.pitchRate, tgtPitch, player.vectorSurge > 0 ? 6.5 : 4.5, dt);
   player.rollRate = damp(player.rollRate, tgtRoll, 5.5, dt);
+  // Barrel-roll animation: override roll rate to drive a full 360° spin over BARREL_ROLL_DURATION.
+  // TWO_PI / BARREL_ROLL_DURATION gives the required angular velocity; direction = player's last roll intent
+  // (or +1 if neutral). Overrides normal damped rate for the duration, then exits cleanly via normal damp.
+  if (barrelRollAnim > 0) {
+    const spinDir = (rollIn >= 0) ? 1 : -1;
+    player.rollRate = spinDir * (TWO_PI / BARREL_ROLL_DURATION);
+  }
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
   // turbulence as a direct rate perturbation after the control law — feels like physical buffeting rather than fighting the controls
   if (weather.turbulence > 0) {

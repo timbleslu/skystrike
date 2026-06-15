@@ -47,6 +47,11 @@ function updateCamera(dt) {
     camera.position.y += rand(-1, 1) * player.shake * 3;
     camera.position.z += rand(-1, 1) * player.shake * 2;
   }
+  if (camShake > 0) {
+    camera.position.x += rand(-1, 1) * camShake * CAMSHAKE_K;
+    camera.position.y += rand(-1, 1) * camShake * CAMSHAKE_K;
+    camShake = decayShake(camShake, dt);
+  }
   camera.updateMatrixWorld();
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
 }
@@ -139,6 +144,33 @@ function drawGunPipper(ctx, e) {
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
 
+// Small secondary-objective (star) checklist on the HUD: three live conditions, each ★ when met.
+// Mirrors evalStars' conditions (kill efficiency / no-damage wave / objectives) against the live run.
+function drawStarObjectives(ctx, cx) {
+  if (typeof run === 'undefined' || !run) return;
+  const waves = Math.max(1, wave || 1);
+  const killsMet = ((run.kills || 0) + (run.ground || 0) + (run.boss || 0)) / (waves * 4) >= 0.6;
+  const cleanMet = (run.cleanWaves || 0) >= 1;
+  const rescMet = (run.missions || 0) >= 1;
+  const items = [
+    [killsMet, t('stars.obj.kills')],
+    [cleanMet, t('stars.obj.noDamage')],
+    [rescMet, t('stars.obj.rescue')],
+  ];
+  ctx.save();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.font = '11px ' + HUDFONT;
+  let y = 40;
+  for (let i = 0; i < items.length; i++) {
+    const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = met ? 'rgba(255,210,80,0.95)' : 'rgba(150,170,190,0.7)';
+    ctx.fillText(label, cx - w / 2, y);
+    y += 15;
+  }
+  ctx.restore();
+}
+
 // Localized active-condition label (incl. night), or '' for plain daylight-clear (nothing to flag).
 function weatherLabel() {
   const night = (typeof timeOfDay !== 'undefined') && timeOfDay === 2;
@@ -200,6 +232,7 @@ function drawHUD() {
     ctx.textBaseline = 'middle';
   }
 
+  drawStarObjectives(ctx, cx);   // small secondary-objective (star) checklist, top-centre
   drawWeatherChip(ctx);   // active condition (storm / fog / night) top-left
 
   // lead-computing gunsight for the nearest forward gun target
@@ -518,9 +551,86 @@ function cacheEl() {
     wPull: g('w_pull'), wMissile: g('w_missile'), wHighG: g('w_highg'), wStealth: g('w_stealth'), wLock: g('w_lock'), wDrone: g('w_drone'),
     vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
     bossbar: g('bossbar'), bossfill: g('bossfill'),
+    abIndicator: g('abIndicator'),
+    tut: g('tutorial'), tutCard: g('tutCard'), tutArrow: g('tutArrow'),
+    tutStep: g('tutStep'), tutText: g('tutText'), tutSkip: g('tutSkip'),
   };
 }
 function tog(e, on) { e.classList.toggle('show', !!on); }
+
+/* ---------------- first-run guided tutorial (F5) ----------------
+   Lightweight stepped prompts that gate on the player's own actions during their first wave.
+   The pure step machine is `tutorialNext` (globals.js, mirrored in tests/tutorial.test.js); the
+   `tutorial` runtime state lives in globals.js. main.js feeds detected action events here each frame.
+   Touch vs keyboard is chosen at render time (isTouchEnabled) so the hint text matches the input mode. */
+// i18n key for the current step's hint, touch-aware.
+function tutStepKey(step) {
+  const base = TUTORIAL_STEPS[step];                 // 'pitch' | 'throttle' | 'guns' | 'missile'
+  if (!base) return 'tut.done';
+  return isTouchEnabled ? ('tut.' + base + 'Touch') : ('tut.' + base);  // e.g. tut.pitchTouch / tut.pitch
+}
+// the HUD element a step's arrow should point at (null = no specific element → arrow hidden).
+function tutArrowTarget(step) {
+  if (TUTORIAL_STEPS[step] === 'throttle') return el.thr && el.thr.parentElement;   // the THR meter row
+  if (TUTORIAL_STEPS[step] === 'missile') return el.missiles;                       // the Msl counter
+  return null;
+}
+// position the pointer arrow just above (or below) the target element, in viewport coords.
+function placeTutArrow(target) {
+  const a = el.tutArrow;
+  if (!a) return;
+  if (!target) { a.classList.remove('show'); return; }
+  const r = target.getBoundingClientRect();
+  if (!r.width && !r.height) { a.classList.remove('show'); return; }
+  const cx = r.left + r.width / 2;
+  // prefer pointing DOWN from just above the element; if it's near the top edge, flip to point UP from below.
+  const above = r.top > 46;
+  a.classList.toggle('up', !above);
+  a.style.left = cx + 'px';
+  a.style.top = (above ? r.top - 26 : r.bottom + 6) + 'px';
+  a.classList.add('show');
+}
+// render the overlay for the current tutorial.step (or hide it when done/inactive).
+function renderTutorial() {
+  if (!el.tut) return;
+  if (!tutorial.active || tutorial.done || tutorial.step >= TUTORIAL_DONE) { el.tut.classList.remove('show'); return; }
+  el.tut.classList.add('show');
+  if (el.tutText) el.tutText.textContent = t(tutStepKey(tutorial.step));
+  if (el.tutStep) el.tutStep.textContent = (tutorial.step + 1) + '/' + TUTORIAL_DONE;
+  placeTutArrow(tutArrowTarget(tutorial.step));
+}
+// begin the tutorial for a new player's first run. Idempotent; baselines the run-stat counters
+// so we detect the NEXT gun/missile action rather than ammo spent before this point.
+function startTutorial() {
+  tutorial.active = true; tutorial.done = false; tutorial.step = 0;
+  tutorial.prevShots = (typeof run === 'object' && run) ? (run.shots || 0) : 0;
+  tutorial.prevMissiles = (typeof run === 'object' && run) ? (run.missiles || 0) : 0;
+  if (el.tutSkip) {
+    el.tutSkip.textContent = t('tut.skip');
+    if (!el.tutSkip._wired) {                        // wire Skip once
+      el.tutSkip._wired = true;
+      el.tutSkip.addEventListener('click', () => { advanceTutorial('skip'); if (audio.on) audio.ui(); });
+    }
+  }
+  renderTutorial();
+}
+// tear down: latch done, hide overlay. Persistence is shared with onboarding (skystrike_onboarded
+// is already set once a new player clears the controls brief) — no extra storage key.
+function finishTutorial() {
+  tutorial.active = false; tutorial.done = true;
+  if (el.tut) el.tut.classList.remove('show');
+  showBanner(t('tut.done'));
+}
+// feed one detected action event into the pure machine; re-render or finish on a step change.
+function advanceTutorial(event) {
+  if (!tutorial.active || tutorial.done) return;
+  const next = tutorialNext(tutorial.step, event);
+  if (next === tutorial.step) return;               // no-op event
+  tutorial.step = next;
+  if (next >= TUTORIAL_DONE) { finishTutorial(); return; }
+  if (audio.on) audio.ui();
+  renderTutorial();
+}
 
 let bannerT = 0;
 function showBanner(txt) { el.banner.textContent = txt; el.banner.classList.remove('show'); void el.banner.offsetWidth; el.banner.classList.add('show'); bannerT = 2.0; }
@@ -556,6 +666,7 @@ function updateDom(dt) {
   el.hp.style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
   el.shd.style.width = clamp(player.shield / player.maxShield * 100, 0, 100) + '%';
   el.thr.style.width = clamp(player.throttle * 100, 0, 100) + '%';
+  el.abIndicator.style.display = (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none';
   el.spd.textContent = Math.round(player.speed * 2.3);
   el.alt.textContent = Math.round(Math.max(0, player.group.position.y) * 3.28);
   el.score.textContent = player.score.toLocaleString();
@@ -878,6 +989,8 @@ function buildHangar() {
   bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
   bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => { motionAggression = v; }, () => { if (audio.on) audio.ui(); });
   bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
+  // F11 graphics quality (auto/low/high) — re-resolve the render tier + resize the shadow map on change (visual-only)
+  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => { gfxQuality = v; if (typeof refreshGfxTier === 'function') refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }, () => { if (audio.on) audio.ui(); });
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
   const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
   const shs = g('setHudScale');
@@ -901,11 +1014,84 @@ function buildHangar() {
   updateBest();
   updateSpHud();
   renderKillBoard();
+  const db = g('dailyBtn'); if (db) db.addEventListener('click', startDaily);
+  refreshDailyEntry();
+  const brb = g('bossRushBtn'); if (brb) brb.addEventListener('click', startBossRush);   // F15
+  refreshBossRushEntry();
   const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);
   const mc = g('metaClose'); if (mc) mc.addEventListener('click', closeMetaScreen);
   const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
   const mg = g('metaGrid'); if (mg) mg.addEventListener('click', onMetaGridClick);
   const js = g('jetStage'); if (js) js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
+  renderPilotPanel();
+}
+/* ---------------- pilot callsign + emblem (F13) ---------------- */
+const EMBLEM_GLYPHS = { wings: '✈', skull: '☠', star: '★', dragon: 'ᚴ', ace: '◈' };
+function renderPilotPanel() {
+  // callsign input
+  const inp = g('callsignInput');
+  if (inp) {
+    inp.value = (meta && meta.callsign) || '';
+    inp.placeholder = t('pilot.placeholder');
+    inp.removeEventListener('input', _onCallsignInput);
+    inp.addEventListener('input', _onCallsignInput);
+    inp.removeEventListener('blur', _onCallsignBlur);
+    inp.addEventListener('blur', _onCallsignBlur);
+  }
+  // emblem grid
+  const grid = g('emblemGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  EMBLEMS.forEach(function(em) {
+    const unlocked = emblemUnlocked(em.id, meta);
+    const active = meta && meta.emblem === em.id;
+    const btn = document.createElement('button');
+    btn.className = 'emblembtn' + (active ? ' active' : '') + (unlocked ? '' : ' elocked');
+    btn.title = em.id;
+    btn.dataset.eid = em.id;
+    const glyph = EMBLEM_GLYPHS[em.id] || '◆';
+    btn.textContent = glyph;
+    if (!unlocked && em.gate === 'sp') {
+      const cost = document.createElement('span');
+      cost.className = 'emblemcost';
+      cost.textContent = em.cost;
+      btn.appendChild(cost);
+    }
+    btn.addEventListener('click', function() { onEmblemClick(em.id); });
+    grid.appendChild(btn);
+  });
+  // update label
+  setTxt('lblCallsign', t('pilot.callsign'));
+  setTxt('lblEmblem', t('pilot.emblem'));
+}
+function _onCallsignInput(e) {
+  // show sanitized value live
+  const raw = e.target.value;
+  const clean = sanitizeCallsign(raw);
+  e.target.value = clean;
+}
+function _onCallsignBlur(e) {
+  if (!meta) return;
+  const clean = sanitizeCallsign(e.target.value);
+  e.target.value = clean;
+  setCallsign(clean);
+}
+function onEmblemClick(id) {
+  if (!meta) return;
+  if (emblemUnlocked(id, meta)) {
+    setEmblem(id);
+    renderPilotPanel();
+  } else {
+    // try to buy if SP-gated
+    const def = EMBLEMS.filter(function(e) { return e.id === id; })[0];
+    if (def && def.gate === 'sp') {
+      if (buyPatch(id)) { setEmblem(id); updateSpHud(); renderPilotPanel(); if (typeof audio !== 'undefined' && audio.on) audio.ui(); }
+      else showBanner(t('meta.needSp'));
+    } else if (def && def.gate === 'ach') {
+      const achDef = EMBLEMS.filter(function(e) { return e.id === id; })[0];
+      showBanner(tf('pilot.needAch', { a: achDef.ach }));
+    }
+  }
 }
 // first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
 function initOnboarding() {
@@ -1087,9 +1273,11 @@ function onMetaGridClick(e) {
   if (buyPerk(b.dataset.perk)) { updateSpHud(); renderMetaScreen(); audio.ui(); }
   else showBanner(t('meta.needSp'));
 }
-function startGame(i) {
+function startGame(i, daily, rush) {
   if (state !== 'hangar') return;
   if (!jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
+  dailyMode = !!daily;   // explicit per-launch: only startDaily passes true; normal launches reset it to false
+  bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
   selectedJet = i; audio.init();
   closeManual();
   if (previewJet) { scene.remove(previewJet); previewJet = null; }
@@ -1100,21 +1288,30 @@ function startGame(i) {
 
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
-  applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree
+  if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
-  opMap = null; opStage = 0; opSector = null; mission = null;
-  weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;   // fresh per-run weather seed (standalone rolls derive from it)
+  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
+  barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
+  opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
+  weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0 };
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls fresh each run (F10); nextWave also refreshes per sector
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
+  noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
+  bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)
   state = 'playing';
+  // first-run guided tutorial (F5): only a brand-new player (this session) who hasn't finished it yet.
+  // isReturningPlayer (globals.js) is captured at boot, so returning players skip entirely. Never in boss-rush.
+  if (!bossRush && !isReturningPlayer && !tutorial.done) startTutorial();
+  else if (el.tut) el.tut.classList.remove('show');
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
 }
@@ -1132,6 +1329,10 @@ function gameOver() {
 function endRun(title) {
   const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
   if (player.score > bestScore) { bestScore = player.score; saveBest(); }
+  if (dailyMode) {   // record today's daily best (attempt already marked played in startDaily); keep the higher score
+    const rec = dailyToday();
+    saveDaily({ date: rec.date, played: true, best: Math.max(rec.best || 0, player.score) });
+  }
   g('go_score').textContent = player.score.toLocaleString();
   g('go_wave').textContent = wave;
   const secs = Math.max(0, Math.round((performance.now() - run.t0) / 1000));
@@ -1141,16 +1342,38 @@ function endRun(title) {
   const dm = g('go_msl'); if (dm) dm.textContent = run.missiles;
   const dt2 = g('go_time'); if (dt2) dt2.textContent = (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2);
   // ---- meta-progression: bank SP + evaluate achievements from this run's stats ----
-  // stamp the two derived stats onto run so spAward / achievement predicates stay pure
+  // stamp derived stats onto run so spAward / gradeRun / achievement predicates stay pure
   run.waveReached = wave;
   run.rivalLevel = (rival && rival.level) || 0;
+  run.timeSecs = secs;
   const award = spAward(run, player);
+  const grade = gradeRun(run, player);
+  const gradedAward = Math.round(award * grade.mult);
   const achRes = checkAchievements(run, player);
-  bankSP(award);                       // achievement SP is banked inside grantAch
-  const total = award + (achRes.sp || 0);
+  bankSP(gradedAward);                 // achievement SP is banked inside grantAch
+  const total = gradedAward + (achRes.sp || 0);
   const spd = g('go_sp'); if (spd) spd.textContent = '+' + total.toLocaleString();
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
+  // render grade letter + bonus
+  const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
+  // ---- star objectives: compute this run's stars, fold into the per-jet best, render on #gameover ----
+  const stars = evalStars(run, player);
+  const jetId = (player && player.jet && player.jet.id) || null;
+  const best = bestStars(meta, jetId, stars); saveMeta();   // meta.stars[jet] now holds the lifetime best
+  const sd = g('go_stars');
+  if (sd) {
+    const pips = sd.querySelector('.stars-pips'); if (pips) pips.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    const note = sd.querySelector('.stars-note'); if (note) note.textContent = stars + ' / 3  ·  ' + tf('stars.best', { n: best });
+  }
   if (achRes.unlocked.length) showBanner(tf('banner.achUnlocked', { n: achRes.unlocked.length }));
+  // pilot callsign + emblem on debrief
+  const goPilot = g('go_pilot');
+  if (goPilot) {
+    const cs = (meta && meta.callsign) || '';
+    const emId = (meta && meta.emblem) || 'wings';
+    const glyph = (typeof EMBLEM_GLYPHS !== 'undefined' && EMBLEM_GLYPHS[emId]) || '';
+    goPilot.textContent = cs ? (glyph ? glyph + ' ' + cs : cs) : '';
+  }
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
@@ -1160,9 +1383,104 @@ function operationComplete() {
   state = 'dead';
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   player.score += 5000;
+  // F15: clearing the campaign once unlocks Boss Rush mode (persisted; healed for legacy saves)
+  if (meta && !meta.bossRushUnlocked) { meta.bossRushUnlocked = true; saveMeta(); }
   showBanner(t('banner.operationComplete'));
   endRun(t('banner.operationComplete'));
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // reflect the new unlock in the hangar
 }
+
+// ===== Boss Rush mode (F15) =====
+// Unlockable gauntlet: every boss in sequence, FIXED loadout, ONE life, NO tech tree. The run is
+// timed; the lower (faster) full-clear time is kept as the local best. Death ends the run with no
+// time recorded (gameOver → endRun). Completion records the time, then shows the result screen.
+function startBossRush() {
+  if (state !== 'hangar') return;
+  if (!meta || !meta.bossRushUnlocked) { showBanner(t('bossrush.locked')); audio.ui(); return; }
+  // fixed airframe: the player's first starter jet (always owned) — boss-rush is a level playing field.
+  let jetIdx = 0;
+  for (let k = 0; k < JETS.length; k++) { if (JETS[k].id === STARTER_JETS[0]) { jetIdx = k; break; } }
+  opMode = false;   // not the op-map campaign; single-life gauntlet
+  startGame(jetIdx, false, true);   // rush=true → fixed loadout (no meta perks), no tutorial, boss-rush loop
+  if (state === 'playing') { spawnBossRushBoss(); showBanner(t('bossrush.title')); }   // launch the first boss immediately
+}
+// every boss down → record the best time and show the debrief
+function bossRushComplete() {
+  if (state !== 'playing') return;
+  const secs = Math.max(0, Math.round((performance.now() - bossRushT0) / 1000));
+  if (meta) { meta.bossRushBest = betterTime(meta.bossRushBest || 0, secs); saveMeta(); }   // keep the LOWER time
+  player.score += 8000;   // gauntlet clear bonus
+  state = 'dead';
+  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  showBanner(tf('bossrush.cleared', { t: bossRushTimeStr(secs) }));
+  endRun(t('bossrush.title'));
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
+}
+// mm:ss for the leaderboard
+function bossRushTimeStr(secs) { return (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2); }
+// hangar entry: lock the button until unlocked; show the best time once set
+function refreshBossRushEntry() {
+  const btn = g('bossRushBtn'); if (!btn) return;
+  const unlocked = !!(meta && meta.bossRushUnlocked);
+  btn.disabled = !unlocked;
+  btn.classList.toggle('disabled', !unlocked);
+  btn.textContent = unlocked ? t('bossrush.start') : t('bossrush.locked');
+  const note = g('bossRushNote');
+  if (note) {
+    const best = (meta && meta.bossRushBest) || 0;
+    note.textContent = !unlocked ? t('bossrush.locked')
+      : (best > 0 ? tf('bossrush.best', { t: bossRushTimeStr(best) }) : t('bossrush.sub'));
+  }
+}
+
+// ===== Daily seeded challenge (F7) =====
+// Calendar-date seed → fixed layout/weather/jet restriction, one attempt per day, score saved locally.
+// CRITICAL: the clock is read ONCE here at the call site (browser runtime); the pure fns
+// (dailySeedFor/makeRng in globals.js) never call new Date(). y/m/d are passed in.
+function todayParts() { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }; }
+function todayKey() { const p = todayParts(); return p.y + '-' + ('0' + p.m).slice(-2) + '-' + ('0' + p.d).slice(-2); }
+function loadDaily() {
+  try { const o = JSON.parse(store.get('skystrike_daily') || 'null'); if (o && typeof o === 'object') return o; } catch (e) {}
+  return null;
+}
+function saveDaily(o) { try { store.set('skystrike_daily', JSON.stringify(o)); } catch (e) {} }
+// today's record, or a fresh unplayed record if the stored one is for a previous day
+function dailyToday() {
+  const key = todayKey(); const rec = loadDaily();
+  if (rec && rec.date === key) return rec;
+  return { date: key, played: false, best: 0 };
+}
+// refresh the hangar Daily entry: lock the button once played, surface today's best / lock note
+function refreshDailyEntry() {
+  const rec = dailyToday();
+  const btn = g('dailyBtn');
+  if (btn) {
+    btn.textContent = rec.played ? t('daily.done') : t('daily.play');
+    btn.disabled = !!rec.played;
+    btn.classList.toggle('disabled', !!rec.played);
+  }
+  const note = g('dailyNoteTxt');
+  if (note) {
+    if (rec.played) note.textContent = t('daily.best').replace('{best}', rec.best.toLocaleString()) + ' · ' + t('daily.locked');
+    else note.textContent = t('daily.sub').replace('{date}', rec.date);
+  }
+}
+// launch today's daily run: seed-fix everything off the calendar date, force one-life endless, restrict the jet
+function startDaily() {
+  if (state !== 'hangar') return;
+  const rec = dailyToday();
+  if (rec.played) { showBanner(t('daily.locked')); if (audio.on) audio.ui(); return; }
+  const p = todayParts();
+  const seed = dailySeedFor(p.y, p.m, p.d);
+  // mark the attempt as consumed up front (one attempt/day, even if the player bails mid-run)
+  saveDaily({ date: rec.date, played: true, best: rec.best || 0 });
+  opMode = false;                                  // daily is single-life endless, not the op-map campaign
+  const rng = makeRng(seed);
+  const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;   // seed-derived jet restriction (everyone flies the same airframe today)
+  dailySeed = seed;                                // startGame reads this to reset weatherSeed deterministically when dailyMode
+  startGame(jetIdx, true);
+}
+
 function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
   const b = g('hangarBest'); if (b) { b.style.display = bestScore > 0 ? 'block' : 'none'; const v = g('hangarBestVal'); if (v) v.textContent = bestScore.toLocaleString(); }
@@ -1198,6 +1516,8 @@ function loadSettings() {
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
     if (typeof s.buttonOpacity === 'number') buttonOpacity = clamp(s.buttonOpacity, 0.4, 1.0);
     if (s.buttonLayout === 'right' || s.buttonLayout === 'left' || s.buttonLayout === 'compact') buttonLayout = s.buttonLayout;
+    if (s.gfxQuality === 'auto' || s.gfxQuality === 'low' || s.gfxQuality === 'high') gfxQuality = s.gfxQuality;
+    if (typeof refreshGfxTier === 'function') { refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }   // F11: re-resolve tier from the persisted setting + resize the shadow map
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
     if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
@@ -1213,6 +1533,8 @@ function applyLang() {
   setTxt('obCombatH', t('onboard.combat')); setTxt('obCombatK', t('onboard.combatKeys'));
   setTxt('obViewH', t('onboard.view')); setTxt('obViewK', t('onboard.viewKeys'));
   setTxt('obTouch', t('onboard.touch')); setTxt('obMore', t('onboard.more'));
+  setTxt('tutSkip', t('tut.skip'));
+  if (typeof tutorial !== 'undefined' && tutorial.active && !tutorial.done) renderTutorial();   // retranslate live tutorial hint
   setTxt('obContinue', t('onboard.continue'));
   // hangar
   setTxt('hangarSub', t('hangar.sub')); setTxt('hangarBestLbl', t('hangar.best'));
@@ -1221,6 +1543,10 @@ function applyLang() {
   setTxt('rbTitle', t('hangar.rivalBoard'));
   setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
+  if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: boss-rush entry label/note follow language + unlock state
+  setTxt('lblCallsign', t('pilot.callsign')); setTxt('lblEmblem', t('pilot.emblem'));
+  const ci = g('callsignInput'); if (ci) ci.placeholder = t('pilot.placeholder');
   setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
   setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
@@ -1232,6 +1558,8 @@ function applyLang() {
   setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
   setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
   setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
+  setTxt('goLblGrade', t('grade.title'));
+  setTxt('goLblStars', t('stars.title'));
   setTxt('redeploy', t('go.redeploy'));
   // meta-progression screen labels
   setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));
@@ -1257,6 +1585,7 @@ function applyLang() {
   applyOpLegend();
   // hud panel labels
   setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
+  if (el.abIndicator) el.abIndicator.textContent = t('hud.ab');
   setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); setTxt('lblWave', t('hud.wave')); setTxt('lblCombo', t('hud.combo'));
   setTxt('lblSpd', t('hud.knots')); setTxt('lblAlt', t('hud.ft'));
   setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));
@@ -1283,6 +1612,7 @@ function applyLang() {
   setTxt('lblMotion', t('set.motionSensor'));
   setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
   setTxt('lblBtnLayout', t('set.btnLayout'));
+  setTxt('lblGfx', t('set.gfx'));
   setTxt('lblHudScale', t('set.hudScale'));
   const shs2 = g('setHudScale');
   if (shs2 && shs2.options.length >= 4) {
@@ -1297,6 +1627,7 @@ function applyLang() {
   segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
   segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
   segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');
+  segTxt('#gfxQualityTog [data-gq="auto"]', 'set.gfxAuto'); segTxt('#gfxQualityTog [data-gq="low"]', 'set.gfxLow'); segTxt('#gfxQualityTog [data-gq="high"]', 'set.gfxHigh');
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
   // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
@@ -1307,6 +1638,7 @@ function applyLang() {
   // touch buttons
   setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
   setTxt('tb-thr', t('touch.thr')); setTxt('tb-brk', t('touch.brk')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
+  setTxt('tb-aws', t('touch.aws')); setTxt('tb-ars', t('touch.ars')); setTxt('tb-ajm', t('touch.ajm'));
   // flight manual body (HTML content)
   const setHTML = (id, key) => { const e = g(id); if (e) e.innerHTML = t(key); };
   setHTML('manUL_Flight', 'manBody.flight'); setHTML('manUL_Combat', 'manBody.combat'); setHTML('manP_Lock', 'manBody.lock');
@@ -1348,6 +1680,7 @@ function syncControlSettingsUI() {
   mark('mobileControlTog', 'mc', mobileControl);
   mark('aggressionTog', 'ag', motionAggression);
   mark('btnLayoutTog', 'bl', buttonLayout);
+  mark('gfxQualityTog', 'gq', gfxQuality);
   const sh = g('setHaptics'); if (sh) sh.checked = haptics;
   const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
 }
@@ -1406,7 +1739,7 @@ function saveSettings() {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
-      mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout
+      mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
     }));
   } catch (e) {}
 }
@@ -1449,4 +1782,6 @@ function returnToHangar() {
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();
+  refreshDailyEntry();   // daily button label/play-state can change after a run — keep it current
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: unlock/best-time can change after a run
 }
