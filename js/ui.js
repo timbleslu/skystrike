@@ -1537,7 +1537,7 @@ function loadSettings() {
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
-    controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'rate';
+    controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
