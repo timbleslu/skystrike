@@ -1,12 +1,13 @@
 /* SKYSTRIKE — hud.js: canvas HUD renderer. Loaded before ui.js. Reads global game state, writes the 2D canvas context. No DOM. Extracted from ui.js. */
 /* Canvas-HUD colour roles (rgb triplets — the canvas twin of the CSS semantic tokens, §2a).
-   ONE red (danger) for lock + locked + missile + enemy markers, matching CSS --danger.
+   Glass-cockpit avionics: amber = active signal, green = nominal. ONE red (danger) for
+   lock + locked + missile + enemy markers, matching CSS --danger.
    Boss keeps its unique magenta as a deliberate identity exception. */
 const HUD = {
-  primary: '25,240,212',  primaryBright: '11,213,255',
-  danger: '255,57,75',    warn: '255,140,43',
-  ok: '70,255,140',       reward: '255,225,77',
-  velvec: '0,255,170',    ink: '189,238,230',  dim: '91,138,134',
+  primary: '255,185,56',  primaryBright: '255,211,107',
+  danger: '255,59,59',    warn: '255,122,31',
+  ok: '77,255,160',       reward: '255,225,77',
+  velvec: '90,255,180',   ink: '207,230,214',  dim: '111,145,128',
   rival: '255,90,42',     boss: '255,80,220'
 };
 function drawGunPipper(ctx, e) {
@@ -111,7 +112,7 @@ function drawWeatherChip(ctx) {
   ctx.fillRect(x, y, w, h);
   ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(' + HUD.primary + ',0.5)';
   ctx.strokeRect(x, y, w, h);
-  ctx.fillStyle = storm ? 'rgba(205,215,255,0.95)' : 'rgba(150,255,235,0.95)';
+  ctx.fillStyle = storm ? 'rgba(205,215,255,0.95)' : 'rgba(255,230,200,0.95)';
   ctx.fillText(label, x + padX, y + 6 * k);
   ctx.restore();
 }
@@ -183,9 +184,9 @@ function drawHUD() {
     const sp = projectPoint(l.mesh.position);
     if (sp.behind || sp.x < 0 || sp.x > W || sp.y < 0 || sp.y > H) continue;
     const s = (9 + Math.sin(performance.now() * 0.006) * 2) * k;   // projected pos fixed, size ×k
-    ctx.strokeStyle = 'rgba(70,255,200,0.9)'; ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(77,255,160,0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = 'rgba(70,255,200,0.85)'; ctx.font = (9 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(77,255,160,0.85)'; ctx.font = (9 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
     ctx.fillText(t('hud.supply') + ' ' + Math.round(player.group.position.distanceTo(l.mesh.position)), sp.x, sp.y - s - 7 * k);
   }
   ctx.lineWidth = 2;
@@ -287,7 +288,7 @@ function drawWingman(ctx, w, cx, cy) {
   const p = projectPoint(pos);
   const dist = player.group.position.distanceTo(pos);
   const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
-  const col = w.cca ? '73,182,255' : '45,255,176';
+  const col = w.cca ? '73,182,255' : '77,255,160';
   if (onScreen) {
     const s = clamp(52000 / Math.max(dist, 1), 11, 28), x = p.x, y = p.y;
     ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: escort marker scales around its position
@@ -584,19 +585,19 @@ function drawRadar() {
   const detR2 = detR * detR;
 
   // forward FOV wedge
-  ctx.fillStyle = 'rgba(25,240,212,0.07)';
+  ctx.fillStyle = 'rgba(255,185,56,0.07)';
   ctx.beginPath(); ctx.moveTo(cx, cy);
   ctx.arc(cx, cy, R, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); ctx.closePath(); ctx.fill();
 
   // rings + crosshair
-  ctx.strokeStyle = 'rgba(25,240,212,0.22)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,185,56,0.22)'; ctx.lineWidth = 1;
   for (let r = R / 3; r <= R + 0.5; r += R / 3) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI); ctx.stroke(); }
   ctx.beginPath(); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
 
   // sweep
   const sweep = (performance.now() * 0.0011) % TWO_PI;
   const grad = ctx.createLinearGradient(cx, cy, cx + Math.cos(sweep - Math.PI / 2) * R, cy + Math.sin(sweep - Math.PI / 2) * R);
-  grad.addColorStop(0, 'rgba(25,240,212,0.5)'); grad.addColorStop(1, 'rgba(25,240,212,0)');
+  grad.addColorStop(0, 'rgba(255,185,56,0.5)'); grad.addColorStop(1, 'rgba(255,185,56,0)');
   ctx.strokeStyle = grad; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep - Math.PI / 2) * R, cy + Math.sin(sweep - Math.PI / 2) * R); ctx.stroke();
 
@@ -634,6 +635,6 @@ function drawRadar() {
   for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) plot(missiles[i].mesh.position, 255, 255, 255, 2);
   for (let i = 0; i < wingmen.length; i++) { if (wingmen[i].alive) plot(wingmen[i].group.position, 45, 255, 176, 4, true); }
   for (let i = 0; i < loots.length; i++) { const isC = loots[i].kind === 'crate'; plot(loots[i].mesh.position, 70, 255, 190, isC ? 4 : 3, isC); }
-  ctx.fillStyle = '#19f0d4'; ctx.beginPath();
+  ctx.fillStyle = '#ffb938'; ctx.beginPath();
   ctx.moveTo(cx, cy - 8); ctx.lineTo(cx - 6, cy + 6); ctx.lineTo(cx + 6, cy + 6); ctx.closePath(); ctx.fill();
 }
