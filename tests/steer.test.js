@@ -1,42 +1,6 @@
 'use strict';
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-// ---- shared helper (mirror of js/globals.js clamp) ----
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-
-// ---- tunables mirror (js/globals.js STEER) ----
-const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoMaxBank: 0.5, autoYawGain: 1.6 };
-
-// ============================================================================
-//  Mirror of js/globals.js steerCommand (byte-identity guard at the bottom
-//  enforces it matches source; project convention for non-marker pure fns).
-// ============================================================================
-// PURE — map normalized flight intent to the engine's pitch/roll command axes, honouring the control scheme.
-// `intent` = { pitch, roll } in -1..1 (point-to-fly signs: +pitch=climb, +roll=bank right). `currentBank` is the
-// airframe's present bank angle in radians, SAME sign frame as roll intent (combat.js passes atan2(-right.y, up.y)).
-// Returns { pitchCmd, rollCmd } to be consumed exactly where flightInput.pitch/roll were before (so 'rate' is identical).
-//   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
-//   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
-//               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
-//   'auto'    : SAME pitch/roll mapping as pointer, but banks to a SMALLER cap (autoMaxBank). The actual turn is a
-//              world-axis yaw applied in combat.js (∝ sin(bank)); keeping it OUT of pitch is what lets you dive while
-//              turning (diagonals). An older design pulled pitch ∝ |sin(bank)| to turn, which blocked diving in a turn.
-function steerCommand(scheme, intent, currentBank, t) {
-  const pitchCmd = intent.pitch;
-  if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
-  const cb = currentBank || 0;
-  const mb = (scheme === 'auto') ? t.autoMaxBank : t.maxBank;   // 'auto' banks gently; heading turns via world-yaw in combat.js
-  let rollCmd;
-  if (Math.abs(intent.roll) < t.deadzone) {
-    rollCmd = clamp(-cb * t.autoLevelGain / mb, -1, 1);           // wings-level seek when stick released
-  } else {
-    const targetBank = intent.roll * mb;
-    rollCmd = clamp(t.bankGain * (targetBank - cb) / mb, -1, 1);  // proportional bank-hold
-  }
-  return { pitchCmd, rollCmd };
-}
+const { steerCommand, STEER } = require('../js/core.js');
 
 /* ===== 'rate' scheme: returns intent verbatim (today's mapping) ===== */
 for (const intent of [
@@ -123,32 +87,3 @@ assert.ok(Math.abs(autoSettled.rollCmd) < 1e-12, 'auto: at (autoMaxBank-scaled) 
 assert.ok(STEER.autoMaxBank < STEER.maxBank, 'auto: autoMaxBank is a gentler bank cap than pointer maxBank');
 
 console.log('ok - steerCommand auto: pitch decoupled (=== intent), bank-hold capped at autoMaxBank');
-
-/* ===== byte-identity guard: mirrored steerCommand must match js/globals.js verbatim =====
-   (project convention: test-mirrored functions stay byte-identical with source) */
-const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'globals.js'), 'utf8');
-function bodyOf(fnName, text) {
-  // extract from 'function NAME(' to the matching closing brace (brace-counting)
-  const start = text.indexOf('function ' + fnName + '(');
-  assert.ok(start !== -1, 'js/globals.js defines function ' + fnName);
-  let i = text.indexOf('{', start), depth = 0, end = -1;
-  for (; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-  }
-  return text.slice(start, end);
-}
-function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
-{
-  const mine = norm(steerCommand.toString());
-  const theirs = norm(bodyOf('steerCommand', src));
-  const strip = (x) => x.replace(/\s+/g, ' ');
-  assert.strictEqual(strip(theirs), strip(mine), 'steerCommand in globals.js must match the mirror byte-for-byte (ignoring whitespace)');
-}
-// STEER tunables table must be present in source with the same keys
-assert.ok(/const STEER\s*=/.test(src), 'globals.js defines STEER');
-for (const k of ['maxBank', 'bankGain', 'autoLevelGain', 'deadzone', 'autoMaxBank', 'autoYawGain']) {
-  assert.ok(new RegExp(k + '\\s*:').test(src), 'STEER.' + k + ' present in source');
-}
-
-console.log('ok - steerCommand mirror matches js/globals.js source; STEER tunables present');

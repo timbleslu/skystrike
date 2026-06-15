@@ -328,3 +328,24 @@ function checkAchievements(run, player) {
   }
   return { sp: paid, unlocked: unlocked };
 }
+
+/* CommonJS export for Node tests — inert in the browser. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    // pure/scoring cores
+    spAward, gradeRun, evalStars, bestStars, perkCost,
+    applyMetaPerks, sanitizeCallsign, emblemUnlocked,
+    // meta lifecycle
+    freshMeta, validMeta, loadMeta, saveMeta,
+    // perk API
+    perkLevel, perkMaxed, perkUnlocked, buyPerk,
+    // jet/skin API
+    jetUnlocked, jetCost, buyJet, skinOwned, skinCost, buySkin,
+    // achievements
+    achEarned, grantAch, checkAchievements,
+    // tables & constants
+    META_KEY, META_VERSION, STARTER_JETS, STAR_KILL_FRAC,
+    META_PERKS, META_BY_ID, SKINS, ACHIEVEMENTS, EMBLEMS,
+    JET_LOCK_COST, SKIN_COST,
+  };
+}

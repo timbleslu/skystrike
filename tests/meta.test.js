@@ -1,220 +1,27 @@
 'use strict';
-const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-// ---- in-memory storage seam so the mirrored persistence fns run under Node ----
+// ---- Node seams: stateful storage + dev toggle the browser supplies via globals.js ----
 let _kv = {};
-const store = { get(k) { return k in _kv ? _kv[k] : null; }, set(k, v) { _kv[k] = String(v); } };
+global.store = { get(k) { return k in _kv ? _kv[k] : null; }, set(k, v) { _kv[k] = String(v); } };
+global.devUnlockAll = false;   // js/globals.js dev toggle (default off — preserves existing assertions)
 
-// ============================================================================
-//  Mirrors of js/meta.js (byte-identity guard at the bottom enforces they match)
-// ============================================================================
-const META_KEY = 'skystrike_meta';
-const META_VERSION = 1;
-let meta = null;
+const assert = require('assert');
+const {
+  spAward, perkCost, applyMetaPerks, sanitizeCallsign, emblemUnlocked,
+  freshMeta, validMeta, loadMeta, saveMeta,
+  perkLevel, perkMaxed, perkUnlocked, buyPerk,
+  jetUnlocked, jetCost, buyJet, skinOwned, skinCost, buySkin,
+  achEarned, grantAch, checkAchievements,
+  META_KEY, META_VERSION,
+} = require('../js/meta.js');
+// boss-rush trio moved to core.js
+const { bossRushNext, bossRushDone, betterTime } = require('../js/core.js');
 
-const STARTER_JETS = ['FT-1', 'F-22', 'SU-57'];
+const BOSS_RUSH_TOTAL = 5;   // gauntlet length (BOSS_RUSH_POOL in core.js)
 
-function spAward(run, player) {
-  if (!run) return 0;
-  const score = (player && player.score) || 0;
-  const sp =
-    (run.kills || 0) * 2 +
-    (run.ground || 0) * 1 +
-    (run.boss || 0) * 25 +
-    (run.escortKills || 0) * 1 +
-    (run.waveReached || 0) * 3 +
-    (run.rivalLevel || 0) * 10 +
-    Math.floor(score / 500);
-  return Math.max(0, Math.floor(sp));
-}
-
-const META_PERKS = [
-  { id: 'hull',    x: 0, y: 0, base: 40, max: 5,
-    apply: function (p, lvl) { if (lvl > 0) { p.maxHp = Math.round(p.maxHp * (1 + 0.06 * lvl)); p.hp = p.maxHp; } } },
-  { id: 'plating', x: 0, y: 1, base: 50, max: 5, req: 'hull',
-    apply: function (p, lvl) { if (lvl > 0) { p.maxShield = Math.round(p.maxShield * (1 + 0.08 * lvl)); p.shield = p.maxShield; } } },
-  { id: 'guns',    x: 1, y: 0, base: 45, max: 5,
-    apply: function (p, lvl) { if (lvl > 0) p.gunDmgMul *= (1 + 0.04 * lvl); } },
-  { id: 'warheads',x: 1, y: 1, base: 55, max: 5, req: 'guns',
-    apply: function (p, lvl) { if (lvl > 0) p.missileDmgMul *= (1 + 0.05 * lvl); } },
-  { id: 'magazine',x: 2, y: 0, base: 40, max: 3,
-    apply: function (p, lvl) { if (lvl > 0) { var add = 4 * lvl; p.missiles += add; p.maxMissiles += add; p.flares += lvl; p.maxFlares += lvl; } } },
-  { id: 'research',x: 2, y: 1, base: 60, max: 3, req: 'magazine',
-    apply: function (p, lvl) { if (lvl > 0) p.rpMul *= (1 + 0.10 * lvl); } },
-  { id: 'bounty',  x: 3, y: 0, base: 70, max: 1,
-    apply: function (p, lvl) { if (lvl > 0) p.scoreMul *= 1.15; } },
-];
-const META_BY_ID = {};
-for (var _i = 0; _i < META_PERKS.length; _i++) META_BY_ID[META_PERKS[_i].id] = META_PERKS[_i];
-
-function perkCost(perkId, level) {
-  const def = META_BY_ID[perkId];
-  if (!def) return Infinity;
-  return Math.round(def.base * Math.pow(1.6, level));
-}
-
-function applyMetaPerks(player) {
-  if (!player || !meta || !meta.perks) return;
-  for (var k = 0; k < META_PERKS.length; k++) {
-    var def = META_PERKS[k];
-    var lvl = meta.perks[def.id] || 0;
-    if (lvl > 0) def.apply(player, lvl);
-  }
-}
-
-const SKINS = {
-  'FT-1':  [{ id: 'default', color: null }, { id: 'sand', color: 0xc8b88a, accent: 0xe0c060 }, { id: 'arctic', color: 0xdfe8ef, accent: 0x8fd0ff }],
-  'F-22':  [{ id: 'default', color: null }, { id: 'splinter', color: 0x4a5a6a, accent: 0x9fe0ff }, { id: 'raptor', color: 0x1a2a3a, accent: 0xff3a3a }],
-  'SU-57': [{ id: 'default', color: null }, { id: 'felon', color: 0x3a3a44, accent: 0xff6a2a }, { id: 'aurora', color: 0x2a3a5a, accent: 0x60ffd0 }],
-};
-
-const ACHIEVEMENTS = [
-  { id: 'firstBlood', test: function (run, player) { return (run.kills || 0) + (run.ground || 0) + (run.boss || 0) >= 1; }, sp: 5 },
-  { id: 'acePilot',   test: function (run, player) { return (run.kills || 0) >= 25; }, sp: 25 },
-  { id: 'bossSlayer', test: function (run, player) { return (run.boss || 0) >= 1; }, sp: 30 },
-  { id: 'survivor',   test: function (run, player) { return (run.waveReached || 0) >= 10; }, sp: 40 },
-  { id: 'highScore',  test: function (run, player) { return ((player && player.score) || 0) >= 50000; }, sp: 50 },
-  { id: 'groundPounder', test: function (run, player) { return (run.ground || 0) >= 20; }, sp: 25 },
-  { id: 'tactician',  test: function (run, player) { return (run.missions || 0) >= 5; }, sp: 35 },
-];
-
-const EMBLEMS = [
-  { id: 'wings',    gate: 'free' },
-  { id: 'skull',    gate: 'sp',  cost: 80 },
-  { id: 'star',     gate: 'sp',  cost: 80 },
-  { id: 'dragon',   gate: 'ach', ach: 'bossSlayer' },
-  { id: 'ace',      gate: 'ach', ach: 'acePilot' },
-];
-/* uppercase, strip non-A-Z0-9, clamp to 8 chars. Empty string is valid (anonymous). */
-function sanitizeCallsign(str) {
-  if (!str) return '';
-  return String(str).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
-}
-/* true if the emblem is accessible to the player given current meta state. */
-function emblemUnlocked(id, m) {
-  if (!m) return false;
-  for (var j = 0; j < EMBLEMS.length; j++) {
-    var e = EMBLEMS[j];
-    if (e.id !== id) continue;
-    if (e.gate === 'free') return true;
-    if (e.gate === 'sp') return !!(m.patches && m.patches[id]);
-    if (e.gate === 'ach') return !!(m.ach && m.ach[e.ach]);
-    return false;
-  }
-  return false;
-}
-function freshMeta() {
-  const jets = {};
-  for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, bossRushUnlocked: false, bossRushBest: 0 };
-}
-function validMeta(m) {
-  return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
-    m.jets && typeof m.jets === 'object' && m.skins && typeof m.skins === 'object' &&
-    m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
-}
-function loadMeta() {
-  try {
-    const m = JSON.parse(store.get(META_KEY) || 'null');
-    meta = validMeta(m) ? m : freshMeta();
-  } catch (e) { meta = freshMeta(); }
-  for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
-  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) / boss-rush (F15) — keep progression, never wipe
-  if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
-  if (typeof meta.callsign !== 'string') meta.callsign = '';
-  if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
-  if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
-  if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
-  if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
-}
-function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
-
-// ---- mirror of js/globals.js boss-rush pure core (keep byte-identical between the MIRROR markers) ----
-// === MIRROR START (globals.js boss-rush core) ===
-const BOSS_RUSH_POOL = ['boss', 'boss', 'boss', 'boss', 'boss'];
-const BOSS_RUSH_TOTAL = BOSS_RUSH_POOL.length;   // bosses to clear for a full run
-function bossRushNext(index) {
-  if (index < 0 || index >= BOSS_RUSH_POOL.length) return null;
-  return BOSS_RUSH_POOL[index];
-}
-function bossRushDone(killed, total) {
-  return killed >= total;
-}
-function betterTime(prev, next) {
-  if (!(next > 0)) return prev > 0 ? prev : 0;     // invalid new time: keep the old record (or 0)
-  if (!(prev > 0)) return next;                    // no prior record: the new time is the record
-  return next < prev ? next : prev;                // otherwise keep the smaller
-}
-// === MIRROR END ===
-
-function perkLevel(id) { return (meta && meta.perks[id]) || 0; }
-function perkMaxed(id) { const d = META_BY_ID[id]; return !!d && perkLevel(id) >= d.max; }
-function perkUnlocked(id) {
-  const d = META_BY_ID[id];
-  return !!d && (!d.req || perkLevel(d.req) > 0);
-}
-function buyPerk(id) {
-  const d = META_BY_ID[id];
-  if (!d || !meta) return false;
-  if (perkMaxed(id) || !perkUnlocked(id)) return false;
-  const cost = perkCost(id, perkLevel(id));
-  if (meta.sp < cost) return false;
-  meta.sp -= cost;
-  meta.perks[id] = perkLevel(id) + 1;
-  saveMeta();
-  return true;
-}
-
-let devUnlockAll = false;   // mirrors js/globals.js dev toggle (default off — preserves existing assertions)
-const JET_LOCK_COST = 250;
-function jetUnlocked(key) { return devUnlockAll || !!(meta && meta.jets[key]); }
-function jetCost(key) { return JET_LOCK_COST; }
-function buyJet(key) {
-  if (!meta || jetUnlocked(key)) return false;
-  const cost = jetCost(key);
-  if (meta.sp < cost) return false;
-  meta.sp -= cost;
-  meta.jets[key] = true;
-  saveMeta();
-  return true;
-}
-
-const SKIN_COST = 120;
-function skinOwned(key, id) {
-  if (id === 'default') return true;
-  return !!(meta && meta.skins[key] && meta.skins[key].indexOf(id) !== -1);
-}
-function skinCost(key, id) { return SKIN_COST; }
-function buySkin(key, id) {
-  if (!meta || id === 'default' || skinOwned(key, id)) return false;
-  const cost = skinCost(key, id);
-  if (meta.sp < cost) return false;
-  meta.sp -= cost;
-  if (!meta.skins[key]) meta.skins[key] = [];
-  meta.skins[key].push(id);
-  saveMeta();
-  return true;
-}
-
-function achEarned(id) { return !!(meta && meta.ach[id]); }
-function grantAch(id) {
-  const def = ACHIEVEMENTS.find(function (a) { return a.id === id; });
-  if (!def || !meta || achEarned(id)) return 0;
-  meta.ach[id] = true;
-  if (def.sp > 0) meta.sp += def.sp;
-  saveMeta();
-  return def.sp || 0;
-}
-function checkAchievements(run, player) {
-  var paid = 0; var unlocked = [];
-  for (var i = 0; i < ACHIEVEMENTS.length; i++) {
-    var a = ACHIEVEMENTS[i];
-    if (!achEarned(a.id) && a.test(run, player)) { paid += grantAch(a.id); unlocked.push(a.id); }
-  }
-  return { sp: paid, unlocked: unlocked };
-}
+// loadMeta()/saveMeta()/buy*/grant* mutate meta.js's internal `meta`, which is not exported.
+// Drive it via the store seam: setMeta() seeds + loads, getMeta() snapshots the live state.
+function setMeta(obj) { _kv[META_KEY] = JSON.stringify(obj); loadMeta(); }
+function getMeta() { saveMeta(); return JSON.parse(_kv[META_KEY]); }
 
 // ============================================================================
 //  spAward — monotonic, zero-run, rival bonus
@@ -246,27 +53,27 @@ function mockPlayer() {
     missiles: 16, maxMissiles: 40, flares: 10, maxFlares: 10, rpMul: 1, scoreMul: 1 };
 }
 // level 0 (no perks owned) is a no-op
-meta = freshMeta();
+setMeta(freshMeta());
 let p0 = mockPlayer();
 applyMetaPerks(p0);
 assert.deepStrictEqual(p0, mockPlayer(), 'no owned perks -> player unchanged');
 // hull perk raises maxHp by 6% per level
-meta = freshMeta(); meta.perks.hull = 2;
+setMeta(Object.assign(freshMeta(), { perks: { hull: 2 } }));
 let pHull = mockPlayer(); applyMetaPerks(pHull);
 assert.strictEqual(pHull.maxHp, Math.round(100 * (1 + 0.12)), 'hull lvl2 -> +12% maxHp');
 assert.strictEqual(pHull.hp, pHull.maxHp, 'hull also tops up current hp');
 // guns perk raises gunDmgMul by 4% per level
-meta = freshMeta(); meta.perks.guns = 3;
+setMeta(Object.assign(freshMeta(), { perks: { guns: 3 } }));
 let pGun = mockPlayer(); applyMetaPerks(pGun);
 assert.ok(Math.abs(pGun.gunDmgMul - (1 * (1 + 0.12))) < 1e-9, 'guns lvl3 -> +12% gunDmgMul');
 // magazine adds missiles+flares
-meta = freshMeta(); meta.perks.magazine = 2;
+setMeta(Object.assign(freshMeta(), { perks: { magazine: 2 } }));
 let pMag = mockPlayer(); applyMetaPerks(pMag);
 assert.strictEqual(pMag.missiles, 16 + 8, 'magazine lvl2 -> +8 missiles');
 assert.strictEqual(pMag.maxMissiles, 40 + 8, 'magazine lvl2 -> +8 max missiles');
 assert.strictEqual(pMag.flares, 10 + 2, 'magazine lvl2 -> +2 flares');
 // perks STACK
-meta = freshMeta(); meta.perks.hull = 1; meta.perks.guns = 1; meta.perks.bounty = 1;
+setMeta(Object.assign(freshMeta(), { perks: { hull: 1, guns: 1, bounty: 1 } }));
 let pStack = mockPlayer(); applyMetaPerks(pStack);
 assert.strictEqual(pStack.maxHp, Math.round(100 * 1.06), 'stacked hull applies');
 assert.ok(Math.abs(pStack.gunDmgMul - 1.04) < 1e-9, 'stacked guns applies');
@@ -280,24 +87,24 @@ assert.ok(perkCost('hull', 1) > perkCost('hull', 0), 'perkCost increases with le
 assert.strictEqual(perkCost('hull', 0), 40, 'hull first level base cost');
 assert.strictEqual(perkCost('nope', 0), Infinity, 'unknown perk -> Infinity cost');
 // buyPerk rejects when broke
-meta = freshMeta(); meta.sp = 10;
+setMeta(Object.assign(freshMeta(), { sp: 10 }));
 assert.strictEqual(buyPerk('hull'), false, 'cannot buy when sp < cost');
 assert.strictEqual(perkLevel('hull'), 0, 'rejected buy leaves level 0');
-assert.strictEqual(meta.sp, 10, 'rejected buy does not deduct');
+assert.strictEqual(getMeta().sp, 10, 'rejected buy does not deduct');
 // buyPerk succeeds + deducts
-meta = freshMeta(); meta.sp = 100;
+setMeta(Object.assign(freshMeta(), { sp: 100 }));
 assert.strictEqual(buyPerk('hull'), true, 'buy succeeds with enough sp');
 assert.strictEqual(perkLevel('hull'), 1, 'level incremented');
-assert.strictEqual(meta.sp, 100 - 40, 'cost deducted');
+assert.strictEqual(getMeta().sp, 100 - 40, 'cost deducted');
 // req gate: plating needs hull first
-meta = freshMeta(); meta.sp = 1000;
+setMeta(Object.assign(freshMeta(), { sp: 1000 }));
 assert.strictEqual(perkUnlocked('plating'), false, 'plating locked without hull');
 assert.strictEqual(buyPerk('plating'), false, 'cannot buy a req-locked perk');
 buyPerk('hull');
 assert.strictEqual(perkUnlocked('plating'), true, 'plating unlocks after hull');
 assert.strictEqual(buyPerk('plating'), true, 'now buyable');
 // maxLevel cap
-meta = freshMeta(); meta.sp = 100000;
+setMeta(Object.assign(freshMeta(), { sp: 100000 }));
 for (var b = 0; b < 10; b++) buyPerk('bounty');
 assert.strictEqual(perkLevel('bounty'), 1, 'bounty caps at maxLevel 1');
 assert.strictEqual(perkMaxed('bounty'), true, 'bounty is maxed');
@@ -306,32 +113,32 @@ console.log('ok - perkCost rises with level; buyPerk respects funds, req gate, m
 // ============================================================================
 //  jet unlock gating
 // ============================================================================
-meta = freshMeta();
+setMeta(freshMeta());
 assert.strictEqual(jetUnlocked('FT-1'), true, 'starter jet unlocked');
 assert.strictEqual(jetUnlocked('F-22'), true, 'starter jet unlocked');
 assert.strictEqual(jetUnlocked('J-20'), false, 'non-starter jet locked');
-meta.sp = 100;
+setMeta(Object.assign(freshMeta(), { sp: 100 }));
 assert.strictEqual(buyJet('J-20'), false, 'cannot buy locked jet when broke');
 assert.strictEqual(jetUnlocked('J-20'), false, 'still locked');
-meta.sp = 300;
+setMeta(Object.assign(freshMeta(), { sp: 300 }));
 assert.strictEqual(buyJet('J-20'), true, 'buy jet with enough sp');
 assert.strictEqual(jetUnlocked('J-20'), true, 'now unlocked');
-assert.strictEqual(meta.sp, 300 - 250, 'jet cost deducted');
+assert.strictEqual(getMeta().sp, 300 - 250, 'jet cost deducted');
 assert.strictEqual(buyJet('J-20'), false, 'cannot re-buy an owned jet');
 console.log('ok - jetUnlocked/buyJet: starter free, locked gated by SP, no double-buy');
 
 // ============================================================================
 //  skins
 // ============================================================================
-meta = freshMeta();
+setMeta(freshMeta());
 assert.strictEqual(skinOwned('F-22', 'default'), true, 'default skin always owned');
 assert.strictEqual(skinOwned('F-22', 'raptor'), false, 'paid skin not owned yet');
-meta.sp = 50;
+setMeta(Object.assign(freshMeta(), { sp: 50 }));
 assert.strictEqual(buySkin('F-22', 'raptor'), false, 'cannot buy skin when broke');
-meta.sp = 200;
+setMeta(Object.assign(freshMeta(), { sp: 200 }));
 assert.strictEqual(buySkin('F-22', 'raptor'), true, 'buy skin with enough sp');
 assert.strictEqual(skinOwned('F-22', 'raptor'), true, 'skin now owned');
-assert.strictEqual(meta.sp, 200 - 120, 'skin cost deducted');
+assert.strictEqual(getMeta().sp, 200 - 120, 'skin cost deducted');
 assert.strictEqual(buySkin('F-22', 'raptor'), false, 'cannot re-buy owned skin');
 assert.strictEqual(buySkin('F-22', 'default'), false, 'default is not purchasable');
 console.log('ok - skinOwned/buySkin: default free, paid skins gated by SP, no double-buy');
@@ -339,13 +146,13 @@ console.log('ok - skinOwned/buySkin: default free, paid skins gated by SP, no do
 // ============================================================================
 //  achievements: predicates fire on right stats, SP paid once
 // ============================================================================
-meta = freshMeta();
+setMeta(freshMeta());
 assert.strictEqual(grantAch('bossSlayer'), 30, 'grant pays the reward once');
 assert.strictEqual(achEarned('bossSlayer'), true, 'achievement now earned');
 assert.strictEqual(grantAch('bossSlayer'), 0, 're-grant pays nothing');
-assert.strictEqual(meta.sp, 30, 'SP only banked once');
+assert.strictEqual(getMeta().sp, 30, 'SP only banked once');
 // checkAchievements evaluates predicates over run stats
-meta = freshMeta();
+setMeta(freshMeta());
 let res = checkAchievements({ kills: 30, ground: 0, boss: 1, waveReached: 12 }, { score: 0 });
 assert.ok(res.unlocked.indexOf('firstBlood') !== -1, 'firstBlood fires (>=1 kill)');
 assert.ok(res.unlocked.indexOf('acePilot') !== -1, 'acePilot fires (>=25 kills)');
@@ -375,18 +182,19 @@ assert.ok(!validMeta({ sp: 0, jets: {}, skins: {}, perks: {} }), 'missing ach re
 // load falls back to fresh on garbage
 _kv = {}; _kv[META_KEY] = '{ not json';
 loadMeta();
-assert.ok(validMeta(meta), 'garbage save -> fresh meta');
-assert.strictEqual(meta.sp, 0, 'fresh meta starts at 0 SP');
+let mGarbage = getMeta();
+assert.ok(validMeta(mGarbage), 'garbage save -> fresh meta');
+assert.strictEqual(mGarbage.sp, 0, 'fresh meta starts at 0 SP');
 // save then load round-trips state
-meta = freshMeta(); meta.sp = 777; meta.perks.hull = 3; meta.jets['J-20'] = true; saveMeta();
-meta = null; loadMeta();
-assert.strictEqual(meta.sp, 777, 'SP persisted across load');
-assert.strictEqual(meta.perks.hull, 3, 'perk level persisted');
-assert.strictEqual(meta.jets['J-20'], true, 'unlocked jet persisted');
+setMeta(Object.assign(freshMeta(), { sp: 777, perks: { hull: 3 }, jets: { 'J-20': true } }));
+let mRt = getMeta();
+assert.strictEqual(mRt.sp, 777, 'SP persisted across load');
+assert.strictEqual(mRt.perks.hull, 3, 'perk level persisted');
+assert.strictEqual(mRt.jets['J-20'], true, 'unlocked jet persisted');
 // starter jets always re-added even if a save omits one
 _kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {}, stars: {} });
 loadMeta();
-assert.strictEqual(meta.jets['FT-1'], true, 'starter jets re-seeded on load');
+assert.strictEqual(getMeta().jets['FT-1'], true, 'starter jets re-seeded on load');
 console.log('ok - validMeta rejects malformed blobs; persistence round-trips; starters re-seeded');
 
 // ============================================================================
@@ -406,25 +214,26 @@ console.log('ok - sanitizeCallsign: uppercase, A-Z0-9 filter, 8-char clamp, empt
 
 // ============================================================================
 //  emblemUnlocked — free always true, SP-gated needs patch, ach-gated needs achievement
+//  (emblemUnlocked is PURE — it reads the meta object passed as its 2nd argument)
 // ============================================================================
-meta = freshMeta();
-assert.strictEqual(emblemUnlocked('wings', meta), true, 'free emblem always unlocked');
-assert.strictEqual(emblemUnlocked('skull', meta), false, 'sp-gated emblem locked without patch');
-assert.strictEqual(emblemUnlocked('star', meta), false, 'sp-gated star locked without patch');
-assert.strictEqual(emblemUnlocked('dragon', meta), false, 'ach-gated dragon locked without achievement');
-assert.strictEqual(emblemUnlocked('ace', meta), false, 'ach-gated ace locked without achievement');
-assert.strictEqual(emblemUnlocked('nonexistent', meta), false, 'unknown emblem is false');
+let em = freshMeta();
+assert.strictEqual(emblemUnlocked('wings', em), true, 'free emblem always unlocked');
+assert.strictEqual(emblemUnlocked('skull', em), false, 'sp-gated emblem locked without patch');
+assert.strictEqual(emblemUnlocked('star', em), false, 'sp-gated star locked without patch');
+assert.strictEqual(emblemUnlocked('dragon', em), false, 'ach-gated dragon locked without achievement');
+assert.strictEqual(emblemUnlocked('ace', em), false, 'ach-gated ace locked without achievement');
+assert.strictEqual(emblemUnlocked('nonexistent', em), false, 'unknown emblem is false');
 assert.strictEqual(emblemUnlocked('wings', null), false, 'null meta is false');
 // SP-gated unlocks with patch ownership
-meta = freshMeta(); meta.patches.skull = true;
-assert.strictEqual(emblemUnlocked('skull', meta), true, 'skull unlocked after patch owned');
-assert.strictEqual(emblemUnlocked('star', meta), false, 'star still locked (diff patch)');
+em = freshMeta(); em.patches.skull = true;
+assert.strictEqual(emblemUnlocked('skull', em), true, 'skull unlocked after patch owned');
+assert.strictEqual(emblemUnlocked('star', em), false, 'star still locked (diff patch)');
 // ach-gated unlocks with achievement
-meta = freshMeta(); meta.ach.bossSlayer = true;
-assert.strictEqual(emblemUnlocked('dragon', meta), true, 'dragon unlocked after bossSlayer');
-assert.strictEqual(emblemUnlocked('ace', meta), false, 'ace still locked (diff ach)');
-meta.ach.acePilot = true;
-assert.strictEqual(emblemUnlocked('ace', meta), true, 'ace unlocked after acePilot');
+em = freshMeta(); em.ach.bossSlayer = true;
+assert.strictEqual(emblemUnlocked('dragon', em), true, 'dragon unlocked after bossSlayer');
+assert.strictEqual(emblemUnlocked('ace', em), false, 'ace still locked (diff ach)');
+em.ach.acePilot = true;
+assert.strictEqual(emblemUnlocked('ace', em), true, 'ace unlocked after acePilot');
 console.log('ok - emblemUnlocked: free=always, sp-gated=patch, ach-gated=achievement');
 
 // ============================================================================
@@ -439,42 +248,44 @@ assert.ok(validMeta(fm), 'fresh meta with new fields validates');
 const legacy = { v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} };
 assert.ok(validMeta(legacy), 'legacy save without callsign/emblem/patches still validates');
 // round-trip through JSON preserves new fields
-meta = freshMeta(); meta.callsign = 'VIPER'; meta.emblem = 'skull'; meta.patches.skull = true; saveMeta();
-meta = null; loadMeta();
-assert.strictEqual(meta.callsign, 'VIPER', 'callsign persists across save/load');
-assert.strictEqual(meta.emblem, 'skull', 'emblem persists across save/load');
-assert.strictEqual(meta.patches.skull, true, 'patch ownership persists across save/load');
+setMeta(Object.assign(freshMeta(), { callsign: 'VIPER', emblem: 'skull', patches: { skull: true } }));
+let mFields = getMeta();
+assert.strictEqual(mFields.callsign, 'VIPER', 'callsign persists across save/load');
+assert.strictEqual(mFields.emblem, 'skull', 'emblem persists across save/load');
+assert.strictEqual(mFields.patches.skull, true, 'patch ownership persists across save/load');
 // loadMeta heals legacy saves missing the new fields
 _kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {} });
 loadMeta();
-assert.strictEqual(meta.callsign, '', 'legacy save healed: callsign defaults to empty');
-assert.strictEqual(meta.emblem, 'wings', 'legacy save healed: emblem defaults to wings');
-assert.ok(typeof meta.patches === 'object', 'legacy save healed: patches defaults to object');
+let mHeal = getMeta();
+assert.strictEqual(mHeal.callsign, '', 'legacy save healed: callsign defaults to empty');
+assert.strictEqual(mHeal.emblem, 'wings', 'legacy save healed: emblem defaults to wings');
+assert.ok(typeof mHeal.patches === 'object', 'legacy save healed: patches defaults to object');
 console.log('ok - validMeta accepts + defaults new fields; legacy saves heal on load');
 
 // ============================================================================
 //  boss-rush (F15): unlock flag + best-time persistence + back-compat (NO progression wipe)
 // ============================================================================
 // fresh meta starts locked with no recorded time
-meta = freshMeta();
-assert.strictEqual(meta.bossRushUnlocked, false, 'boss-rush starts locked on a fresh meta');
-assert.strictEqual(meta.bossRushBest, 0, 'no boss-rush record on a fresh meta');
+let fresh = freshMeta();
+assert.strictEqual(fresh.bossRushUnlocked, false, 'boss-rush starts locked on a fresh meta');
+assert.strictEqual(fresh.bossRushBest, 0, 'no boss-rush record on a fresh meta');
 // unlock flag + best time persist across save/load
-meta = freshMeta(); meta.sp = 90; meta.bossRushUnlocked = true; meta.bossRushBest = 142; saveMeta();
-meta = null; loadMeta();
-assert.strictEqual(meta.bossRushUnlocked, true, 'boss-rush unlock persists across load');
-assert.strictEqual(meta.bossRushBest, 142, 'boss-rush best time persists across load');
-assert.strictEqual(meta.sp, 90, 'SP intact alongside the new boss-rush fields');
+setMeta(Object.assign(freshMeta(), { sp: 90, bossRushUnlocked: true, bossRushBest: 142 }));
+let mBr = getMeta();
+assert.strictEqual(mBr.bossRushUnlocked, true, 'boss-rush unlock persists across load');
+assert.strictEqual(mBr.bossRushBest, 142, 'boss-rush best time persists across load');
+assert.strictEqual(mBr.sp, 90, 'SP intact alongside the new boss-rush fields');
 // CRITICAL back-compat: a legacy save WITHOUT any boss-rush fields still validates, keeps
 // its progression (sp/perks/jets), and heals the new fields to defaults — never wipes.
 _kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 555, jets: { 'J-20': true }, skins: {}, perks: { hull: 4 }, ach: {} });
 assert.ok(validMeta(JSON.parse(_kv[META_KEY])), 'legacy save (no boss-rush fields) still validates — validMeta stayed lenient');
 loadMeta();
-assert.strictEqual(meta.sp, 555, 'legacy save keeps its SP (no progression wipe)');
-assert.strictEqual(meta.perks.hull, 4, 'legacy save keeps its perk levels');
-assert.strictEqual(meta.jets['J-20'], true, 'legacy save keeps its unlocked jets');
-assert.strictEqual(meta.bossRushUnlocked, false, 'legacy save healed: boss-rush locked by default');
-assert.strictEqual(meta.bossRushBest, 0, 'legacy save healed: boss-rush best defaults to 0');
+let mLegacy = getMeta();
+assert.strictEqual(mLegacy.sp, 555, 'legacy save keeps its SP (no progression wipe)');
+assert.strictEqual(mLegacy.perks.hull, 4, 'legacy save keeps its perk levels');
+assert.strictEqual(mLegacy.jets['J-20'], true, 'legacy save keeps its unlocked jets');
+assert.strictEqual(mLegacy.bossRushUnlocked, false, 'legacy save healed: boss-rush locked by default');
+assert.strictEqual(mLegacy.bossRushBest, 0, 'legacy save healed: boss-rush best defaults to 0');
 console.log('ok - boss-rush: unlock+best persist; legacy save without fields keeps progression + heals');
 
 // ---- pure boss-rush sequence/timing helpers (globals.js) ----
@@ -497,53 +308,3 @@ assert.strictEqual(betterTime(100, 0), 100, 'an invalid (0) new time keeps the o
 assert.strictEqual(betterTime(0, 0), 0, 'no record and no valid time stays 0');
 assert.strictEqual(betterTime(100, -5), 100, 'a negative new time keeps the old record');
 console.log('ok - boss-rush pure helpers: sequence bounds, saturating completion, lower-wins best time');
-
-// ---- byte-identity guard for the boss-rush MIRROR block in globals.js ----
-const gsrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'globals.js'), 'utf8');
-function bodyOfIn(fnName, text) {
-  const start = text.indexOf('function ' + fnName + '(');
-  assert.ok(start !== -1, 'globals.js defines function ' + fnName);
-  let i = text.indexOf('{', start), depth = 0, end = -1;
-  for (; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-  }
-  return text.slice(start, end);
-}
-for (const fn of ['bossRushNext', 'bossRushDone', 'betterTime']) {
-  const mine = eval('(' + fn + ').toString()').replace(/^[^(]*\(/, 'function ' + fn + '(').replace(/\r\n/g, '\n').trim();
-  const theirs = bodyOfIn(fn, gsrc).replace(/\r\n/g, '\n').trim();
-  assert.strictEqual(theirs.replace(/\s+/g, ' '), mine.replace(/\s+/g, ' '), fn + ' in globals.js must match the mirror (ignoring whitespace)');
-}
-assert.ok(/const BOSS_RUSH_POOL\s*=/.test(gsrc), 'globals.js defines BOSS_RUSH_POOL');
-console.log('ok - boss-rush mirrors (bossRushNext/bossRushDone/betterTime) match globals.js source');
-
-// ============================================================================
-//  byte-identity guard: mirrored fns must match js/meta.js verbatim (whitespace-insensitive)
-// ============================================================================
-const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'meta.js'), 'utf8');
-function bodyOf(fnName, text) {
-  const start = text.indexOf('function ' + fnName + '(');
-  assert.ok(start !== -1, 'js/meta.js defines function ' + fnName);
-  let i = text.indexOf('{', start), depth = 0, end = -1;
-  for (; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-  }
-  return text.slice(start, end);
-}
-function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
-const strip = (x) => x.replace(/\s+/g, ' ');
-for (const fn of ['spAward', 'perkCost', 'applyMetaPerks', 'validMeta', 'freshMeta', 'buyPerk',
-                  'buyJet', 'buySkin', 'grantAch', 'checkAchievements', 'jetUnlocked', 'skinOwned',
-                  'sanitizeCallsign', 'emblemUnlocked']) {
-  const mine = norm(eval('(' + fn + ').toString()').replace(/^[^(]*\(/, 'function ' + fn + '('));
-  const theirs = norm(bodyOf(fn, src));
-  assert.strictEqual(strip(theirs), strip(mine), fn + ' in meta.js must match the mirror (ignoring whitespace)');
-}
-// data tables must be present in source
-assert.ok(/const META_PERKS\s*=/.test(src), 'meta.js defines META_PERKS');
-assert.ok(/const ACHIEVEMENTS\s*=/.test(src), 'meta.js defines ACHIEVEMENTS');
-assert.ok(/const SKINS\s*=/.test(src), 'meta.js defines SKINS');
-assert.ok(/const STARTER_JETS\s*=/.test(src), 'meta.js defines STARTER_JETS');
-console.log('ok - meta.js mirrors (spAward/applyMetaPerks/perkCost/persistence/buy fns) match source');

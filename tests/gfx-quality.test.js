@@ -1,21 +1,6 @@
 'use strict';
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-// ---- mirror of js/globals.js graphics-quality core (keep byte-identical between the MIRROR markers) ----
-// === MIRROR START (globals.js gfx-quality core) ===
-const GFX_TIERS = ['auto', 'low', 'high'];
-// PURE — resolve the effective render tier ('low'|'high') from the gfxQuality setting plus a
-// cheap device heuristic. Explicit 'low'/'high' pass through untouched; 'auto' (and any unknown
-// value) picks 'low' for touch devices on a non-flagship pixel ratio (dpr <= 2 — the mid-range
-// phone signature), else 'high'. Deterministic + side-effect free so it is unit-testable; the
-// fps sample (which headless cannot measure) is layered on at the call site, never in here.
-function resolveQuality(setting, dpr, isTouch) {
-  if (setting === 'low' || setting === 'high') return setting;
-  return (isTouch && dpr <= 2) ? 'low' : 'high';
-}
-// === MIRROR END ===
+const { GFX_TIERS, resolveQuality } = require('../js/core.js');
 
 // ---- tier list invariants ----
 assert.deepStrictEqual(GFX_TIERS, ['auto', 'low', 'high'], 'three tiers: auto/low/high');
@@ -46,17 +31,5 @@ for (const s of ['auto', 'low', 'high', undefined, 'x']) {
     }
   }
 }
-
-// ---- byte-identity guard: the MIRROR block above must be character-for-character identical to js/globals.js ----
-const gsrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'globals.js'), 'utf8');
-const here = fs.readFileSync(__filename, 'utf8');
-function mirrorBlock(src) {
-  const a = src.indexOf('// === MIRROR START (globals.js gfx-quality core) ===');
-  // search for END *after* START — globals.js holds several mirror blocks that all share the END marker
-  const b = a === -1 ? -1 : src.indexOf('// === MIRROR END ===', a);
-  assert.ok(a !== -1 && b !== -1 && b > a, 'MIRROR markers present');
-  return src.slice(a, b);
-}
-assert.strictEqual(mirrorBlock(here), mirrorBlock(gsrc), 'gfx-quality MIRROR block is byte-identical with js/globals.js');
 
 console.log('ok - gfx quality tier resolver (auto heuristic, explicit pass-through, byte-identical mirror)');

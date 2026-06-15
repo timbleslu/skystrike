@@ -1,19 +1,6 @@
 'use strict';
 const assert = require('assert');
-
-// === MIRROR START (globals.js barrel-roll pure helpers) ===
-// Returns true if the gap between now and lastTapTime is within threshold (double-tap detected).
-// gap must be > 0 (can't double-tap at identical timestamps) and <= threshold.
-function rollDetect(now, lastTapTime, threshold) {
-  const gap = now - lastTapTime;
-  return gap > 0 && gap <= threshold;
-}
-
-// Returns true if cooldown has elapsed (or was never started), meaning a new barrel roll is allowed.
-function rollCooldownGate(cooldown) {
-  return cooldown <= 0;
-}
-// === MIRROR END ===
+const { rollDetect, rollCooldownGate } = require('../js/core.js');
 
 // Constants mirrored from globals.js for assertion
 const BARREL_ROLL_INVULN   = 0.4;   // seconds of i-frames granted

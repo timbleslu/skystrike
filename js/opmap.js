@@ -101,3 +101,8 @@ function setpieceOutcome(id, won) {
   return 'banner.missionFailedObj';
 }
 // ---- END MIRROR ----
+
+/* CommonJS export for Node tests — inert in the browser. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { genOpMap, sectorMission, sectorPlan, SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome };
+}

@@ -1,46 +1,6 @@
 'use strict';
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-// ---- shared helper (mirror of js/globals.js clamp) ----
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-
-// ---- mirrors of js/controls.js pure input-shaping helpers ----
-// dead-zone -> renormalize -> expo blend (linear<->cubic) -> clamp; sign-preserving.
-function shapeAxis(v, opts) {
-  const dz = (opts && opts.deadzone) || 0;
-  const ex = (opts && opts.expo) || 0;
-  const a = Math.abs(v);
-  if (a <= dz) return 0;
-  const n = (a - dz) / (1 - dz);
-  const curved = (1 - ex) * n + ex * n * n * n;
-  return clamp(Math.sign(v) * curved, -1, 1);
-}
-
-// per-aggression motion tuning. Invariants asserted below:
-//   deadzone: casual > balanced > direct ; sens: direct > balanced > casual.
-const AGGRESSION = {
-  casual:   { deadzone: 0.18, expo: 0.55, sens: 0.75, maxAngle: 45, autoLevel: 2.2, pitchClamp: 0.70 },
-  balanced: { deadzone: 0.10, expo: 0.35, sens: 1.00, maxAngle: 35, autoLevel: 1.2, pitchClamp: 0.85 },
-  direct:   { deadzone: 0.05, expo: 0.15, sens: 1.35, maxAngle: 28, autoLevel: 0.4, pitchClamp: 1.00 },
-};
-
-// shape a raw analog axis (touch or tilt) into a flight axis: curve -> sens -> clamp -> invert.
-function mapFlightInput(raw, preset, invert) {
-  let v = shapeAxis(raw, preset) * (preset && preset.sens != null ? preset.sens : 1);
-  v = clamp(v, -1, 1);
-  return invert ? -v : v;
-}
-
-// motion recenter: tilt relative to the captured neutral offset, normalized by maxAngle.
-function motionAxis(angle, offset, maxAngle) {
-  return clamp((angle - offset) / maxAngle, -1, 1);
-}
-
-// EMA low-pass: pull prev toward next by alpha (0..1). Higher alpha = snappier, less smooth.
-// PURE (mirrored in tests/controls.test.js — keep byte-identical).
-function emaSmooth(prev, next, alpha) { return prev + alpha * (next - prev); }
+const { shapeAxis, mapFlightInput, motionAxis, emaSmooth, AGGRESSION } = require('../js/core.js');
 
 /* ===== shapeAxis behavior ===== */
 const bal = AGGRESSION.balanced;
@@ -122,32 +82,3 @@ for (let i = 0; i < 200; i++) {
 assert.ok(Math.abs(s - 10) < 1e-6, 'emaSmooth converges to next');
 
 console.log('ok - emaSmooth: alpha endpoints, fixed point, monotone convergence');
-
-/* ===== byte-identity guard: mirrored helpers must match js/controls.js verbatim =====
-   (project convention: test-mirrored functions stay byte-identical with source) */
-const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'controls.js'), 'utf8');
-function bodyOf(fnName, text) {
-  // extract from 'function NAME(' to the matching closing brace (brace-counting)
-  const start = text.indexOf('function ' + fnName + '(');
-  assert.ok(start !== -1, 'js/controls.js defines function ' + fnName);
-  let i = text.indexOf('{', start), depth = 0, end = -1;
-  for (; i < text.length; i++) {
-    if (text[i] === '{') depth++;
-    else if (text[i] === '}') { depth--; if (depth === 0) { end = i + 1; break; } }
-  }
-  return text.slice(start, end);
-}
-function norm(s) { return s.replace(/\r\n/g, '\n').trim(); }
-for (const fn of ['shapeAxis', 'mapFlightInput', 'motionAxis', 'emaSmooth']) {
-  const mine = norm(eval('(' + fn + ').toString()')
-    .replace(/^[^(]*\(/, 'function ' + fn + '(')); // normalize fn name form
-  // compare the source slice to our mirror by stripping whitespace differences only
-  const theirs = norm(bodyOf(fn, src));
-  const strip = (x) => x.replace(/\s+/g, ' ');
-  assert.strictEqual(strip(theirs), strip(mine), fn + ' in controls.js must match the mirror byte-for-byte (ignoring whitespace)');
-}
-// AGGRESSION table must be present with all three presets in source
-assert.ok(/const AGGRESSION\s*=/.test(src), 'controls.js defines AGGRESSION');
-for (const k of ['casual', 'balanced', 'direct']) assert.ok(new RegExp(k + '\\s*:').test(src), 'AGGRESSION.' + k + ' present');
-
-console.log('ok - controls.js mirrors (shapeAxis/mapFlightInput/motionAxis/emaSmooth) match source');

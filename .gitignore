@@ -5,6 +5,10 @@ www/
 .vercel
 *.png
 
+# iOS Capacitor scaffold — removed from the repo; regenerate locally with `npx cap add ios`
+ios/
+capacitor.config.json
+
 # graphify knowledge graph (derived artifact — rebuilt locally by post-commit/post-checkout hooks)
 graphify-out/
 

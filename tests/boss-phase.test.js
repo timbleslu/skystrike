@@ -1,24 +1,6 @@
 'use strict';
 const assert = require('assert');
-
-// ---- mirror of js/globals.js boss-phase core (keep byte-identical between the MIRROR markers) ----
-// === MIRROR START (globals.js boss phase core) ===
-const BOSS_PHASE2_HP = 0.6;   // boss steps 1 -> 2 when hp/maxHp drops below this
-const BOSS_PHASE3_HP = 0.3;   // boss steps 2 -> 3 when hp/maxHp drops below this
-// PURE — boss phase (1/2/3) implied by a HP fraction. Monotone non-increasing in hpFrac.
-function bossPhaseFor(hpFrac) {
-  if (hpFrac < BOSS_PHASE3_HP) return 3;
-  if (hpFrac < BOSS_PHASE2_HP) return 2;
-  return 1;
-}
-// PURE — once-per-phase guard. Given the highest phase already reached and the phase
-// implied by current HP, return the new highest reached: never regresses (HP regen can't
-// drop a phase) and only ever advances toward the HP-implied phase. `reached` starts at 1.
-function nextBossPhase(reached, hpFrac) {
-  const want = bossPhaseFor(hpFrac);
-  return want > reached ? want : reached;
-}
-// === MIRROR END ===
+const { bossPhaseFor, nextBossPhase, BOSS_PHASE2_HP, BOSS_PHASE3_HP } = require('../js/core.js');
 
 // ---- bossPhaseFor: correct phase at and around the thresholds ----
 assert.strictEqual(bossPhaseFor(1.0), 1, 'full HP is phase 1');

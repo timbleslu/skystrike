@@ -1,66 +1,6 @@
 'use strict';
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
-
-/* ----------------------------------------------------------------------------
-   Mirrors of js/opmap.js scripted set-piece PURE helpers (F14).
-   Keep byte-identical with the source between the MIRROR markers. Set-pieces
-   are AUTHORED encounters bound to fixed campaign coordinates (sector type +
-   stage index) — deterministic, so the same campaign node always triggers the
-   same scripted event. No THREE / DOM here.
----------------------------------------------------------------------------- */
-
-// ---- BEGIN MIRROR (js/opmap.js setpiece core) ----
-// Authored encounters as DATA. `mission` reuses the existing typed-mission seam
-// (missions.js) so each set-piece resolves through onMissionResolved's win/fail.
-// `ground` reuses queueStrikeSite's fortified SAM/AAA/convoy. i18n keys carry the
-// localized name + intro/outro lines. `convoy`/`bombers` tune the authored spawns.
-const SETPIECES = {
-  // outrun a wall of SAMs: a fortified ground site IS the objective (strike it).
-  samCorridor: { mission: 'strike',    ground: true,  bombers: 0, convoy: 0, name: 'setpiece.samCorridor', intro: 'setpiece.samCorridor.intro', outro: 'setpiece.samCorridor.outro' },
-  // shepherd a friendly bomber wing out through SAM lanes (escort + ground threat).
-  bomberRun:   { mission: 'escort',    ground: true,  bombers: 0, convoy: 4, name: 'setpiece.bomberRun',   intro: 'setpiece.bomberRun.intro',   outro: 'setpiece.bomberRun.outro' },
-  // thread a carrier group's screen of interceptors (no ground; pure air gauntlet).
-  carrier:     { mission: 'intercept', ground: false, bombers: 5, convoy: 0, name: 'setpiece.carrier',     intro: 'setpiece.carrier.intro',     outro: 'setpiece.carrier.outro' },
-};
-
-// PURE + deterministic: which authored set-piece (if any) a campaign node triggers.
-// Keyed on (sector type, stage index) against the FIXED genOpMap campaign, so a given
-// run's node always plays the same scripted event. Returns an id into SETPIECES or null.
-// 1–2 per campaign: STRIKE @ stage 1 = the SAM corridor; ESCORT @ stage 4 = the bomber run.
-function setpieceFor(type, stage) {
-  if (type === 'STRIKE' && stage === 1) return 'samCorridor';
-  if (type === 'ESCORT' && stage === 4) return 'bomberRun';
-  return null;
-}
-
-// PURE: fold an authored encounter onto a base sector plan. Overrides the mission
-// descriptor + ground flag + bomber/convoy counts the script needs, tags `setpiece`,
-// and leaves the base plan's weather/tod/hostileAce/etc. untouched. Returns a NEW plan.
-function setpiecePlan(id, base) {
-  const sp = SETPIECES[id];
-  if (!sp) return base;
-  const p = {};
-  for (const k in base) p[k] = base[k];
-  p.mission = sp.mission;
-  p.ground = sp.ground;
-  p.bombers = sp.bombers;
-  p.setpiece = id;
-  p.convoy = sp.convoy;
-  p.boss = false;
-  return p;
-}
-
-// PURE: an authored encounter resolves through the SAME mission win/fail seam; map
-// the outcome to the localized outro/fail banner key. Win -> the encounter's outro;
-// loss -> the shared objective-failed line.
-function setpieceOutcome(id, won) {
-  const sp = SETPIECES[id];
-  if (won) return sp ? sp.outro : 'banner.missionComplete';
-  return 'banner.missionFailedObj';
-}
-// ---- END MIRROR ----
+const { SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome } = require('../js/opmap.js');
 
 // --- deterministic node -> encounter mapping ---
 assert.strictEqual(setpieceFor('STRIKE', 1), 'samCorridor', 'STRIKE @ stage 1 is the SAM corridor');
@@ -127,15 +67,5 @@ assert.strictEqual(setpieceOutcome('samCorridor', true), 'setpiece.samCorridor.o
 assert.strictEqual(setpieceOutcome('bomberRun', true), 'setpiece.bomberRun.outro', 'bomber run win shows its outro');
 assert.strictEqual(setpieceOutcome('samCorridor', false), 'banner.missionFailedObj', 'a lost set-piece uses the shared fail banner');
 assert.strictEqual(setpieceOutcome('bomberRun', false), 'banner.missionFailedObj', 'a lost set-piece uses the shared fail banner');
-
-// --- the mirror above MUST stay byte-identical with js/opmap.js (drift fails here) ---
-(function () {
-  const MK = '// ---- BEGIN MIRROR (js/opmap.js setpiece core) ----';
-  const EK = '// ---- END MIRROR ----';
-  function block(src) { const a = src.indexOf(MK); const b = src.indexOf(EK, a); return src.slice(a + MK.length, b); }
-  const here = fs.readFileSync(__filename, 'utf8');
-  const there = fs.readFileSync(path.join(__dirname, '..', 'js', 'opmap.js'), 'utf8');
-  assert.strictEqual(block(here), block(there), 'setpiece MIRROR block is byte-identical with js/opmap.js source');
-})();
 
 console.log('ok - setpiece: deterministic node->encounter mapping, plan fold is pure, win/fail resolution');

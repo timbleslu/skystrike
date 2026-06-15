@@ -4,46 +4,10 @@
    THE SEAM: every analog flight source converges on `flightInput = {pitch, roll}` (globals.js),
    recomputed once per frame by readFlightInput() and consumed by combat.js updatePlayer().
    Keyboard stays digital in combat.js and is ADDED on top before clamping, so desktop is unchanged.
-   Pure shaping helpers (shapeAxis/mapFlightInput/motionAxis) + the AGGRESSION table are mirrored
-   byte-for-byte in tests/controls.test.js — keep them in sync. */
+   Pure shaping helpers (shapeAxis/mapFlightInput/motionAxis/emaSmooth) + the AGGRESSION table now
+   live in core.js (require-safe; tests import them directly — no byte-identical mirror). */
 
-/* ---------------- pure input shaping (unit-tested) ---------------- */
-// dead-zone -> renormalize -> expo blend (linear<->cubic) -> clamp; sign-preserving.
-function shapeAxis(v, opts) {
-  const dz = (opts && opts.deadzone) || 0;
-  const ex = (opts && opts.expo) || 0;
-  const a = Math.abs(v);
-  if (a <= dz) return 0;
-  const n = (a - dz) / (1 - dz);
-  const curved = (1 - ex) * n + ex * n * n * n;
-  return clamp(Math.sign(v) * curved, -1, 1);
-}
-
-// per-aggression motion tuning. Invariants (asserted in tests):
-//   deadzone: casual > balanced > direct ; sens: direct > balanced > casual.
-//   autoLevel: reserved for a future roll auto-leveling assist (values + ordering tests
-//   exist; runtime wiring is a later step, intentionally not read yet).
-const AGGRESSION = {
-  casual:   { deadzone: 0.18, expo: 0.55, sens: 0.75, maxAngle: 45, autoLevel: 2.2, pitchClamp: 0.70 },
-  balanced: { deadzone: 0.10, expo: 0.35, sens: 1.00, maxAngle: 35, autoLevel: 1.2, pitchClamp: 0.85 },
-  direct:   { deadzone: 0.05, expo: 0.15, sens: 1.35, maxAngle: 28, autoLevel: 0.4, pitchClamp: 1.00 },
-};
-
-// shape a raw analog axis (touch or tilt) into a flight axis: curve -> sens -> clamp -> invert.
-function mapFlightInput(raw, preset, invert) {
-  let v = shapeAxis(raw, preset) * (preset && preset.sens != null ? preset.sens : 1);
-  v = clamp(v, -1, 1);
-  return invert ? -v : v;
-}
-
-// motion recenter: tilt relative to the captured neutral offset, normalized by maxAngle.
-function motionAxis(angle, offset, maxAngle) {
-  return clamp((angle - offset) / maxAngle, -1, 1);
-}
-
-// EMA low-pass: pull prev toward next by alpha (0..1). Higher alpha = snappier, less smooth.
-// PURE (mirrored in tests/controls.test.js — keep byte-identical).
-function emaSmooth(prev, next, alpha) { return prev + alpha * (next - prev); }
+/* ---------------- pure input shaping → core.js (shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth) ---------------- */
 
 /* ---------------- per-frame source selection (the seam writer) ---------------- */
 // Picks the active analog source by Settings.mobileControl and writes flightInput{pitch,roll}.

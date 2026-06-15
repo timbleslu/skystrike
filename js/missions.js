@@ -255,3 +255,8 @@ function clearMissionLeftovers() {
     if (e.marker) scene.remove(e.marker); clearLocks(e);
   }
 }
+
+/* CommonJS export for Node tests — inert in the browser. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { MISSIONS, MISSION_TYPES, missionForSector, startMission, missionKill, tickMission };
+}
