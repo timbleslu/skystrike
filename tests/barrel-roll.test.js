@@ -18,7 +18,7 @@ function rollCooldownGate(cooldown) {
 // Constants mirrored from globals.js for assertion
 const BARREL_ROLL_INVULN   = 0.4;   // seconds of i-frames granted
 const BARREL_ROLL_COOLDOWN = 6.0;   // seconds before another roll is allowed
-const BARREL_ROLL_DURATION = 0.4;   // seconds the 360° spin animation plays
+const BARREL_ROLL_DURATION = 0.65;  // seconds the 360° spin animation plays
 const BARREL_ROLL_THRESHOLD = 0.35; // seconds: max gap for double-tap recognition
 
 // ---- rollDetect: double-tap within threshold ----

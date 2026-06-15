@@ -35,11 +35,17 @@
       <div><span class="lab" id="lblFlares">Flares</span><b id="flares">10</b></div>
       <div><span class="lab" id="lblMsl">Msl</span><b id="missiles">30</b></div>
     </div>
+    <div id="awacsHud" class="awacs-hud" style="display:none">
+      <span class="awacs-chip"><span id="awacsLblStrike"></span><b id="awacsUsesStrike">×1</b><i id="awacsCostStrike">140 RP</i></span>
+      <span class="awacs-chip"><span id="awacsLblResupply"></span><b id="awacsUsesResupply">×1</b><i id="awacsCostResupply">90 RP</i></span>
+      <span class="awacs-chip"><span id="awacsLblJam"></span><b id="awacsUsesJam">×2</b><i id="awacsCostJam">70 RP</i></span>
+    </div>
     <div id="special" class="special">ABILITY &#9656; READY</div>
     <div id="wingStatus" class="special wing" style="display:none">&#9650; ESCORT</div>
   </div>
   <div id="wingSidebar"></div>
-  
+  <div id="pilotTag" class="pilot-tag" style="display:none"><span id="pilotEmblemIcon"></span><span id="pilotCallsignTxt"></span></div>
+
   <div id="btnPause" onclick="toggleManual()">|| PAUSE</div>
   
   <div id="warns">
@@ -88,6 +94,7 @@
         <span id="lblCallsign" class="dlab">CALLSIGN</span>
         <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
       </div>
+      <p id="callsignHint" class="techhint"></p>
       <div class="pilotRow">
         <span id="lblEmblem" class="dlab">EMBLEM</span>
         <div id="emblemGrid"></div>
@@ -275,6 +282,8 @@
           <li>Radar is heading-up: dots = bearing, ticks = above/below you, yellow ring = locked target.</li>
           <li>Heed <b>PULL UP</b>, <b>MISSILE</b> (pop flares), <b>HIGH-G</b>, <b>STEALTH</b>.</li>
         </ul>
+        <h3 id="manH_Awacs">AWACS Support</h3>
+        <div id="manP_Awacs"></div>
       </section>
     </div>
     </div>
@@ -326,6 +335,7 @@
         <div class="srow"><label id="lblInvert" for="setInvert">Invert pitch (W = nose up)</label><input id="setInvert" type="checkbox"></div>
         <div class="srow"><label id="lblAutoLock" for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
         <div class="srow"><label id="lblWingman" for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
+        <div class="srow"><label id="lblDevUnlock" for="setDevUnlock">Unlock all aircraft (dev)</label><input id="setDevUnlock" type="checkbox"></div>
         <div class="srow"><label id="lblRival" for="setRival">Nemesis rival ace (persistent named enemy)</label><input id="setRival" type="checkbox"></div>
         <div class="srow"><label id="lblGroundWar" for="setGroundWar">Ground war (SAM/AAA sites, strike waves)</label><input id="setGroundWar" type="checkbox"></div>
         <div class="srow"><label id="lblGunLead" for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>

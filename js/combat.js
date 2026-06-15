@@ -893,6 +893,7 @@ function updatePlayer(dt) {
   // Barrel-roll evasive maneuver: consume the request flag set by controls/main keydown
   if (barrelRollRequest) {
     barrelRollRequest = false;
+    barrelRollDir = (rollIn !== 0) ? Math.sign(rollIn) : 1;   // capture roll intent at trigger
     barrelRollAnim = BARREL_ROLL_DURATION;
     barrelRollCooldown = BARREL_ROLL_COOLDOWN;
     player.invuln = Math.max(player.invuln, BARREL_ROLL_INVULN);
@@ -914,15 +915,12 @@ function updatePlayer(dt) {
   // TWO_PI / BARREL_ROLL_DURATION gives the required angular velocity; direction = player's last roll intent
   // (or +1 if neutral). Overrides normal damped rate for the duration, then exits cleanly via normal damp.
   if (barrelRollAnim > 0) {
-    const spinDir = (rollIn >= 0) ? 1 : -1;
-    player.rollRate = spinDir * (TWO_PI / BARREL_ROLL_DURATION);
+    player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);
+    // gentle pitch pulse through the roll midpoint for a real barrel-roll arc
+    const frac = 1 - barrelRollAnim / BARREL_ROLL_DURATION;
+    if (frac > 0.2 && frac < 0.8) player.pitchRate += tb * 0.35 * Math.sin((frac - 0.2) * Math.PI / 0.6);
   }
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
-  // turbulence as a direct rate perturbation after the control law — feels like physical buffeting rather than fighting the controls
-  if (weather.turbulence > 0) {
-    player.pitchRate += turbSample(weatherT * 1.7, weather.turbulence * 0.5) * tb;
-    player.rollRate  += turbSample(weatherT * 2.3 + 11, weather.turbulence * 0.5) * tb;
-  }
 
   eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
   q1.setFromEuler(eul);

@@ -54,6 +54,7 @@ const I18N = {
     'tut.missileTouch': 'Lock & fire — tap LOCK to designate a target, then MISSILE to launch.',
     'tut.skip': 'SKIP',
     'tut.done': 'TRAINING COMPLETE — good hunting, pilot.',
+    'tut.barrelRoll': 'BARREL ROLL — double-tap Q or E to snap-roll and dodge incoming fire (6s cooldown).',
 
     /* ---- hud labels ---- */
     'hud.guns': 'GUNS',
@@ -83,6 +84,7 @@ const I18N = {
     'hud.rtb': 'RTB', 'hud.exp': 'EXP', 'hud.ace': 'ACE', 'hud.lv': 'Lv',
     'hud.killRow': 'Lv{lv} · W{wv}',
     'hud.hint': 'W/S PITCH · Q/E ROLL · A/D YAW · SHIFT/CTRL THRUST · CTRL+S HIGH-G · SPACE GUN · G MISSILE · X FLARE · F LOCK · R SPECIAL · T/Y FLIGHT CMD · C CAM · V LOOK-BACK · RMB TRACK',
+    'hud.barrelRollHint': 'DBL-TAP Q/E: BARREL ROLL',
 
     /* ---- camera modes ---- */
     'cam.CHASE': 'CHASE', 'cam.CLOSE': 'CLOSE', 'cam.COCKPIT': 'COCKPIT',
@@ -98,6 +100,7 @@ const I18N = {
     /* ---- AWACS support calls (keys 1/2/3) ---- */
     'awacs.title': 'AWACS', 'awacs.strike': 'ORBITAL STRIKE', 'awacs.resupply': 'EMERGENCY RESUPPLY', 'awacs.jam': 'JAMMING',
     'awacs.noRp': 'AWACS: NOT ENOUGH RP', 'awacs.empty': 'AWACS: NO CALLS LEFT THIS SECTOR',
+    'awacs.chipStrike': 'STRIKE', 'awacs.chipResupply': 'RESUP', 'awacs.chipJam': 'JAM',
 
     /* ---- killstreak callouts ---- */
     'ks.5': 'KILLSTREAK', 'ks.10': 'RAMPAGE', 'ks.15': 'UNSTOPPABLE', 'ks.20': 'GODLIKE',
@@ -264,6 +267,7 @@ const I18N = {
     'manual.hEnemies': 'Enemies & Abilities',
     'manual.hTech': 'R&D Tech Tree',
     'manual.hSettings': 'Settings',
+    'manual.awacs': 'AWACS Support',
     'manual.tabGuide': 'Guide',
     'manual.tabSystems': 'Systems',
     'manual.tabTactics': 'Tactics',
@@ -302,7 +306,8 @@ const I18N = {
     'set.motionDenied': 'Motion permission denied — using Touch controls.',
     'set.motionUnsupported': 'Motion sensor unavailable — using Touch controls.',
     'set.controlScheme': 'Steering',
-    'set.csAuto': 'Auto', 'set.csPointer': 'Manual', 'set.csClassic': 'Classic',
+    'set.csAuto': 'AUTO', 'set.csPointer': 'ASSISTED', 'set.csClassic': 'EXPERT',
+    'set.devUnlock': 'Unlock all aircraft (dev)',
     'set.msRequesting': 'Requesting motion access…',
     'set.msDenied': 'Motion permission denied — using touch',
     'set.msUnsupported': 'Motion not supported on this device',
@@ -318,6 +323,7 @@ const I18N = {
     'manBody.wingman': '<li>By default every sortie launches with a loyal <b>AI escort</b> (teal jet, teal radar marker) — you can switch this starting wingman off in <em>Settings</em>. It flies formation off your wing and breaks to dogfight whenever an enemy comes into range, hosing fighters with its cannon and loosing the occasional missile.</li><li>It draws enemy fire — hostiles will sometimes shoot at it instead of you. It can be <em>shot down</em> (and a boss SHOCKWAVE PULSE will swat it), after which it regroups and a fresh escort returns on station a few seconds later. The bottom-right chip shows <b>ON STATION</b> or a <b>REGROUPING</b> timer.</li><li>The <b>WING COMMANDER</b> and <b>SQUADRON</b> tech-tree nodes add a 2nd and 3rd permanent escort and up-armour the whole flight; the <b>FLEET COMMANDER</b> capstone makes your escorts hit much harder. The <b>F-47</b>\'s <b>CCA SWARM</b> deploys three vivid electric-blue drones in front of you for ~16s — they immediately acquire targets and attack. The F-47\'s passive makes all AI escorts and CCAs hit 25% harder.</li><li><b>FLIGHT COMMANDS:</b> press <b>T</b> to order the whole flight to <b>FOCUS FIRE</b> your locked target, or <b>Y</b> to <b>REGROUP</b> — break off and tuck into tight defensive formation. The <b>GUARDIAN ESCORTS</b> tech node lets your escorts run their own point-defense laser, swatting enemy missiles that stray near the flight.</li>',
     'manBody.enemies': '<li><b>Red fighters</b> hold their distance and circle, then commit to strafing gun-runs — they now carry a real cannon magazine and a single missile, so expect to be shot at.</li><li><b>Crimson drones</b> — cheap kamikaze swarms that ignore guns and simply <em>ram you</em>. Individually fragile, lethal in numbers — keep moving, hose them with the cannon, or break line-of-sight in a cloud.</li><li><b>Gold ACE</b> — an elite with more ammo that shrugs off a single missile; wear it down.</li><li><b>Bombers</b> pack a heavy cannon, two missiles &amp; a few flares.</li><li><b>Orange turrets</b> are ground SAM sites (missiles only).</li><li><b>Magenta BOSS</b> (every 4th wave) now cycles <em>telegraphed</em> special attacks — radial MISSILE BARRAGE, deployed DRONE SWARMS, and a close-range SHOCKWAVE PULSE — then enrages at low health. Watch for the warning, then break away or pop countermeasures.</li><li>Enemy ammo still runs dry — a disarmed foe is just a target.</li>',
     'manBody.tech': 'You earn <em>research points (RP)</em> — shown as <b>R&amp;D</b> on the HUD — only from damage, kills and <em>assists you personally deal</em>. Kills your wingmen or CCA drones score earn you nothing. Clear a wave and an <b>R&amp;D screen</b> opens: spend RP across five branches (Gunnery, Missiles, Airframe, Electronic Warfare, Command). Each branch is a <em>track</em> — a node only unlocks once the one above it is bought. Purchases <em>persist for the whole run</em>, so every sortie builds a different fighter. Buy as many as you can afford, or none at all — press <b>DEPLOY</b> (or <b>Enter</b>) to launch the next wave.',
+    'manBody.awacs': '<b>AWACS SUPPORT (keys 1 / 2 / 3)</b><br>Three radio calls per sector, each spends Research Points (RP). <b>1 — ORBITAL STRIKE</b> (140 RP): destroys the nearest enemy instantly (bosses immune). <b>2 — EMERGENCY RESUPPLY</b> (90 RP): refills missiles and flares. <b>3 — JAMMING</b> (70 RP): 8 seconds of total enemy-missile blindness. Strike and Resupply allow one call each per sector; Jamming allows two. Uses reset every sector — watch the HUD chips for remaining calls.',
 
     /* ---- meta-progression (SP currency, perks, jet/skin unlocks, achievements) ---- */
     'meta.title': 'COMMAND PROGRESSION',
@@ -345,6 +351,7 @@ const I18N = {
     'pilot.buy': 'UNLOCK — {c} SP',
     'pilot.locked': 'LOCKED',
     'pilot.needAch': 'REQUIRES: {a}',
+    'pilot.hint': 'Your callsign shows in the HUD during flight and on your debrief card.',
     'banner.achUnlocked': '★ {n} ACHIEVEMENT(S) UNLOCKED ★',
     /* ---- daily seeded challenge (F7) ---- */
     'daily.title': '◆ DAILY CHALLENGE',
@@ -412,6 +419,7 @@ const I18N = {
     'tut.missileTouch': '锁定并发射 —— 点「锁定」指定目标，再点「导弹」发射。',
     'tut.skip': '跳过',
     'tut.done': '训练完成 —— 祝你好运，飞行员。',
+    'tut.barrelRoll': '横滚规避 — 双击 Q 或 E 急滚翻转、规避来袭火力（冷却6秒）。',
 
     'hud.guns': '可射击',
     'hud.locking': '锁定中',
@@ -440,6 +448,7 @@ const I18N = {
     'hud.rtb': '返航', 'hud.exp': '剩余', 'hud.ace': '王牌', 'hud.lv': '等级',
     'hud.killRow': '等级{lv} · 第{wv}波',
     'hud.hint': 'W/S 俯仰 · Q/E 滚转 · A/D 偏航 · SHIFT/CTRL 油门 · CTRL+S 高过载 · SPACE 机炮 · G 导弹 · X 干扰弹 · F 锁定 · R 技能 · T/Y 编队指令 · C 镜头 · V 后视 · 右键 跟踪',
+    'hud.barrelRollHint': '双击Q/E：横滚规避',
 
     'cam.CHASE': '追尾', 'cam.CLOSE': '近景', 'cam.COCKPIT': '座舱',
 
@@ -452,6 +461,7 @@ const I18N = {
     /* ---- AWACS support calls ---- */
     'awacs.title': '预警机', 'awacs.strike': '轨道打击', 'awacs.resupply': '紧急补给', 'awacs.jam': '电子干扰',
     'awacs.noRp': '预警机：研发点不足', 'awacs.empty': '预警机：本区呼叫次数已用尽',
+    'awacs.chipStrike': '打击', 'awacs.chipResupply': '补给', 'awacs.chipJam': '干扰',
 
     'ks.5': '连杀', 'ks.10': '狂暴', 'ks.15': '势不可挡', 'ks.20': '神一般',
 
@@ -608,6 +618,7 @@ const I18N = {
     'manual.hEnemies': '敌人与能力',
     'manual.hTech': '研发科技树',
     'manual.hSettings': '设置',
+    'manual.awacs': 'AWACS 支援',
     'manual.tabGuide': '指南',
     'manual.tabSystems': '系统',
     'manual.tabTactics': '战术',
@@ -645,7 +656,8 @@ const I18N = {
     'set.motionDenied': '体感权限被拒绝 — 改用触屏操控。',
     'set.motionUnsupported': '运动传感器不可用 — 改用触屏操控。',
     'set.controlScheme': '转向方式',
-    'set.csAuto': '自动', 'set.csPointer': '手动', 'set.csClassic': '经典',
+    'set.csAuto': '自动', 'set.csPointer': '辅助', 'set.csClassic': '专家',
+    'set.devUnlock': '解锁所有机型（开发者）',
     'set.msRequesting': '正在请求体感权限…',
     'set.msDenied': '体感权限被拒绝 — 改用触屏',
     'set.msUnsupported': '本设备不支持体感',
@@ -661,6 +673,7 @@ const I18N = {
     'manBody.wingman': '<li>默认情况下，每次出击都会带上一名忠诚的<b>AI僚机</b>（青色战机、青色雷达标记）——可在<em>设置</em>中关闭这名初始僚机。它会在你的侧翼编队飞行，一旦有敌人进入范围便脱离展开缠斗，用机炮扫射战机并不时发射导弹。</li><li>它会吸引敌方火力——敌人有时会攻击它而非你。它可能被<em>击落</em>（首领的冲击波脉冲也会将其打落），之后它会重整旗鼓，数秒后一架新的僚机将返回就位。右下角的标牌会显示<b>就位</b>或<b>重整中</b>计时。</li><li><b>僚机指挥官</b>与<b>中队编成</b>科技树节点会增加第二、第三架永久僚机并强化全编队装甲；<b>舰队指挥官</b>终极节点会让你的僚机伤害大幅提升。<b>F-47</b>的<b>CCA SWARM</b>会在你前方部署三架鲜亮电蓝色的无人机，持续约16秒——它们会立即锁定目标并发起攻击。F-47的被动技能使所有AI僚机与CCA伤害提高25%。</li><li><b>编队指令：</b>按 <b>T</b> 命令整个编队<b>集火</b>你锁定的目标，或按 <b>Y</b> <b>归队</b>——脱离战斗并转入紧密防御编队。<b>守护僚机</b>科技节点让僚机运行自己的点防御激光，击落靠近编队的敌方导弹。</li>',
     'manBody.enemies': '<li><b>红色战机</b>会保持距离并盘旋，然后投入扫射式机炮攻击——它们现在携带真正的机炮弹药与一枚导弹，所以预料会遭到还击。</li><li><b>深红色无人机</b>——廉价的神风蜂群，无视机炮，只会<em>径直撞向你</em>。单个脆弱，成群致命——保持机动，用机炮扫射，或借助云层切断其视线。</li><li><b>金色王牌</b>——弹药更多的精英，能扛下单枚导弹；逐步消耗它。</li><li><b>轰炸机</b>配备重型机炮、两枚导弹与少量干扰弹。</li><li><b>橙色炮塔</b>是地面防空导弹据点（仅发射导弹）。</li><li><b>洋红色首领</b>（每第4波）现在会循环施放<em>有预兆的</em>特殊攻击——放射状导弹弹幕、部署无人机蜂群、以及近距离冲击波脉冲——并在低血量时狂暴。注意警告，然后规避或释放对抗措施。</li><li>敌方弹药同样会耗尽——被缴械的敌人不过是个靶子。</li>',
     'manBody.tech': '你仅能从<em>你亲自造成的</em>伤害、击杀与助攻中获得<em>研究点数（RP）</em>——在平显上显示为<b>研发</b>。僚机或CCA无人机的击杀不会给你任何点数。清除一波后会打开<b>研发界面</b>：将RP花费在五条分支上（机炮、导弹、机体、电子战、指挥）。每条分支都是一条<em>路线</em>——只有购买了上一个节点，下一个才会解锁。购买<em>在整局内永久生效</em>，因此每次出击都能打造不同的战机。能买多少就买多少，或者一个都不买——按<b>出击</b>（或<b>回车</b>）进入下一波。',
+    'manBody.awacs': '<b>AWACS 支援（按键 1 / 2 / 3）</b><br>每区段三次无线电呼叫，各消耗研发点（RP）。<b>1 — 轨道打击</b>（140 RP）：立即摧毁最近的敌机（Boss 免疫）。<b>2 — 紧急补给</b>（90 RP）：补满导弹与干扰弹。<b>3 — 电子干扰</b>（70 RP）：8 秒内敌方导弹完全失灵。打击与补给每区段各一次，干扰两次。每区段重置 —— 注意 HUD 上的剩余次数。',
 
     /* JETS data-table overrides — name/ability kept in English (fall back to obj field) */
     jet: {
@@ -829,6 +842,7 @@ const I18N = {
     'pilot.buy': '解锁 — {c} 点',
     'pilot.locked': '已锁定',
     'pilot.needAch': '需要：{a}',
+    'pilot.hint': '你的呼号会在飞行中显示于 HUD，并出现在任务总结卡片上。',
     'banner.achUnlocked': '★ 解锁 {n} 项成就 ★',
     /* ---- 每日挑战 (F7) ---- */
     'daily.title': '◆ 每日挑战',
