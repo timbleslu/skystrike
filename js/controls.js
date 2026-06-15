@@ -89,17 +89,22 @@ function readFlightInput() {
   }
   motionPrevState = state;
   let pitch = 0, roll = 0;
+  // invert-pitch is a manual-pitch sim preference. The AUTO "fly toward the stick" scheme is directional
+  // (stick up = climb, always), so it IGNORES invertY. This also keeps manual pitch on the same sign
+  // convention as steerCommand's autoPitch coordination term (globals.js, never inverted) — otherwise the
+  // two fight and AUTO's coordinated turn reverses when invert is on. (EXPERT/ASSISTED still honour invertY.)
+  const inv = (controlScheme === 'auto') ? false : invertY;
   if (mobileControl === 'motion' && motionInput.ready) {
     const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
     // beta -> pitch (push nose down by tilting forward by default; invertY flips), gamma -> roll
     const rawPitch = motionAxis(motionInput.beta, motionOffset.beta, a.maxAngle);
     const rawRoll = motionAxis(motionInput.gamma, motionOffset.gamma, a.maxAngle);
-    pitch = mapFlightInput(rawPitch, a, !invertY) * a.pitchClamp;  // default push-up=climb -> invert raw beta
+    pitch = mapFlightInput(rawPitch, a, !inv) * a.pitchClamp;  // default push-up=climb -> invert raw beta
     roll = mapFlightInput(rawRoll, a, false);
   } else if (isTouchEnabled && joyActive) {
     const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
     // stick: up (negative y) = climb by default; invertY flips. push right (+x) = roll right.
-    pitch = mapFlightInput(-touchInput.y, a, invertY) * a.pitchClamp;  // cap pitch authority like the motion path
+    pitch = mapFlightInput(-touchInput.y, a, inv) * a.pitchClamp;  // cap pitch authority like the motion path
     roll = mapFlightInput(touchInput.x, a, false);
   }
   flightInput.pitch = clamp(pitch, -1, 1);
