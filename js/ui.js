@@ -1294,14 +1294,14 @@ function startGame(i, daily) {
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
-  opMap = null; opStage = 0; opSector = null; mission = null;
+  opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
   weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls fresh each run (F10); nextWave also refreshes per sector
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, cleanWaves: 0 };
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   state = 'playing';
   // first-run guided tutorial (F5): only a brand-new player (this session) who hasn't finished it yet.
