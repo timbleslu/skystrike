@@ -115,14 +115,17 @@ canvas{display:block}
 #tb-msl:active{background:rgba(255,57,75,0.4); color:#fff; box-shadow:0 0 20px rgba(255,57,75,0.6);}
 #tb-flr{bottom:46px; right:36px; width:44px; height:44px;}
 #tb-spc{bottom:118px; right:18px; width:44px; height:44px;}
-#tb-thr{bottom:168px; left:36px; width:48px; height:48px;}
-#tb-brk{bottom:168px; left:98px; width:48px; height:48px;}
+/* THR slider (replaces the old THR + BRK touch buttons): drag to set throttle 0..1 */
+#tb-thr{position:absolute; bottom:120px; left:30px; width:58px; height:188px; border:1px solid rgba(25,240,212,0.4); border-radius:16px; background:rgba(4,10,14,0.6); pointer-events:auto; touch-action:none; user-select:none; overflow:hidden;}
+.t-slider-fill{position:absolute; left:0; right:0; bottom:0; height:0%; background:linear-gradient(to top, rgba(25,240,212,0.55), rgba(25,240,212,0.18)); pointer-events:none; transition:height .05s linear;}
+.t-slider-thumb{position:absolute; left:5px; right:5px; height:26px; bottom:0; border-radius:9px; background:rgba(25,240,212,0.85); box-shadow:0 0 14px rgba(25,240,212,0.55); pointer-events:none; transition:bottom .05s linear;}
+.t-slider-cap{position:absolute; top:7px; left:0; right:0; text-align:center; font-family:var(--disp); font-size:10px; font-weight:700; color:var(--cy); pointer-events:none; text-shadow:0 0 5px rgba(0,0,0,0.85);}
 #tb-cam{top:18px; right:18px; width:40px; height:40px; font-size:9px;}
 #tb-lck{bottom:178px; right:62px; width:44px; height:44px; font-size:10px; border-color:#0bd5ff; color:#0bd5ff;}
 
 /* --- touch control opacity + scale + layouts + floating stick (controls.js) --- */
 #touchControls{--btn-opacity:0.8; --ctrl-scale:1; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
-#touchControls .t-btn{opacity:var(--btn-opacity);}
+#touchControls .t-btn, #touchControls #tb-thr{opacity:var(--btn-opacity);}
 #touchControls .joy-base{opacity:calc(var(--btn-opacity) * 0.9);}
 .joy-base.floating{transition:left .04s linear, top .04s linear;}
 /* left-handed: swap the action cluster to the left, throttle/brake to the right */
@@ -131,8 +134,7 @@ canvas{display:block}
 #touchControls.layout-left #tb-flr{right:auto; left:36px;}
 #touchControls.layout-left #tb-spc{right:auto; left:18px;}
 #touchControls.layout-left #tb-lck{right:auto; left:62px;}
-#touchControls.layout-left #tb-thr{left:auto; right:36px;}
-#touchControls.layout-left #tb-brk{left:auto; right:98px;}
+#touchControls.layout-left #tb-thr{left:auto; right:30px;}
 #touchControls.layout-left #tb-cam{right:auto; left:18px;}
 /* compact: shrink the on-screen buttons further (compounds with --ctrl-scale) */
 #touchControls.layout-compact .t-btn{transform:scale(calc(var(--ctrl-scale,1) * 0.85));}

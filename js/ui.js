@@ -1237,7 +1237,7 @@ function applyLang() {
   const pauseEl = g('btnPause'); if (pauseEl) pauseEl.textContent = t('hud.pause');
   // touch buttons
   setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
-  setTxt('tb-thr', t('touch.thr')); setTxt('tb-brk', t('touch.brk')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
+  setTxt('tb-thr-lbl', t('touch.thr')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
   setTxt('tb-aws', t('touch.aws')); setTxt('tb-ars', t('touch.ars')); setTxt('tb-ajm', t('touch.ajm'));
   // flight manual body (HTML content)
   const setHTML = (id, key) => { const e = g(id); if (e) e.innerHTML = t(key); };
