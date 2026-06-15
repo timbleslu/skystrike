@@ -552,13 +552,16 @@ let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live
 let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
 // flight control scheme — how combat.js INTERPRETS the flightInput seam (orthogonal to touch/motion source).
-//   'auto'    (default) = bank-hold like pointer + a CONSTANT nose-up pull when banked -> banking carves a turn in the bank direction.
+//   'auto'    (default) = "fly toward the stick": gentle bank-hold (capped at autoMaxBank) + a WORLD-axis yaw
+//                         (combat.js, ∝ bank) that turns the heading. Pitch stays fully manual so DIAGONALS work
+//                         (you can dive AND turn at once). Turn is decoupled from pitch on purpose — see combat.js.
 //   'pointer'           = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
 let controlScheme = 'auto';
 let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
-// point-to-steer tunables (only combat.js reads these). maxBank ≈ 80°. Verified stable (negative-feedback bank-hold).
-const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoPitchGain: 0.6 };
+// steering tunables (combat.js reads these). pointer maxBank ≈ 80°; 'auto' banks gently (autoMaxBank ≈ 29°) and turns
+// via a world-yaw ∝ sin(bank)*autoYawGain applied in combat.js (NOT here — heading turn is decoupled from pitch).
+const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoMaxBank: 0.5, autoYawGain: 1.6 };
 // PURE — map normalized flight intent to the engine's pitch/roll command axes, honouring the control scheme.
 // `intent` = { pitch, roll } in -1..1 (point-to-fly signs: +pitch=climb, +roll=bank right). `currentBank` is the
 // airframe's present bank angle in radians, SAME sign frame as roll intent (combat.js passes atan2(-right.y, up.y)).
@@ -566,24 +569,20 @@ const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06,
 //   'rate'    : rollCmd = roll intent (-> roll rate, today's mapping). pitchCmd = pitch intent.
 //   'pointer' : rollCmd holds bank to rollIntent*maxBank; |rollIntent|<deadzone auto-levels to wings-level.
 //               pitchCmd = pitch intent unchanged (same climb/dive authority in both schemes).
-//   'auto'    : same bank-hold as pointer; also subtracts |sin(currentBank)|*autoPitchGain from pitchCmd — a CONSTANT
-//              nose-up pull whenever banked (combat applies pitchIn = -pitchCmd, so this pulls the nose UP). The pull
-//              is direction-INDEPENDENT (|sin|), so heading turns in the BANK direction. A signed sin(cb) term fails:
-//              it makes pitchRate flip with bank while the banked-pitch->heading coupling (~sin(bank)) also flips, so
-//              they cancel to heading ~ -sin^2(bank) -> the jet always turned the SAME way regardless of stick side.
+//   'auto'    : SAME pitch/roll mapping as pointer, but banks to a SMALLER cap (autoMaxBank). The actual turn is a
+//              world-axis yaw applied in combat.js (∝ sin(bank)); keeping it OUT of pitch is what lets you dive while
+//              turning (diagonals). An older design pulled pitch ∝ |sin(bank)| to turn, which blocked diving in a turn.
 function steerCommand(scheme, intent, currentBank, t) {
   const pitchCmd = intent.pitch;
   if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
   const cb = currentBank || 0;
+  const mb = (scheme === 'auto') ? t.autoMaxBank : t.maxBank;   // 'auto' banks gently; heading turns via world-yaw in combat.js
   let rollCmd;
   if (Math.abs(intent.roll) < t.deadzone) {
-    rollCmd = clamp(-cb * t.autoLevelGain / t.maxBank, -1, 1);           // wings-level seek when stick released
+    rollCmd = clamp(-cb * t.autoLevelGain / mb, -1, 1);           // wings-level seek when stick released
   } else {
-    const targetBank = intent.roll * t.maxBank;
-    rollCmd = clamp(t.bankGain * (targetBank - cb) / t.maxBank, -1, 1);  // proportional bank-hold
-  }
-  if (scheme === 'auto') {
-    return { pitchCmd: clamp(pitchCmd - Math.abs(Math.sin(cb)) * t.autoPitchGain, -1, 1), rollCmd };
+    const targetBank = intent.roll * mb;
+    rollCmd = clamp(t.bankGain * (targetBank - cb) / mb, -1, 1);  // proportional bank-hold
   }
   return { pitchCmd, rollCmd };
 }
