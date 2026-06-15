@@ -355,6 +355,36 @@ function reqSatisfied(node, ownsFn, byId, groundOn) {
   if (!req) return true;
   return Array.isArray(req) ? req.some(met) : met(req);            // OR-gate: any one parent unlocks
 }
+/* ---------------- FRONTIER DRAFT (feature 4) ----------------
+   Run-scoped draft state. The full tech tree still renders (positions/connectors unchanged); only a
+   few currently-unlockable FRONTIER nodes are OFFERED as buyable each visit. PIN biases the offer
+   toward a goal's prereq path; REROLL re-rolls once per visit; PITY force-includes a long-skipped node.
+   Pure draft logic lives in core.js (frontierEligible/prereqPath/draftOffer); this is just the glue.
+   Reset in startGame(). Scoped to the TECH tab only — the ARMORY tab keeps its full-list behaviour. */
+let draftState = { seed: 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {} };
+function resetDraftState() {
+  draftState = { seed: (Math.random() * 0x7fffffff) | 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {} };
+}
+function inOffer(id) { return draftState.offer.indexOf(id) >= 0; }
+// the per-visit frontier: currently-unlockable, unowned (repeatables stay), applicable tech-tab nodes.
+function draftFrontier() {
+  const treeNodes = TECH_TREE.filter(n => !n.tab || n.tab === 'tech');
+  return frontierEligible(treeNodes, {
+    owns,
+    reqSatisfied: (n) => reqSatisfied(n, owns, TECH_BY_ID, groundWar),
+    applicable: (n) => nodeState(n) !== 'hidden' && nodeState(n) !== 'na' && nodeState(n) !== 'bought',
+  });
+}
+// roll the offer for this visit. `sub` salts the seed (reroll passes a non-zero salt for a fresh 3).
+function rollDraftOffer(sub) {
+  const frontier = draftFrontier();
+  const pinPath = draftState.pin ? prereqPath(draftState.pin, TECH_BY_ID, owns).filter(inFrontierOf(frontier)) : [];
+  const rng = makeRng((draftState.seed ^ (draftState.visit * 0x9e3779b1) ^ ((sub || 0) * 0x85ebca6b)) | 0);
+  const res = draftOffer({ frontier, pinPath, pity: draftState.pity, rng, n: DRAFT_OFFER_N });
+  draftState.offer = res.offer;
+  draftState.pity = res.pity;
+}
+function inFrontierOf(frontier) { const s = new Set(frontier); return (id) => s.has(id); }
 function nodeState(node) {
   if (node.ground && !groundWar) return 'hidden';
   if (!node.repeat && owns(node.id)) return 'bought';
@@ -365,6 +395,12 @@ function nodeState(node) {
 function openTechScreen() {
   if (!player) return;
   techTab = 'tech';
+  // FRONTIER DRAFT: new visit → roll a fresh 3-node offer (deterministic per run seed + visit index),
+  // arm the reroll, and clear the "already drafted this visit" flag.
+  draftState.visit++;
+  draftState.drafted = false;
+  draftState.rerollUsed = false;
+  rollDraftOffer(0);
   document.querySelectorAll('.tech-tab').forEach(b => { b.classList.toggle('active', b.dataset.tab === 'tech'); b.onclick = () => switchTechTab(b.dataset.tab); });
   renderTechTree(true);
   choosingUpgrade = true; paused = true;
@@ -372,6 +408,16 @@ function openTechScreen() {
   g('upgrade').classList.add('show');
 }
 function nodeXY(node) { return { left: TECH_PAD + node.x * TECH_COLW, top: TECH_PAD + node.y * TECH_ROWH }; }
+// FRONTIER DRAFT display gate: only OFFERED nodes are buyable this visit. A node that would otherwise
+// be 'avail'/'cantafford' but isn't in the offer renders as the non-buyable 'lockvisit' state (shown,
+// not buyable). Owned/bought/locked/na/hidden pass through unchanged.
+function draftDisplayState(node, st) {
+  if (st === 'avail' || st === 'cantafford') {
+    if (inOffer(node.id)) return st === 'avail' ? 'avail' : 'cantafford';
+    return 'lockvisit';   // visible-but-locked-this-visit (not on this visit's frontier offer)
+  }
+  return st;
+}
 function renderTechTree(recenter) {
   const rv = g('rpval'); if (rv) rv.textContent = Math.floor(player.tp).toLocaleString();
   const grid = g('techgrid'); if (!grid) return;
@@ -403,14 +449,20 @@ function renderTechTree(recenter) {
   svg += '</svg>';
   let nodes = '';
   for (const n of treeNodes) {
-    const st = nodeState(n);
-    if (st === 'hidden') continue;
+    const raw = nodeState(n);
+    if (raw === 'hidden') continue;
+    const st = draftDisplayState(n, raw);   // FRONTIER DRAFT: gate buyability to this visit's offer
     const p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
     const cost = nodeCost(n);
-    const costTxt = n.id === 'core' ? t('tech.core') : st === 'bought' ? t('tech.owned') : st === 'na' ? t('tech.na') : cost + ' RP';
+    const costTxt = n.id === 'core' ? t('tech.core') : raw === 'bought' ? t('tech.owned') : raw === 'na' ? t('tech.na')
+      : st === 'lockvisit' ? t('tech.lockVisit') : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
-    nodes += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
+    const offered = inOffer(n.id) && (raw === 'avail' || raw === 'cantafford');   // one of the 3 frontier picks
+    const pinned = draftState.pin === n.id;
+    const cls = 'tnode ' + st + (n.repeat ? ' rep' : '') + (offered ? ' offered' : '') + (pinned ? ' pinned' : '');
+    nodes += '<div class="' + cls + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
       badge +
+      (pinned ? '<span class="tn-pin">\u25C8</span>' : '') +
       '<div class="tn-sym">' + n.sym + '</div>' +
       '<div class="tn-name">' + techText(n, 'name') + '</div>' +
       '<div class="tn-desc">' + techText(n, 'desc') + '</div>' +
@@ -418,14 +470,44 @@ function renderTechTree(recenter) {
     '</div>';
   }
   grid.innerHTML = '<div id="techcanvas" style="width:' + W + 'px;height:' + H + 'px">' + svg + nodes + '</div>';
-  // wire clicks for purchasable nodes
+  // wire clicks: OFFERED+affordable nodes buy (draft pick); any other non-bought tree node toggles the PIN goal.
   const cv = g('techcanvas');
-  cv.querySelectorAll('.tnode.avail').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } const id = el.getAttribute('data-id'); buyNode(TECH_BY_ID[id]); }));
+  cv.querySelectorAll('.tnode.avail.offered').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } const id = el.getAttribute('data-id'); buyNode(TECH_BY_ID[id]); }));
+  cv.querySelectorAll('.tnode:not(.offered):not(.bought)').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } togglePin(el.getAttribute('data-id')); }));
+  renderDraftBar();
   if (recenter) {
     const rootCX = TECH_PAD + 3 * TECH_COLW + TECH_NODEW / 2;
     grid.scrollLeft = Math.max(0, rootCX - grid.clientWidth / 2);
     grid.scrollTop = 0;
   }
+}
+// FRONTIER DRAFT control bar: pin readout + reroll button state. Lives in #draftBar (index.html).
+function renderDraftBar() {
+  const pinEl = g('draftPin');
+  if (pinEl) {
+    pinEl.textContent = draftState.pin
+      ? tf('tech.pinned', { name: techText(TECH_BY_ID[draftState.pin], 'name') })
+      : t('tech.pinHint');
+    pinEl.classList.toggle('active', !!draftState.pin);
+  }
+  const rr = g('techReroll');
+  if (rr) { rr.disabled = draftState.rerollUsed; rr.textContent = t('tech.reroll'); }
+}
+// PIN: clicking a non-offered tree node sets it as the goal (offers bias toward its prereq path).
+// Clicking the already-pinned node clears the pin. Pin persists across visits within the run.
+function togglePin(id) {
+  if (!id || !TECH_BY_ID[id]) return;
+  draftState.pin = (draftState.pin === id) ? null : id;
+  audio.ui();
+  if (techTab === 'tech') renderTechTree(false);   // re-render to show/clear the pin marker + readout
+}
+// REROLL: once per visit, re-roll this visit's offer with a fresh sub-seed (pity + pin still applied).
+function rerollDraft() {
+  if (draftState.rerollUsed) { audio.ui(); return; }
+  draftState.rerollUsed = true;
+  rollDraftOffer(draftState.visit * 7 + 1);   // non-zero salt → a different draw than the visit's first roll
+  audio.ui();
+  if (techTab === 'tech') renderTechTree(false);
 }
 function renderArmory() {
   if (!player) return;
@@ -468,6 +550,8 @@ let pendingWingNode = null;
 function buyNode(node) {
   if (!choosingUpgrade || !player || !node) return;
   if (nodeState(node) !== 'avail') { audio.ui(); return; }
+  // FRONTIER DRAFT: on the TECH tab, only this visit's 3 offered nodes are buyable (armory is unrestricted).
+  if (techTab === 'tech' && !inOffer(node.id)) { audio.ui(); return; }
   if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
   commitNode(node);
 }
@@ -480,7 +564,15 @@ function commitNode(node) {
   else { player.tech.push(node.id); player.upgrades.push(node.id); }
   audio.power(); empFlash = 0.26;
   showBanner(tf('banner.researched', { name: techText(node, 'name') }));
-  techTab === 'armory' ? renderArmory() : renderTechTree(false);
+  // FRONTIER DRAFT: picking an offered TECH-tab node is the visit's ONE draft pick → commit + deploy.
+  // (Armory keeps buy-multiple; only the draft tab is pick-exactly-one.)
+  if (techTab === 'tech') {
+    draftState.pity[node.id] = 0;   // a picked frontier node clears its pity debt
+    draftState.drafted = true;
+    deployFromTech();
+    return;
+  }
+  renderArmory();
 }
 
 function openWingPicker(node) {
@@ -589,6 +681,7 @@ function buildHangar() {
   const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
   g('redeploy').addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
+  const trr = g('techReroll'); if (trr) trr.addEventListener('click', rerollDraft);   // FRONTIER DRAFT: reroll the 3 offers (once/visit)
   const tg = g('techgrid');
   if (tg) {   // drag anywhere to pan the tech tree (scroll wheel & touch still work too)
     let panning = false, sx = 0, sy = 0, sl = 0, stp = 0;
@@ -1008,6 +1101,7 @@ function startGame(i, daily, rush) {
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  resetDraftState();   // FRONTIER DRAFT (feature 4): fresh run seed + clear pin/pity/visit counter
   awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap fresh each run (F10); nextWave also refreshes per sector
   awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clock fresh each run (cooldown-gated, balance 2026-06)
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
@@ -1297,6 +1391,7 @@ function applyLang() {
   document.querySelectorAll('.tech-tab').forEach(b => { b.textContent = b.dataset.tab === 'armory' ? t('tech.tabArmory') : t('tech.tabTech'); });
   setTxt('techDeploy', t('tech.deploy'));
   const hint = g('techhint'); if (hint) hint.textContent = techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree');
+  renderDraftBar();   // FRONTIER DRAFT: localize the pin readout + reroll button on language switch
   // wing picker
   const wt = g('wpTitle'); if (wt) wt.textContent = t('wing.title');
   const wsx = g('wpSub'); if (wsx) wsx.textContent = t('wing.sub');

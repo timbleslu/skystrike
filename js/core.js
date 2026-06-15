@@ -405,6 +405,111 @@ function specialSlotReady(slot) {
   return !!(slot && slot.id && slot.cd <= 0);
 }
 
+/* ---------------- FRONTIER DRAFT (feature 4) ----------------
+   Pure draft-pick logic for the R&D tech tree. The full tree stays visible/planned; each shop visit
+   only a few of the player's currently-unlockable FRONTIER nodes are OFFERED as buyable. Eligibility
+   is INJECTED (owns/reqSatisfied/applicable fns + data) so this stays DOM/THREE-free + require-safe.
+   `tests/draft.test.js` exercises these directly. */
+
+const DRAFT_OFFER_N = 3;        // how many frontier nodes are offered per visit
+const DRAFT_PITY_THRESHOLD = 3; // a frontier node skipped this many visits is force-included next offer
+
+// frontierEligible(nodes, {owns, reqSatisfied, applicable}) → [ids]
+// The FRONTIER = nodes whose prerequisites are satisfied, that the player does not yet own
+// (repeatables are still offerable even when already taken), and that apply to this map
+// (applicable() rejects na/hidden/ground-off nodes). All three predicates are injected fns.
+function frontierEligible(nodes, fns) {
+  const owns = (fns && fns.owns) || (() => false);
+  const reqSatisfied = (fns && fns.reqSatisfied) || (() => true);
+  const applicable = (fns && fns.applicable) || (() => true);
+  const out = [];
+  for (let i = 0; i < (nodes ? nodes.length : 0); i++) {
+    const n = nodes[i];
+    if (!n) continue;
+    if (!applicable(n)) continue;                 // excludes na / hidden / not-this-map
+    if (!n.repeat && owns(n.id)) continue;        // already owned (repeatables stay offerable)
+    if (!reqSatisfied(n)) continue;               // prereqs not met yet — not on the frontier
+    out.push(n.id);
+  }
+  return out;
+}
+
+// prereqPath(targetId, byId, owns) → [ids]  (ordered: deepest unowned prereq first → target last)
+// The chain of UNOWNED prerequisite node ids leading to `target`, used to BIAS offers toward a pinned
+// goal. Walks the req/reqAll graph (OR-gate: follow the first unowned parent; AND-gate: include all
+// unowned parents). Returns [] if the target is already owned or unknown; includes the target itself
+// (when unowned) as the final element so the path is directly offer-biasable.
+function prereqPath(targetId, byId, owns) {
+  if (!targetId || !byId) return [];
+  const ownsFn = owns || (() => false);
+  const seen = {};
+  const acc = [];
+  const visit = (id) => {
+    if (!id || seen[id]) return;
+    seen[id] = true;
+    const node = byId[id];
+    if (!node) return;
+    if (ownsFn(id)) return;                        // owned prereqs are already satisfied — skip
+    const reqAll = node.reqAll || [];
+    for (let i = 0; i < reqAll.length; i++) visit(reqAll[i]);   // AND-gate: every listed parent
+    const req = node.req;
+    if (req) {                                     // OR-gate: take the first unowned parent's path
+      const list = Array.isArray(req) ? req : [req];
+      let parent = null;
+      for (let i = 0; i < list.length; i++) { if (!ownsFn(list[i])) { parent = list[i]; break; } }
+      if (parent) visit(parent);
+    }
+    acc.push(id);                                  // post-order: prereqs land before the node itself
+  };
+  visit(targetId);
+  return acc;
+}
+
+// draftOffer({ frontier, pinPath, pity, rng, n }) → { offer:[ids], pity:{id:count} }
+// Picks up to `n` ids from `frontier`: (1) force-include any frontier node whose pity counter is at or
+// over DRAFT_PITY_THRESHOLD; (2) bias toward pinPath nodes that are on the frontier; (3) fill the
+// remainder via seeded `rng` (deterministic for a fixed rng). Returns the chosen offer AND the updated
+// pity map — offered/picked nodes reset to 0, every other frontier node increments (skipped one more
+// visit). If frontier < n, the whole frontier is offered. Pure: no clock, no DOM.
+function draftOffer(opts) {
+  const o = opts || {};
+  const frontier = (o.frontier || []).slice();
+  const pinPath = o.pinPath || [];
+  const pityIn = o.pity || {};
+  const rng = o.rng || (() => 0);
+  const n = (typeof o.n === 'number' && o.n > 0) ? o.n : DRAFT_OFFER_N;
+  const inFrontier = {};
+  for (let i = 0; i < frontier.length; i++) inFrontier[frontier[i]] = true;
+
+  const offer = [];
+  const taken = {};
+  const take = (id) => { if (id && inFrontier[id] && !taken[id] && offer.length < n) { taken[id] = true; offer.push(id); } };
+
+  // (1) pity-due frontier nodes are force-included first (oldest debt wins the slot)
+  const due = frontier.filter(id => (pityIn[id] || 0) >= DRAFT_PITY_THRESHOLD)
+                      .sort((a, b) => (pityIn[b] || 0) - (pityIn[a] || 0));
+  for (let i = 0; i < due.length; i++) take(due[i]);
+
+  // (2) bias toward the pinned goal's prereq path (path order = prereqs first)
+  for (let i = 0; i < pinPath.length; i++) take(pinPath[i]);
+
+  // (3) fill the rest by seeded shuffle of the remaining frontier (deterministic for a fixed rng)
+  const rest = frontier.filter(id => !taken[id]);
+  for (let i = rest.length - 1; i > 0; i--) {     // Fisher–Yates using injected rng
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = rest[i]; rest[i] = rest[j]; rest[j] = tmp;
+  }
+  for (let i = 0; i < rest.length; i++) take(rest[i]);
+
+  // pity update: offered frontier nodes reset; every other frontier node ages one more visit.
+  const pityOut = {};
+  for (let i = 0; i < frontier.length; i++) {
+    const id = frontier[i];
+    pityOut[id] = taken[id] ? 0 : (pityIn[id] || 0) + 1;
+  }
+  return { offer, pity: pityOut };
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -428,5 +533,6 @@ if (typeof module !== 'undefined' && module.exports) {
     enemyIsAimingPlayer,
     ARCHETYPES, pickArchetype, shouldJink, pincerSign,
     equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
+    DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
   };
 }

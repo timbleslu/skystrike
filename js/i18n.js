@@ -199,8 +199,12 @@ const I18N = {
     'tech.sub': '// ONE TREE · PATH DOWN ANY BRANCH · UPGRADES PERSIST FOR THE RUN //',
     'tech.tabTech': 'TECH TREE', 'tech.tabArmory': 'ARMORY',
     'tech.deploy': '▶ DEPLOY TO NEXT WAVE',
-    'tech.hintTree': 'Drag or scroll to explore the tree. Tap a lit node to research it — or just DEPLOY and spend nothing. The dashed RESERVE SQUADRON node can be bought over and over to grow & up-armour your flight.',
+    'tech.hintTree': 'This visit, only the 3 glowing FRONTIER nodes are buyable — pick ONE to research and deploy, or just DEPLOY to bank RP. PIN a goal node to bias future offers; REROLL once per visit for fresh picks.',
     'tech.hintArmory': 'Click any lit card to purchase. WEAPONS LOCKER, COMMAND AUTHORITY and TARGETING COMPUTER have no prerequisites — just spare RP.',
+    'tech.lockVisit': 'LOCKED THIS VISIT',
+    'tech.reroll': '↻ REROLL',
+    'tech.pinHint': 'Tap any tree node to PIN it as your goal — offers will favour the path there.',
+    'tech.pinned': '◈ PINNED: {name}',
 
     /* ---- wing picker ---- */
     'wing.title': 'SELECT WINGMAN AIRFRAME',
@@ -572,8 +576,12 @@ const I18N = {
     'tech.sub': '// 一棵科技树 · 沿任意分支前进 · 升级在本局内永久生效 //',
     'tech.tabTech': '科技树', 'tech.tabArmory': '军械库',
     'tech.deploy': '▶ 出击至下一波',
-    'tech.hintTree': '拖动或滚动浏览科技树。点击亮起的节点进行研发——也可以直接出击，一点不花。虚线的「预备中队」节点可反复购买，用以扩充并强化你的机群。',
+    'tech.hintTree': '本次仅这 3 个发光的「前沿」节点可购买——选其一研发并出击，或直接出击以积攒研究点数。点击节点「锁定」目标，可让后续提供偏向通往它的路径；每次访问可「重抽」一次。',
     'tech.hintArmory': '点击任意亮起的卡片即可购买。「武器库」「战区授权」与「火控计算机」无前置要求——有余裕的研究点数即可购入。',
+    'tech.lockVisit': '本次锁定',
+    'tech.reroll': '↻ 重抽',
+    'tech.pinHint': '点击任意科技节点将其「锁定」为目标——提供将偏向通往它的路径。',
+    'tech.pinned': '◈ 已锁定：{name}',
 
     'wing.title': '选择僚机机型',
     'wing.sub': '// 选定新僚机将驾驶的战机 //',

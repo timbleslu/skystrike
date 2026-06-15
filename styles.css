@@ -505,6 +505,21 @@ canvas{display:block}
 .tnode.na{border-color:var(--locked);opacity:.5;filter:grayscale(1)}
 .tnode.na .tn-name,.tnode.na .tn-desc{color:var(--ink-dim)}
 .tnode.na .tn-cost{color:var(--ink-dim)}
+/* FRONTIER DRAFT (feature 4): the full tree still renders; only the 3 OFFERED nodes are buyable this
+   visit. Reuses existing tokens only — no new colours. */
+.tnode.lockvisit{border-color:var(--hairline);opacity:.6;filter:grayscale(.6);cursor:default}   /* shown, not buyable this visit */
+.tnode.lockvisit .tn-name,.tnode.lockvisit .tn-desc{color:var(--ink-dim)}
+.tnode.lockvisit .tn-cost{color:var(--ink-dim);letter-spacing:1px}
+.tnode.offered{border-color:var(--primary-bright);box-shadow:0 0 0 1px var(--primary-bright) inset,0 0 22px color-mix(in srgb,var(--primary-bright) 40%,transparent);animation:offerPulse 1.6s ease-in-out infinite}   /* the 3 frontier picks */
+.tnode.pinned{border-color:var(--reward)}
+.tnode .tn-pin{position:absolute;top:7px;left:10px;font-size:11px;color:var(--reward);text-shadow:0 0 8px rgba(255,225,77,.6)}
+@keyframes offerPulse{0%,100%{box-shadow:0 0 0 1px var(--primary-bright) inset,0 0 16px color-mix(in srgb,var(--primary-bright) 28%,transparent)}50%{box-shadow:0 0 0 1px var(--primary-bright) inset,0 0 28px color-mix(in srgb,var(--primary-bright) 55%,transparent)}}
+#draftBar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:6px 0 8px}
+.draft-pin{font-size:11px;color:var(--dim);letter-spacing:.5px;text-transform:none;flex:1 1 200px;text-align:left}
+.draft-pin.active{color:var(--reward)}
+.draft-reroll{background:transparent;border:var(--bd);color:var(--primary);font-family:var(--disp);font-weight:700;letter-spacing:2px;font-size:11px;padding:7px 16px;cursor:pointer;transition:var(--dur-fast) var(--ease-out);clip-path:polygon(0 0,100% 0,100% calc(100% - var(--bevel)),calc(100% - var(--bevel)) 100%,0 100%)}
+.draft-reroll:hover:not(:disabled){border-color:var(--primary);color:var(--ink-hi);box-shadow:0 0 12px rgba(25,240,212,.3)}
+.draft-reroll:disabled{opacity:.4;cursor:default;color:var(--ink-dim)}
 .techfoot{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid rgba(91,138,134,.3);padding-top:12px;margin-top:10px}
 .techhint{font-size:11px;color:var(--dim);letter-spacing:.5px;text-transform:none;flex:1 1 200px;text-align:left}
 #techDeploy{font-family:var(--disp);font-weight:900;font-size:15px;letter-spacing:4px;color:var(--ink);
