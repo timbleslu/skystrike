@@ -521,6 +521,12 @@ canvas{display:block}
 .tnode.lockvisit .tn-name,.tnode.lockvisit .tn-desc{color:var(--ink-dim)}
 .tnode.lockvisit .tn-cost{color:var(--ink-dim);letter-spacing:1px}
 .tnode.offered{border-color:var(--primary-bright);box-shadow:0 0 0 1px var(--primary-bright) inset,0 0 22px color-mix(in srgb,var(--primary-bright) 40%,transparent);animation:offerPulse 1.6s ease-in-out infinite}   /* the 3 frontier picks */
+/* DRAFT: the staged pick (green confirm glow) vs the offers it set aside this wave (dimmed but still tappable to switch) */
+.tnode.offered.selected{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok) inset,0 0 28px color-mix(in srgb,var(--ok) 55%,transparent);animation:none}
+.tnode.offered.selected .tn-cost{color:var(--ok);font-weight:700;letter-spacing:1px}
+.tnode.offered.passed{opacity:.42;filter:grayscale(.55);animation:none;box-shadow:none}
+.tnode.offered.passed:hover{opacity:.7;transform:translateY(-2px) scale(1.01)}   /* hint: still clickable to change your mind */
+.tnode.offered.passed .tn-cost{color:var(--ink-dim)}
 .tnode.pinned{border-color:var(--reward)}
 .tnode .tn-pin{position:absolute;top:7px;left:10px;font-size:11px;color:var(--reward);text-shadow:0 0 8px rgba(var(--reward-rgb),.6)}
 @keyframes offerPulse{0%,100%{box-shadow:0 0 0 1px var(--primary-bright) inset,0 0 16px color-mix(in srgb,var(--primary-bright) 28%,transparent)}50%{box-shadow:0 0 0 1px var(--primary-bright) inset,0 0 28px color-mix(in srgb,var(--primary-bright) 55%,transparent)}}
@@ -585,8 +591,8 @@ canvas{display:block}
 /* ---- onboarding screens (language select + controls) ---- */
 #langSelect,#onboard{position:fixed;inset:0;z-index:80;display:none;background:radial-gradient(circle at 50% 30%,rgba(8,22,16,.98),rgba(3,7,5,1));overflow:auto;padding:40px 24px}
 #langSelect.show,#onboard.show{display:flex;align-items:center;justify-content:center}
-/* §5a — SELL THE GAME: let the live 3D scene (#gl) be the hero; only a top/bottom scrim, not a black wall */
-#langSelect{background:linear-gradient(180deg,rgba(3,7,5,.82) 0%,rgba(3,7,5,.28) 30%,rgba(3,7,5,.28) 62%,rgba(3,7,5,.92) 100%)}
+/* Opaque boot screen — matches the controls brief (#onboard) so the language gate isn't see-through */
+#langSelect{background:radial-gradient(circle at 50% 30%,rgba(8,22,16,1),rgba(3,7,5,1))}
 .ls-wrap{display:flex;flex-direction:column;align-items:center}
 .ls-title{font-size:clamp(44px,9vw,84px);line-height:1}
 .ls-title .ls-sub2{display:block;font-size:.3em;letter-spacing:var(--ls-caps);color:var(--primary);margin-top:var(--sp-2);text-shadow:0 0 18px rgba(var(--primary-rgb),.6)}

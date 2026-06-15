@@ -6,8 +6,9 @@ const { TUTORIAL_STEPS, TUTORIAL_DONE, tutorialNext } = require('../js/core.js')
 assert.strictEqual(tutorialNext(0, 'pitched'), 1, 'pitch advances step 0 -> 1');
 assert.strictEqual(tutorialNext(1, 'throttled'), 2, 'throttle advances step 1 -> 2');
 assert.strictEqual(tutorialNext(2, 'fired'), 3, 'guns advance step 2 -> 3');
-assert.strictEqual(tutorialNext(3, 'missile'), 4, 'missile advances step 3 -> DONE');
-assert.strictEqual(tutorialNext(3, 'missile'), TUTORIAL_DONE, 'final step lands on DONE');
+assert.strictEqual(tutorialNext(3, 'missile'), 4, 'missile advances step 3 -> 4');
+assert.strictEqual(tutorialNext(4, 'rolled'), 5, 'barrel roll advances step 4 -> DONE');
+assert.strictEqual(tutorialNext(4, 'rolled'), TUTORIAL_DONE, 'final step lands on DONE');
 
 /* ===== wrong / out-of-order events do not advance (and never regress) ===== */
 assert.strictEqual(tutorialNext(0, 'throttled'), 0, 'future-step event ignored at step 0');
@@ -27,10 +28,10 @@ for (let s = 0; s <= TUTORIAL_DONE; s++) {
 assert.strictEqual(tutorialNext(TUTORIAL_DONE, 'pitched'), TUTORIAL_DONE, 'done stays done (pitched)');
 assert.strictEqual(tutorialNext(TUTORIAL_DONE, 'missile'), TUTORIAL_DONE, 'done stays done (missile)');
 assert.strictEqual(tutorialNext(TUTORIAL_DONE, 'skip'), TUTORIAL_DONE, 'done stays done (skip)');
-assert.strictEqual(tutorialNext(5, 'pitched'), TUTORIAL_DONE, 'over-range step clamps to DONE');
+assert.strictEqual(tutorialNext(6, 'pitched'), TUTORIAL_DONE, 'over-range step clamps to DONE');
 
 /* ===== monotonicity: across ANY event sequence, step never decreases ===== */
-const events = ['pitched', 'throttled', 'fired', 'missile', 'bogus', 'throttled', 'pitched'];
+const events = ['pitched', 'throttled', 'fired', 'missile', 'rolled', 'bogus', 'throttled', 'pitched'];
 function fuzz(seed) {
   // tiny deterministic LCG so the property check is reproducible
   let x = seed >>> 0;
@@ -47,10 +48,10 @@ for (let seed = 1; seed <= 50; seed++) {
   }
 }
 
-/* ===== the canonical happy path terminates exactly at DONE in 4 steps ===== */
+/* ===== the canonical happy path terminates exactly at DONE in 5 steps ===== */
 (function () {
   let step = 0;
-  const path = ['pitched', 'throttled', 'fired', 'missile'];
+  const path = ['pitched', 'throttled', 'fired', 'missile', 'rolled'];
   for (let i = 0; i < path.length; i++) step = tutorialNext(step, path[i]);
   assert.strictEqual(step, TUTORIAL_DONE, 'happy path reaches DONE');
   // and the four ordered events were each required (each consumed exactly one step)
