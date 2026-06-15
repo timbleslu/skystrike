@@ -1,50 +1,54 @@
 'use strict';
-// AWACS adapter decision (F10, candidate D): awacsResolve is the PURE half of combat.js awacsAction —
-// it decides affordability + per-sector cap (via awacsCall) AND which effect/banner to apply. combat.js
-// only commits {rp,uses} and imperatively applies the effect. This test covers that decision (previously
-// the key->effect/banner wiring lived inline in combat.js and was untested).
+// AWACS adapter decision (F10): awacsResolve is the PURE half of combat.js awacsAction — it decides
+// the cooldown gate + per-sector cap (via awacsCall) AND which effect/banner to apply. combat.js only
+// commits {uses, last} and imperatively applies the effect. Balance pass 2026-06: calls are now
+// COOLDOWN-GATED (free), not RP-costed — so the failure banner for a too-soon call is 'awacs.cooldown'
+// (the old 'awacs.noRp' path is gone). This test covers that decision (the key->effect/banner wiring).
 const assert = require('assert');
-const { awacsResolve, awacsCall, AWACS_COSTS, AWACS_USES_MAX } = require('../js/core.js');
+const { awacsResolve, awacsCall, AWACS_COOLDOWNS, AWACS_USES_MAX } = require('../js/core.js');
 
-const fresh = () => ({ strike: 0, resupply: 0, jam: 0 });
+const fresh = () => ({ uses: { strike: 0, resupply: 0, jam: 0 }, last: { strike: 0, resupply: 0, jam: 0 } });
 
-// 1) each successful call resolves to its own effect + success banner, and matches awacsCall's rp/uses
+// 1) each successful call resolves to its own effect + success banner, and matches awacsCall's uses/last
 for (const [key, banner] of [['strike', 'awacs.strike'], ['resupply', 'awacs.resupply'], ['jam', 'awacs.jam']]) {
-  const state = { rp: 1000, uses: fresh() };
-  const r = awacsResolve(state, AWACS_COSTS, AWACS_USES_MAX, key);
-  const base = awacsCall(state, AWACS_COSTS, AWACS_USES_MAX, key);
-  assert.strictEqual(r.ok, true, `${key} succeeds with ample RP`);
+  const state = fresh();
+  const now = 500;
+  const r = awacsResolve(state, AWACS_COOLDOWNS, AWACS_USES_MAX, key, now);
+  const base = awacsCall(state, AWACS_COOLDOWNS, AWACS_USES_MAX, key, now);
+  assert.strictEqual(r.ok, true, `${key} succeeds off cooldown`);
   assert.strictEqual(r.effect, key, `${key} effect is the call key`);
   assert.strictEqual(r.banner, banner, `${key} success banner`);
-  assert.strictEqual(r.rp, base.rp, `${key} rp matches awacsCall`);
   assert.deepStrictEqual(r.uses, base.uses, `${key} uses match awacsCall`);
+  assert.deepStrictEqual(r.last, base.last, `${key} last match awacsCall`);
 }
 
-// 2) failure: not enough RP → no effect, the noRp banner, state unchanged
+// 2) failure: still on cooldown -> no effect, the cooldown banner, use counter unchanged
 {
-  const r = awacsResolve({ rp: 10, uses: fresh() }, AWACS_COSTS, AWACS_USES_MAX, 'strike');
-  assert.strictEqual(r.ok, false);
-  assert.strictEqual(r.reason, 'noRp');
-  assert.strictEqual(r.effect, null, 'no effect on failure');
-  assert.strictEqual(r.banner, 'awacs.noRp');
-  assert.strictEqual(r.rp, 10, 'rp not spent on a rejected call');
+  const a = awacsResolve(fresh(), AWACS_COOLDOWNS, AWACS_USES_MAX, 'jam', 100);
+  const b = awacsResolve({ uses: a.uses, last: a.last }, AWACS_COOLDOWNS, AWACS_USES_MAX, 'jam', 100 + 1);   // way inside the cooldown
+  assert.strictEqual(b.ok, false);
+  assert.strictEqual(b.reason, 'cooldown');
+  assert.strictEqual(b.effect, null, 'no effect on a cooldown rejection');
+  assert.strictEqual(b.banner, 'awacs.cooldown');
+  assert.strictEqual(b.uses.jam, 1, 'use not consumed while on cooldown');
 }
 
-// 3) failure: per-sector cap reached → empty banner, no effect (jam caps at 2)
+// 3) failure: per-sector cap reached -> empty banner, no effect (jam caps at 2, cooldown respected between)
 {
-  const a = awacsResolve({ rp: 1000, uses: fresh() }, AWACS_COSTS, AWACS_USES_MAX, 'jam');
-  const b = awacsResolve({ rp: a.rp, uses: a.uses }, AWACS_COSTS, AWACS_USES_MAX, 'jam');
-  const c = awacsResolve({ rp: b.rp, uses: b.uses }, AWACS_COSTS, AWACS_USES_MAX, 'jam');
-  assert.strictEqual(b.ok, true, 'second jam allowed (cap 2)');
-  assert.strictEqual(c.ok, false, 'third jam blocked');
+  const cd = AWACS_COOLDOWNS.jam;
+  const a = awacsResolve(fresh(), AWACS_COOLDOWNS, AWACS_USES_MAX, 'jam', 0);
+  const b = awacsResolve({ uses: a.uses, last: a.last }, AWACS_COOLDOWNS, AWACS_USES_MAX, 'jam', cd);
+  const c = awacsResolve({ uses: b.uses, last: b.last }, AWACS_COOLDOWNS, AWACS_USES_MAX, 'jam', cd * 3);
+  assert.strictEqual(b.ok, true, 'second jam allowed once its cooldown elapses (cap 2)');
+  assert.strictEqual(c.ok, false, 'third jam blocked by the cap even after another cooldown');
   assert.strictEqual(c.reason, 'empty');
   assert.strictEqual(c.effect, null);
   assert.strictEqual(c.banner, 'awacs.empty');
 }
 
-// 4) unknown key → rejected with NO banner (combat.js plays a neutral ui blip, not a warn)
+// 4) unknown key -> rejected with NO banner (combat.js plays a neutral ui blip, not a warn)
 {
-  const r = awacsResolve({ rp: 1000, uses: fresh() }, AWACS_COSTS, AWACS_USES_MAX, 'nope');
+  const r = awacsResolve(fresh(), AWACS_COOLDOWNS, AWACS_USES_MAX, 'nope', 0);
   assert.strictEqual(r.ok, false);
   assert.strictEqual(r.reason, 'unknown');
   assert.strictEqual(r.effect, null);
@@ -53,10 +57,10 @@ for (const [key, banner] of [['strike', 'awacs.strike'], ['resupply', 'awacs.res
 
 // 5) purity: the input snapshot is never mutated by a successful resolve
 {
-  const input = { rp: 500, uses: fresh() };
-  awacsResolve(input, AWACS_COSTS, AWACS_USES_MAX, 'strike');
-  assert.strictEqual(input.rp, 500, 'input rp not mutated');
+  const input = fresh();
+  awacsResolve(input, AWACS_COOLDOWNS, AWACS_USES_MAX, 'strike', 42);
   assert.strictEqual(input.uses.strike, 0, 'input uses not mutated');
+  assert.strictEqual(input.last.strike, 0, 'input last not mutated');
 }
 
-console.log('ok - AWACS adapter decision (awacsResolve: effect + banner + cap/affordability)');
+console.log('ok - AWACS adapter decision (awacsResolve: effect + banner + cooldown/cap, cooldown-gated)');

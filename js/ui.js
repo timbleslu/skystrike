@@ -248,10 +248,16 @@ function updateAwacsHud() {
   const show = state === 'playing' && !paused;
   el.style.display = show ? 'flex' : 'none';
   if (!show) return;
+  const now = performance.now() / 1000;
   const chip = (key, cntId, costId) => {
     const rem = Math.max(0, (AWACS_USES_MAX[key] || 0) - ((awacsUses && awacsUses[key]) || 0));
     const c = g(cntId); if (c) c.textContent = '×' + rem;
-    const k = g(costId); if (k) k.textContent = (AWACS_COSTS[key] || 0) + ' RP';
+    // AWACS is cooldown-gated, not RP-costed (balance 2026-06): the `<i>` shows the live cooldown
+    // remaining (Ns) when on cooldown, else the call's cooldown length as a hint (e.g. "30s").
+    const cd = AWACS_COOLDOWNS[key] || 0;
+    const last = (awacsLast && awacsLast[key]) || 0;
+    const left = last > 0 ? Math.max(0, cd - (now - last)) : 0;
+    const k = g(costId); if (k) k.textContent = left > 0 ? Math.ceil(left) + 's' : cd + 's';
   };
   chip('strike', 'awacsUsesStrike', 'awacsCostStrike');
   chip('resupply', 'awacsUsesResupply', 'awacsCostResupply');
@@ -920,6 +926,8 @@ function startGame(i, daily, rush) {
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
+  bossWaveNext = 0; bossWaveActive = false; lastWaveWasBoss = false;   // Endless boss schedule (balance 2026-06); seeded lazily in nextWave
+  player._cheatUsed = false;   // APEX PREDATOR cheat-death is now ONCE PER RUN (balance 2026-06); reset here, NOT per wave
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
@@ -928,7 +936,8 @@ function startGame(i, daily, rush) {
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls fresh each run (F10); nextWave also refreshes per sector
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap fresh each run (F10); nextWave also refreshes per sector
+  awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clock fresh each run (cooldown-gated, balance 2026-06)
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)

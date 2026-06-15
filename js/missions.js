@@ -51,7 +51,9 @@ const MISSIONS = {
   escort: {
     setup: function (wave, rng) {
       const n = 4;
-      return { target: Math.ceil(n / 2), timer: 0, params: { convoy: n, survivors: n, exited: false } };
+      // balance pass 2026-06: tighten the survivor threshold from half (lose 2 of 4) to n-1 (lose AT MOST 1
+      // of 4). Losing half was too forgiving — escort never forced a genuinely protective flight pattern.
+      return { target: n - 1, timer: 0, params: { convoy: n, survivors: n, exited: false } };
     },
     onKill: function (e, m) {},
     onTick: function (dt, m) {},

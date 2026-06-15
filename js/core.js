@@ -145,37 +145,90 @@ const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
 function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
 
 /* ---------------- AWACS support-call core (F10) ---------------- */
-// AWACS_COSTS = RP price per call; AWACS_USES_MAX = how many times each may be called per sector.
-const AWACS_COSTS    = { strike: 140, resupply: 90, jam: 70 };
-const AWACS_USES_MAX = { strike: 1,   resupply: 1,  jam: 2 };
-const AWACS_JAM_TIME = 8;   // seconds enemy missiles stay blinded by a jamming call
-// PURE resolver: given a snapshot {rp, uses:{strike,resupply,jam}}, the cost+cap tables, and a call
-// key, returns a NEW snapshot. ok=false (state unchanged) when the call is unknown, capped out, or
-// unaffordable. reason: 'unknown' | 'empty' (no uses left) | 'noRp' (can't afford) | 'ok'.
-function awacsCall(state, costs, max, key) {
-  const cost = costs[key], cap = max[key];
-  if (cost === undefined || cap === undefined) return { ok: false, reason: 'unknown', rp: state.rp, uses: state.uses };
+// AWACS calls are COOLDOWN-GATED, not RP-costed (balance pass 2026-06: they used to draw from
+// player.tp, the same pool as the permanent TECH_TREE, so spending on a one-shot call was never
+// rational vs. a compounding upgrade — the whole feature was economically dead. Decoupling from RP
+// revives it without new HUD chrome.) AWACS_COOLDOWNS = seconds between successive calls of a key;
+// AWACS_USES_MAX = the unchanged hard cap on how many times each may be called per sector.
+const AWACS_COOLDOWNS = { strike: 30, resupply: 26, jam: 18 };
+const AWACS_USES_MAX  = { strike: 1,   resupply: 1,  jam: 2 };
+const AWACS_JAM_TIME  = 8;   // seconds enemy missiles stay blinded by a jamming call
+// PURE resolver: given a snapshot {uses:{strike,resupply,jam}, last:{...}}, the cooldown+cap tables,
+// a call key, and the current time `now` (seconds), returns a NEW snapshot. ok=false (state
+// unchanged) when the call is unknown, capped out, or still on cooldown. reason:
+//   'unknown' | 'empty' (no uses left this sector) | 'cooldown' (called too recently) | 'ok'.
+// `last` is the per-key timestamp of the last SUCCESSFUL call (or a missing/<=0 sentinel = never).
+function awacsCall(state, cd, max, key, now) {
+  const cool = cd[key], cap = max[key];
+  const last = state.last || {};
+  if (cool === undefined || cap === undefined) return { ok: false, reason: 'unknown', uses: state.uses, last };
   const used = state.uses[key] || 0;
-  if (used >= cap) return { ok: false, reason: 'empty', rp: state.rp, uses: state.uses };
-  if (state.rp < cost) return { ok: false, reason: 'noRp', rp: state.rp, uses: state.uses };
+  if (used >= cap) return { ok: false, reason: 'empty', uses: state.uses, last };
+  const prev = last[key];
+  if (prev !== undefined && prev > 0 && (now - prev) < cool) return { ok: false, reason: 'cooldown', uses: state.uses, last };
   const uses = { strike: state.uses.strike || 0, resupply: state.uses.resupply || 0, jam: state.uses.jam || 0 };
+  const nextLast = { strike: last.strike || 0, resupply: last.resupply || 0, jam: last.jam || 0 };
   uses[key] = used + 1;
-  return { ok: true, reason: 'ok', rp: state.rp - cost, uses: uses };
+  nextLast[key] = now;
+  return { ok: true, reason: 'ok', uses: uses, last: nextLast };
 }
 // AWACS effect/banner table — which outcome a SUCCESSFUL call applies, and its banner i18n key.
 const AWACS_EFFECTS = { strike: 'awacs.strike', resupply: 'awacs.resupply', jam: 'awacs.jam' };
 // PURE adapter decision: wrap awacsCall, then attach what combat.js must imperatively do. On success
 // `effect` is the call key (strike/resupply/jam) and `banner` its success message; combat.js commits
-// {rp, uses} and applies `effect`. On failure `effect` is null and `banner` is the failure message
-// key (or null for an unknown key → caller plays a neutral ui sound). The ENTIRE "which message,
-// which effect, allowed?" decision lives here (tested); combat.js only mutates game state + plays SFX.
-function awacsResolve(state, costs, max, key) {
-  const r = awacsCall(state, costs, max, key);
+// {uses, last} and applies `effect`. On failure `effect` is null and `banner` is the failure message
+// key (cooldown / empty; null for an unknown key → caller plays a neutral ui sound). The ENTIRE
+// "which message, which effect, allowed?" decision lives here (tested); combat.js only mutates game
+// state + plays SFX.
+function awacsResolve(state, cd, max, key, now) {
+  const r = awacsCall(state, cd, max, key, now);
   if (!r.ok) {
-    const banner = r.reason === 'noRp' ? 'awacs.noRp' : r.reason === 'empty' ? 'awacs.empty' : null;
-    return { ok: false, reason: r.reason, rp: r.rp, uses: r.uses, effect: null, banner };
+    const banner = r.reason === 'cooldown' ? 'awacs.cooldown' : r.reason === 'empty' ? 'awacs.empty' : null;
+    return { ok: false, reason: r.reason, uses: r.uses, last: r.last, effect: null, banner };
   }
-  return { ok: true, reason: 'ok', rp: r.rp, uses: r.uses, effect: key, banner: AWACS_EFFECTS[key] };
+  return { ok: true, reason: 'ok', uses: r.uses, last: r.last, effect: key, banner: AWACS_EFFECTS[key] };
+}
+
+/* ---------------- tech-screen cadence core (balance pass 2026-06) ---------------- */
+// The R&D shop used to open after EVERY wave (flow-killing full-screen modal every ~60-90s, and each
+// buy was low-stakes because RP arrived in a trickle every wave). It now opens on a CADENCE: skip
+// wave 1 entirely (pure-flight opener), then every 2nd wave AND always after any wave that contained
+// a boss. RP banks naturally between visits (player.tp persists), so each shop visit funds a bigger,
+// more deliberate purchase. PURE — `wasBoss` = the just-cleared wave contained a boss.
+function shouldOpenTechScreen(wave, wasBoss) {
+  if (wave < 2) return false;            // first wave is pure flight — no shop interruption
+  if (wasBoss) return true;              // always restock after a boss fight
+  return wave % 2 === 0;                 // otherwise every second wave
+}
+
+/* ---------------- wave/boss cadence + density core (balance pass 2026-06) ---------------- */
+// Boss cadence used to be a hard metronome (`wave % 4 === 0`) — fully predictable, so the player
+// could autopilot the calm waves and brace for the known boss wave. These helpers replace it with a
+// windowed schedule: after each boss, the NEXT boss is rolled 3-5 waves out, so the player can never
+// be certain which wave spikes. Enemy density used to cap at 10 (hit by ~wave 7, flat forever after);
+// the cap is lifted to 16 (distant-enemy culling already exists, GFX_CULL_*/cullDistantEnemies).
+const BOSS_WINDOW_MIN = 3;   // soonest the next boss can arrive after the previous one
+const BOSS_WINDOW_MAX = 5;   // latest the next boss can arrive
+const WAVE_COUNT_CAP  = 16;  // hard ceiling on simultaneous queued fighters (was 10)
+// PURE — gap (in waves) until the next boss. Rolled once per boss kill/spawn so cadence stays varied.
+// rng() ∈ [0,1). Inclusive integer in [BOSS_WINDOW_MIN, BOSS_WINDOW_MAX].
+function nextBossOffset(rng) {
+  const span = BOSS_WINDOW_MAX - BOSS_WINDOW_MIN + 1;
+  return BOSS_WINDOW_MIN + Math.floor(rng() * span);
+}
+// PURE — is THIS wave a boss wave, given the wave number the next boss is scheduled for? The schedule
+// is seeded the first time the player reaches the window (caller initializes bossWaveNext).
+function isBossWave(wave, bossWaveNext) { return wave >= bossWaveNext; }
+// PURE — fighters to queue this wave. Same growth as before (3 + wave + difficulty delta) but clamped
+// to WAVE_COUNT_CAP instead of 10, so density keeps escalating past the old wave-7 plateau.
+function waveCount(wave, diffDelta, cap) {
+  return clamp(3 + wave + diffDelta, 2, (cap === undefined ? WAVE_COUNT_CAP : cap));
+}
+// PURE — occasional non-boss "wildcard spike" wave: a denser-than-usual swarm to break the rhythm
+// WITHOUT a boss. Only on non-boss combat waves from wave 5 on; roll ∈ [0,1). Kept rare (≈18%) so the
+// pacing stays readable, not chaotic.
+function isWildcardWave(wave, isBoss, roll) {
+  return !isBoss && wave >= 5 && roll < 0.18;
 }
 
 /* ---------------- barrel-roll pure helpers (F-barrel) ---------------- */
@@ -271,7 +324,9 @@ if (typeof module !== 'undefined' && module.exports) {
     TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,
     makeRng, dailySeedFor,
     CAMSHAKE_RATE, CAMSHAKE_K, decayShake,
-    AWACS_COSTS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
+    AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
+    shouldOpenTechScreen,
+    BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
     GFX_TIERS, resolveQuality,

@@ -1110,7 +1110,7 @@ function createEnemy(type, pos, opts) {
     mesh = gk === 'aaa' ? buildAAA() : gk === 'radar' ? buildRadar() : gk === 'truck' ? buildTruck() : buildGround();
     hp = gk === 'radar' ? 110 : gk === 'truck' ? 45 : gk === 'aaa' ? 90 : 75;
   }
-  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 1.4; }
+  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // balance 2026-06: was *1.4 — keeps late-run swarms threatening (drones were one-tapped past ~wave 10)
   else if (type === 'bomber') { mesh = buildJet(0x8a9468, 0xffb060, SHAPES.BOMBER); mesh.scale.setScalar(1.7); hp = 240 + wave * 8; }
   else {
     const pool = opts.shapePool || FIGHTER_SHAPES;
@@ -1120,12 +1120,22 @@ function createEnemy(type, pos, opts) {
   }
   scene.add(mesh); mesh.position.copy(pos);
   if (mesh.userData.body) { mesh.userData.body.emissive = new THREE.Color(type === 'boss' ? 0x550033 : 0x3a0606); mesh.userData.body.emissiveIntensity = 0.7; }
+  // Fighter threat variety (balance pass 2026-06, cheap version): roll a coarse temperament so not every
+  // fighter flies the same "circle-then-strafe" routine. ~40% are AGGRESSIVE knife-fighters (sharper turn,
+  // tighter fire cadence); the rest are STANDOFF (wider, looser). turnRate range widened from rand(0.95,1.32)
+  // to a per-temperament split; fire cooldown tightened for the aggressive side. Full multi-archetype AI
+  // (evaders, decoy-users, coordinated pincers) is deferred — see balance-implementation-report.md.
+  const aggressive = type === 'fighter' && Math.random() < 0.4;
+  const fighterTurn = type === 'fighter'
+    ? (aggressive ? rand(1.18, 1.5) : rand(0.85, 1.15))   // aggressive out-turns the player harder; standoff is lazier
+    : rand(0.95, 1.32);                                   // bombers etc. keep the legacy roll
+  const fighterFireCd = aggressive ? rand(0.45, 1.1) : rand(0.6, 2);   // aggressive fighters re-engage faster
   const e = {
-    group: mesh, type, hp, maxHp: hp,
+    group: mesh, type, hp, maxHp: hp, aggressive,
     vel: new THREE.Vector3(), speed: type === 'ground' ? 0 : rand(150, 205),
-    turnRate: type === 'boss' ? 0.82 : type === 'ground' ? 0 : rand(0.95, 1.32),
+    turnRate: type === 'boss' ? 0.82 : type === 'ground' ? 0 : fighterTurn,
     logicQuat: mesh.quaternion.clone(), bank: 0, baseScale: mesh.scale.x,
-    fireCd: rand(0.6, 2), missileCd: rand(3, 7), flareCd: 0, trailT: 0,
+    fireCd: fighterFireCd, missileCd: rand(3, 7), flareCd: 0, trailT: 0,
     gunRun: 0, gunRunCd: rand(2.5, 5.5),
     orbitSign: Math.random() < 0.5 ? -1 : 1,
     state: 'engage', alive: true, isInCloud: false, hitFlash: 0,
@@ -1328,7 +1338,7 @@ function updateEnemy(e, dt) {
       enemyFireGun(e, wm);
       if (e.type === 'boss') { enemyFireGun(e); enemyFireGun(e); }
       else if (e.elite && e.gunRun > 0 && dist < 900) { enemyFireGun(e); }
-      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr;
+      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr * (e.aggressive ? 0.78 : 1);   // aggressive fighters keep up a tighter cadence (balance 2026-06)
     }
     // ----- missiles (jamming shuts down launches) -----
     e.missileCd -= dt;

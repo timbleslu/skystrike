@@ -309,7 +309,11 @@ function spawnCrate(pos) {
 function maybeSpawnCrate(dt) {
   crateTimer -= dt;
   if (crateTimer > 0) return;
-  crateTimer = rand(11, 17);
+  // Crate cadence scales UP over the run (balance pass 2026-06): early waves get frequent restocks
+  // (~11-17s) but the gap stretches toward ~18-28s by ~wave 14, so late-game resource pressure returns
+  // (constant fast resupply was erasing the loss-aversion tension). Linear ramp, clamped both ends.
+  const lateF = clamp((wave - 4) / 10, 0, 1);
+  crateTimer = rand(11 + 7 * lateF, 17 + 11 * lateF);
   let count = 0; for (let i = 0; i < loots.length; i++) if (loots[i].kind === 'crate') count++;
   if (count >= MAX_CRATES) return;
   const ang = rand(0, TWO_PI), r = rand(900, 1900);
@@ -477,7 +481,7 @@ function damagePlayer(amt, src) {
   haptic(60);
   if (player.reactive && hadShield && player.shield <= 0) reactivePulse();   // REACTIVE ARMOUR — the shield going down detonates
   if (player.hp <= 0) {
-    if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per wave
+    if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per RUN (balance 2026-06; _cheatUsed reset only in startGame)
       player._cheatUsed = true; player.hp = player.maxHp * 0.4; player.shield = player.maxShield;
       player.invuln = 2.5; player.damageFlash = 0; empFlash = Math.max(empFlash, 0.6);
       showBanner(t('banner.guardianAngel')); audio.power(); return;
@@ -657,18 +661,22 @@ function nearestNonBossEnemy() {
 }
 
 /* ---------------- AWACS support calls (F10/F11/F12) ---------------- */
-// Spend RP (player.tp) on a capped-per-sector radio call. The cost/cap math is the pure
-// awacsCall() resolver (globals.js, mirrored in tests/awacs.test.js); this glue applies the effect.
+// Cooldown-gated, capped-per-sector radio call (balance pass 2026-06: NO LONGER costs RP — calls used
+// to draw from player.tp, the same pool as the permanent TECH_TREE, so they were never rational vs. a
+// compounding upgrade and the feature was dead. Now they're free but gated by a per-call cooldown +
+// the unchanged per-sector use cap). The allow/effect/banner decision is the pure awacsResolve()
+// (core.js, tested in tests/awacs.test.js + tests/awacs-adapter.test.js); this glue applies the effect.
 function awacsAction(key) {
   if (!player) return false;
-  // Pure decision (core.js awacsResolve): affordability + per-sector cap + which effect + which banner.
-  const res = awacsResolve({ rp: player.tp, uses: awacsUses }, AWACS_COSTS, AWACS_USES_MAX, key);
+  const now = performance.now() / 1000;   // seconds clock for the cooldown gate
+  // Pure decision (core.js awacsResolve): cooldown + per-sector cap + which effect + which banner.
+  const res = awacsResolve({ uses: awacsUses, last: awacsLast }, AWACS_COOLDOWNS, AWACS_USES_MAX, key, now);
   if (!res.ok) {
-    if (res.banner) { showBanner(t(res.banner)); audio.warn(); }   // noRp / empty
+    if (res.banner) { showBanner(t(res.banner)); audio.warn(); }   // cooldown / empty
     else audio.ui();                                               // unknown key — neutral blip
     return false;
   }
-  player.tp = res.rp; awacsUses = res.uses;   // commit the deduction + use spend
+  awacsUses = res.uses; awacsLast = res.last;   // commit the use spend + cooldown stamp
   // imperative application of the resolved effect (game-state mutation only; decision already made)
   if (res.effect === 'strike') {
     const tgt = nearestNonBossEnemy();
