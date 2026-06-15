@@ -441,7 +441,7 @@ function renderTechTree(recenter) {
       const open = owns(edge.id) && nodeState(n) !== 'locked';
       const next = open && nodeState(n) === 'avail';   // parent owned + child affordable → light the path forward
       // tokens: --ok (both owned) · --primary-bright (affordable next) · --primary low (reachable) · --hairline (dormant)
-      const col = lit ? '#46ff8c' : next ? '#0bd5ff' : open ? 'rgba(25,240,212,.4)' : 'rgba(91,138,134,.34)';
+      const col = lit ? '#4dffa0' : next ? '#ffd36b' : open ? 'rgba(255,185,56,.4)' : 'rgba(120,170,140,.34)';
       const dash = edge.and ? ' stroke-dasharray="7,5"' : '';
       svg += '<path d="M' + px + ',' + pb + ' V' + midY + ' H' + cx + ' V' + ct + '" fill="none" stroke="' + col + '" stroke-width="' + (lit ? 3 : 2) + '"' + dash + '/>';
     }
@@ -452,7 +452,7 @@ function renderTechTree(recenter) {
     const raw = nodeState(n);
     if (raw === 'hidden') continue;
     const st = draftDisplayState(n, raw);   // FRONTIER DRAFT: gate buyability to this visit's offer
-    const p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
+    const p = nodeXY(n), ac = FAM_C[n.fam] || '#ffb938';
     const cost = nodeCost(n);
     const costTxt = n.id === 'core' ? t('tech.core') : raw === 'bought' ? t('tech.owned') : raw === 'na' ? t('tech.na')
       : st === 'lockvisit' ? t('tech.lockVisit') : cost + ' RP';
