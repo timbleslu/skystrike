@@ -726,6 +726,15 @@ function buildHangar() {
     });
   }
   applyHudScale();
+  // Theming: visual language (skin) + color scheme (palette). Apply stored choice at boot, then wire selects.
+  const storedSkin = store.get('skystrike_skin') || 'futuristic';
+  const storedPalette = store.get('skystrike_palette') || 'amber';
+  if (typeof applySkin === 'function') applySkin(storedSkin);
+  if (typeof applyPalette === 'function') applyPalette(storedPalette);
+  const ssk = g('setSkin');
+  if (ssk) { ssk.value = storedSkin; ssk.addEventListener('change', () => { applySkin(ssk.value); if (audio.on) audio.ui(); }); }
+  const spal = g('setPalette');
+  if (spal) { spal.value = storedPalette; spal.addEventListener('change', () => { applyPalette(spal.value); if (audio.on) audio.ui(); }); }
   const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); if (audio.on) audio.ui(); });
   const srec = g('setRecenter'); if (srec) srec.addEventListener('click', () => { if (typeof recenterMotion === 'function') recenterMotion(); if (audio.on) audio.ui(); });
   installMotionStatus();
@@ -1442,6 +1451,8 @@ function applyLang() {
   const _maw = g('manP_Awacs'); if (_maw) _maw.innerHTML = t('manBody.awacs');
   setTxt('callsignHint', t('pilot.hint'));
   setTxt('lblHudScale', t('set.hudScale'));
+  setTxt('lblSkin', t('set.skin'));
+  setTxt('lblPalette', t('set.palette'));
   const shs2 = g('setHudScale');
   if (shs2 && shs2.options.length >= 4) {
     shs2.options[0].textContent = t('set.hudSmall');
