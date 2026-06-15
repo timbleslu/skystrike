@@ -354,6 +354,15 @@ const I18N = {
     'daily.best': 'TODAY’S BEST {best}',
     'daily.locked': 'COME BACK TOMORROW FOR A NEW SEED',
 
+    /* ---- Boss Rush (F15) ---- */
+    'bossrush.title': '☠ BOSS RUSH',
+    'bossrush.start': '☠ BOSS RUSH',
+    'bossrush.locked': '☠ BOSS RUSH — CLEAR THE CAMPAIGN TO UNLOCK',
+    'bossrush.sub': 'All bosses, one life, fixed loadout. Beat the clock.',
+    'bossrush.best': 'BEST TIME {t}',
+    'bossrush.wave': 'BOSS {n} / {total}',
+    'bossrush.cleared': 'GAUNTLET CLEARED — {t}',
+
     /* meta data strings (perks / achievements / skins) — canonical EN copy (no fields in meta.js tables) */
     meta: {
       'hull':     { name: 'REINFORCED HULL',   desc: 'Start every sortie with more hull integrity (+6% max HP per level).' },
@@ -828,6 +837,15 @@ const I18N = {
     'daily.done': '✔ 今日已完成',
     'daily.best': '今日最佳 {best}',
     'daily.locked': '明天再来挑战新种子',
+
+    /* ---- 首领连战 (F15) ---- */
+    'bossrush.title': '☠ 首领连战',
+    'bossrush.start': '☠ 首领连战',
+    'bossrush.locked': '☠ 首领连战 — 通关战役后解锁',
+    'bossrush.sub': '全部首领，一条命，固定配置。挑战最快用时。',
+    'bossrush.best': '最佳用时 {t}',
+    'bossrush.wave': '首领 {n} / {total}',
+    'bossrush.cleared': '连战通关 — {t}',
 
     meta: {
       'hull':     { name: '强化机体',   desc: '每次出击开始时拥有更高的机体强度（每级 +6% 最大生命）。' },

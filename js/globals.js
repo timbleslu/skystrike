@@ -178,6 +178,34 @@ function nextBossPhase(reached, hpFrac) {
   return want > reached ? want : reached;
 }
 // === MIRROR END ===
+// Boss-rush mode (F15): unlockable gauntlet — fight every boss in sequence, fixed loadout,
+// ONE life, no tech tree. Runtime mode flag + progress; best time persists in meta.
+let bossRush = false;        // true while a Boss Rush run is active (gates tech tree / meta perks / loadout)
+let bossRushIndex = 0;       // how many bosses have been DEFEATED so far this run (0..BOSS_RUSH_TOTAL)
+let bossRushT0 = 0;          // performance.now() at run start, for the timed leaderboard
+// === MIRROR START (globals.js boss-rush core) ===
+// The fixed boss gauntlet, flown in order. Each entry is the boss type spawned for that leg
+// (all reuse the F4 multi-phase 'boss' enemy). Length defines the sequence; index 0 spawns first.
+const BOSS_RUSH_POOL = ['boss', 'boss', 'boss', 'boss', 'boss'];
+const BOSS_RUSH_TOTAL = BOSS_RUSH_POOL.length;   // bosses to clear for a full run
+// PURE — the boss type to spawn for leg `index` (0-based), or null once the gauntlet is done.
+// Out-of-range / negative indices return null (no spawn). Monotone: index past the end yields null.
+function bossRushNext(index) {
+  if (index < 0 || index >= BOSS_RUSH_POOL.length) return null;
+  return BOSS_RUSH_POOL[index];
+}
+// PURE — the run is complete once `killed` bosses reaches the total. Saturating (>= guards overshoot).
+function bossRushDone(killed, total) {
+  return killed >= total;
+}
+// PURE — keep the better (lower) of two run times in seconds. 0/undefined means "no record yet",
+// so the first finish always wins; thereafter only a strictly faster time replaces the record.
+function betterTime(prev, next) {
+  if (!(next > 0)) return prev > 0 ? prev : 0;     // invalid new time: keep the old record (or 0)
+  if (!(prev > 0)) return next;                    // no prior record: the new time is the record
+  return next < prev ? next : prev;                // otherwise keep the smaller
+}
+// === MIRROR END ===
 // === MIRROR START (globals.js tutorial step machine) ===
 // First-run tutorial step machine. Steps gate on player actions, in order:
 //   0 = pitch, 1 = throttle (>0.6), 2 = guns fired, 3 = missile (lock + fire), 4 = DONE.
