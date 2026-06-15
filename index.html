@@ -36,11 +36,12 @@
       <div><span class="lab" id="lblMsl">Msl</span><b id="missiles">30</b></div>
     </div>
     <div id="awacsHud" class="awacs-hud" style="display:none">
-      <span class="awacs-chip"><span id="awacsLblStrike"></span><b id="awacsUsesStrike">×1</b><i id="awacsCostStrike">140 RP</i></span>
-      <span class="awacs-chip"><span id="awacsLblResupply"></span><b id="awacsUsesResupply">×1</b><i id="awacsCostResupply">90 RP</i></span>
-      <span class="awacs-chip"><span id="awacsLblJam"></span><b id="awacsUsesJam">×2</b><i id="awacsCostJam">70 RP</i></span>
+      <span class="awacs-chip"><span id="awacsLblStrike"></span><b id="awacsUsesStrike">×1</b><i id="awacsCostStrike">30s</i></span>
+      <span class="awacs-chip"><span id="awacsLblResupply"></span><b id="awacsUsesResupply">×1</b><i id="awacsCostResupply">26s</i></span>
+      <span class="awacs-chip"><span id="awacsLblJam"></span><b id="awacsUsesJam">×2</b><i id="awacsCostJam">18s</i></span>
     </div>
     <div id="special" class="special">ABILITY &#9656; READY</div>
+    <div id="special2" class="special" style="display:none">SLOT 2 &#9656; READY</div>
     <div id="wingStatus" class="special wing" style="display:none">&#9650; ESCORT</div>
   </div>
   <div id="wingSidebar"></div>
@@ -48,17 +49,21 @@
 
   <div id="btnPause" onclick="toggleManual()">|| PAUSE</div>
   
-  <div id="warns">
-    <div id="w_pull" class="warn red big">&#9888; PULL UP &#9888;</div>
-    <div id="w_missile" class="warn orange big">&#9650; MISSILE ALERT &#9650;</div>
-    <div id="w_drone" class="warn red">&#9888; DRONE SWARM &#9888;</div>
-    <div id="w_highg" class="warn cyan">HIGH-G PULL</div>
-    <div id="w_stealth" class="warn green">STEALTH ACTIVE</div>
-    <div id="w_lock" class="warn yellow">&#9679; TARGET LOCKED</div>
+  <!-- T1 SURVIVAL warnings: big, centred, interrupt everything -->
+  <div id="warns-survival">
+    <div id="w_pull" class="warn red warn--survival">&#9888; PULL UP &#9888;</div>
+    <div id="w_missile" class="warn orange warn--survival">&#9650; MISSILE ALERT &#9650;</div>
+  </div>
+  <!-- T2 STATUS warnings: slim chips under the top panels, yield to survival -->
+  <div id="warns-status">
+    <div id="w_drone" class="warn red warn--status">&#9888; DRONE SWARM &#9888;</div>
+    <div id="w_highg" class="warn cyan warn--status">HIGH-G PULL</div>
+    <div id="w_stealth" class="warn green warn--status">STEALTH ACTIVE</div>
+    <div id="w_lock" class="warn yellow warn--status">&#9679; TARGET LOCKED</div>
   </div>
   <div id="bossbar"><div class="bosslabel">&#9670; BOSS</div><div class="bosstrack"><i id="bossfill"></i></div></div>
   <div id="banner"></div>
-  <div id="hint">W/S PITCH &middot; Q/E ROLL &middot; A/D YAW &middot; SHIFT/CTRL THRUST &middot; CTRL+S HIGH-G &middot; SPACE GUN &middot; G MISSILE &middot; X FLARE &middot; F LOCK &middot; R SPECIAL &middot; C CAM &middot; V LOOK-BACK &middot; RMB TRACK</div>
+  <div id="hint">W/S PITCH &middot; Q/E ROLL &middot; A/D YAW &middot; SHIFT/CTRL THRUST &middot; CTRL+S HIGH-G &middot; SPACE GUN &middot; G MISSILE &middot; X FLARE &middot; F LOCK &middot; R SPECIAL &middot; B SPECIAL-2 &middot; C CAM &middot; V LOOK-BACK &middot; RMB TRACK</div>
 </div>
 
 <div id="touchControls">
@@ -69,6 +74,7 @@
   <div class="t-btn" id="tb-msl">MSL</div>
   <div class="t-btn" id="tb-flr">FLR</div>
   <div class="t-btn" id="tb-spc">SPC</div>
+  <div class="t-btn" id="tb-spc2" style="display:none">SPC2</div>
   <div id="tb-thr" class="t-slider">
     <div class="t-slider-fill" id="tb-thr-fill"></div>
     <div class="t-slider-thumb" id="tb-thr-thumb"></div>
@@ -92,41 +98,8 @@
     <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
     <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
     <div id="hangarSp"><span id="hangarSpLbl">STRATEGIC POINTS</span> <b id="hangarSpVal">0</b></div>
-    <div id="pilotPanel">
-      <div class="pilotRow">
-        <span id="lblCallsign" class="dlab">CALLSIGN</span>
-        <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-      </div>
-      <p id="callsignHint" class="techhint"></p>
-      <div class="pilotRow">
-        <span id="lblEmblem" class="dlab">EMBLEM</span>
-        <div id="emblemGrid"></div>
-      </div>
-    </div>
-    <div id="diffsel">
-      <span id="lblDiff" class="dlab">DIFFICULTY</span>
-      <div class="dbtns">
-        <button class="dbtn" data-d="0" id="dbtn0">ROOKIE</button>
-        <button class="dbtn" data-d="1" id="dbtn1">VETERAN</button>
-        <button class="dbtn" data-d="2" id="dbtn2">ACE</button>
-      </div>
-      <div id="diffdesc" class="ddesc"></div>
-    </div>
-    <div id="todsel">
-      <span id="lblEnv" class="dlab">ENVIRONMENT</span>
-      <div class="dbtns">
-        <button class="dbtn tbtn" data-t="0" id="tbtn0">DAY</button>
-        <button class="dbtn tbtn" data-t="1" id="tbtn1">DUSK</button>
-        <button class="dbtn tbtn" data-t="2" id="tbtn2">NIGHT</button>
-      </div>
-    </div>
-    <div id="modesel">
-      <span id="lblMode" class="dlab">MODE</span>
-      <div class="dbtns">
-        <button class="dbtn mbtn" data-m="0" id="mbtnEndless">ENDLESS</button>
-        <button class="dbtn mbtn" data-m="1" id="mbtnOperation">OPERATION</button>
-      </div>
-    </div>
+
+    <!-- HERO ZONE (§5c): the chosen aircraft is the centerpiece -->
     <div id="carousel">
       <button id="jetPrev" class="navarrow" aria-label="Previous aircraft">&#10094;</button>
       <div id="jetStage"><div id="jetCard" class="card cardbig"></div></div>
@@ -136,16 +109,61 @@
       <span id="jetCounter"></span>
       <div id="jetDots"></div>
     </div>
-    <div id="rivalBoard"><div id="rbTitle" class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
-    <div class="hbtns">
-      <button id="launch">&#9654; LAUNCH MISSION</button>
-      <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>
-      <button id="bossRushBtn" class="ghostbtn disabled" disabled>&#9760; BOSS RUSH</button>
+
+    <!-- THE primary action: one dominant LAUNCH directly under the jet, carrying the loadout summary -->
+    <button id="launch">&#9654; LAUNCH MISSION<span id="launchSub" class="btn-sub"></span></button>
+
+    <!-- LOADOUT STRIP (§5c): collapsed, subordinate row of selectors below LAUNCH -->
+    <div class="loadout">
+      <div id="diffsel">
+        <span id="lblDiff" class="dlab">DIFFICULTY</span>
+        <div class="dbtns">
+          <button class="dbtn" data-d="0" id="dbtn0">ROOKIE</button>
+          <button class="dbtn" data-d="1" id="dbtn1">VETERAN</button>
+          <button class="dbtn" data-d="2" id="dbtn2">ACE</button>
+        </div>
+        <div id="diffdesc" class="ddesc"></div>
+      </div>
+      <div id="todsel">
+        <span id="lblEnv" class="dlab">ENVIRONMENT</span>
+        <div class="dbtns">
+          <button class="dbtn tbtn" data-t="0" id="tbtn0">DAY</button>
+          <button class="dbtn tbtn" data-t="1" id="tbtn1">DUSK</button>
+          <button class="dbtn tbtn" data-t="2" id="tbtn2">NIGHT</button>
+        </div>
+      </div>
+      <div id="modesel">
+        <span id="lblMode" class="dlab">MODE</span>
+        <div class="dbtns">
+          <button class="dbtn mbtn" data-m="0" id="mbtnEndless">ENDLESS</button>
+          <button class="dbtn mbtn" data-m="1" id="mbtnOperation">OPERATION</button>
+        </div>
+      </div>
+      <div id="pilotPanel">
+        <div class="pilotRow">
+          <span id="lblCallsign" class="dlab">CALLSIGN</span>
+          <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        </div>
+        <p id="callsignHint" class="techhint"></p>
+        <div class="pilotRow">
+          <span id="lblEmblem" class="dlab">EMBLEM</span>
+          <div id="emblemGrid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECONDARY TIER (§5c): grouped ghost row at the bottom; BOSS RUSH uses the locked treatment -->
+    <div class="hbtns hbtns-secondary">
       <button id="metaBtn" class="ghostbtn">&#9650; COMMAND &amp; PROGRESSION</button>
       <button id="manualBtn" class="ghostbtn">&#9636; CONTROLS &amp; MANUAL</button>
+      <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>
+      <button id="bossRushBtn" class="ghostbtn disabled is-locked" disabled>&#9760; BOSS RUSH</button>
     </div>
     <div id="dailyNote" class="controls"><span id="dailyNoteTxt"></span></div>
     <div id="bossRushNote" class="controls"></div>
+
+    <!-- RIVAL BOARD demoted to a slim flavour strip at the very bottom -->
+    <div id="rivalBoard"><div id="rbTitle" class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
     <div class="controls">
       <span id="hangarCtl1"></span><br>
       <span id="hangarCtl2"></span><br>
@@ -185,9 +203,13 @@
       <button class="tech-tab" data-tab="tech">TECH TREE</button>
       <button class="tech-tab" data-tab="armory">ARMORY</button>
     </div>
+    <div id="draftBar">
+      <span id="draftPin" class="draft-pin">Tap any tree node to PIN it as your goal &mdash; offers will favour the path there.</span>
+      <button id="techReroll" class="draft-reroll">&#8635; REROLL</button>
+    </div>
     <div id="techgrid"></div>
     <div class="techfoot">
-      <div id="techhint" class="techhint">Drag or scroll to explore the tree. Tap a lit node to research it &mdash; or just DEPLOY and spend nothing. The dashed RESERVE SQUADRON node can be bought over and over to grow &amp; up-armour your flight.</div>
+      <div id="techhint" class="techhint">This visit, only the 3 glowing FRONTIER nodes are buyable &mdash; pick ONE to research and deploy, or just DEPLOY to bank RP. PIN a goal node to bias future offers; REROLL once per visit for fresh picks.</div>
       <button id="techDeploy">&#9654; DEPLOY TO NEXT WAVE</button>
     </div>
   </div>
@@ -218,7 +240,7 @@
       <span><b>FINAL</b> the operation's boss target</span>
     </div>
     <div id="opStages" class="op-stages"></div>
-    <button id="opLaunch" disabled>&#9654; LAUNCH</button>
+    <button id="opLaunch" class="btn-primary" disabled>&#9654; LAUNCH</button>
   </div>
 </div>
 
@@ -389,14 +411,14 @@
 </div>
 
 <div id="langSelect">
-  <div class="obwrap">
-    <h1 class="ob-h1">SKYSTRIKE</h1>
-    <p id="langTitle" class="ob-sub">SELECT LANGUAGE</p>
-    <p id="langSub" class="ob-sub2">// 选择语言 //</p>
-    <div class="ob-langbtns">
+  <div class="obwrap ls-wrap">
+    <h1 class="ob-h1 ls-title">SKYSTRIKE<span class="ls-sub2">ACE PROTOCOL</span></h1>
+    <p id="langTagline" class="ls-tagline">ARCADE JET COMBAT</p>
+    <div class="ob-langbtns ls-flags">
       <button class="ob-lang" data-lang="EN">English 🇬🇧</button>
       <button class="ob-lang" data-lang="ZH">简体中文 🇨🇳</button>
     </div>
+    <p id="langBegin" class="ls-begin"><span class="ls-prompt">&#9654;</span> SELECT LANGUAGE TO BEGIN</p>
   </div>
 </div>
 
@@ -404,14 +426,17 @@
   <div class="obwrap">
     <h2 id="obTitle" class="ob-h2">CONTROLS</h2>
     <p id="obSub" class="ob-sub2">// PRE-FLIGHT BRIEF //</p>
-    <div class="ob-grid">
-      <div class="ob-card"><h3 id="obFlightH">FLIGHT</h3><p id="obFlightK"></p></div>
-      <div class="ob-card"><h3 id="obCombatH">COMBAT</h3><p id="obCombatK"></p></div>
-      <div class="ob-card"><h3 id="obViewH">VIEW</h3><p id="obViewK"></p></div>
+    <!-- §5b: one consolidated card, one primary action, generous negative space -->
+    <div class="ob-onecard">
+      <div class="ob-grid">
+        <div class="ob-card"><h3 id="obFlightH">FLIGHT</h3><p id="obFlightK"></p></div>
+        <div class="ob-card"><h3 id="obCombatH">COMBAT</h3><p id="obCombatK"></p></div>
+        <div class="ob-card"><h3 id="obViewH">VIEW</h3><p id="obViewK"></p></div>
+      </div>
+      <p id="obTouch" class="ob-note"></p>
+      <p id="obMore" class="ob-note"></p>
     </div>
-    <p id="obTouch" class="ob-note"></p>
-    <p id="obMore" class="ob-note"></p>
-    <button id="obContinue" class="ob-continue">▶ START TUTORIAL</button>
+    <button id="obContinue" class="btn-primary ob-continue">▶ START TUTORIAL</button>
   </div>
 </div>
 

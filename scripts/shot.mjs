@@ -29,6 +29,19 @@ page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForTimeout(1200);
 
+// drive past the first-run language gate (langSelect → onboard → hangar) so we reach
+// the real hangar instead of the language screen. Falls through harmlessly for returning players.
+await page.evaluate(() => {
+  const en = document.querySelector('.ob-lang[data-lang="EN"]');
+  if (en) en.click();
+});
+await page.waitForTimeout(250);
+await page.evaluate(() => {
+  const cont = document.getElementById('obContinue');
+  if (cont) cont.click();
+});
+await page.waitForTimeout(600);
+
 // hangar shot
 await page.screenshot({ path: `${prefix}-hangar.png` });
 
@@ -48,6 +61,11 @@ await page.screenshot({ path: `${prefix}-fx.png` });
 await page.evaluate(() => { player.group.position.y = 900; player.group.rotation.x = -0.5; });
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${prefix}-terrain.png` });
+
+// debrief / game-over screen (grade-first redesign)
+await page.evaluate(() => { if (typeof gameOver === 'function') gameOver(); });
+await page.waitForTimeout(700);
+await page.screenshot({ path: `${prefix}-debrief.png` });
 
 await browser.close();
 server.close();

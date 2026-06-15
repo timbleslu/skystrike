@@ -36,6 +36,7 @@ function fireGun() {
   const mz = player.group.userData.muzzle;
   if (mz) { mz.visible = true; mz.scale.setScalar(rand(11, 18)); mz.material.rotation = rand(0, TWO_PI); player.muzzleT = 0.045; }
   player.shake = Math.max(player.shake, 0.12);
+  player.firingT = 0.12;   // "weapon fired this frame" tell for the stealth detection meter (missions.js)
   audio.gun();
   haptic(8);
   run.shots += used;
@@ -89,6 +90,7 @@ function fireMissile() {
   }
   const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul() * (1 + 0.3 * frenzyAmt());
   player.missileCd = 0.55;
+  player.firingT = 0.12;   // missile launch also trips the stealth detection meter (missions.js)
   const salvo = 1 + (player.mslSwarm || 0);   // SWARM RACK looses extra birds — bonus birds are free, only 1 leaves the rack
   const baseDir = fwdOf(player.group, t1).clone();
   for (let s = 0; s < salvo; s++) {
@@ -309,7 +311,11 @@ function spawnCrate(pos) {
 function maybeSpawnCrate(dt) {
   crateTimer -= dt;
   if (crateTimer > 0) return;
-  crateTimer = rand(11, 17);
+  // Crate cadence scales UP over the run (balance pass 2026-06): early waves get frequent restocks
+  // (~11-17s) but the gap stretches toward ~18-28s by ~wave 14, so late-game resource pressure returns
+  // (constant fast resupply was erasing the loss-aversion tension). Linear ramp, clamped both ends.
+  const lateF = clamp((wave - 4) / 10, 0, 1);
+  crateTimer = rand(11 + 7 * lateF, 17 + 11 * lateF);
   let count = 0; for (let i = 0; i < loots.length; i++) if (loots[i].kind === 'crate') count++;
   if (count >= MAX_CRATES) return;
   const ang = rand(0, TWO_PI), r = rand(900, 1900);
@@ -477,7 +483,7 @@ function damagePlayer(amt, src) {
   haptic(60);
   if (player.reactive && hadShield && player.shield <= 0) reactivePulse();   // REACTIVE ARMOUR — the shield going down detonates
   if (player.hp <= 0) {
-    if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per wave
+    if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per RUN (balance 2026-06; _cheatUsed reset only in startGame)
       player._cheatUsed = true; player.hp = player.maxHp * 0.4; player.shield = player.maxShield;
       player.invuln = 2.5; player.damageFlash = 0; empFlash = Math.max(empFlash, 0.6);
       showBanner(t('banner.guardianAngel')); audio.power(); return;
@@ -566,7 +572,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
-  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(0.25); audio.killSfx(); }
+  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); if (typeof killFlash !== 'undefined') killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
@@ -657,18 +663,22 @@ function nearestNonBossEnemy() {
 }
 
 /* ---------------- AWACS support calls (F10/F11/F12) ---------------- */
-// Spend RP (player.tp) on a capped-per-sector radio call. The cost/cap math is the pure
-// awacsCall() resolver (globals.js, mirrored in tests/awacs.test.js); this glue applies the effect.
+// Cooldown-gated, capped-per-sector radio call (balance pass 2026-06: NO LONGER costs RP — calls used
+// to draw from player.tp, the same pool as the permanent TECH_TREE, so they were never rational vs. a
+// compounding upgrade and the feature was dead. Now they're free but gated by a per-call cooldown +
+// the unchanged per-sector use cap). The allow/effect/banner decision is the pure awacsResolve()
+// (core.js, tested in tests/awacs.test.js + tests/awacs-adapter.test.js); this glue applies the effect.
 function awacsAction(key) {
   if (!player) return false;
-  // Pure decision (core.js awacsResolve): affordability + per-sector cap + which effect + which banner.
-  const res = awacsResolve({ rp: player.tp, uses: awacsUses }, AWACS_COSTS, AWACS_USES_MAX, key);
+  const now = performance.now() / 1000;   // seconds clock for the cooldown gate
+  // Pure decision (core.js awacsResolve): cooldown + per-sector cap + which effect + which banner.
+  const res = awacsResolve({ uses: awacsUses, last: awacsLast }, AWACS_COOLDOWNS, AWACS_USES_MAX, key, now);
   if (!res.ok) {
-    if (res.banner) { showBanner(t(res.banner)); audio.warn(); }   // noRp / empty
+    if (res.banner) { showBanner(t(res.banner)); audio.warn(); }   // cooldown / empty
     else audio.ui();                                               // unknown key — neutral blip
     return false;
   }
-  player.tp = res.rp; awacsUses = res.uses;   // commit the deduction + use spend
+  awacsUses = res.uses; awacsLast = res.last;   // commit the use spend + cooldown stamp
   // imperative application of the resolved effect (game-state mutation only; decision already made)
   if (res.effect === 'strike') {
     const tgt = nearestNonBossEnemy();
@@ -721,7 +731,7 @@ function updateLockOn(dt) {
     player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1)));   // weather slows lock-on
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
-    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); }
+    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); player.lockFlash = 0.42; }   // lockFlash = VISUAL-ONLY snap timer for hud.js (no balance/timing impact)
   } else {
     player.lockProgress = Math.max(0, player.lockProgress - dt / (LOCK_TIME * 0.5));
     if (player.lockProgress < 1) player.lockedTarget = null;
@@ -740,11 +750,23 @@ function interceptPoint(shooter, tp, tv, bs) {
 
 /* ---------------- special abilities ---------------- */
 function hasSpecial(jet) { return !!(jet && jet.ability); }
-function useSpecial() {
-  if (!hasSpecial(player.jet)) { audio.ui(); return; }
-  if (player.special.cd > 0) { audio.ui(); return; }
-  player.special.cd = player.special.max; audio.power();
-  const id = player.jet.id;
+
+// useSpecial(slot): slot 1 (default) = the NATIVE jet special (KeyR / tb-spc — behaviour unchanged);
+// slot 2 = the equipped secondary special (KeyB / tb-spc2). Each slot owns its own cooldown state
+// (player.special / player.special2); both fire the SAME id-keyed effect via applySpecialEffect, so an
+// effect is fully portable — it works no matter which airframe is currently flown.
+function useSpecial(slot) {
+  const st = (slot === 2) ? player.special2 : player.special;
+  if (!st || !st.id) { audio.ui(); return; }          // empty slot (FT-1 native, or nothing equipped) is inert
+  if (st.cd > 0) { audio.ui(); return; }
+  st.cd = st.max; audio.power();
+  applySpecialEffect(st.id);
+}
+
+// applySpecialEffect(id): fires a special's EFFECT keyed purely on the ability/jet id, INDEPENDENT of
+// player.jet — this is what lets slot 2 run another jet's ability. (Was the inline switch body of the
+// old useSpecial; the per-slot cooldown gate moved up into useSpecial.)
+function applySpecialEffect(id) {
   const pp = player.group.position;
 
   if (id === 'F-22') {
@@ -862,8 +884,11 @@ function updatePlayer(dt) {
   if (player.vectorSurge > 0) player.vectorSurge -= dt;
   if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);   // KILL FRENZY bleeds off when you stop scoring
   if (player.special.cd > 0) player.special.cd -= dt;
+  if (player.special2 && player.special2.cd > 0) player.special2.cd -= dt;   // SLOT 2 recharge (feature #3)
   if (player.damageFlash > 0) player.damageFlash -= dt;
+  if (player.lockFlash > 0) player.lockFlash -= dt;   // VISUAL-ONLY lock-snap overshoot timer (hud.js drawLockReticle)
   if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
+  if (player.firingT > 0) player.firingT -= dt;   // decays the stealth "firing" tell set in fireGun/fireMissile
   if (player.shake > 0) player.shake -= dt;
   if (player.comboTimer > 0) { player.comboTimer -= dt; if (player.comboTimer <= 0) player.combo = 0; }
   if (player.shieldT > 0) player.shieldT -= dt;

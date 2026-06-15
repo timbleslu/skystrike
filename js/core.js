@@ -145,37 +145,90 @@ const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
 function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
 
 /* ---------------- AWACS support-call core (F10) ---------------- */
-// AWACS_COSTS = RP price per call; AWACS_USES_MAX = how many times each may be called per sector.
-const AWACS_COSTS    = { strike: 140, resupply: 90, jam: 70 };
-const AWACS_USES_MAX = { strike: 1,   resupply: 1,  jam: 2 };
-const AWACS_JAM_TIME = 8;   // seconds enemy missiles stay blinded by a jamming call
-// PURE resolver: given a snapshot {rp, uses:{strike,resupply,jam}}, the cost+cap tables, and a call
-// key, returns a NEW snapshot. ok=false (state unchanged) when the call is unknown, capped out, or
-// unaffordable. reason: 'unknown' | 'empty' (no uses left) | 'noRp' (can't afford) | 'ok'.
-function awacsCall(state, costs, max, key) {
-  const cost = costs[key], cap = max[key];
-  if (cost === undefined || cap === undefined) return { ok: false, reason: 'unknown', rp: state.rp, uses: state.uses };
+// AWACS calls are COOLDOWN-GATED, not RP-costed (balance pass 2026-06: they used to draw from
+// player.tp, the same pool as the permanent TECH_TREE, so spending on a one-shot call was never
+// rational vs. a compounding upgrade — the whole feature was economically dead. Decoupling from RP
+// revives it without new HUD chrome.) AWACS_COOLDOWNS = seconds between successive calls of a key;
+// AWACS_USES_MAX = the unchanged hard cap on how many times each may be called per sector.
+const AWACS_COOLDOWNS = { strike: 30, resupply: 26, jam: 18 };
+const AWACS_USES_MAX  = { strike: 1,   resupply: 1,  jam: 2 };
+const AWACS_JAM_TIME  = 8;   // seconds enemy missiles stay blinded by a jamming call
+// PURE resolver: given a snapshot {uses:{strike,resupply,jam}, last:{...}}, the cooldown+cap tables,
+// a call key, and the current time `now` (seconds), returns a NEW snapshot. ok=false (state
+// unchanged) when the call is unknown, capped out, or still on cooldown. reason:
+//   'unknown' | 'empty' (no uses left this sector) | 'cooldown' (called too recently) | 'ok'.
+// `last` is the per-key timestamp of the last SUCCESSFUL call (or a missing/<=0 sentinel = never).
+function awacsCall(state, cd, max, key, now) {
+  const cool = cd[key], cap = max[key];
+  const last = state.last || {};
+  if (cool === undefined || cap === undefined) return { ok: false, reason: 'unknown', uses: state.uses, last };
   const used = state.uses[key] || 0;
-  if (used >= cap) return { ok: false, reason: 'empty', rp: state.rp, uses: state.uses };
-  if (state.rp < cost) return { ok: false, reason: 'noRp', rp: state.rp, uses: state.uses };
+  if (used >= cap) return { ok: false, reason: 'empty', uses: state.uses, last };
+  const prev = last[key];
+  if (prev !== undefined && prev > 0 && (now - prev) < cool) return { ok: false, reason: 'cooldown', uses: state.uses, last };
   const uses = { strike: state.uses.strike || 0, resupply: state.uses.resupply || 0, jam: state.uses.jam || 0 };
+  const nextLast = { strike: last.strike || 0, resupply: last.resupply || 0, jam: last.jam || 0 };
   uses[key] = used + 1;
-  return { ok: true, reason: 'ok', rp: state.rp - cost, uses: uses };
+  nextLast[key] = now;
+  return { ok: true, reason: 'ok', uses: uses, last: nextLast };
 }
 // AWACS effect/banner table — which outcome a SUCCESSFUL call applies, and its banner i18n key.
 const AWACS_EFFECTS = { strike: 'awacs.strike', resupply: 'awacs.resupply', jam: 'awacs.jam' };
 // PURE adapter decision: wrap awacsCall, then attach what combat.js must imperatively do. On success
 // `effect` is the call key (strike/resupply/jam) and `banner` its success message; combat.js commits
-// {rp, uses} and applies `effect`. On failure `effect` is null and `banner` is the failure message
-// key (or null for an unknown key → caller plays a neutral ui sound). The ENTIRE "which message,
-// which effect, allowed?" decision lives here (tested); combat.js only mutates game state + plays SFX.
-function awacsResolve(state, costs, max, key) {
-  const r = awacsCall(state, costs, max, key);
+// {uses, last} and applies `effect`. On failure `effect` is null and `banner` is the failure message
+// key (cooldown / empty; null for an unknown key → caller plays a neutral ui sound). The ENTIRE
+// "which message, which effect, allowed?" decision lives here (tested); combat.js only mutates game
+// state + plays SFX.
+function awacsResolve(state, cd, max, key, now) {
+  const r = awacsCall(state, cd, max, key, now);
   if (!r.ok) {
-    const banner = r.reason === 'noRp' ? 'awacs.noRp' : r.reason === 'empty' ? 'awacs.empty' : null;
-    return { ok: false, reason: r.reason, rp: r.rp, uses: r.uses, effect: null, banner };
+    const banner = r.reason === 'cooldown' ? 'awacs.cooldown' : r.reason === 'empty' ? 'awacs.empty' : null;
+    return { ok: false, reason: r.reason, uses: r.uses, last: r.last, effect: null, banner };
   }
-  return { ok: true, reason: 'ok', rp: r.rp, uses: r.uses, effect: key, banner: AWACS_EFFECTS[key] };
+  return { ok: true, reason: 'ok', uses: r.uses, last: r.last, effect: key, banner: AWACS_EFFECTS[key] };
+}
+
+/* ---------------- tech-screen cadence core (balance pass 2026-06) ---------------- */
+// The R&D shop used to open after EVERY wave (flow-killing full-screen modal every ~60-90s, and each
+// buy was low-stakes because RP arrived in a trickle every wave). It now opens on a CADENCE: skip
+// wave 1 entirely (pure-flight opener), then every 2nd wave AND always after any wave that contained
+// a boss. RP banks naturally between visits (player.tp persists), so each shop visit funds a bigger,
+// more deliberate purchase. PURE — `wasBoss` = the just-cleared wave contained a boss.
+function shouldOpenTechScreen(wave, wasBoss) {
+  if (wave < 2) return false;            // first wave is pure flight — no shop interruption
+  if (wasBoss) return true;              // always restock after a boss fight
+  return wave % 2 === 0;                 // otherwise every second wave
+}
+
+/* ---------------- wave/boss cadence + density core (balance pass 2026-06) ---------------- */
+// Boss cadence used to be a hard metronome (`wave % 4 === 0`) — fully predictable, so the player
+// could autopilot the calm waves and brace for the known boss wave. These helpers replace it with a
+// windowed schedule: after each boss, the NEXT boss is rolled 3-5 waves out, so the player can never
+// be certain which wave spikes. Enemy density used to cap at 10 (hit by ~wave 7, flat forever after);
+// the cap is lifted to 16 (distant-enemy culling already exists, GFX_CULL_*/cullDistantEnemies).
+const BOSS_WINDOW_MIN = 3;   // soonest the next boss can arrive after the previous one
+const BOSS_WINDOW_MAX = 5;   // latest the next boss can arrive
+const WAVE_COUNT_CAP  = 16;  // hard ceiling on simultaneous queued fighters (was 10)
+// PURE — gap (in waves) until the next boss. Rolled once per boss kill/spawn so cadence stays varied.
+// rng() ∈ [0,1). Inclusive integer in [BOSS_WINDOW_MIN, BOSS_WINDOW_MAX].
+function nextBossOffset(rng) {
+  const span = BOSS_WINDOW_MAX - BOSS_WINDOW_MIN + 1;
+  return BOSS_WINDOW_MIN + Math.floor(rng() * span);
+}
+// PURE — is THIS wave a boss wave, given the wave number the next boss is scheduled for? The schedule
+// is seeded the first time the player reaches the window (caller initializes bossWaveNext).
+function isBossWave(wave, bossWaveNext) { return wave >= bossWaveNext; }
+// PURE — fighters to queue this wave. Same growth as before (3 + wave + difficulty delta) but clamped
+// to WAVE_COUNT_CAP instead of 10, so density keeps escalating past the old wave-7 plateau.
+function waveCount(wave, diffDelta, cap) {
+  return clamp(3 + wave + diffDelta, 2, (cap === undefined ? WAVE_COUNT_CAP : cap));
+}
+// PURE — occasional non-boss "wildcard spike" wave: a denser-than-usual swarm to break the rhythm
+// WITHOUT a boss. Only on non-boss combat waves from wave 5 on; roll ∈ [0,1). Kept rare (≈18%) so the
+// pacing stays readable, not chaotic.
+function isWildcardWave(wave, isBoss, roll) {
+  return !isBoss && wave >= 5 && roll < 0.18;
 }
 
 /* ---------------- barrel-roll pure helpers (F-barrel) ---------------- */
@@ -258,6 +311,267 @@ function motionAxis(angle, offset, maxAngle) {
 // EMA low-pass: pull prev toward next by alpha (0..1). Higher alpha = snappier, less smooth.
 function emaSmooth(prev, next, alpha) { return prev + alpha * (next - prev); }
 
+// "being locked by enemy" threat test: is this enemy a real gun threat to the player THIS frame?
+// Mirrors the gun-fire gate's geometry (within the gun cone AND inside gun range) plus the same
+// gating the AI already respects: it must be engaging and able to see the player. Pure so the rule
+// is testable; updateEnemy calls it with the live ang/dist/cone/range it already computes.
+function enemyIsAimingPlayer(o) {
+  return !!(o && o.engaged && o.canSee && o.ang < o.gunCone && o.dist < o.gunRange);
+}
+
+/* ---------------- fighter archetypes (feature 2026-06: AI threat variety) ----------------
+   Replaces the single ~40% `aggressive` temperament with distinct, READABLE behavioral roles
+   so dogfights stop feeling same-y and the player must recognize + counter different threats.
+   PURE selection here; the imperative steering (lateral jukes, proactive flares, flank offsets)
+   stays in entities.js updateEnemy, gated on `e.archetype`. 'duelist' is byte-for-byte the old
+   behavior (existing `aggressive` sub-roll still applies), so early waves are unchanged in feel. */
+const ARCHETYPES = ['duelist', 'baiter', 'decoy', 'pincer'];
+// Weighted picker. duelist dominates early; baiter/decoy/pincer ramp in with wave so the opener
+// stays a clean dogfight and exotic threats appear as the run heats up. Elites/aces bias exotic
+// (their extra menace IS the gimmick) but never to zero duelists. `rng` is a 0..1 source (testable).
+function pickArchetype(rng, wave, opts) {
+  opts = opts || {};
+  const w = Math.max(0, wave || 0);
+  // exotic share climbs from ~0 at wave 1 toward a cap; elites get a flat bump on top.
+  let exotic = Math.min(0.5, 0.04 * Math.max(0, w - 1));   // wave 1 → 0, ramps ~+4%/wave, capped 50%
+  if (opts.elite) exotic = Math.min(0.7, exotic + 0.25);   // aces/elites lean exotic, still ≤70%
+  const r = rng();
+  if (r >= exotic) return 'duelist';                       // the dominant baseline
+  // split the exotic slice across the three gimmick roles (even thirds within the slice)
+  const k = exotic > 0 ? (r / exotic) : 0;
+  if (k < 1 / 3) return 'baiter';
+  if (k < 2 / 3) return 'decoy';
+  return 'pincer';
+}
+// baiter jink gate: juke hard ONLY while the player is actively locking THIS enemy AND the jink
+// cooldown has elapsed. Pure so the trigger rule is testable; updateEnemy supplies live lock state.
+function shouldJink(o) {
+  return !!(o && o.lockedByPlayer && (o.jinkCd == null || o.jinkCd <= 0));
+}
+// pincer partner sign: the flanking partner orbits the OPPOSITE way so the pair brackets the player
+// from two sides. Defaults a missing/zero self-sign to +1 → partner -1.
+function pincerSign(selfSign) {
+  return (selfSign < 0) ? 1 : -1;
+}
+
+/* ---------------- 2nd SPECIAL slot (feature #3) ----------------
+   Pure helpers for the equippable secondary special. The EFFECT (THREE/spawn/DOM) stays in
+   combat.js `applySpecialEffect`; only the data logic — which abilities can be equipped, and the
+   cooldown-ready gate — lives here so it is require-safe + testable. */
+
+// equippableSpecials(unlockedJetIds, jetsRoster, currentJetId) → [{id, name}]
+// The pool of abilities the player may equip into SLOT 2: every jet they have UNLOCKED that
+// carries a real ability (FT-1's null ability is excluded), MINUS the currently-flown jet (its own
+// ability is already slot 1, so re-equipping it would be a redundant duplicate). Order follows the
+// roster. `unlockedJetIds` may be an array OR a {id:true} map; both are accepted.
+function equippableSpecials(unlockedJetIds, jetsRoster, currentJetId) {
+  const has = Array.isArray(unlockedJetIds)
+    ? (id => unlockedJetIds.indexOf(id) !== -1)
+    : (id => !!(unlockedJetIds && unlockedJetIds[id]));
+  const out = [];
+  const roster = jetsRoster || [];
+  for (let i = 0; i < roster.length; i++) {
+    const j = roster[i];
+    if (!j || !j.ability) continue;          // skip the FT-1 null ability (and any future ability-less jet)
+    if (j.id === currentJetId) continue;      // skip the native jet — that ability is slot 1
+    if (!has(j.id)) continue;                 // skip jets the player has not unlocked
+    out.push({ id: j.id, name: j.ability });
+  }
+  return out;
+}
+
+// isEquippableSpecial(id, unlockedJetIds, jetsRoster, currentJetId) → bool
+// True iff `id` is a currently-valid slot-2 choice (in the equippable pool). Used to reject a stale
+// saved equip (e.g. a jet that is no longer unlocked, or the now-current jet) and clear the slot.
+function isEquippableSpecial(id, unlockedJetIds, jetsRoster, currentJetId) {
+  if (!id) return false;
+  const pool = equippableSpecials(unlockedJetIds, jetsRoster, currentJetId);
+  for (let i = 0; i < pool.length; i++) if (pool[i].id === id) return true;
+  return false;
+}
+
+// specialCooldownMax(id, cdTable, fallback) → seconds. Raw per-id recharge time for a slot, read
+// from the SPECIAL_CD table. No tech mods here (OVERCLOCK/GHOST apply to slot 1 only, in globals).
+function specialCooldownMax(id, cdTable, fallback) {
+  const fb = (typeof fallback === 'number') ? fallback : 15;
+  if (!id || !cdTable) return fb;
+  const v = cdTable[id];
+  return (typeof v === 'number' && v > 0) ? v : fb;
+}
+
+// specialSlotReady(slot) → bool. A slot can fire iff it holds an ability (id truthy) and its
+// cooldown has fully recharged (cd <= 0). An empty/unequipped slot is never ready (inert).
+function specialSlotReady(slot) {
+  return !!(slot && slot.id && slot.cd <= 0);
+}
+
+/* ---------------- FRONTIER DRAFT (feature 4) ----------------
+   Pure draft-pick logic for the R&D tech tree. The full tree stays visible/planned; each shop visit
+   only a few of the player's currently-unlockable FRONTIER nodes are OFFERED as buyable. Eligibility
+   is INJECTED (owns/reqSatisfied/applicable fns + data) so this stays DOM/THREE-free + require-safe.
+   `tests/draft.test.js` exercises these directly. */
+
+const DRAFT_OFFER_N = 3;        // how many frontier nodes are offered per visit
+const DRAFT_PITY_THRESHOLD = 3; // a frontier node skipped this many visits is force-included next offer
+
+// frontierEligible(nodes, {owns, reqSatisfied, applicable}) → [ids]
+// The FRONTIER = nodes whose prerequisites are satisfied, that the player does not yet own
+// (repeatables are still offerable even when already taken), and that apply to this map
+// (applicable() rejects na/hidden/ground-off nodes). All three predicates are injected fns.
+function frontierEligible(nodes, fns) {
+  const owns = (fns && fns.owns) || (() => false);
+  const reqSatisfied = (fns && fns.reqSatisfied) || (() => true);
+  const applicable = (fns && fns.applicable) || (() => true);
+  const out = [];
+  for (let i = 0; i < (nodes ? nodes.length : 0); i++) {
+    const n = nodes[i];
+    if (!n) continue;
+    if (!applicable(n)) continue;                 // excludes na / hidden / not-this-map
+    if (!n.repeat && owns(n.id)) continue;        // already owned (repeatables stay offerable)
+    if (!reqSatisfied(n)) continue;               // prereqs not met yet — not on the frontier
+    out.push(n.id);
+  }
+  return out;
+}
+
+// prereqPath(targetId, byId, owns) → [ids]  (ordered: deepest unowned prereq first → target last)
+// The chain of UNOWNED prerequisite node ids leading to `target`, used to BIAS offers toward a pinned
+// goal. Walks the req/reqAll graph (OR-gate: follow the first unowned parent; AND-gate: include all
+// unowned parents). Returns [] if the target is already owned or unknown; includes the target itself
+// (when unowned) as the final element so the path is directly offer-biasable.
+function prereqPath(targetId, byId, owns) {
+  if (!targetId || !byId) return [];
+  const ownsFn = owns || (() => false);
+  const seen = {};
+  const acc = [];
+  const visit = (id) => {
+    if (!id || seen[id]) return;
+    seen[id] = true;
+    const node = byId[id];
+    if (!node) return;
+    if (ownsFn(id)) return;                        // owned prereqs are already satisfied — skip
+    const reqAll = node.reqAll || [];
+    for (let i = 0; i < reqAll.length; i++) visit(reqAll[i]);   // AND-gate: every listed parent
+    const req = node.req;
+    if (req) {                                     // OR-gate: take the first unowned parent's path
+      const list = Array.isArray(req) ? req : [req];
+      let parent = null;
+      for (let i = 0; i < list.length; i++) { if (!ownsFn(list[i])) { parent = list[i]; break; } }
+      if (parent) visit(parent);
+    }
+    acc.push(id);                                  // post-order: prereqs land before the node itself
+  };
+  visit(targetId);
+  return acc;
+}
+
+// draftOffer({ frontier, pinPath, pity, rng, n }) → { offer:[ids], pity:{id:count} }
+// Picks up to `n` ids from `frontier`: (1) force-include any frontier node whose pity counter is at or
+// over DRAFT_PITY_THRESHOLD; (2) bias toward pinPath nodes that are on the frontier; (3) fill the
+// remainder via seeded `rng` (deterministic for a fixed rng). Returns the chosen offer AND the updated
+// pity map — offered/picked nodes reset to 0, every other frontier node increments (skipped one more
+// visit). If frontier < n, the whole frontier is offered. Pure: no clock, no DOM.
+function draftOffer(opts) {
+  const o = opts || {};
+  const frontier = (o.frontier || []).slice();
+  const pinPath = o.pinPath || [];
+  const pityIn = o.pity || {};
+  const rng = o.rng || (() => 0);
+  const n = (typeof o.n === 'number' && o.n > 0) ? o.n : DRAFT_OFFER_N;
+  const inFrontier = {};
+  for (let i = 0; i < frontier.length; i++) inFrontier[frontier[i]] = true;
+
+  const offer = [];
+  const taken = {};
+  const take = (id) => { if (id && inFrontier[id] && !taken[id] && offer.length < n) { taken[id] = true; offer.push(id); } };
+
+  // (1) pity-due frontier nodes are force-included first (oldest debt wins the slot)
+  const due = frontier.filter(id => (pityIn[id] || 0) >= DRAFT_PITY_THRESHOLD)
+                      .sort((a, b) => (pityIn[b] || 0) - (pityIn[a] || 0));
+  for (let i = 0; i < due.length; i++) take(due[i]);
+
+  // (2) bias toward the pinned goal's prereq path (path order = prereqs first)
+  for (let i = 0; i < pinPath.length; i++) take(pinPath[i]);
+
+  // (3) fill the rest by seeded shuffle of the remaining frontier (deterministic for a fixed rng)
+  const rest = frontier.filter(id => !taken[id]);
+  for (let i = rest.length - 1; i > 0; i--) {     // Fisher–Yates using injected rng
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = rest[i]; rest[i] = rest[j]; rest[j] = tmp;
+  }
+  for (let i = 0; i < rest.length; i++) take(rest[i]);
+
+  // pity update: offered frontier nodes reset; every other frontier node ages one more visit.
+  const pityOut = {};
+  for (let i = 0; i < frontier.length; i++) {
+    const id = frontier[i];
+    pityOut[id] = taken[id] ? 0 : (pityIn[id] || 0) + 1;
+  }
+  return { offer, pity: pityOut };
+}
+
+/* ---------------- non-combat mission cores (feature 2026-06: RECON + STEALTH) ----------------
+   A shared waypoint primitive backs two NON-kill objectives so missions stop being all "kill things":
+   RECON = fly through N waypoints; STEALTH = reach an extraction waypoint without being detected.
+   PURE here (hit-test + detection math over plain {x,y,z} data); the POSITIONING of waypoints and the
+   per-frame "am I firing / being aimed at" reads stay impure in missions.js. Mirrored test:
+   tests/recon-stealth.test.js (imports the REAL impl below — no byte copy). */
+
+// squared planar+vertical distance between two plain {x,y,z} points (no THREE — keep require-safe)
+function _wpDist2(a, b) {
+  const dx = a.x - b.x, dy = (a.y || 0) - (b.y || 0), dz = a.z - b.z;
+  return dx * dx + dy * dy + dz * dz;
+}
+
+// Flip a waypoint's hit flag once the player passes within hitRadius; idempotent (a hit waypoint
+// STAYS hit). Returns the same array (mutated in place) plus the running hitCount and the index of
+// the next unhit waypoint (-1 when all are hit). playerPos/waypoints are plain {x,y,z[,hit]}.
+function reconProgress(waypoints, playerPos, hitRadius) {
+  const r2 = hitRadius * hitRadius;
+  let hitCount = 0, nextIndex = -1;
+  for (let i = 0; i < waypoints.length; i++) {
+    const w = waypoints[i];
+    if (!w.hit && _wpDist2(w, playerPos) <= r2) w.hit = true;
+    if (w.hit) hitCount++;
+    else if (nextIndex === -1) nextIndex = i;
+  }
+  return { waypoints: waypoints, hitCount: hitCount, nextIndex: nextIndex };
+}
+
+// First still-unhit waypoint (for the HUD pointer), or null when the path is complete.
+function nextWaypoint(waypoints) {
+  for (let i = 0; i < waypoints.length; i++) if (!waypoints[i].hit) return waypoints[i];
+  return null;
+}
+
+// Detection-meter delta for the stealth mission. CONTRACT: returns the RAW signed delta for this
+// frame — the CALLER clamps the running meter to 0..1. The meter RISES while the player is firing
+// weapons OR while any enemy is aiming at the player (spotted); otherwise it DECAYS slowly.
+function detectionDelta(o) {
+  const dt = o.dt || 0;
+  const rise = (o.riseRate == null ? 1 : o.riseRate);
+  const decay = (o.decayRate == null ? 1 : o.decayRate);
+  if (o.firing || o.beingAimed) return rise * dt;
+  return -decay * dt;
+}
+
+// Pure win/fail predicates so the resolve logic is testable without THREE/DOM.
+// RECON wins when every waypoint is hit. STEALTH wins when the extraction waypoint is reached with
+// the detection meter still under the alarm threshold; it FAILS the instant the meter hits 1 (alarm).
+function reconWon(m) {
+  const w = (m.params && m.params.waypoints) || [];
+  if (!w.length) return false;
+  for (let i = 0; i < w.length; i++) if (!w[i].hit) return false;
+  return true;
+}
+function stealthFailed(m) {
+  return ((m.params && m.params.detect) || 0) >= 1;
+}
+function stealthWon(m) {
+  if (stealthFailed(m)) return false;
+  return reconWon(m);   // reuse: the extraction goal is a (1-waypoint) recon path
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -271,10 +585,17 @@ if (typeof module !== 'undefined' && module.exports) {
     TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,
     makeRng, dailySeedFor,
     CAMSHAKE_RATE, CAMSHAKE_K, decayShake,
-    AWACS_COSTS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
+    AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
+    shouldOpenTechScreen,
+    BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
+    enemyIsAimingPlayer,
+    reconProgress, nextWaypoint, detectionDelta, reconWon, stealthWon, stealthFailed,
+    ARCHETYPES, pickArchetype, shouldJink, pincerSign,
+    equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
+    DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
   };
 }

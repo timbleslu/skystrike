@@ -6,8 +6,8 @@ function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && 
 function nextWave() {
   wave++;
   noDamageWave = true;   // arm the per-wave no-damage star tracker; damagePlayer clears it on a hit
-  player._cheatUsed = false;   // APEX PREDATOR's save refreshes every wave
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls refresh each sector/wave (F10)
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap refreshes each sector/wave (F10)
+  awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clears each sector/wave (cooldown-gated, balance 2026-06)
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
   if (opMode && opSector) {
@@ -18,6 +18,7 @@ function nextWave() {
     const spId = setpieceFor(opSector, opStage - 1);
     if (spId && !run.setpieceDone[opSector]) { run.setpieceDone[opSector] = true; plan = setpiecePlan(spId, plan); }
     strikeWaveActive = plan.ground;
+    bossWaveActive = lastWaveWasBoss = !!plan.boss;   // Operation: the FINAL sector IS the boss wave (drives tech-screen cadence)
     applyWeather(rollWeather(weatherSeed + wave)); applyTimeOfDay(plan.tod);   // random weather per wave, TOD fixed to sector type
     startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset (+ set-piece intro)
     const sectorLine = plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) });
@@ -37,19 +38,32 @@ function nextWave() {
   applyWeather(rollWeather(weatherSeed + wave));
   const _wCond = weatherLabel();
   if (strike) {
+    strikeWaveActive = true; bossWaveActive = lastWaveWasBoss = false;
     showBanner(t('banner.strikeWave'));
     queueStrikeSite(wave);
     for (let i = 0; i < 3; i++) pendingSpawns.push(spawnFighter);
     return;
   }
-  const count = clamp(3 + wave + DIFFS[difficulty].count, 2, 10);
+  // Windowed boss schedule (balance pass 2026-06) — replaces the old `wave % 4` metronome. Seed the
+  // schedule the first time we need it, then a boss wave fires once `wave` reaches the scheduled mark
+  // and the NEXT mark is rolled 3-5 waves further out, so cadence is never predictable.
+  if (bossWaveNext < BOSS_WINDOW_MIN) bossWaveNext = BOSS_WINDOW_MIN + Math.floor(Math.random() * (BOSS_WINDOW_MAX - BOSS_WINDOW_MIN + 1));
+  bossWaveActive = isBossWave(wave, bossWaveNext);
+  if (bossWaveActive) bossWaveNext = wave + nextBossOffset(Math.random);   // reschedule the next boss off THIS wave
+  lastWaveWasBoss = bossWaveActive;
+  // occasional non-boss "wildcard spike" — a denser-than-usual swarm to break the rhythm (~18%, wave >=5)
+  const wildcard = isWildcardWave(wave, bossWaveActive, Math.random());
+  let count = waveCount(wave, DIFFS[difficulty].count, WAVE_COUNT_CAP);
+  if (wildcard) count = Math.min(WAVE_COUNT_CAP, count + randInt(2, 4));
   for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
-  if (wave % 4 === 0) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
+  if (bossWaveActive) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
+  else if (wildcard) { showBanner(t('banner.wildcardWave')); }
   else showBanner(_wCond ? tf('banner.wave', { n: wave }) + '  ·  ' + _wCond : tf('banner.wave', { n: wave }));
-  if (wave >= 3 && wave % 4 !== 0 && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
+  if (wave >= 3 && !bossWaveActive && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
+  if (wildcard) pendingSpawns.push(spawnAce);   // wildcard always brings an extra ace for spice
   if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
-  if (wave >= 4 && wave % 4 !== 0 && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
-  if (wave >= 3 && wave % 4 !== 0 && Math.random() < 0.5) {
+  if (wave >= 4 && !bossWaveActive && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
+  if (wave >= 3 && !bossWaveActive && Math.random() < 0.5) {
     const dn = randInt(3, 4) + Math.floor(wave / 4);
     pendingSpawns.push(() => spawnDroneSwarm(dn));
   }
@@ -636,7 +650,12 @@ function handleWaves(dt) {
       if (noDamageWave) run.cleanWaves = (run.cleanWaves || 0) + 1;   // cleared a full wave untouched → no-damage star progress
       betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
       if (opMode && opSector === 'FINAL') { operationComplete(); return; }
-      openTechScreen();   // open the R&D tech tree before the next wave
+      // Tech-screen cadence (balance pass 2026-06): in OPERATION mode the tech screen is also the
+      // campaign-navigation hub (deployFromTech → openOpMap is the ONLY path to the next sector), so
+      // it must always open. In ENDLESS the shop opens on a cadence (skip wave 1, then every 2nd wave
+      // + after any boss) so it stops ejecting the player from the dogfight every ~60-90s; RP banks in
+      // player.tp between visits. When skipped, the waveTimer above auto-advances to the next wave.
+      if (opMode || shouldOpenTechScreen(wave, lastWaveWasBoss)) openTechScreen();
     }
   } else if (!choosingUpgrade) {
     waveTimer -= dt;
@@ -725,6 +744,7 @@ addEventListener('keydown', e => {
     case 'KeyX': deployFlares(); break;
     case 'KeyF': cycleLock(); break;
     case 'KeyR': useSpecial(); break;
+    case 'KeyB': useSpecial(2); break;     // feature #3: equipped SLOT-2 special
     case 'KeyC': cycleCamera(); break;
     case 'KeyT': wingCommand('focus'); break;
     case 'KeyY': wingCommand('regroup'); break;

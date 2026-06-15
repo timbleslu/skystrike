@@ -145,14 +145,28 @@ let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;
+let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
 
 let player = null;
 let enemies = [], bullets = [], missiles = [], flares = [], loots = [], particles = [], clouds = [], decoys = [];
 let wingmen = [];   // AI escort jets that fly with the player
 const BPOOL = [];
 let hitMarkers = [], dmgNumbers = [];
+// JS twin of the CSS prefers-reduced-motion gate (styles.css:96): when true, the canvas-juice
+// layer (hud.js kill flash / lock-snap / low-HP pulse) renders its calm fallback. Cached + live.
+let _reduceMotionMQ = (typeof matchMedia === 'function') ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+let _reduceMotion = !!(_reduceMotionMQ && _reduceMotionMQ.matches);
+if (_reduceMotionMQ && _reduceMotionMQ.addEventListener) _reduceMotionMQ.addEventListener('change', e => { _reduceMotion = e.matches; });
+function prefersReducedMotion() { return _reduceMotion; }
+let killFlash = 0;   // VISUAL-ONLY: brief frame timer set on a player kill (hud.js draws a confirm flash). Decays in drawHUD.
 let wave = 0, betweenWaves = true, waveTimer = 2.6;
 let strikeWaveActive = false;   // true while the current wave is a ground-war strike wave
+// Endless-mode boss schedule (balance pass 2026-06): the next wave a boss arrives on. Replaces the old
+// `wave % 4` metronome — re-rolled 3-5 waves out by nextBossOffset after each boss spawns. lastWaveWasBoss
+// records whether the just-spawned wave carried a boss (drives the tech-screen cadence after it clears).
+let bossWaveNext = 0;           // wave number the next Endless boss is scheduled for (0 = uninitialized)
+let bossWaveActive = false;     // true while the CURRENT wave contains a boss (Endless metronome replacement)
+let lastWaveWasBoss = false;    // did the wave that just cleared contain a boss? (tech-screen cadence)
 let pendingSpawns = [];          // FIFO of zero-arg spawn closures, drained a few per frame to avoid wave-start hitch
 const SPAWN_PER_FRAME = 2;       // enemies actually built per frame after a wave is announced
 let camMode = 0;
@@ -210,14 +224,14 @@ const TECH_TREE = [
   // ---- root ----
   { id:'core', x:3, y:0, req:null, fam:'core', cost:0, sym:'\u2756', name:'CORE SYSTEMS', desc:'Boot the upgrade bus. (Owned from the start of every run.)', apply:()=>{} },
   // ---- three trunks off the root; each fans into three sub-branches ----
-  { id:'wpn', x:1, y:1, req:'core', fam:'wpn', cost:110, sym:'\u2724', name:'WEAPONS BUS', desc:'+12% cannon AND +12% missile damage. Opens the Gunnery, Munitions and Missile branches.', apply:p=>{ p.gunDmgMul *= 1.12; p.missileDmgMul *= 1.12; } },
+  { id:'wpn', x:1, y:1, req:'core', fam:'wpn', cost:160, sym:'\u2724', name:'WEAPONS BUS', desc:'+12% cannon AND +12% missile damage. Opens the Gunnery, Munitions and Missile branches.', apply:p=>{ p.gunDmgMul *= 1.12; p.missileDmgMul *= 1.12; } },
   { id:'def', x:5, y:1, req:'core', fam:'def', cost:110, sym:'\u25C8', name:'AIRFRAME BUS', desc:'+25 max HP and +12 max shield, topped up now. Opens Armour, Propulsion and EW.', apply:p=>{ p.maxHp += 25; p.hp = p.maxHp; p.maxShield += 12; p.shield = p.maxShield; } },
   { id:'cmd', x:9, y:1, req:'core', fam:'cmd', tab:'armory', cost:110, sym:'\u2605', name:'COMMAND BUS', desc:'+12% score from everything. Opens Command/Economy, Tactics and Flight.', apply:p=>{ p.scoreMul *= 1.12; } },
 
   // ===== WEAPONS group ===========================================================
   // ---- GUNNERY (cannon line, far left) ----
   { id:'g1', x:0, y:2, req:'wpn', fam:'gun', cost:150, sym:'\u25C9', name:'HEAVY ROUNDS',     desc:'+25% cannon damage.',                                              ok:p=>!p.noCannon, apply:p=>{ p.gunDmgMul *= 1.25; } },
-  { id:'g2', x:0, y:3, req:'g1',  fam:'gun', cost:280, sym:'\u25A4', name:'RAPID FEED',        desc:'+22% cannon rate of fire.',                                        ok:p=>!p.noCannon, apply:p=>{ p.fireRateMul *= 0.78; } },
+  { id:'g2', x:0, y:3, req:'g1',  fam:'gun', cost:280, sym:'\u25A4', name:'RAPID FEED',        desc:'+18% cannon rate of fire.',                                        ok:p=>!p.noCannon, apply:p=>{ p.fireRateMul *= 0.85; } },
   { id:'g3', x:0, y:4, req:['g2','u2'], fam:'gun', cost:450, sym:'\u2261', name:'AP PENETRATORS', desc:'Rounds punch THROUGH one extra target, and fly faster. (Reached via Gunnery OR Munitions.)', ok:p=>!p.noCannon, apply:p=>{ p.pierce += 1; p.bulletSpeedMul *= 1.2; } },
   { id:'g4', x:0, y:5, req:'g3',  fam:'gun', cost:640, sym:'\u25CE', name:'CRITICAL OPTICS',   desc:'+20% chance to land a critical hit for ×1.8 damage.',              ok:p=>!p.noCannon, apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.2); p.critMul = Math.max(p.critMul, 1.8); } },
   { id:'g5', x:0, y:6, req:'g4',  fam:'gun', cost:980, sym:'\u2726', name:'GAUSS DRIVER',      desc:'CAPSTONE \u2014 +45% cannon damage, +1 pierce, hypervelocity rounds, and critical hits now DETONATE on impact.', ok:p=>!p.noCannon, apply:p=>{ p.gunDmgMul *= 1.45; p.pierce += 1; p.bulletSpeedMul *= 1.2; p.critChance = Math.min(0.6, p.critChance + 0.05); p.critChain = true; } },
@@ -293,7 +307,7 @@ const TECH_TREE = [
   // ===== COMMAND group ===========================================================
   // ---- ECONOMY / ACE (score & research line, left of COMMAND) ----
   { id:'s1', x:8, y:2, req:'cmd', fam:'sc', tab:'armory', cost:150, sym:'\u2605', name:'ACE BONUS',          desc:'+25% score from everything.',                                      apply:p=>{ p.scoreMul *= 1.25; } },
-  { id:'s2', x:8, y:3, req:'s1',  fam:'sc', tab:'armory', cost:300, sym:'\u25C9', name:'FIELD ANALYTICS',    desc:'+25% research points (RP) earned.',                                apply:p=>{ p.rpMul *= 1.25; } },
+  { id:'s2', x:8, y:3, req:'s1',  fam:'sc', tab:'armory', cost:300, sym:'\u25C9', name:'FIELD ANALYTICS',    desc:'+15% research points (RP) earned.',                                apply:p=>{ p.rpMul *= 1.15; } },
   { id:'s3', x:8, y:4, req:'s2',  fam:'sc', tab:'armory', cost:470, sym:'\u00A4', name:'BOUNTY CONTRACTS',   desc:'Every kill you land pays a flat +6 RP bounty, and restock all ammo now.', apply:p=>{ p.rpPerKill += 6; p.bullets = p.maxBullets; p.missiles = p.maxMissiles; p.flares = p.maxFlares; } },
   { id:'s4', x:8, y:5, req:'s3',  fam:'sc', tab:'armory', cost:640, sym:'\u2630', name:'WAR CHEST',          desc:'+25% score, and fully restock guns, missiles & flares.',           apply:p=>{ p.scoreMul *= 1.25; p.bullets = p.maxBullets; p.missiles = p.maxMissiles; p.flares = p.maxFlares; } },
   { id:'s5', x:8, y:6, req:'s4',  fam:'sc', tab:'armory', cost:980, sym:'\u2742', name:'ACE PEDIGREE',       desc:'CAPSTONE \u2014 +35% score, +20% RP, and another +6 RP bounty per kill.', apply:p=>{ p.scoreMul *= 1.35; p.rpMul *= 1.2; p.rpPerKill += 6; } },
@@ -361,15 +375,18 @@ function shakeCam(amt) { camShake = Math.max(camShake, amt); }
 
 const keys = {};
 let mouseRight = false;
-const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
+const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyB','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
 const HUDFONT = "'Share Tech Mono', monospace";
 
 /* ---------------- AWACS support calls (F10) ---------------- */
-// Core (AWACS_COSTS, AWACS_USES_MAX, AWACS_JAM_TIME, pure awacsCall resolver) → core.js.
-// awacsUses below is the live per-sector counter (reset per sector + per run); combat.js awacsAction
-// wraps awacsCall reading {rp: player.tp, uses: awacsUses}.
+// Core (AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, pure awacsCall resolver) → core.js.
+// AWACS calls are now COOLDOWN-GATED (not RP-costed — balance pass 2026-06). awacsUses is the live
+// per-sector use counter (hard cap, reset per sector + per run); awacsLast is the per-key timestamp
+// (performance.now()/1000) of the last successful call, used for the cooldown gate (reset per sector).
+// combat.js awacsAction wraps awacsResolve reading {uses: awacsUses, last: awacsLast}.
 let awacsUses = { strike: 0, resupply: 0, jam: 0 };   // calls SPENT this sector (reset per sector + per run)
+let awacsLast = { strike: 0, resupply: 0, jam: 0 };   // sec-clock of last successful call per key (cooldown gate)
 
 /* Touch controls state */
 let isTouchEnabled = false;

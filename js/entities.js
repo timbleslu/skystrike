@@ -1040,7 +1040,9 @@ function createPlayer(idx) {
     execBlast: 0,                                     // HEADSMAN: executions detonate for this damage
     cheatDeath: false, _cheatUsed: false,             // TACTICS capstone: survive one lethal blow per wave
     tp: 0, tech: ['core'], techRepeat: {}, rpMul: 1,   // research points + purchased nodes (root owned free)
-    special: { cd: 0, max: SPECIAL_CD[j.id] || 15 },
+    special: { id: j.ability ? j.id : null, cd: 0, max: SPECIAL_CD[j.id] || 15 },   // SLOT 1 = native jet special (id null on FT-1 → inert)
+    special2: { id: null, cd: 0, max: 15 },            // SLOT 2 = equipped secondary special; startGame fills id+max from the saved equip
+
     damageFlash: 0, shake: 0, hurtDir: null, hurtT: 0,
     _gpwsT: 0, _missT: 0, _lockT: 0, _trailT: 0, _look: null, _lbPrev: false, _wakeT: 0,
   };
@@ -1110,7 +1112,7 @@ function createEnemy(type, pos, opts) {
     mesh = gk === 'aaa' ? buildAAA() : gk === 'radar' ? buildRadar() : gk === 'truck' ? buildTruck() : buildGround();
     hp = gk === 'radar' ? 110 : gk === 'truck' ? 45 : gk === 'aaa' ? 90 : 75;
   }
-  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 1.4; }
+  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // balance 2026-06: was *1.4 — keeps late-run swarms threatening (drones were one-tapped past ~wave 10)
   else if (type === 'bomber') { mesh = buildJet(0x8a9468, 0xffb060, SHAPES.BOMBER); mesh.scale.setScalar(1.7); hp = 240 + wave * 8; }
   else {
     const pool = opts.shapePool || FIGHTER_SHAPES;
@@ -1120,14 +1122,30 @@ function createEnemy(type, pos, opts) {
   }
   scene.add(mesh); mesh.position.copy(pos);
   if (mesh.userData.body) { mesh.userData.body.emissive = new THREE.Color(type === 'boss' ? 0x550033 : 0x3a0606); mesh.userData.body.emissiveIntensity = 0.7; }
+  // Fighter threat variety (balance pass 2026-06, cheap version): roll a coarse temperament so not every
+  // fighter flies the same "circle-then-strafe" routine. ~40% are AGGRESSIVE knife-fighters (sharper turn,
+  // tighter fire cadence); the rest are STANDOFF (wider, looser). turnRate range widened from rand(0.95,1.32)
+  // to a per-temperament split; fire cooldown tightened for the aggressive side. Full multi-archetype AI
+  // (evaders, decoy-users, coordinated pincers) is deferred — see balance-implementation-report.md.
+  const aggressive = type === 'fighter' && Math.random() < 0.4;
+  const fighterTurn = type === 'fighter'
+    ? (aggressive ? rand(1.18, 1.5) : rand(0.85, 1.15))   // aggressive out-turns the player harder; standoff is lazier
+    : rand(0.95, 1.32);                                   // bombers etc. keep the legacy roll
+  const fighterFireCd = aggressive ? rand(0.45, 1.1) : rand(0.6, 2);   // aggressive fighters re-engage faster
   const e = {
-    group: mesh, type, hp, maxHp: hp,
+    group: mesh, type, hp, maxHp: hp, aggressive, aimingPlayer: false,
     vel: new THREE.Vector3(), speed: type === 'ground' ? 0 : rand(150, 205),
-    turnRate: type === 'boss' ? 0.82 : type === 'ground' ? 0 : rand(0.95, 1.32),
+    turnRate: type === 'boss' ? 0.82 : type === 'ground' ? 0 : fighterTurn,
     logicQuat: mesh.quaternion.clone(), bank: 0, baseScale: mesh.scale.x,
-    fireCd: rand(0.6, 2), missileCd: rand(3, 7), flareCd: 0, trailT: 0,
+    fireCd: fighterFireCd, missileCd: rand(3, 7), flareCd: 0, trailT: 0,
     gunRun: 0, gunRunCd: rand(2.5, 5.5),
     orbitSign: Math.random() < 0.5 ? -1 : 1,
+    // fighter behavioral archetype (2026-06): duelist (baseline, keeps the `aggressive` sub-roll)
+    // / baiter (jukes to break player lock) / decoy (proactive flares + standoff) / pincer (pairs up
+    // to flank). Non-fighters always fly the duelist routine. jinkCd/pincerPartner are per-archetype
+    // scratch used by updateEnemy; pickArchetype is the PURE selector in core.js.
+    archetype: type === 'fighter' ? pickArchetype(Math.random, wave, { elite: !!(opts && opts.elite) }) : 'duelist',
+    jinkCd: 0, pincerPartner: null,
     state: 'engage', alive: true, isInCloud: false, hitFlash: 0,
     marker: type === 'drone' ? null : makeMarker(type),
     callsign: type === 'fighter' ? genCallsign() : null,
@@ -1255,11 +1273,30 @@ function updateEnemy(e, dt) {
     else if (e.marker && !e.marker.visible) e.marker.visible = true;
   }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
+  // ----- archetype scratch (2026-06): all behavior below is gated on e.archetype, so duelists run the
+  // unchanged routine. lockedByPlayer = the player is acquiring or fully locked onto THIS enemy. -----
+  e.jinkCd -= dt;
+  const lockedByPlayer = (player.lockTarget === e) || (player.lockedTarget === e);
+  if (e.archetype === 'pincer') {
+    // lazy pairing: createEnemy spawns one enemy per call, so partners link up here. Find another
+    // partnerless live pincer and bracket the player by taking the OPPOSITE orbit sign.
+    if (!e.pincerPartner || !e.pincerPartner.alive) {
+      e.pincerPartner = null;
+      for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (o !== e && o.alive && o.type === 'fighter' && o.archetype === 'pincer' && (!o.pincerPartner || !o.pincerPartner.alive)) { e.pincerPartner = o; o.pincerPartner = e; break; } }
+    }
+    if (e.pincerPartner && e.pincerPartner.alive) e.orbitSign = pincerSign(e.pincerPartner.orbitSign);
+    // a partnerless pincer just flies the duelist routine (no flank) — exactly per spec.
+  } else if (e.archetype === 'decoy' && lockedByPlayer && e.flareCd <= 0 && e.flareAmmo > 0) {
+    // proactive decoy: pop chaff the MOMENT it's locked (not only when a missile is already inbound),
+    // making the player's missiles unreliable vs it. Counter: close to gun range.
+    enemyFlares(e); e.flareCd = 2.3;
+  }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;
   if (incoming) e.state = 'evade';
   else if (dist < NEAR) e.state = 'extend';
   else if (prev === 'extend' && dist < PREF * 1.25) e.state = 'extend';
+  else if (e.archetype === 'decoy' && lockedByPlayer && dist < PREF * 1.6) e.state = 'extend';   // decoy keeps distance while locked
   else e.state = 'engage';
 
   let desired = t2;
@@ -1287,11 +1324,25 @@ function updateEnemy(e, dt) {
   }
   const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
   if (agl < 220) desired.y = Math.max(desired.y, 0.45);
+  // ----- baiter break-turn (2026-06): when the player is locking this enemy, juke HARD sideways on a
+  // short cooldown to break the lock, then settle back. Adds a big lateral offset to the heading +
+  // a transient turn-rate boost so the juke actually snaps. Counter: stay on it / lead the juke. -----
+  let turnMul = 1;
+  if (e.archetype === 'baiter' && shouldJink({ lockedByPlayer, jinkCd: e.jinkCd })) {
+    e.jinkCd = rand(1.4, 2.2);            // re-engage window between jukes (player gets a beat to re-acquire)
+    e.orbitSign = -e.orbitSign;           // flip the break direction each juke (unpredictable)
+    e._jinkT = 0.5;                       // hold the boosted turn for the snap
+  }
+  if (e._jinkT > 0) {
+    e._jinkT -= dt;
+    t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * 1.1); desired.add(t5);   // hard lateral break
+    turnMul = 1.6;
+  }
   desired.normalize();
   if (e.elite && e.sprintTimer > 0) { e.sprintTimer -= dt; e.speed = lerp(e.speed, 340, dt * 2.5); }
 
   dirToQuat(desired, q1);
-  e.logicQuat.rotateTowards(q1, e.turnRate * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun makes them wallow
+  e.logicQuat.rotateTowards(q1, e.turnRate * turnMul * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun makes them wallow; baiter jukes boost turnMul
   const nf = fwdQ(e.logicQuat, t4);
   const cross = t5.copy(fwd).cross(nf);
   const wantBank = clamp(-cross.y * 6, -1, 1);
@@ -1315,6 +1366,7 @@ function updateEnemy(e, dt) {
   const jammed = player.jammer > 0;
 
   const visible = !player.stealth;
+  e.aimingPlayer = false;   // recomputed below when the enemy is an active gun threat to the player this frame
   if (e.state === 'engage' && visible && !scrambled) {
     const ang = nf.angleTo(toP);
     const df = DIFFS[difficulty].fire, dms = DIFFS[difficulty].missile;
@@ -1323,12 +1375,14 @@ function updateEnemy(e, dt) {
     e.fireCd -= dt;
     const gunCone = e.gunRun > 0 ? 0.34 : 0.24;
     const gunRange = e.type === 'boss' ? 2200 : 1750;
+    // threat reticle (§4b): flag when this fighter/boss is aligned + in gun range — i.e. aiming at the player NOW
+    e.aimingPlayer = enemyIsAimingPlayer({ ang, dist, gunCone, gunRange, engaged: true, canSee: visible });
     if (ang < gunCone && dist < gunRange && e.fireCd <= 0 && e.bulletAmmo > 0) {
       const wm = (wingmen.length && Math.random() < 0.34) ? firstAliveWingman() : null;
       enemyFireGun(e, wm);
       if (e.type === 'boss') { enemyFireGun(e); enemyFireGun(e); }
       else if (e.elite && e.gunRun > 0 && dist < 900) { enemyFireGun(e); }
-      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr;
+      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr * (e.aggressive ? 0.78 : 1);   // aggressive fighters keep up a tighter cadence (balance 2026-06)
     }
     // ----- missiles (jamming shuts down launches) -----
     e.missileCd -= dt;

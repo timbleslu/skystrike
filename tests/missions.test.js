@@ -23,7 +23,7 @@ assert.ok(itc.timer > 0, 'intercept has a countdown');
 
 const esc = startMission('escort', 5);
 assert.strictEqual(esc.params.convoy, 4, 'escort spawns a 4-unit convoy');
-assert.strictEqual(esc.target, 2, 'escort needs half the convoy alive');
+assert.strictEqual(esc.target, 3, 'escort needs all-but-one of the convoy alive (lose <=1 of 4; balance 2026-06)');
 
 const def = startMission('defend', 5);
 assert.ok(def.timer > 0, 'defend holds for a duration');
@@ -56,14 +56,19 @@ for (let k = 0; k < 5; k++) missionKill(sm, {});
 tickMission(sm, 0.016);
 assert.strictEqual(sm.status, 'won', 'sweep won when wave cleared');
 
-// ===== escort.winFail: failed when survivors<threshold; won at exit =====
-let em = startMission('escort', 5);   // convoy 4, target 2 survivors
-em.params.survivors = 1;              // two trucks lost -> below threshold
+// ===== escort.winFail: failed when survivors<threshold; won at exit (balance 2026-06: target 3, lose <=1 of 4) =====
+let em = startMission('escort', 5);   // convoy 4, target 3 survivors
+em.params.survivors = 2;              // two trucks lost -> below the tightened threshold
 tickMission(em, 0.016);
-assert.strictEqual(em.status, 'failed', 'escort failed when too many convoy units die');
+assert.strictEqual(em.status, 'failed', 'escort failed when more than one convoy unit dies');
+
+let emOk = startMission('escort', 5); // losing exactly one (survivors 3) is still within tolerance
+emOk.params.survivors = 3;
+tickMission(emOk, 0.016);
+assert.strictEqual(emOk.status, 'active', 'escort still active after losing only one unit (not yet exited)');
 
 let em2 = startMission('escort', 5);
-em2.params.exited = true;             // convoy reached its exit, survivors still >= target
+em2.params.exited = true;             // convoy reached its exit, survivors still >= target (4 >= 3)
 tickMission(em2, 0.016);
 assert.strictEqual(em2.status, 'won', 'escort won at convoy exit');
 

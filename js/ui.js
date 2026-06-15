@@ -93,6 +93,20 @@ function pickGunTarget() {
 function hudK() { return (typeof hudScale === 'number') ? Math.max(0.6, Math.min(1.6, hudScale)) : 1; }
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
+// JUICE: count a number up to `target` over `ms`, formatting each frame via fmt(v)→string.
+// Cancels any prior count-up on the same element (stored on el._cuRaf) so re-opens don't stack tweens.
+function countUp(el, target, ms, fmt) {
+  if (!el) return;
+  if (el._cuRaf) cancelAnimationFrame(el._cuRaf);
+  const t0 = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - t0) / ms);
+    const eased = 1 - (1 - p) * (1 - p);   // ease-out
+    el.textContent = fmt(target * eased);
+    if (p < 1) el._cuRaf = requestAnimationFrame(step); else { el.textContent = fmt(target); el._cuRaf = 0; }
+  };
+  el._cuRaf = requestAnimationFrame(step);
+}
 
 // Localized active-condition label (incl. night), or '' for plain daylight-clear (nothing to flag).
 function weatherLabel() {
@@ -111,7 +125,7 @@ function cacheEl() {
   el = {
     hp: g('hpfill'), thr: g('thrfill'), shd: g('shfill'), spd: g('spd'), alt: g('alt'),
     score: g('score'), wave: g('wave'), combo: g('combo'), tp: g('tp'),
-    flares: g('flares'), missiles: g('missiles'), bullets: g('bullets'), special: g('special'),
+    flares: g('flares'), missiles: g('missiles'), bullets: g('bullets'), special: g('special'), special2: g('special2'),
     hpbar: g('hpbar'), banner: g('banner'), sidebar: g('wingSidebar'),
     wPull: g('w_pull'), wMissile: g('w_missile'), wHighG: g('w_highg'), wStealth: g('w_stealth'), wLock: g('w_lock'), wDrone: g('w_drone'),
     vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
@@ -234,10 +248,16 @@ function updateAwacsHud() {
   const show = state === 'playing' && !paused;
   el.style.display = show ? 'flex' : 'none';
   if (!show) return;
+  const now = performance.now() / 1000;
   const chip = (key, cntId, costId) => {
     const rem = Math.max(0, (AWACS_USES_MAX[key] || 0) - ((awacsUses && awacsUses[key]) || 0));
     const c = g(cntId); if (c) c.textContent = '×' + rem;
-    const k = g(costId); if (k) k.textContent = (AWACS_COSTS[key] || 0) + ' RP';
+    // AWACS is cooldown-gated, not RP-costed (balance 2026-06): the `<i>` shows the live cooldown
+    // remaining (Ns) when on cooldown, else the call's cooldown length as a hint (e.g. "30s").
+    const cd = AWACS_COOLDOWNS[key] || 0;
+    const last = (awacsLast && awacsLast[key]) || 0;
+    const left = last > 0 ? Math.max(0, cd - (now - last)) : 0;
+    const k = g(costId); if (k) k.textContent = left > 0 ? Math.ceil(left) + 's' : cd + 's';
   };
   chip('strike', 'awacsUsesStrike', 'awacsCostStrike');
   chip('resupply', 'awacsUsesResupply', 'awacsCostResupply');
@@ -253,7 +273,13 @@ function updateDom(dt) {
   el.score.textContent = player.score.toLocaleString();
   if (el.tp) { el.tp.textContent = Math.floor(player.tp).toLocaleString(); el.tp.style.color = player.tp >= 120 ? '#ffe14d' : ''; }
   el.wave.textContent = wave;
-  el.combo.textContent = player.combo > 1 ? 'x' + player.combo : '';
+  // JUICE: combo chip scale-pops on each increment (reflow-retrigger pattern, like showBanner). _comboShown tracks the last drawn value.
+  const comboTxt = player.combo > 1 ? 'x' + player.combo : '';
+  if (comboTxt !== el.combo.textContent) {
+    el.combo.textContent = comboTxt;
+    if (player.combo > 1 && player.combo > (el._comboShown || 0)) { el.combo.classList.remove('pop'); void el.combo.offsetWidth; el.combo.classList.add('pop'); }
+    el._comboShown = player.combo;
+  }
   el.flares.textContent = player.flares;
   el.missiles.textContent = player.missiles;
   if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
@@ -262,6 +288,21 @@ function updateDom(dt) {
   if (!hasSpecial(player.jet)) { el.special.textContent = t('hud.noSpecial'); el.special.classList.remove('ready'); }
   else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + t('hud.ready'); el.special.classList.add('ready'); }
   else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + t('hud.sec'); el.special.classList.remove('ready'); }
+  // SLOT 2 chip (feature #3): hidden when nothing equipped, else mirrors the slot-1 name + READY/countdown.
+  // The mobile SPC2 button mirrors the chip's visibility (only shown when something is equipped).
+  if (el.special2) {
+    const s2 = player.special2;
+    const equipped = !!(s2 && s2.id);
+    if (!equipped) { el.special2.style.display = 'none'; }
+    else {
+      el.special2.style.display = '';
+      const j2 = JETS.find(j => j.id === s2.id);
+      const nm = j2 ? jetText(j2, 'ability') : s2.id;
+      if (s2.cd <= 0) { el.special2.textContent = nm + ' \u25B8 ' + t('hud.ready'); el.special2.classList.add('ready'); }
+      else { el.special2.textContent = nm + ' \u25B8 ' + Math.ceil(s2.cd) + t('hud.sec'); el.special2.classList.remove('ready'); }
+    }
+    const tb2 = g('tb-spc2'); if (tb2) tb2.style.display = (equipped && isTouchEnabled) ? '' : 'none';
+  }
   updateWingmanSidebar();
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
@@ -271,8 +312,8 @@ function updateDom(dt) {
   const lockedNow = !!(player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1);
   const acquiringNow = !lockedNow && player.lockTarget && player.lockTarget.alive && player.lockProgress > 0.02;
   tog(el.wLock, lockedNow || acquiringNow);
-  if (lockedNow) { el.wLock.textContent = t('hud.targetLocked'); el.wLock.style.color = '#ff5a5a'; }
-  else if (acquiringNow) { el.wLock.textContent = t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffd24d'; }
+  if (lockedNow) { el.wLock.textContent = t('hud.targetLocked'); el.wLock.style.color = '#ff394b'; }   /* --danger: LOCKED payoff */
+  else if (acquiringNow) { el.wLock.textContent = t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffe14d'; }   /* --reward: lock building */
   el.hpbar.classList.toggle('low', player.hp / player.maxHp < 0.3);
 
   let boss = null;
@@ -314,6 +355,36 @@ function reqSatisfied(node, ownsFn, byId, groundOn) {
   if (!req) return true;
   return Array.isArray(req) ? req.some(met) : met(req);            // OR-gate: any one parent unlocks
 }
+/* ---------------- FRONTIER DRAFT (feature 4) ----------------
+   Run-scoped draft state. The full tech tree still renders (positions/connectors unchanged); only a
+   few currently-unlockable FRONTIER nodes are OFFERED as buyable each visit. PIN biases the offer
+   toward a goal's prereq path; REROLL re-rolls once per visit; PITY force-includes a long-skipped node.
+   Pure draft logic lives in core.js (frontierEligible/prereqPath/draftOffer); this is just the glue.
+   Reset in startGame(). Scoped to the TECH tab only — the ARMORY tab keeps its full-list behaviour. */
+let draftState = { seed: 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {} };
+function resetDraftState() {
+  draftState = { seed: (Math.random() * 0x7fffffff) | 0, visit: 0, offer: [], drafted: false, rerollUsed: false, pin: null, pity: {} };
+}
+function inOffer(id) { return draftState.offer.indexOf(id) >= 0; }
+// the per-visit frontier: currently-unlockable, unowned (repeatables stay), applicable tech-tab nodes.
+function draftFrontier() {
+  const treeNodes = TECH_TREE.filter(n => !n.tab || n.tab === 'tech');
+  return frontierEligible(treeNodes, {
+    owns,
+    reqSatisfied: (n) => reqSatisfied(n, owns, TECH_BY_ID, groundWar),
+    applicable: (n) => nodeState(n) !== 'hidden' && nodeState(n) !== 'na' && nodeState(n) !== 'bought',
+  });
+}
+// roll the offer for this visit. `sub` salts the seed (reroll passes a non-zero salt for a fresh 3).
+function rollDraftOffer(sub) {
+  const frontier = draftFrontier();
+  const pinPath = draftState.pin ? prereqPath(draftState.pin, TECH_BY_ID, owns).filter(inFrontierOf(frontier)) : [];
+  const rng = makeRng((draftState.seed ^ (draftState.visit * 0x9e3779b1) ^ ((sub || 0) * 0x85ebca6b)) | 0);
+  const res = draftOffer({ frontier, pinPath, pity: draftState.pity, rng, n: DRAFT_OFFER_N });
+  draftState.offer = res.offer;
+  draftState.pity = res.pity;
+}
+function inFrontierOf(frontier) { const s = new Set(frontier); return (id) => s.has(id); }
 function nodeState(node) {
   if (node.ground && !groundWar) return 'hidden';
   if (!node.repeat && owns(node.id)) return 'bought';
@@ -324,6 +395,12 @@ function nodeState(node) {
 function openTechScreen() {
   if (!player) return;
   techTab = 'tech';
+  // FRONTIER DRAFT: new visit → roll a fresh 3-node offer (deterministic per run seed + visit index),
+  // arm the reroll, and clear the "already drafted this visit" flag.
+  draftState.visit++;
+  draftState.drafted = false;
+  draftState.rerollUsed = false;
+  rollDraftOffer(0);
   document.querySelectorAll('.tech-tab').forEach(b => { b.classList.toggle('active', b.dataset.tab === 'tech'); b.onclick = () => switchTechTab(b.dataset.tab); });
   renderTechTree(true);
   choosingUpgrade = true; paused = true;
@@ -331,6 +408,16 @@ function openTechScreen() {
   g('upgrade').classList.add('show');
 }
 function nodeXY(node) { return { left: TECH_PAD + node.x * TECH_COLW, top: TECH_PAD + node.y * TECH_ROWH }; }
+// FRONTIER DRAFT display gate: only OFFERED nodes are buyable this visit. A node that would otherwise
+// be 'avail'/'cantafford' but isn't in the offer renders as the non-buyable 'lockvisit' state (shown,
+// not buyable). Owned/bought/locked/na/hidden pass through unchanged.
+function draftDisplayState(node, st) {
+  if (st === 'avail' || st === 'cantafford') {
+    if (inOffer(node.id)) return st === 'avail' ? 'avail' : 'cantafford';
+    return 'lockvisit';   // visible-but-locked-this-visit (not on this visit's frontier offer)
+  }
+  return st;
+}
 function renderTechTree(recenter) {
   const rv = g('rpval'); if (rv) rv.textContent = Math.floor(player.tp).toLocaleString();
   const grid = g('techgrid'); if (!grid) return;
@@ -352,7 +439,9 @@ function renderTechTree(recenter) {
       const midY = (pb + ct) / 2;
       const lit = owns(edge.id) && (n.repeat ? repeatCount(n) > 0 : owns(n.id));
       const open = owns(edge.id) && nodeState(n) !== 'locked';
-      const col = lit ? '#46ff8c' : open ? 'rgba(25,240,212,.55)' : 'rgba(91,138,134,.3)';
+      const next = open && nodeState(n) === 'avail';   // parent owned + child affordable → light the path forward
+      // tokens: --ok (both owned) · --primary-bright (affordable next) · --primary low (reachable) · --hairline (dormant)
+      const col = lit ? '#46ff8c' : next ? '#0bd5ff' : open ? 'rgba(25,240,212,.4)' : 'rgba(91,138,134,.34)';
       const dash = edge.and ? ' stroke-dasharray="7,5"' : '';
       svg += '<path d="M' + px + ',' + pb + ' V' + midY + ' H' + cx + ' V' + ct + '" fill="none" stroke="' + col + '" stroke-width="' + (lit ? 3 : 2) + '"' + dash + '/>';
     }
@@ -360,14 +449,20 @@ function renderTechTree(recenter) {
   svg += '</svg>';
   let nodes = '';
   for (const n of treeNodes) {
-    const st = nodeState(n);
-    if (st === 'hidden') continue;
+    const raw = nodeState(n);
+    if (raw === 'hidden') continue;
+    const st = draftDisplayState(n, raw);   // FRONTIER DRAFT: gate buyability to this visit's offer
     const p = nodeXY(n), ac = FAM_C[n.fam] || '#19f0d4';
     const cost = nodeCost(n);
-    const costTxt = n.id === 'core' ? t('tech.core') : st === 'bought' ? t('tech.owned') : st === 'na' ? t('tech.na') : cost + ' RP';
+    const costTxt = n.id === 'core' ? t('tech.core') : raw === 'bought' ? t('tech.owned') : raw === 'na' ? t('tech.na')
+      : st === 'lockvisit' ? t('tech.lockVisit') : cost + ' RP';
     const badge = n.repeat ? '<span class="tn-rep">\u00D7' + repeatCount(n) + '</span>' : '';
-    nodes += '<div class="tnode ' + st + (n.repeat ? ' rep' : '') + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
+    const offered = inOffer(n.id) && (raw === 'avail' || raw === 'cantafford');   // one of the 3 frontier picks
+    const pinned = draftState.pin === n.id;
+    const cls = 'tnode ' + st + (n.repeat ? ' rep' : '') + (offered ? ' offered' : '') + (pinned ? ' pinned' : '');
+    nodes += '<div class="' + cls + '" data-id="' + n.id + '" style="left:' + p.left + 'px;top:' + p.top + 'px;--ac:' + ac + '">' +
       badge +
+      (pinned ? '<span class="tn-pin">\u25C8</span>' : '') +
       '<div class="tn-sym">' + n.sym + '</div>' +
       '<div class="tn-name">' + techText(n, 'name') + '</div>' +
       '<div class="tn-desc">' + techText(n, 'desc') + '</div>' +
@@ -375,14 +470,44 @@ function renderTechTree(recenter) {
     '</div>';
   }
   grid.innerHTML = '<div id="techcanvas" style="width:' + W + 'px;height:' + H + 'px">' + svg + nodes + '</div>';
-  // wire clicks for purchasable nodes
+  // wire clicks: OFFERED+affordable nodes buy (draft pick); any other non-bought tree node toggles the PIN goal.
   const cv = g('techcanvas');
-  cv.querySelectorAll('.tnode.avail').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } const id = el.getAttribute('data-id'); buyNode(TECH_BY_ID[id]); }));
+  cv.querySelectorAll('.tnode.avail.offered').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } const id = el.getAttribute('data-id'); buyNode(TECH_BY_ID[id]); }));
+  cv.querySelectorAll('.tnode:not(.offered):not(.bought)').forEach(el => el.addEventListener('click', () => { if (techPanMoved) { techPanMoved = false; return; } togglePin(el.getAttribute('data-id')); }));
+  renderDraftBar();
   if (recenter) {
     const rootCX = TECH_PAD + 3 * TECH_COLW + TECH_NODEW / 2;
     grid.scrollLeft = Math.max(0, rootCX - grid.clientWidth / 2);
     grid.scrollTop = 0;
   }
+}
+// FRONTIER DRAFT control bar: pin readout + reroll button state. Lives in #draftBar (index.html).
+function renderDraftBar() {
+  const pinEl = g('draftPin');
+  if (pinEl) {
+    pinEl.textContent = draftState.pin
+      ? tf('tech.pinned', { name: techText(TECH_BY_ID[draftState.pin], 'name') })
+      : t('tech.pinHint');
+    pinEl.classList.toggle('active', !!draftState.pin);
+  }
+  const rr = g('techReroll');
+  if (rr) { rr.disabled = draftState.rerollUsed; rr.textContent = t('tech.reroll'); }
+}
+// PIN: clicking a non-offered tree node sets it as the goal (offers bias toward its prereq path).
+// Clicking the already-pinned node clears the pin. Pin persists across visits within the run.
+function togglePin(id) {
+  if (!id || !TECH_BY_ID[id]) return;
+  draftState.pin = (draftState.pin === id) ? null : id;
+  audio.ui();
+  if (techTab === 'tech') renderTechTree(false);   // re-render to show/clear the pin marker + readout
+}
+// REROLL: once per visit, re-roll this visit's offer with a fresh sub-seed (pity + pin still applied).
+function rerollDraft() {
+  if (draftState.rerollUsed) { audio.ui(); return; }
+  draftState.rerollUsed = true;
+  rollDraftOffer(draftState.visit * 7 + 1);   // non-zero salt → a different draw than the visit's first roll
+  audio.ui();
+  if (techTab === 'tech') renderTechTree(false);
 }
 function renderArmory() {
   if (!player) return;
@@ -425,6 +550,8 @@ let pendingWingNode = null;
 function buyNode(node) {
   if (!choosingUpgrade || !player || !node) return;
   if (nodeState(node) !== 'avail') { audio.ui(); return; }
+  // FRONTIER DRAFT: on the TECH tab, only this visit's 3 offered nodes are buyable (armory is unrestricted).
+  if (techTab === 'tech' && !inOffer(node.id)) { audio.ui(); return; }
   if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
   commitNode(node);
 }
@@ -437,7 +564,15 @@ function commitNode(node) {
   else { player.tech.push(node.id); player.upgrades.push(node.id); }
   audio.power(); empFlash = 0.26;
   showBanner(tf('banner.researched', { name: techText(node, 'name') }));
-  techTab === 'armory' ? renderArmory() : renderTechTree(false);
+  // FRONTIER DRAFT: picking an offered TECH-tab node is the visit's ONE draft pick → commit + deploy.
+  // (Armory keeps buy-multiple; only the draft tab is pick-exactly-one.)
+  if (techTab === 'tech') {
+    draftState.pity[node.id] = 0;   // a picked frontier node clears its pity debt
+    draftState.drafted = true;
+    deployFromTech();
+    return;
+  }
+  renderArmory();
 }
 
 function openWingPicker(node) {
@@ -470,7 +605,8 @@ function openOpMap() {
   const wrap = g('opStages'); if (!wrap) return;
   wrap.innerHTML = opMap.map((stage, si) =>
     '<div class="op-stage">' + stage.map((s, i) => {
-      const cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
+      let cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
+      if (s === 'FINAL') cls += ' boss';   // FINAL/boss node gets the boss-magenta accent (§5f)
       return '<div class="' + cls + '" data-s="' + si + '" data-i="' + i + '">' + t('op.' + s) + '</div>';
     }).join('') + '</div>'
   ).join('');
@@ -545,6 +681,7 @@ function buildHangar() {
   const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
   g('redeploy').addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
+  const trr = g('techReroll'); if (trr) trr.addEventListener('click', rerollDraft);   // FRONTIER DRAFT: reroll the 3 offers (once/visit)
   const tg = g('techgrid');
   if (tg) {   // drag anywhere to pan the tech tree (scroll wheel & touch still work too)
     let panning = false, sx = 0, sy = 0, sl = 0, stp = 0;
@@ -701,6 +838,34 @@ function initOnboarding() {
   g('langSelect').classList.add('show');
 }
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
+
+/* ---------------- SLOT-2 special equip (feature #3) ----------------
+   The set of jet ids the player has UNLOCKED, used as the source pool for slot-2 equippable
+   specials (mirrors the hangar's own jetUnlocked() gate so the picker only offers owned airframes). */
+function unlockedJetIds() {
+  const out = [];
+  for (let k = 0; k < JETS.length; k++) if (jetUnlocked(JETS[k].id)) out.push(JETS[k].id);
+  return out;
+}
+// equipSpecial2(p, id, currentJetId): fill p.special2 from a chosen equip id, validated against the
+// equippable pool (unlocked, real ability, not the current jet). Stale/invalid/null → empty inert slot.
+// Cooldown starts ready (cd=0); max is the raw SPECIAL_CD (NO OVERCLOCK/GHOST mods — those are slot-1 only).
+function equipSpecial2(p, id, currentJetId) {
+  if (!p) return;
+  const ok = isEquippableSpecial(id, unlockedJetIds(), JETS, currentJetId);
+  p.special2 = ok
+    ? { id: id, cd: 0, max: specialCooldownMax(id, SPECIAL_CD, 15) }
+    : { id: null, cd: 0, max: 15 };
+}
+// setSpecial2(id): hangar-side setter — persists the equip (via saveSettings, the selectedJet seam)
+// and re-renders the card so the chosen ability shows. `null`/'' clears the slot.
+function setSpecial2(id) {
+  special2Id = (id && id !== '') ? id : null;
+  saveSettings();
+  renderJetCard(selectedJet);
+  if (audio.on) audio.ui();
+}
+
 function renderJetCard(i) {
   const j = JETS[i];
   g('jetCard').innerHTML =
@@ -727,26 +892,65 @@ function renderJetCard(i) {
       '</div>' +
       '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
       '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
+      '<div id="special2Row" class="special2row"></div>' +
       '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
+  renderSpecial2Picker(i);
   renderJetMeta(i);
+}
+// SLOT-2 equip picker (feature #3): a compact <select> offering every UNLOCKED jet's ability except
+// this jet's own (that is slot 1). Persists via setSpecial2 → saveSettings (the selectedJet seam).
+function renderSpecial2Picker(i) {
+  const wrap = g('special2Row'); if (!wrap) return;
+  const pool = equippableSpecials(unlockedJetIds(), JETS, JETS[i].id);
+  if (!pool.length) {                                   // nothing to equip yet — surface why, no control
+    wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
+                     '<div class="cabilitydesc">' + t('card.special2NoneAvail') + '</div>';
+    return;
+  }
+  // drop a stale saved equip from the rendered selection (e.g. now-current jet / locked) without persisting
+  const curId = isEquippableSpecial(special2Id, unlockedJetIds(), JETS, JETS[i].id) ? special2Id : '';
+  let opts = '<option value=""' + (curId === '' ? ' selected' : '') + '>' + t('card.special2None') + '</option>';
+  for (let k = 0; k < pool.length; k++) {
+    const p = pool[k], jk = JETS.find(j => j.id === p.id);
+    const nm = jk ? jetText(jk, 'ability') : p.name;
+    opts += '<option value="' + p.id + '"' + (curId === p.id ? ' selected' : '') + '>' + nm + '</option>';
+  }
+  let html = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
+             '<select id="special2Sel" class="special2sel">' + opts + '</select>';
+  const chosen = curId ? JETS.find(j => j.id === curId) : null;
+  html += '<div class="cabilitydesc">' + (chosen ? jetText(chosen, 'abilityDesc') : t('card.special2Hint')) + '</div>';
+  wrap.innerHTML = html;
+  const sel = g('special2Sel');
+  if (sel) sel.addEventListener('change', e => setSpecial2(e.target.value));
+}
+// §5c: LAUNCH carries the current loadout as a subtitle line (difficulty · env · mode)
+function refreshLaunchSub() {
+  const sub = g('launchSub'); if (!sub) return;
+  const diffKey = ['diff.ROOKIE', 'diff.VETERAN', 'diff.ACE'][difficulty] || 'diff.VETERAN';
+  const todKey = ['tod.DAY', 'tod.DUSK', 'tod.NIGHT'][typeof timeOfDay === 'number' ? timeOfDay : 0] || 'tod.DAY';
+  const modeKey = opMode ? 'hangar.operation' : 'hangar.endless';
+  sub.textContent = t(diffKey) + ' · ' + t(todKey) + ' · ' + t(modeKey);
 }
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === difficulty));
   const dd = g('diffdesc'); if (dd) dd.textContent = DIFFS[difficulty].desc;
+  refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
 }
 function setTimeOfDay(t) {
   applyTimeOfDay(t);
   document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('on', +b.dataset.t === timeOfDay));
+  refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
 }
 function setOpMode(m) {
   opMode = !!m;
   document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', (+b.dataset.m === 1) === opMode));
+  refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
 }
@@ -880,12 +1084,15 @@ function startGame(i, daily, rush) {
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
   if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
+  equipSpecial2(player, special2Id, JETS[i].id);   // feature #3: load the equipped SLOT-2 special (or leave empty/inert if none/stale); slot 1 untouched
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0;
   hitMarkers.length = dmgNumbers.length = 0;
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
+  bossWaveNext = 0; bossWaveActive = false; lastWaveWasBoss = false;   // Endless boss schedule (balance 2026-06); seeded lazily in nextWave
+  player._cheatUsed = false;   // APEX PREDATOR cheat-death is now ONCE PER RUN (balance 2026-06); reset here, NOT per wave
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
@@ -894,7 +1101,9 @@ function startGame(i, daily, rush) {
   if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS support calls fresh each run (F10); nextWave also refreshes per sector
+  resetDraftState();   // FRONTIER DRAFT (feature 4): fresh run seed + clear pin/pity/visit counter
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap fresh each run (F10); nextWave also refreshes per sector
+  awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clock fresh each run (cooldown-gated, balance 2026-06)
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)
@@ -916,8 +1125,11 @@ function gameOver() {
   if (h2d) h2d.clearRect(0, 0, W, H);
   endRun(t('banner.missionFailed'));
 }
-// shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title
-function endRun(title) {
+// shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title.
+// `win` true = success outcome (debrief eyebrow turns --ok via .gowrap.win), default false = failure (--danger).
+function endRun(title, win) {
+  const gw = g('gameover').querySelector('.gowrap');
+  if (gw) gw.classList.toggle('win', !!win);
   const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
   if (player.score > bestScore) { bestScore = player.score; saveBest(); }
   if (dailyMode) {   // record today's daily best (attempt already marked played in startDaily); keep the higher score
@@ -943,10 +1155,16 @@ function endRun(title) {
   const achRes = checkAchievements(run, player);
   bankSP(gradedAward);                 // achievement SP is banked inside grantAch
   const total = gradedAward + (achRes.sp || 0);
-  const spd = g('go_sp'); if (spd) spd.textContent = '+' + total.toLocaleString();
+  const spd = g('go_sp');
+  if (spd) {
+    // JUICE: SP earned ticks up from 0 over --dur-slow (the reward count-up). Reduced-motion sets it flat.
+    if (prefersReducedMotion() || total <= 0) { spd.textContent = '+' + total.toLocaleString(); }
+    else { countUp(spd, total, 560, v => '+' + Math.round(v).toLocaleString()); }
+  }
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
-  // render grade letter + bonus
+  // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low)
   const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
+  if (gw) gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A'));
   // ---- star objectives: compute this run's stars, fold into the per-jet best, render on #gameover ----
   const stars = evalStars(run, player);
   const jetId = (player && player.jet && player.jet.id) || null;
@@ -968,6 +1186,9 @@ function endRun(title) {
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
+  // JUICE: retrigger the staged reward reveal (grade snap → stars → SP rise) each time the debrief opens.
+  if (gw && !prefersReducedMotion()) { gw.classList.remove('reveal'); void gw.offsetWidth; gw.classList.add('reveal'); }
+  else if (gw) gw.classList.add('reveal');
 }
 function operationComplete() {
   if (state !== 'playing') return;
@@ -977,7 +1198,7 @@ function operationComplete() {
   // F15: clearing the campaign once unlocks Boss Rush mode (persisted; healed for legacy saves)
   if (meta && !meta.bossRushUnlocked) { meta.bossRushUnlocked = true; saveMeta(); }
   showBanner(t('banner.operationComplete'));
-  endRun(t('banner.operationComplete'));
+  endRun(t('banner.operationComplete'), true);
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // reflect the new unlock in the hangar
 }
 
@@ -1004,7 +1225,7 @@ function bossRushComplete() {
   state = 'dead';
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   showBanner(tf('bossrush.cleared', { t: bossRushTimeStr(secs) }));
-  endRun(t('bossrush.title'));
+  endRun(t('bossrush.title'), true);
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
 }
 // mm:ss for the leaderboard
@@ -1015,6 +1236,7 @@ function refreshBossRushEntry() {
   const unlocked = !!(meta && meta.bossRushUnlocked);
   btn.disabled = !unlocked;
   btn.classList.toggle('disabled', !unlocked);
+  btn.classList.toggle('is-locked', !unlocked);   // §3l: designed locked treatment, not just dimmed
   btn.textContent = unlocked ? t('bossrush.start') : t('bossrush.locked');
   const note = g('bossRushNote');
   if (note) {
@@ -1113,13 +1335,14 @@ function loadSettings() {
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
     if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
+    if (typeof s.special2Id === 'string' || s.special2Id === null) special2Id = s.special2Id;   // feature #3: equipped SLOT-2 special (validated against the unlocked pool at equip/launch time)
   } catch (e) {}
 }
 // retranslate all static DOM text + re-render dynamic panels for the current LANG
 function setTxt(id, str) { const e = g(id); if (e) e.textContent = str; }
 function applyLang() {
   // language-select / onboarding screens
-  setTxt('langTitle', t('lang.title')); setTxt('langSub', t('lang.sub'));
+  setTxt('langTagline', t('lang.tagline')); setTxt('langBegin', t('lang.begin'));
   setTxt('obTitle', t('onboard.title')); setTxt('obSub', t('onboard.sub'));
   setTxt('obFlightH', t('onboard.flight')); setTxt('obFlightK', t('onboard.flightKeys'));
   setTxt('obCombatH', t('onboard.combat')); setTxt('obCombatK', t('onboard.combatKeys'));
@@ -1133,7 +1356,11 @@ function applyLang() {
   setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment')); setTxt('lblMode', t('hangar.mode'));
   setTxt('mbtnEndless', t('hangar.endless')); setTxt('mbtnOperation', t('hangar.operation'));
   setTxt('rbTitle', t('hangar.rivalBoard'));
-  setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
+  // launch label lives in the leading text node so the #launchSub subtitle span survives re-localization
+  const launchBtn = g('launch');
+  if (launchBtn) { if (launchBtn.firstChild && launchBtn.firstChild.nodeType === 3) launchBtn.firstChild.nodeValue = t('hangar.launch'); else launchBtn.insertBefore(document.createTextNode(t('hangar.launch')), launchBtn.firstChild); }
+  refreshLaunchSub();
+  setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: boss-rush entry label/note follow language + unlock state
@@ -1164,6 +1391,7 @@ function applyLang() {
   document.querySelectorAll('.tech-tab').forEach(b => { b.textContent = b.dataset.tab === 'armory' ? t('tech.tabArmory') : t('tech.tabTech'); });
   setTxt('techDeploy', t('tech.deploy'));
   const hint = g('techhint'); if (hint) hint.textContent = techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree');
+  renderDraftBar();   // FRONTIER DRAFT: localize the pin readout + reroll button on language switch
   // wing picker
   const wt = g('wpTitle'); if (wt) wt.textContent = t('wing.title');
   const wsx = g('wpSub'); if (wsx) wsx.textContent = t('wing.sub');
@@ -1338,7 +1566,7 @@ function applyHudScale() {
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
+      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
     }));

@@ -276,6 +276,7 @@ function initTouchControls() {
   bindBtn('tb-msl', 'msl', () => { if (state === 'playing' && !paused) fireMissile(); });
   bindBtn('tb-flr', 'flr', () => { if (state === 'playing' && !paused) deployFlares(); });
   bindBtn('tb-spc', 'spc', () => { if (state === 'playing' && !paused) useSpecial(); });
+  bindBtn('tb-spc2', 'spc2', () => { if (state === 'playing' && !paused) useSpecial(2); });   // feature #3: equipped SLOT-2 special
   bindBtn('tb-lck', 'lck', () => { if (state === 'playing' && !paused) cycleLock(); });
   bindBtn('tb-cam', 'cam', () => { if (state === 'playing' && !paused) cycleCamera(); });
   bindBtn('tb-aws', 'aws', () => { if (state === 'playing' && !paused) awacsAction('strike'); });    // AWACS orbital strike
