@@ -72,6 +72,43 @@ function readFlightInput() {
   }
   flightInput.pitch = clamp(pitch, -1, 1);
   flightInput.roll = clamp(roll, -1, 1);
+  paintThrSlider();   // keep the touch THR slider visual in sync with player.throttle each frame
+}
+
+/* ---------------- THR throttle slider (touch) ---------------- */
+// Drag the vertical track to set player.throttle directly (0 = bottom, 1 = top). Replaces the old
+// momentary THR/BRK touch buttons. combat.js no longer ramps throttle on touch (touchBtns.thr/brk
+// stay false there); the slider writes player.throttle and readFlightInput repaints it each frame.
+// Keyboard Shift/Ctrl throttle is unchanged (desktop unaffected).
+let thrTouchId = null;
+function paintThrSlider() {
+  const sl = g('tb-thr'); if (!sl) return;
+  const fill = g('tb-thr-fill'), thumb = g('tb-thr-thumb');
+  const frac = clamp(player ? player.throttle : 0, 0, 1);
+  if (fill) fill.style.height = (frac * 100) + '%';
+  if (thumb) thumb.style.bottom = (frac * Math.max(0, sl.clientHeight - thumb.offsetHeight)) + 'px';
+}
+function bindThrSlider() {
+  const sl = g('tb-thr'); if (!sl) return;
+  const setFromTouch = (touch) => {
+    const r = sl.getBoundingClientRect();
+    if (player) player.throttle = clamp(1 - (touch.clientY - r.top) / r.height, 0, 1);   // top of track = full throttle
+    paintThrSlider();
+  };
+  sl.addEventListener('touchstart', (e) => {
+    if (state !== 'playing' || paused) return;
+    e.preventDefault(); e.stopPropagation();
+    thrTouchId = e.changedTouches[0].identifier;
+    setFromTouch(e.changedTouches[0]);
+  }, { passive: false });
+  sl.addEventListener('touchmove', (e) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === thrTouchId) { e.preventDefault(); e.stopPropagation(); setFromTouch(e.changedTouches[i]); }
+    }
+  }, { passive: false });
+  const end = (e) => { for (let i = 0; i < e.changedTouches.length; i++) if (e.changedTouches[i].identifier === thrTouchId) thrTouchId = null; };
+  sl.addEventListener('touchend', end, { passive: false });
+  sl.addEventListener('touchcancel', end, { passive: false });
 }
 
 /* ---------------- haptics ---------------- */
@@ -235,8 +272,7 @@ function initTouchControls() {
     el.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); touchBtns[key] = false; }, { passive: false });
   }
   bindBtn('tb-gun', 'gun');
-  bindBtn('tb-thr', 'thr');
-  bindBtn('tb-brk', 'brk');
+  bindThrSlider();   // THR slider replaces the old thr/brk momentary buttons (sets player.throttle directly)
   bindBtn('tb-msl', 'msl', () => { if (state === 'playing' && !paused) fireMissile(); });
   bindBtn('tb-flr', 'flr', () => { if (state === 'playing' && !paused) deployFlares(); });
   bindBtn('tb-spc', 'spc', () => { if (state === 'playing' && !paused) useSpecial(); });
