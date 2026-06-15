@@ -41,7 +41,7 @@ All code is browser globals — no imports/exports. Script load order in `index.
 - Custom `ShaderMaterial` fragment shaders must end with `#include <tonemapping_fragment>` + `#include <colorspace_fragment>` or they won't match the scene's ACES/sRGB grading.
 
 ## Docs layout (docs/)
-- `ios/` — iOS transition docs: `ios.md` (Capacitor build/run guide), `ios-completion-checklist.md` (remaining steps before App Store release).
+- *(empty — ios/ docs removed with the Capacitor scaffold)*
 
 ## Current state
 
@@ -55,11 +55,10 @@ Game is **feature-complete** for web. Playable at `index.html`.
 - Content: weather + TOD gameplay, multi-phase bosses, named hostile aces, sound variety (per-jet engine timbre, lock/kill SFX)
 - UX: tabbed flight manual (4 panels per tab), tutorial opens immediately after controls screen, bilingual EN/ZH throughout
 
-**iOS (highest priority — see `docs/ios/`):**
-- Capacitor scaffold complete: `ios/` folder, SPM-based, no CocoaPods
-- Build: `npm run build:www && npx cap sync ios` → open `ios/App/App.xcworkspace` in Xcode
-- `www/` and `ios/App/App/public/` are build artifacts tracked in git — re-run pipeline after any source edit
-- Pending before App Store: browser/device smoke test, swap `js/storage.js` internals to `@capacitor/preferences`, merge `feat/ios-readiness` to master
+**iOS:**
+- Capacitor scaffold removed from repo (regenerate with `npx cap add ios` when ready to build)
+- Build pipeline: `npm run build:www` copies source → `www/`; then `npx cap sync ios` after adding the platform
+- Pending before App Store: swap `js/storage.js` internals to `@capacitor/preferences`, device smoke test
 
 **Known open issues:**
 - Device smoke tests pending (headless Playwright cannot simulate touch/orientation/fps)
