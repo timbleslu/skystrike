@@ -255,7 +255,7 @@ function buyPerk(id) {
 }
 
 const JET_LOCK_COST = 250;            // flat SP cost to unlock any non-starter airframe
-function jetUnlocked(key) { return !!(meta && meta.jets[key]); }
+function jetUnlocked(key) { return devUnlockAll || !!(meta && meta.jets[key]); }
 function jetCost(key) { return JET_LOCK_COST; }
 function buyJet(key) {
   if (!meta || jetUnlocked(key)) return false;

@@ -620,6 +620,7 @@ function finishTutorial() {
   tutorial.active = false; tutorial.done = true;
   if (el.tut) el.tut.classList.remove('show');
   showBanner(t('tut.done'));
+  setTimeout(() => { if (state === 'playing') showBanner(t('tut.barrelRoll'), 4); }, 2600);
 }
 // feed one detected action event into the pure machine; re-render or finish on a step change.
 function advanceTutorial(event) {
@@ -661,6 +662,20 @@ function updateWingmanSidebar() {
     row.children[1].textContent = sub;
     row.children[2].children[0].style.width = hp.toFixed(1) + '%';
   }
+}
+function updateAwacsHud() {
+  const el = g('awacsHud'); if (!el) return;
+  const show = state === 'playing' && !paused;
+  el.style.display = show ? 'flex' : 'none';
+  if (!show) return;
+  const chip = (key, cntId, costId) => {
+    const rem = Math.max(0, (AWACS_USES_MAX[key] || 0) - ((awacsUses && awacsUses[key]) || 0));
+    const c = g(cntId); if (c) c.textContent = '×' + rem;
+    const k = g(costId); if (k) k.textContent = (AWACS_COSTS[key] || 0) + ' RP';
+  };
+  chip('strike', 'awacsUsesStrike', 'awacsCostStrike');
+  chip('resupply', 'awacsUsesResupply', 'awacsCostResupply');
+  chip('jam', 'awacsUsesJam', 'awacsCostJam');
 }
 function updateDom(dt) {
   el.hp.style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
@@ -707,6 +722,9 @@ function updateDom(dt) {
   el.vignette.style.opacity = vig.toFixed(3);
   el.dmg.style.opacity = clamp(player.damageFlash / 0.5, 0, 1).toFixed(3);
   if (empFlash > 0) { empFlash -= dt; el.flash.style.opacity = (empFlash * 0.5).toFixed(3); } else el.flash.style.opacity = '0';
+  updateAwacsHud();
+  const _pt = g('pilotTag');
+  if (_pt) _pt.style.display = (state === 'playing' && !paused && meta && meta.callsign) ? 'flex' : 'none';
 }
 
 /* ---------------- tech tree (between-wave R&D) ---------------- */
@@ -979,6 +997,7 @@ function buildHangar() {
   const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
   const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; if (audio.on) audio.ui(); saveSettings(); renderJetCard(); }); }
   const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
@@ -1275,7 +1294,12 @@ function onMetaGridClick(e) {
 }
 function startGame(i, daily, rush) {
   if (state !== 'hangar') return;
-  if (!jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
+  if (!daily && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
+  const _ptag = g('pilotTag');
+  if (_ptag) {
+    setTxt('pilotCallsignTxt', (meta && meta.callsign) || '');
+    setTxt('pilotEmblemIcon', EMBLEM_GLYPHS[(meta && meta.emblem) || 'wings'] || '✈');
+  }
   dailyMode = !!daily;   // explicit per-launch: only startDaily passes true; normal launches reset it to false
   bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
   selectedJet = i; audio.init();
@@ -1503,6 +1527,7 @@ function loadSettings() {
     if (typeof s.invertY === 'boolean') invertY = s.invertY;
     if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
     if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
+    if (typeof s.devUnlockAll === 'boolean') devUnlockAll = s.devUnlockAll;
     if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
     if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
     if (typeof s.opMode === 'boolean') opMode = s.opMode;
@@ -1510,7 +1535,7 @@ function loadSettings() {
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
-    controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
+    controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'rate';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
@@ -1613,6 +1638,13 @@ function applyLang() {
   setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
   setTxt('lblBtnLayout', t('set.btnLayout'));
   setTxt('lblGfx', t('set.gfx'));
+  setTxt('lblDevUnlock', t('set.devUnlock'));
+  setTxt('awacsLblStrike', t('awacs.chipStrike'));
+  setTxt('awacsLblResupply', t('awacs.chipResupply'));
+  setTxt('awacsLblJam', t('awacs.chipJam'));
+  setTxt('manH_Awacs', t('manual.awacs'));
+  const _maw = g('manP_Awacs'); if (_maw) _maw.innerHTML = t('manBody.awacs');
+  setTxt('callsignHint', t('pilot.hint'));
   setTxt('lblHudScale', t('set.hudScale'));
   const shs2 = g('setHudScale');
   if (shs2 && shs2.options.length >= 4) {
@@ -1737,7 +1769,7 @@ function applyHudScale() {
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
+      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, difficulty, timeOfDay, selectedJet, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
     }));

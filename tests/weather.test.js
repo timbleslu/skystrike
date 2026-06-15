@@ -6,7 +6,7 @@ const assert = require('assert');
 const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.05, fogMul: 3.0 },
+  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 3.0 },
   storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0,  fogMul: 1.6 },
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
@@ -42,8 +42,8 @@ function rollWeather(seed) {
 // ---- WEATHER table invariants (spec §6) ----
 assert.deepStrictEqual(WEATHER.clear, { radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, turbulence: 0.0, fogMul: 1.0 }, 'clear is fully neutral');
 assert.strictEqual(WEATHER.storm.turbulence, 0, 'storm turbulence removed — no buffeting (was too jarring)');
-assert.ok(WEATHER.fog.turbulence > 0, 'fog keeps a faint buffet');
-assert.ok(WEATHER.fog.turbulence > WEATHER.clear.turbulence, 'fog turbulence > clear');
+assert.strictEqual(WEATHER.fog.turbulence, 0, 'fog turbulence removed — no buffeting (was too jarring)');
+assert.strictEqual(WEATHER.fog.turbulence, WEATHER.clear.turbulence, 'fog turbulence equals clear (both zeroed)');
 assert.ok(WEATHER.fog.fogMul > WEATHER.storm.fogMul, 'fog density > storm density');
 assert.ok(WEATHER.storm.fogMul > WEATHER.clear.fogMul, 'storm density > clear density');
 ['clear', 'fog', 'storm'].forEach(function (k) {
@@ -66,7 +66,7 @@ assert.strictEqual(resolveWeather('clear', 2).radarMul, NIGHT_RADAR_MUL, 'night 
 assert.strictEqual(resolveWeather('storm', 0).radarMul, 0.7, 'day leaves radarMul un-nighted');
 assert.strictEqual(resolveWeather('storm', 1).radarMul, 0.7, 'dusk is not night');
 assert.strictEqual(resolveWeather('fog', 2).lockRangeMul, 0.65, 'night does NOT touch lockRangeMul');
-assert.strictEqual(resolveWeather('fog', 2).turbulence, 0.05, 'night does NOT touch turbulence');
+assert.strictEqual(resolveWeather('fog', 2).turbulence, 0, 'fog turbulence zeroed; night still does NOT touch it');
 
 // ---- turbulence sampler: bounded + zero-mean over a cycle ----
 const TWO_PI = Math.PI * 2;

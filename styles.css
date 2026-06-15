@@ -506,3 +506,11 @@ canvas{display:block}
 .emblemcost{position:absolute;bottom:1px;right:2px;font-size:8px;font-family:var(--mono);color:var(--yel);line-height:1}
 /* gameover pilot line */
 .gopilot{font-family:var(--disp);font-size:15px;letter-spacing:3px;color:var(--cy);text-align:center;min-height:22px;margin-bottom:4px}
+/* ---- AWACS support HUD chips (F10) ---- */
+.awacs-hud{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;justify-content:flex-end}
+.awacs-chip{display:inline-flex;align-items:center;gap:4px;font:10px/1 monospace;padding:2px 5px;border:1px solid rgba(120,200,255,.4);border-radius:3px;background:rgba(10,25,40,.55);color:#bfe6ff;letter-spacing:.5px}
+.awacs-chip b{color:#fff;font-weight:700}
+.awacs-chip i{color:#7fd0ff;font-style:normal;opacity:.85}
+/* ---- pilot HUD tag (F13) ---- */
+.pilot-tag{position:absolute;left:12px;bottom:150px;display:flex;align-items:center;gap:6px;font:13px/1 monospace;color:rgba(190,230,255,.78);letter-spacing:1px;text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none;z-index:6}
+.pilot-tag #pilotEmblemIcon{font-size:16px}

@@ -129,7 +129,7 @@ const FOG_BASE = 0.000058;   // neutral FogExp2 density; weather.fogMul scales f
 const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.05, fogMul: 3.0 },
+  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 3.0 },
   storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 1.6 },
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
@@ -538,7 +538,7 @@ function rollCooldownGate(cooldown) {
 // Barrel-roll evasive maneuver constants
 const BARREL_ROLL_INVULN   = 0.4;   // seconds of i-frames granted
 const BARREL_ROLL_COOLDOWN = 6.0;   // seconds before another roll is allowed
-const BARREL_ROLL_DURATION = 0.4;   // seconds the 360° spin animation plays
+const BARREL_ROLL_DURATION = 0.65;  // seconds the 360° spin animation plays
 const BARREL_ROLL_THRESHOLD = 0.35; // seconds: max gap for double-tap recognition
 
 // Barrel-roll runtime state (reset each game start)
@@ -547,6 +547,7 @@ let barrelRollAnim       = 0;   // counts down from BARREL_ROLL_DURATION; >0 = r
 let barrelRollRequest    = false; // set true by controls when double-tap detected; cleared by combat
 let barrelRollLastKeyTap = -999; // time (performance.now()/1000) of last keyboard Q or E press
 let barrelRollLastTouchTap = -999; // time of last joystick roll-direction flick release
+let barrelRollDir = 1;   // +1 right, -1 left; captured at roll initiation
 let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live device-orientation tilt
 let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
@@ -554,7 +555,8 @@ let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude
 //   'auto'    (default) = bank-hold like pointer + sin(bank)*autoPitchGain back-pressure -> banking auto-turns.
 //   'pointer'           = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
-let controlScheme = 'auto';
+let controlScheme = 'rate';
+let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
 // point-to-steer tunables (only combat.js reads these). maxBank ≈ 80°. Verified stable (negative-feedback bank-hold).
 const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06, autoPitchGain: 0.6 };
 // PURE — map normalized flight intent to the engine's pitch/roll command axes, honouring the control scheme.

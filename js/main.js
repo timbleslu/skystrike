@@ -695,6 +695,9 @@ function tickTutorial() {
 
 /* ---------------- input ---------------- */
 addEventListener('keydown', e => {
+  // Don't steal game keys while typing in a text field (callsign input, etc.)
+  const _tag = document.activeElement && document.activeElement.tagName;
+  if (_tag === 'INPUT' || _tag === 'TEXTAREA') return;
   keys[e.code] = true;
   if (GAME_CODES.has(e.code) || (e.ctrlKey && e.code === 'KeyS')) e.preventDefault();
   if (choosingUpgrade) {                 // tech tree open: Enter / Space / Esc deploys to the next wave
