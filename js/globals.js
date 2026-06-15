@@ -377,7 +377,40 @@ const keys = {};
 let mouseRight = false;
 const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyB','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
-const HUDFONT = "'Share Tech Mono', monospace";
+let HUDFONT = "'Share Tech Mono', monospace";   // skin-swappable (applySkin)
+
+/* ---------------- THEMING: 5 color schemes × 5 visual languages ----------------
+   DOM side follows <html data-palette>/<html data-skin> (CSS). The canvas HUD reads
+   the JS `HUD` triplets + HUDFONT, so applyPalette/applySkin keep the canvas in sync. */
+const PALETTES = {
+  amber:    { primary:'255,185,56',  primaryBright:'255,211,107', danger:'255,59,59',   warn:'255,122,31',  ok:'77,255,160',  reward:'255,225,77',  velvec:'90,255,180',  ink:'207,230,214', dim:'111,145,128', rival:'255,90,42',  boss:'255,80,220' },
+  cyan:     { primary:'25,240,212',  primaryBright:'11,213,255',  danger:'255,57,75',   warn:'255,140,43',  ok:'70,255,140',  reward:'255,225,77',  velvec:'0,255,170',   ink:'189,238,230', dim:'91,138,134',  rival:'255,90,42',  boss:'255,80,220' },
+  phosphor: { primary:'70,255,140',  primaryBright:'150,255,185', danger:'255,120,110', warn:'205,255,120', ok:'120,255,165', reward:'185,255,140', velvec:'120,255,160', ink:'130,235,160', dim:'78,150,96',   rival:'255,150,120',boss:'180,255,120' },
+  ice:      { primary:'150,210,255', primaryBright:'212,236,255', danger:'255,92,92',   warn:'255,190,90',  ok:'120,232,182', reward:'255,226,122', velvec:'150,210,255', ink:'204,222,242', dim:'122,142,168', rival:'255,122,92', boss:'200,150,255' },
+  red:      { primary:'255,92,72',   primaryBright:'255,152,92',  danger:'255,40,40',   warn:'255,122,40',  ok:'255,172,62',  reward:'255,202,82',  velvec:'255,150,90',  ink:'240,182,162', dim:'152,96,82',   rival:'255,70,40',  boss:'255,80,160' },
+};
+const SKIN_HUDFONT = {
+  futuristic: "'Share Tech Mono', monospace",
+  analog:     "Georgia, 'Times New Roman', serif",
+  manual:     "'Arial Narrow', Impact, sans-serif",
+  flat:       "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  blueprint:  "'Courier New', monospace",
+};
+let activePalette = 'amber', activeSkin = 'futuristic';
+function applyPalette(id) {
+  if (!PALETTES[id]) id = 'amber';
+  activePalette = id;
+  document.documentElement.dataset.palette = id;          // DOM (CSS variables) follows
+  if (typeof HUD !== 'undefined') { const p = PALETTES[id]; for (const k in p) HUD[k] = p[k]; }  // canvas follows
+  store.set('skystrike_palette', id);
+}
+function applySkin(id) {
+  if (!SKIN_HUDFONT[id]) id = 'futuristic';
+  activeSkin = id;
+  document.documentElement.dataset.skin = id;
+  HUDFONT = SKIN_HUDFONT[id];
+  store.set('skystrike_skin', id);
+}
 
 /* ---------------- AWACS support calls (F10) ---------------- */
 // Core (AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, pure awacsCall resolver) → core.js.
