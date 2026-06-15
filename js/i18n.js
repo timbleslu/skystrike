@@ -45,7 +45,7 @@ const I18N = {
     /* ---- first-run guided tutorial (F5) ---- */
     'tut.title': 'FLIGHT TRAINING',
     'tut.pitch': 'Pull back — press S to pitch your nose up and climb.',
-    'tut.pitchTouch': 'Pull back — drag the stick down to pitch your nose up and climb.',
+    'tut.pitchTouch': 'Climb — pull the stick UP to raise your nose and gain altitude (push down to dive).',
     'tut.throttle': 'Open the throttle — hold SHIFT to push power past 60%.',
     'tut.throttleTouch': 'Open the throttle — hold the THROTTLE button to push power past 60%.',
     'tut.guns': 'Fire the cannon — hold SPACE to let off a burst.',
@@ -416,7 +416,7 @@ const I18N = {
     /* ---- 首次引导教程 (F5) ---- */
     'tut.title': '飞行训练',
     'tut.pitch': '拉杆爬升 —— 按 S 抬起机头向上爬升。',
-    'tut.pitchTouch': '拉杆爬升 —— 向下拖动摇杆抬起机头爬升。',
+    'tut.pitchTouch': '爬升 —— 向上推动摇杆抬起机头、拉升高度（向下俯冲）。',
     'tut.throttle': '加大油门 —— 按住 SHIFT 将动力推过 60%。',
     'tut.throttleTouch': '加大油门 —— 按住「油门」键将动力推过 60%。',
     'tut.guns': '开火射击 —— 按住空格扫射一轮机炮。',
