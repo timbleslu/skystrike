@@ -151,6 +151,13 @@ let enemies = [], bullets = [], missiles = [], flares = [], loots = [], particle
 let wingmen = [];   // AI escort jets that fly with the player
 const BPOOL = [];
 let hitMarkers = [], dmgNumbers = [];
+// JS twin of the CSS prefers-reduced-motion gate (styles.css:96): when true, the canvas-juice
+// layer (hud.js kill flash / lock-snap / low-HP pulse) renders its calm fallback. Cached + live.
+let _reduceMotionMQ = (typeof matchMedia === 'function') ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+let _reduceMotion = !!(_reduceMotionMQ && _reduceMotionMQ.matches);
+if (_reduceMotionMQ && _reduceMotionMQ.addEventListener) _reduceMotionMQ.addEventListener('change', e => { _reduceMotion = e.matches; });
+function prefersReducedMotion() { return _reduceMotion; }
+let killFlash = 0;   // VISUAL-ONLY: brief frame timer set on a player kill (hud.js draws a confirm flash). Decays in drawHUD.
 let wave = 0, betweenWaves = true, waveTimer = 2.6;
 let strikeWaveActive = false;   // true while the current wave is a ground-war strike wave
 let pendingSpawns = [];          // FIFO of zero-arg spawn closures, drained a few per frame to avoid wave-start hitch

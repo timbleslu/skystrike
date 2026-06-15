@@ -566,7 +566,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
-  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(0.25); audio.killSfx(); }
+  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); if (typeof killFlash !== 'undefined') killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
   const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
@@ -721,7 +721,7 @@ function updateLockOn(dt) {
     player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1)));   // weather slows lock-on
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
-    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); }
+    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); player.lockFlash = 0.42; }   // lockFlash = VISUAL-ONLY snap timer for hud.js (no balance/timing impact)
   } else {
     player.lockProgress = Math.max(0, player.lockProgress - dt / (LOCK_TIME * 0.5));
     if (player.lockProgress < 1) player.lockedTarget = null;
@@ -863,6 +863,7 @@ function updatePlayer(dt) {
   if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);   // KILL FRENZY bleeds off when you stop scoring
   if (player.special.cd > 0) player.special.cd -= dt;
   if (player.damageFlash > 0) player.damageFlash -= dt;
+  if (player.lockFlash > 0) player.lockFlash -= dt;   // VISUAL-ONLY lock-snap overshoot timer (hud.js drawLockReticle)
   if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
   if (player.shake > 0) player.shake -= dt;
   if (player.comboTimer > 0) { player.comboTimer -= dt; if (player.comboTimer <= 0) player.combo = 0; }

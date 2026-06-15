@@ -31,6 +31,8 @@ const I18N = {
     /* ---- language / onboarding ---- */
     'lang.title': 'SELECT LANGUAGE',
     'lang.sub': '// 选择语言 //',
+    'lang.tagline': 'ARCADE JET COMBAT',
+    'lang.begin': 'SELECT LANGUAGE TO BEGIN',
     'onboard.title': 'CONTROLS',
     'onboard.sub': '// PRE-FLIGHT BRIEF //',
     'onboard.flight': 'FLIGHT',
@@ -402,6 +404,8 @@ const I18N = {
   ZH: {
     'lang.title': '选择语言',
     'lang.sub': '// SELECT LANGUAGE //',
+    'lang.tagline': '街机空战',
+    'lang.begin': '选择语言以开始',
     'onboard.title': '操作说明',
     'onboard.sub': '// 起飞前简报 //',
     'onboard.flight': '飞行',

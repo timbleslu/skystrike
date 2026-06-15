@@ -1,4 +1,14 @@
 /* SKYSTRIKE — hud.js: canvas HUD renderer. Loaded before ui.js. Reads global game state, writes the 2D canvas context. No DOM. Extracted from ui.js. */
+/* Canvas-HUD colour roles (rgb triplets — the canvas twin of the CSS semantic tokens, §2a).
+   ONE red (danger) for lock + locked + missile + enemy markers, matching CSS --danger.
+   Boss keeps its unique magenta as a deliberate identity exception. */
+const HUD = {
+  primary: '25,240,212',  primaryBright: '11,213,255',
+  danger: '255,57,75',    warn: '255,140,43',
+  ok: '70,255,140',       reward: '255,225,77',
+  velvec: '0,255,170',    ink: '189,238,230',  dim: '91,138,134',
+  rival: '255,90,42',     boss: '255,80,220'
+};
 function drawGunPipper(ctx, e) {
   if (!e) { player._gunSol = false; return; }
   const k = hudK();
@@ -21,11 +31,11 @@ function drawGunPipper(ctx, e) {
 
   // correction line from boresight to the lead point
   if (!bsp.behind && sep > 5) {
-    ctx.strokeStyle = 'rgba(120,255,220,0.25)'; ctx.lineWidth = 1.4;
+    ctx.strokeStyle = 'rgba(' + HUD.primary + ',0.22)'; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.moveTo(bsp.x, bsp.y); ctx.lineTo(sp.x, sp.y); ctx.stroke();
   }
 
-  const col = solution ? '90,255,150' : '255,210,80';
+  const col = solution ? HUD.ok : HUD.reward;
   ctx.save(); ctx.translate(sp.x, sp.y); ctx.scale(k, k); ctx.translate(-sp.x, -sp.y);   // UI-size: gun pipper scales around the lead point
   ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(' + col + ',0.95)';
   ctx.beginPath(); ctx.arc(sp.x, sp.y, 7, 0, TWO_PI); ctx.stroke();
@@ -45,13 +55,13 @@ function drawGunPipper(ctx, e) {
   if (solution) {
     const s = 13 + Math.sin(performance.now() * 0.02) * 2;
     ctx.save(); ctx.translate(sp.x, sp.y); ctx.scale(k, k); ctx.translate(-sp.x, -sp.y);   // UI-size: "guns" diamond scales around lead point
-    ctx.strokeStyle = 'rgba(90,255,150,0.9)'; ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(' + HUD.ok + ',0.9)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y - s); ctx.lineTo(sp.x + s, sp.y); ctx.lineTo(sp.x, sp.y + s); ctx.lineTo(sp.x - s, sp.y); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = 'rgba(90,255,150,0.95)'; ctx.fillText(t('hud.guns'), sp.x, sp.y - s - 6);
+    ctx.fillStyle = 'rgba(' + HUD.ok + ',0.95)'; ctx.fillText(t('hud.guns'), sp.x, sp.y - s - 6);
     ctx.restore();
     // "shoot now" cue ringing the central reticle
     const cx = W / 2, cy = H / 2;
-    ctx.strokeStyle = 'rgba(90,255,150,' + (0.45 + 0.3 * Math.sin(performance.now() * 0.02)) + ')'; ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(' + HUD.ok + ',' + (0.45 + 0.3 * Math.sin(performance.now() * 0.02)) + ')'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(cx, cy, 11 * k, 0, TWO_PI); ctx.stroke();
   }
   if (solution && !player._gunSol) audio.blip(1240, 0.04, 'sine', 0.05, 1560);   // soft tick on acquiring a gun solution
@@ -80,7 +90,7 @@ function drawStarObjectives(ctx, cx) {
   for (let i = 0; i < items.length; i++) {
     const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
     const w = ctx.measureText(label).width;
-    ctx.fillStyle = met ? 'rgba(255,210,80,0.95)' : 'rgba(150,170,190,0.7)';
+    ctx.fillStyle = met ? 'rgba(' + HUD.reward + ',0.95)' : 'rgba(' + HUD.dim + ',0.75)';
     ctx.fillText(label, cx - w / 2, y);
     y += 15 * k;
   }
@@ -97,9 +107,9 @@ function drawWeatherChip(ctx) {
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = 'bold ' + (13 * k) + 'px ' + HUDFONT;
   const padX = 9 * k, x = 16, y = 86, h = 23 * k, w = ctx.measureText(label).width + padX * 2;
-  ctx.fillStyle = storm ? 'rgba(120,140,200,0.16)' : 'rgba(25,240,212,0.10)';
+  ctx.fillStyle = storm ? 'rgba(120,140,200,0.16)' : 'rgba(' + HUD.primary + ',0.10)';
   ctx.fillRect(x, y, w, h);
-  ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(25,240,212,0.5)';
+  ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(' + HUD.primary + ',0.5)';
   ctx.strokeRect(x, y, w, h);
   ctx.fillStyle = storm ? 'rgba(205,215,255,0.95)' : 'rgba(150,255,235,0.95)';
   ctx.fillText(label, x + padX, y + 6 * k);
@@ -108,13 +118,14 @@ function drawWeatherChip(ctx) {
 
 function drawHUD() {
   const ctx = h2d, cx = W / 2, cy = H / 2, k = hudK();
+  const reduce = (typeof prefersReducedMotion === 'function') && prefersReducedMotion();   // gates the non-essential canvas juice (kill flash, hit ring, lock-snap overshoot, HP pulse)
   ctx.clearRect(0, 0, W, H);
   ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
   drawHorizon(ctx, cx, cy);
 
   // central reticle — scaled around its screen anchor (cx,cy)
-  ctx.strokeStyle = 'rgba(120,255,220,0.9)';
+  ctx.strokeStyle = 'rgba(' + HUD.primary + ',0.9)';
   ctx.beginPath(); ctx.arc(cx, cy, 4 * k, 0, TWO_PI);
   ctx.moveTo(cx - 15 * k, cy); ctx.lineTo(cx - 7 * k, cy); ctx.moveTo(cx + 7 * k, cy); ctx.lineTo(cx + 15 * k, cy); ctx.moveTo(cx, cy - 15 * k); ctx.lineTo(cx, cy - 7 * k);
   ctx.stroke();
@@ -125,7 +136,7 @@ function drawHUD() {
     const fp = projectPoint(t2.copy(player.group.position).addScaledVector(vd, 1600));
     if (!fp.behind) {
       // velocity-vector marker — projected position fixed, size ×k
-      ctx.strokeStyle = 'rgba(0,255,170,0.9)';
+      ctx.strokeStyle = 'rgba(' + HUD.velvec + ',0.9)';
       ctx.beginPath(); ctx.arc(fp.x, fp.y, 6 * k, 0, TWO_PI);
       ctx.moveTo(fp.x - 6 * k, fp.y); ctx.lineTo(fp.x - 15 * k, fp.y); ctx.moveTo(fp.x + 6 * k, fp.y); ctx.lineTo(fp.x + 15 * k, fp.y); ctx.moveTo(fp.x, fp.y - 6 * k); ctx.lineTo(fp.x, fp.y - 13 * k);
       ctx.stroke();
@@ -135,7 +146,7 @@ function drawHUD() {
   // active sector-mission objective readout (top-centre), tinted by urgency / outcome
   if (typeof mission !== 'undefined' && mission && mission.status === 'active') {
     const timed = (mission.type === 'intercept' && mission.timer <= 10);
-    ctx.fillStyle = timed ? 'rgba(255,90,60,0.95)' : 'rgba(120,255,220,0.95)';
+    ctx.fillStyle = timed ? 'rgba(' + HUD.warn + ',0.95)' : 'rgba(' + HUD.primary + ',0.95)';
     ctx.font = 'bold ' + (15 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     let line = objectiveText(mission);
     if (mission.type === 'intercept') line += '   ⏱ ' + fmtClock(Math.max(0, mission.timer));
@@ -183,8 +194,12 @@ function drawHUD() {
     ctx.fillText(t('hud.frenzy') + ' ×' + (1 + 0.3 * f).toFixed(2), cx, by - 7 * k);
   }
 
+  // gun-hit marker — chevrons stab INWARD (snap-in ease-out) then fade; fresh hits get one expanding confirm ring.
   for (let i = hitMarkers.length - 1; i >= 0; i--) {
-    const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1); const s = (11 + (1 - a) * 9) * k, t7 = 7 * k;
+    const hm = hitMarkers[i]; hm.t -= lastDt; const a = clamp(hm.t / 0.25, 0, 1);
+    const p = 1 - a;                          // life progress 0→1
+    const eo = 1 - (1 - p) * (1 - p);         // ease-out
+    const s = (reduce ? (11 + a * 9) : (20 - 9 * eo)) * k, t7 = 7 * k;   // juice: start wide (20), stab to 11. reduced-motion keeps the original linear shrink.
     ctx.strokeStyle = 'rgba(255,255,255,' + a + ')'; ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(cx - s, cy - s); ctx.lineTo(cx - s + t7, cy - s + t7);
@@ -192,6 +207,11 @@ function drawHUD() {
     ctx.moveTo(cx - s, cy + s); ctx.lineTo(cx - s + t7, cy + s - t7);
     ctx.moveTo(cx + s, cy + s); ctx.lineTo(cx + s - t7, cy + s - t7);
     ctx.stroke();
+    if (!reduce && p < 0.4) {                 // expanding confirm ring, first ~100ms — pure punch
+      const rp = p / 0.4, rr = (6 + 22 * rp) * k;
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 * (1 - rp)) + ')'; ctx.lineWidth = 1.6 * k;
+      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, TWO_PI); ctx.stroke();
+    }
     if (hm.t <= 0) hitMarkers.splice(i, 1);
   }
   ctx.lineWidth = 2;
@@ -201,8 +221,11 @@ function drawHUD() {
     const p = projectPoint(d.pos);
     if (!p.behind) {
       const lifeMax = d.crit ? 1.1 : 0.9, a = clamp(d.life / lifeMax, 0, 1);
-      if (d.crit) { ctx.fillStyle = 'rgba(255,150,40,' + a + ')'; ctx.font = 'bold ' + ((22 + (1 - a) * 12) * k) + 'px ' + HUDFONT; }
-      else { ctx.fillStyle = 'rgba(255,230,120,' + a + ')'; ctx.font = 'bold ' + ((16 + (1 - a) * 7) * k) + 'px ' + HUDFONT; }
+      // JUICE: numbers PUNCH IN big on the first ~120ms (overshoot, bigger for crits) then settle to base size.
+      const age = lifeMax - d.life;
+      const pop = reduce ? 1 : (age < 0.12 ? 1 + (d.crit ? 0.9 : 0.55) * (1 - age / 0.12) : 1);
+      if (d.crit) { ctx.fillStyle = 'rgba(255,150,40,' + a + ')'; ctx.font = 'bold ' + ((22 + (1 - a) * 12) * pop * k) + 'px ' + HUDFONT; }
+      else { ctx.fillStyle = 'rgba(255,230,120,' + a + ')'; ctx.font = 'bold ' + ((16 + (1 - a) * 7) * pop * k) + 'px ' + HUDFONT; }
       ctx.fillText(d.val, p.x, p.y);
     }
     if (d.life <= 0) dmgNumbers.splice(i, 1);
@@ -219,11 +242,37 @@ function drawHUD() {
     const a = clamp(player.hurtT, 0, 1);
     const rr = Math.min(cx, cy) * 0.72;   // edge-ring radius kept (screen-anchored); stroke + arrowhead ×k
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang2);
-    ctx.strokeStyle = 'rgba(255,55,55,' + (0.85 * a) + ')'; ctx.lineWidth = 6 * k; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(' + HUD.danger + ',' + (0.85 * a) + ')'; ctx.lineWidth = 6 * k; ctx.lineCap = 'round';   // survival edge ring — one red (--danger)
     ctx.beginPath(); ctx.arc(0, 0, rr, -Math.PI / 2 - 0.36, -Math.PI / 2 + 0.36); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,80,80,' + (0.9 * a) + ')';
+    ctx.fillStyle = 'rgba(' + HUD.danger + ',' + (0.9 * a) + ')';
     ctx.beginPath(); ctx.moveTo(0, -rr - 7 * k); ctx.lineTo(-9 * k, -rr + 9 * k); ctx.lineTo(9 * k, -rr + 9 * k); ctx.closePath(); ctx.fill();
     ctx.lineCap = 'butt'; ctx.restore();
+  }
+
+  // ---- JUICE overlays (full-screen, drawn last so they sit on top) ----
+  // LOW-HP screen pulse: a breathing red edge vignette when the player is in the danger band.
+  // Essential threat signal, so it still renders under reduced-motion — just as a STEADY band, no breathing.
+  if (player.alive && player.hp / player.maxHp < 0.3) {
+    const sev = clamp(1 - (player.hp / player.maxHp) / 0.3, 0, 1);   // 0 at 30% HP → 1 at 0% HP
+    const breathe = reduce ? 0.5 : (0.5 + 0.5 * Math.sin(performance.now() * 0.006));
+    const edge = Math.max(cx, cy);
+    const grad = ctx.createRadialGradient(cx, cy, edge * 0.55, cx, cy, edge);
+    grad.addColorStop(0, 'rgba(' + HUD.danger + ',0)');
+    grad.addColorStop(1, 'rgba(' + HUD.danger + ',' + (0.12 + 0.26 * sev * breathe) + ')');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  }
+
+  // KILL CONFIRM flash: a quick white screen-edge bloom on a player kill (set in combat.js killEnemy).
+  // Reward punctuation, not a survival signal → fully suppressed under reduced-motion.
+  if (!reduce && typeof killFlash !== 'undefined' && killFlash > 0) {
+    killFlash -= lastDt;
+    const a = clamp(killFlash / 0.28, 0, 1), eo = a * a;   // ease-out fade
+    const edge = Math.max(cx, cy);
+    const grad = ctx.createRadialGradient(cx, cy, edge * 0.4, cx, cy, edge);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(1, 'rgba(' + HUD.ok + ',' + (0.22 * eo) + ')');   // green = "you got it" (matches kill/ok role)
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    if (killFlash <= 0) killFlash = 0;
   }
 }
 
@@ -272,7 +321,10 @@ function drawHorizon(ctx, cx, cy) {
   ctx.scale(hudK(), hudK());   // UI-size: enlarge the whole pitch ladder uniformly around centre
   ctx.rotate(roll);
   ctx.translate(0, (pitch / DEG) * scale);
-  ctx.strokeStyle = 'rgba(0,255,190,0.55)'; ctx.lineWidth = 2; ctx.font = '11px ' + HUDFONT; ctx.fillStyle = 'rgba(0,255,190,0.6)';
+  // horizon ladder — primary cyan; storm desaturates to a cold blue-grey
+  const storm = (typeof weather !== 'undefined' && weather && weather.type === 'storm');
+  const ladderCol = storm ? '150,170,235' : HUD.primary;
+  ctx.strokeStyle = 'rgba(' + ladderCol + ',0.5)'; ctx.lineWidth = 2; ctx.font = '11px ' + HUDFONT; ctx.fillStyle = 'rgba(' + ladderCol + ',0.6)';
   ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(-70, 0); ctx.moveTo(70, 0); ctx.lineTo(260, 0);
   ctx.moveTo(-70, 0); ctx.lineTo(-70, 9); ctx.moveTo(70, 0); ctx.lineTo(70, 9);
   ctx.stroke();
@@ -302,33 +354,55 @@ function drawLockReticle(ctx, tgt, progress, locked) {
   ctx.textAlign = 'center';
   ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: lock box scales around target, position fixed
   if (locked) {
-    ctx.strokeStyle = 'rgba(255,55,55,1)'; ctx.lineWidth = 2.5;
-    ctx.strokeRect(x - s, y - s, s * 2, s * 2);
+    // LOCKED — one red (--danger), thicker box, blinking diamond: the "you can fire" payoff
+    // JUICE: the moment lock ENGAGES (player.lockFlash, set once in combat.js), the box SNAPS in from
+    // oversize with an --ease-snap-style overshoot and an expanding shockring radiates out. Makes the lock feel earned.
+    const lf = (typeof player.lockFlash === 'number' && player.lockFlash > 0) ? player.lockFlash : 0;
+    const reduceL = (typeof prefersReducedMotion === 'function') && prefersReducedMotion();
+    let bs = s;
+    if (lf > 0 && !reduceL) {
+      const fp = 1 - lf / 0.42;                          // 0→1 over the snap
+      const overshoot = 1 + 0.9 * (1 - fp) * Math.cos(fp * 7.5);   // damped overshoot wobble → settles to 1
+      bs = s * overshoot;
+    }
+    ctx.strokeStyle = 'rgba(' + HUD.danger + ',1)'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(x - bs, y - bs, bs * 2, bs * 2);
     ctx.lineWidth = 2;
     for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-      ctx.beginPath(); ctx.moveTo(x + c[0] * s, y + c[1] * s); ctx.lineTo(x + c[0] * (s + 8), y + c[1] * s);
-      ctx.moveTo(x + c[0] * s, y + c[1] * s); ctx.lineTo(x + c[0] * s, y + c[1] * (s + 8)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + c[0] * bs, y + c[1] * bs); ctx.lineTo(x + c[0] * (bs + 8), y + c[1] * bs);
+      ctx.moveTo(x + c[0] * bs, y + c[1] * bs); ctx.lineTo(x + c[0] * bs, y + c[1] * (bs + 8)); ctx.stroke();
     }
-    ctx.fillStyle = 'rgba(255,55,55,0.95)';
+    if (lf > 0 && !reduceL) {                            // expanding shockring on the snap
+      const fp = 1 - lf / 0.42, rr = bs + 6 + 60 * fp;
+      ctx.strokeStyle = 'rgba(' + HUD.danger + ',' + (0.8 * (1 - fp)) + ')'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(x, y, rr, 0, TWO_PI); ctx.stroke(); ctx.lineWidth = 2;
+    }
+    ctx.fillStyle = 'rgba(' + HUD.danger + ',0.95)';
     ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 6); ctx.lineTo(x - 6, y); ctx.closePath(); ctx.fill();
     const blink = (performance.now() % 600) < 400 ? 1 : 0.35;
-    ctx.fillStyle = 'rgba(255,70,70,' + blink + ')'; ctx.font = 'bold 13px ' + HUDFONT;
+    ctx.fillStyle = 'rgba(' + HUD.danger + ',' + blink + ')'; ctx.font = 'bold 13px ' + HUDFONT;
     ctx.fillText(t('hud.locked'), x, y - s - 11);
   } else if (progress > 0.02) {
+    // LOCKING — caution-tier amber (--warn) converging brackets; progress ring shifts reward→warn as it climbs
     const o = base * (1.35 - progress * 0.9); // brackets converge as progress→1
     const a = 0.5 + progress * 0.5;
-    ctx.strokeStyle = 'rgba(255,210,80,' + a + ')'; ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(' + HUD.warn + ',' + a + ')'; ctx.lineWidth = 2;
     for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
       const px = x + c[0] * (s + o), py = y + c[1] * (s + o);
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - c[0] * 11, py); ctx.moveTo(px, py); ctx.lineTo(px, py - c[1] * 11); ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(255,210,80,0.85)'; ctx.lineWidth = 2.5;
+    const ringCol = progress < 0.6 ? HUD.reward : HUD.warn;   // reward→warn as the lock matures
+    ctx.strokeStyle = 'rgba(' + ringCol + ',0.85)'; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(x, y, base * 0.62, -Math.PI / 2, -Math.PI / 2 + progress * TWO_PI); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,210,80,0.95)'; ctx.font = '11px ' + HUDFONT;
+    ctx.fillStyle = 'rgba(' + HUD.warn + ',0.95)'; ctx.font = '11px ' + HUDFONT;
     ctx.fillText(t('hud.locking') + ' ' + Math.round(progress * 100) + '%', x, y + base * 0.62 + 14);
   }
   ctx.restore();
 }
+// NOTE (§4b "being-locked-by-enemy" reticle): deferred — the engine has no per-enemy
+// "locking the player" state to drive it (enemies fire missiles directly; the only incoming
+// signal is missiles.some(m=>m.enemy)). Adding it would be a gameplay change, out of this
+// visual-only pass. Wire a --warn shrinking reticle here once that state exists.
 
 function drawEnemy(ctx, e, cx, cy, isNear) {
   const pos = e.group.position;
@@ -342,14 +416,15 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     if (!onScreen) return;
     const s = clamp(60000 / Math.max(dist, 1), 9, 34), x = p.x, y = p.y;
     ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: marker scales around target
-    ctx.strokeStyle = 'rgba(255,64,96,' + (locked || isNear ? 1 : 0.82) + ')'; ctx.lineWidth = locked ? 2.4 : 1.6;
+    ctx.strokeStyle = 'rgba(' + HUD.danger + ',' + (locked || isNear ? 1 : 0.82) + ')'; ctx.lineWidth = locked ? 2.4 : 1.6;
     ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,64,96,0.5)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TWO_PI); ctx.fill();
+    ctx.fillStyle = 'rgba(' + HUD.danger + ',0.5)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TWO_PI); ctx.fill();
     ctx.restore(); ctx.lineWidth = 2;
     return;
   }
 
-  const col = boss ? '255,80,220' : e.type === 'bomber' ? '255,176,96' : e.elite ? '255,210,77' : grd ? '255,165,55' : '255,80,80';
+  // enemy markers share --danger; boss keeps its identity magenta; rival --rival; elite --reward; bomber/ground keep distinct ambers
+  const col = boss ? HUD.boss : e.rival ? HUD.rival : e.type === 'bomber' ? '255,176,96' : e.elite ? HUD.reward : grd ? '255,165,55' : HUD.danger;
 
   if (onScreen) {
     const size = clamp(90000 / Math.max(dist, 1), 24, 110) * (boss ? 1.7 : 1);
@@ -366,15 +441,15 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
     const hpFrac = clamp(e.hp / e.maxHp, 0, 1);
     const bw = size, bx = x - s, by = y - s - 7;
     ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, 3);
-    ctx.fillStyle = hpFrac > 0.5 ? 'rgba(70,255,140,0.9)' : hpFrac > 0.25 ? 'rgba(255,210,80,0.9)' : 'rgba(255,70,70,0.95)';
+    ctx.fillStyle = hpFrac > 0.5 ? 'rgba(' + HUD.ok + ',0.9)' : hpFrac > 0.25 ? 'rgba(' + HUD.reward + ',0.9)' : 'rgba(' + HUD.danger + ',0.95)';
     ctx.fillRect(bx, by, bw * hpFrac, 3);
     ctx.fillStyle = 'rgba(' + col + ',0.95)'; ctx.font = '11px ' + HUDFONT;
     ctx.fillText(dist >= 1000 ? (dist / 1000).toFixed(1) + t('hud.km') : Math.round(dist) + t('hud.m'), x, y + s + 12);
-    if (boss) { ctx.fillStyle = 'rgba(255,80,220,0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.boss'), x, by - 8); }
+    if (boss) { ctx.fillStyle = 'rgba(' + HUD.boss + ',0.95)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.boss'), x, by - 8); }
     else if (e.type === 'bomber') { ctx.fillStyle = 'rgba(255,176,96,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText(t('hud.bomber'), x, by - 8); }
-    else if (e.rival) { ctx.fillStyle = 'rgba(255,90,42,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 ' + t('hud.lv') + rival.level, x, by - 8); }
-    else if (e.elite) { ctx.fillStyle = 'rgba(255,210,77,1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || t('hud.ace')) + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
-    else if (e.callsign) { ctx.fillStyle = 'rgba(255,80,80,0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
+    else if (e.rival) { ctx.fillStyle = 'rgba(' + HUD.rival + ',1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2620 ' + e.callsign + ' \u00b7 ' + e.aceName + ' \u00b7 ' + t('hud.lv') + rival.level, x, by - 8); }
+    else if (e.elite) { ctx.fillStyle = 'rgba(' + HUD.reward + ',1)'; ctx.font = 'bold 12px ' + HUDFONT; ctx.fillText('\u2605 ' + (e.callsign || t('hud.ace')) + (e.aceName ? ' \u00b7 ' + e.aceName : ''), x, by - 8); }
+    else if (e.callsign) { ctx.fillStyle = 'rgba(' + HUD.danger + ',0.85)'; ctx.font = '10px ' + HUDFONT; ctx.fillText(e.callsign, x, by - 8); }
     ctx.restore();
   } else {
     let ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
@@ -436,19 +511,21 @@ function drawRadar() {
     ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
     if (sq) ctx.fillRect(X - sz, Y - sz, sz * 2, sz * 2);
     else { ctx.beginPath(); ctx.arc(X, Y, sz, 0, TWO_PI); ctx.fill(); }
-    if (ring) { ctx.strokeStyle = 'rgba(255,225,77,0.95)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, sz + 3, 0, TWO_PI); ctx.stroke(); }
+    if (ring) { ctx.strokeStyle = 'rgba(' + HUD.reward + ',0.95)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, sz + 3, 0, TWO_PI); ctx.stroke(); }
   }
+  // radar contacts mirror the marker roles: boss magenta, rival --rival, elite --reward, drone/fighter --danger
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive || e.isInCloud) continue;
     const rdx = e.group.position.x - player.group.position.x, rdz = e.group.position.z - player.group.position.z;
     if (detR < 6500 && rdx * rdx + rdz * rdz > detR2) continue;   // weather/night only: drop contacts beyond the reduced detection range (clear day = unchanged)
     const lk = player.lockedTarget === e;
-    if (e.type === 'boss') plot(e.group.position, 255, 69, 200, 5, false, lk);
+    if (e.type === 'boss') plot(e.group.position, 255, 80, 220, 5, false, lk);
+    else if (e.rival) plot(e.group.position, 255, 90, 42, 4, false, lk);
     else if (e.type === 'bomber') plot(e.group.position, 255, 176, 96, 5, false, lk);
-    else if (e.type === 'drone') plot(e.group.position, 255, 64, 96, 3, false, lk);
-    else if (e.elite) plot(e.group.position, 255, 210, 77, 4, false, lk);
+    else if (e.type === 'drone') plot(e.group.position, 255, 57, 75, 3, false, lk);
+    else if (e.elite) plot(e.group.position, 255, 225, 77, 4, false, lk);
     else if (e.type === 'ground') plot(e.group.position, 255, 165, 55, 4, true, lk);
-    else plot(e.group.position, 255, 80, 80, 4, false, lk);
+    else plot(e.group.position, 255, 57, 75, 4, false, lk);
   }
   for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) plot(missiles[i].mesh.position, 255, 255, 255, 2);
   for (let i = 0; i < wingmen.length; i++) { if (wingmen[i].alive) plot(wingmen[i].group.position, 45, 255, 176, 4, true); }

@@ -93,6 +93,20 @@ function pickGunTarget() {
 function hudK() { return (typeof hudScale === 'number') ? Math.max(0.6, Math.min(1.6, hudScale)) : 1; }
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
+// JUICE: count a number up to `target` over `ms`, formatting each frame via fmt(v)→string.
+// Cancels any prior count-up on the same element (stored on el._cuRaf) so re-opens don't stack tweens.
+function countUp(el, target, ms, fmt) {
+  if (!el) return;
+  if (el._cuRaf) cancelAnimationFrame(el._cuRaf);
+  const t0 = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - t0) / ms);
+    const eased = 1 - (1 - p) * (1 - p);   // ease-out
+    el.textContent = fmt(target * eased);
+    if (p < 1) el._cuRaf = requestAnimationFrame(step); else { el.textContent = fmt(target); el._cuRaf = 0; }
+  };
+  el._cuRaf = requestAnimationFrame(step);
+}
 
 // Localized active-condition label (incl. night), or '' for plain daylight-clear (nothing to flag).
 function weatherLabel() {
@@ -253,7 +267,13 @@ function updateDom(dt) {
   el.score.textContent = player.score.toLocaleString();
   if (el.tp) { el.tp.textContent = Math.floor(player.tp).toLocaleString(); el.tp.style.color = player.tp >= 120 ? '#ffe14d' : ''; }
   el.wave.textContent = wave;
-  el.combo.textContent = player.combo > 1 ? 'x' + player.combo : '';
+  // JUICE: combo chip scale-pops on each increment (reflow-retrigger pattern, like showBanner). _comboShown tracks the last drawn value.
+  const comboTxt = player.combo > 1 ? 'x' + player.combo : '';
+  if (comboTxt !== el.combo.textContent) {
+    el.combo.textContent = comboTxt;
+    if (player.combo > 1 && player.combo > (el._comboShown || 0)) { el.combo.classList.remove('pop'); void el.combo.offsetWidth; el.combo.classList.add('pop'); }
+    el._comboShown = player.combo;
+  }
   el.flares.textContent = player.flares;
   el.missiles.textContent = player.missiles;
   if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
@@ -271,8 +291,8 @@ function updateDom(dt) {
   const lockedNow = !!(player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1);
   const acquiringNow = !lockedNow && player.lockTarget && player.lockTarget.alive && player.lockProgress > 0.02;
   tog(el.wLock, lockedNow || acquiringNow);
-  if (lockedNow) { el.wLock.textContent = t('hud.targetLocked'); el.wLock.style.color = '#ff5a5a'; }
-  else if (acquiringNow) { el.wLock.textContent = t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffd24d'; }
+  if (lockedNow) { el.wLock.textContent = t('hud.targetLocked'); el.wLock.style.color = '#ff394b'; }   /* --danger: LOCKED payoff */
+  else if (acquiringNow) { el.wLock.textContent = t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffe14d'; }   /* --reward: lock building */
   el.hpbar.classList.toggle('low', player.hp / player.maxHp < 0.3);
 
   let boss = null;
@@ -352,7 +372,9 @@ function renderTechTree(recenter) {
       const midY = (pb + ct) / 2;
       const lit = owns(edge.id) && (n.repeat ? repeatCount(n) > 0 : owns(n.id));
       const open = owns(edge.id) && nodeState(n) !== 'locked';
-      const col = lit ? '#46ff8c' : open ? 'rgba(25,240,212,.55)' : 'rgba(91,138,134,.3)';
+      const next = open && nodeState(n) === 'avail';   // parent owned + child affordable → light the path forward
+      // tokens: --ok (both owned) · --primary-bright (affordable next) · --primary low (reachable) · --hairline (dormant)
+      const col = lit ? '#46ff8c' : next ? '#0bd5ff' : open ? 'rgba(25,240,212,.4)' : 'rgba(91,138,134,.34)';
       const dash = edge.and ? ' stroke-dasharray="7,5"' : '';
       svg += '<path d="M' + px + ',' + pb + ' V' + midY + ' H' + cx + ' V' + ct + '" fill="none" stroke="' + col + '" stroke-width="' + (lit ? 3 : 2) + '"' + dash + '/>';
     }
@@ -470,7 +492,8 @@ function openOpMap() {
   const wrap = g('opStages'); if (!wrap) return;
   wrap.innerHTML = opMap.map((stage, si) =>
     '<div class="op-stage">' + stage.map((s, i) => {
-      const cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
+      let cls = si < opStage ? 'op-sector done' : si === opStage ? 'op-sector pickable' : 'op-sector';
+      if (s === 'FINAL') cls += ' boss';   // FINAL/boss node gets the boss-magenta accent (§5f)
       return '<div class="' + cls + '" data-s="' + si + '" data-i="' + i + '">' + t('op.' + s) + '</div>';
     }).join('') + '</div>'
   ).join('');
@@ -731,22 +754,33 @@ function renderJetCard(i) {
     '</div>';
   renderJetMeta(i);
 }
+// §5c: LAUNCH carries the current loadout as a subtitle line (difficulty · env · mode)
+function refreshLaunchSub() {
+  const sub = g('launchSub'); if (!sub) return;
+  const diffKey = ['diff.ROOKIE', 'diff.VETERAN', 'diff.ACE'][difficulty] || 'diff.VETERAN';
+  const todKey = ['tod.DAY', 'tod.DUSK', 'tod.NIGHT'][typeof timeOfDay === 'number' ? timeOfDay : 0] || 'tod.DAY';
+  const modeKey = opMode ? 'hangar.operation' : 'hangar.endless';
+  sub.textContent = t(diffKey) + ' · ' + t(todKey) + ' · ' + t(modeKey);
+}
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === difficulty));
   const dd = g('diffdesc'); if (dd) dd.textContent = DIFFS[difficulty].desc;
+  refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
 }
 function setTimeOfDay(t) {
   applyTimeOfDay(t);
   document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('on', +b.dataset.t === timeOfDay));
+  refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
 }
 function setOpMode(m) {
   opMode = !!m;
   document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', (+b.dataset.m === 1) === opMode));
+  refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
 }
@@ -916,8 +950,11 @@ function gameOver() {
   if (h2d) h2d.clearRect(0, 0, W, H);
   endRun(t('banner.missionFailed'));
 }
-// shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title
-function endRun(title) {
+// shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title.
+// `win` true = success outcome (debrief eyebrow turns --ok via .gowrap.win), default false = failure (--danger).
+function endRun(title, win) {
+  const gw = g('gameover').querySelector('.gowrap');
+  if (gw) gw.classList.toggle('win', !!win);
   const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
   if (player.score > bestScore) { bestScore = player.score; saveBest(); }
   if (dailyMode) {   // record today's daily best (attempt already marked played in startDaily); keep the higher score
@@ -943,10 +980,16 @@ function endRun(title) {
   const achRes = checkAchievements(run, player);
   bankSP(gradedAward);                 // achievement SP is banked inside grantAch
   const total = gradedAward + (achRes.sp || 0);
-  const spd = g('go_sp'); if (spd) spd.textContent = '+' + total.toLocaleString();
+  const spd = g('go_sp');
+  if (spd) {
+    // JUICE: SP earned ticks up from 0 over --dur-slow (the reward count-up). Reduced-motion sets it flat.
+    if (prefersReducedMotion() || total <= 0) { spd.textContent = '+' + total.toLocaleString(); }
+    else { countUp(spd, total, 560, v => '+' + Math.round(v).toLocaleString()); }
+  }
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
-  // render grade letter + bonus
+  // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low)
   const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
+  if (gw) gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A'));
   // ---- star objectives: compute this run's stars, fold into the per-jet best, render on #gameover ----
   const stars = evalStars(run, player);
   const jetId = (player && player.jet && player.jet.id) || null;
@@ -968,6 +1011,9 @@ function endRun(title) {
   updateBest();
   g('touchControls').classList.remove('show');
   g('gameover').classList.add('show');
+  // JUICE: retrigger the staged reward reveal (grade snap → stars → SP rise) each time the debrief opens.
+  if (gw && !prefersReducedMotion()) { gw.classList.remove('reveal'); void gw.offsetWidth; gw.classList.add('reveal'); }
+  else if (gw) gw.classList.add('reveal');
 }
 function operationComplete() {
   if (state !== 'playing') return;
@@ -977,7 +1023,7 @@ function operationComplete() {
   // F15: clearing the campaign once unlocks Boss Rush mode (persisted; healed for legacy saves)
   if (meta && !meta.bossRushUnlocked) { meta.bossRushUnlocked = true; saveMeta(); }
   showBanner(t('banner.operationComplete'));
-  endRun(t('banner.operationComplete'));
+  endRun(t('banner.operationComplete'), true);
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // reflect the new unlock in the hangar
 }
 
@@ -1004,7 +1050,7 @@ function bossRushComplete() {
   state = 'dead';
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   showBanner(tf('bossrush.cleared', { t: bossRushTimeStr(secs) }));
-  endRun(t('bossrush.title'));
+  endRun(t('bossrush.title'), true);
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
 }
 // mm:ss for the leaderboard
@@ -1015,6 +1061,7 @@ function refreshBossRushEntry() {
   const unlocked = !!(meta && meta.bossRushUnlocked);
   btn.disabled = !unlocked;
   btn.classList.toggle('disabled', !unlocked);
+  btn.classList.toggle('is-locked', !unlocked);   // §3l: designed locked treatment, not just dimmed
   btn.textContent = unlocked ? t('bossrush.start') : t('bossrush.locked');
   const note = g('bossRushNote');
   if (note) {
@@ -1119,7 +1166,7 @@ function loadSettings() {
 function setTxt(id, str) { const e = g(id); if (e) e.textContent = str; }
 function applyLang() {
   // language-select / onboarding screens
-  setTxt('langTitle', t('lang.title')); setTxt('langSub', t('lang.sub'));
+  setTxt('langTagline', t('lang.tagline')); setTxt('langBegin', t('lang.begin'));
   setTxt('obTitle', t('onboard.title')); setTxt('obSub', t('onboard.sub'));
   setTxt('obFlightH', t('onboard.flight')); setTxt('obFlightK', t('onboard.flightKeys'));
   setTxt('obCombatH', t('onboard.combat')); setTxt('obCombatK', t('onboard.combatKeys'));
@@ -1133,7 +1180,11 @@ function applyLang() {
   setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment')); setTxt('lblMode', t('hangar.mode'));
   setTxt('mbtnEndless', t('hangar.endless')); setTxt('mbtnOperation', t('hangar.operation'));
   setTxt('rbTitle', t('hangar.rivalBoard'));
-  setTxt('launch', t('hangar.launch')); setTxt('manualBtn', t('hangar.manualBtn'));
+  // launch label lives in the leading text node so the #launchSub subtitle span survives re-localization
+  const launchBtn = g('launch');
+  if (launchBtn) { if (launchBtn.firstChild && launchBtn.firstChild.nodeType === 3) launchBtn.firstChild.nodeValue = t('hangar.launch'); else launchBtn.insertBefore(document.createTextNode(t('hangar.launch')), launchBtn.firstChild); }
+  refreshLaunchSub();
+  setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: boss-rush entry label/note follow language + unlock state
