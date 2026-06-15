@@ -152,10 +152,10 @@
       </div>
     </div>
 
-    <!-- SECONDARY TIER (§5c): grouped ghost row at the bottom; BOSS RUSH uses the locked treatment -->
+    <!-- §5c: CONTROLS & MANUAL promoted to its own prominent CTA above the secondary ghost row -->
+    <button id="manualBtn" class="ghostbtn manual-cta">&#128214; CONTROLS &amp; MANUAL &middot; HOW TO PLAY</button>
     <div class="hbtns hbtns-secondary">
       <button id="metaBtn" class="ghostbtn">&#9650; COMMAND &amp; PROGRESSION</button>
-      <button id="manualBtn" class="ghostbtn">&#9636; CONTROLS &amp; MANUAL</button>
       <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>
       <button id="bossRushBtn" class="ghostbtn disabled is-locked" disabled>&#9760; BOSS RUSH</button>
     </div>
@@ -358,29 +358,43 @@
     <div class="mgrid">
       <section class="mset">
         <h3 id="manH_Settings">Settings</h3>
-        <div class="srow"><label id="lblLang">Language</label><div class="langtog"><button id="setLangEN" class="langbtn" data-lang="EN">English</button><button id="setLangZH" class="langbtn" data-lang="ZH">简体中文</button></div></div>
-        <div class="srow"><label id="lblSkin" for="setSkin">Visual style</label><select id="setSkin" class="seldrop"><option value="futuristic">Futuristic</option><option value="analog">Analog Instruments</option><option value="manual">Field Manual</option><option value="flat">Modern Flat</option><option value="blueprint">Blueprint</option></select></div>
-        <div class="srow"><label id="lblPalette" for="setPalette">Color scheme</label><select id="setPalette" class="seldrop"><option value="amber">Amber / Green</option><option value="cyan">Cyan / Teal</option><option value="phosphor">Green Phosphor</option><option value="ice">Ice Blue</option><option value="red">Night Red</option></select></div>
-        <div class="srow"><label id="lblHudScale" for="setHudScale">HUD size</label><select id="setHudScale" class="seldrop"><option value="0.8">Small</option><option value="1">Normal</option><option value="1.15">Large</option><option value="1.3">Extra Large</option></select></div>
-        <div class="srow"><label id="lblSens" for="setSens">Control sensitivity</label><input id="setSens" type="range" min="50" max="200" value="100"></div>
-        <div class="srow"><label id="lblControlScheme">Steering</label><div class="segtog" id="controlSchemeTog"><button class="segbtn" data-cs="auto">Auto</button><button class="segbtn" data-cs="pointer">Manual</button><button class="segbtn" data-cs="rate">Classic</button></div></div>
-        <div class="srow"><label id="lblMobileControl">Mobile control</label><div class="segtog" id="mobileControlTog"><button class="segbtn" data-mc="touch">Touch</button><button class="segbtn" data-mc="motion">Motion</button></div></div>
-        <div class="srow"><label id="lblAggression">Tilt aggression</label><div class="segtog" id="aggressionTog"><button class="segbtn" data-ag="casual">Casual</button><button class="segbtn" data-ag="balanced">Balanced</button><button class="segbtn" data-ag="direct">Direct</button></div></div>
-        <div class="srow"><label id="lblMotion">Motion sensor</label><div class="segtog"><button id="setEnableMotion" class="segbtn">Enable Motion</button><button id="setRecenter" class="segbtn">Recenter</button></div></div>
-        <div class="srow motion-note" id="motionNote" style="display:none"><span id="motionNoteTxt"></span></div>
-        <div class="srow"><label id="lblHaptics" for="setHaptics">Haptic feedback (vibration)</label><input id="setHaptics" type="checkbox"></div>
-        <div class="srow"><label id="lblBtnOpacity" for="setBtnOpacity">Button opacity</label><input id="setBtnOpacity" type="range" min="40" max="100" value="80"></div>
-        <div class="srow"><label id="lblBtnLayout">Button layout</label><div class="segtog" id="btnLayoutTog"><button class="segbtn" data-bl="right">Right</button><button class="segbtn" data-bl="left">Left</button><button class="segbtn" data-bl="compact">Compact</button></div></div>
-        <div class="srow"><label id="lblGfx">Graphics quality</label><div class="segtog" id="gfxQualityTog"><button class="segbtn" data-gq="auto">Auto</button><button class="segbtn" data-gq="low">Low</button><button class="segbtn" data-gq="high">High</button></div></div>
-        <div class="srow"><label id="lblVol" for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
-        <div class="srow"><label id="lblInvert" for="setInvert">Invert controls (full stick on touch, pitch on keyboard)</label><input id="setInvert" type="checkbox"></div>
-        <div class="srow"><label id="lblAutoLock" for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
-        <div class="srow"><label id="lblWingman" for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
-        <div class="srow"><label id="lblDevUnlock" for="setDevUnlock">Unlock all aircraft (dev)</label><input id="setDevUnlock" type="checkbox"></div>
-        <div class="srow"><label id="lblRival" for="setRival">Nemesis rival ace (persistent named enemy)</label><input id="setRival" type="checkbox"></div>
-        <div class="srow"><label id="lblGroundWar" for="setGroundWar">Ground war (SAM/AAA sites, strike waves)</label><input id="setGroundWar" type="checkbox"></div>
-        <div class="srow"><label id="lblGunLead" for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
-        <div class="srow"><label id="lblMute" for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
+        <div class="sset-nav" id="ssetNav">
+          <button class="ssetbtn on" data-sset="display" id="ssetTab_display">Display</button>
+          <button class="ssetbtn" data-sset="controls" id="ssetTab_controls">Controls</button>
+          <button class="ssetbtn" data-sset="audio" id="ssetTab_audio">Audio</button>
+          <button class="ssetbtn" data-sset="game" id="ssetTab_game">Gameplay</button>
+        </div>
+        <div class="sset-group show" data-sset="display">
+          <div class="srow"><label id="lblLang">Language</label><div class="langtog"><button id="setLangEN" class="langbtn" data-lang="EN">English</button><button id="setLangZH" class="langbtn" data-lang="ZH">简体中文</button></div></div>
+          <div class="srow"><label id="lblSkin" for="setSkin">Visual style</label><select id="setSkin" class="seldrop"><option value="futuristic">Futuristic</option><option value="analog">Analog Instruments</option><option value="manual">Field Manual</option><option value="flat">Modern Flat</option><option value="blueprint">Blueprint</option></select></div>
+          <div class="srow"><label id="lblPalette" for="setPalette">Color scheme</label><select id="setPalette" class="seldrop"><option value="amber">Amber / Green</option><option value="cyan">Cyan / Teal</option><option value="phosphor">Green Phosphor</option><option value="ice">Ice Blue</option><option value="red">Night Red</option></select></div>
+          <div class="srow"><label id="lblHudScale" for="setHudScale">HUD size</label><select id="setHudScale" class="seldrop"><option value="0.8">Small</option><option value="1">Normal</option><option value="1.15">Large</option><option value="1.3">Extra Large</option></select></div>
+          <div class="srow"><label id="lblGfx">Graphics quality</label><div class="segtog" id="gfxQualityTog"><button class="segbtn" data-gq="auto">Auto</button><button class="segbtn" data-gq="low">Low</button><button class="segbtn" data-gq="high">High</button></div></div>
+        </div>
+        <div class="sset-group" data-sset="controls">
+          <div class="srow"><label id="lblSens" for="setSens">Control sensitivity</label><input id="setSens" type="range" min="50" max="200" value="100"></div>
+          <div class="srow"><label id="lblControlScheme">Steering</label><div class="segtog" id="controlSchemeTog"><button class="segbtn" data-cs="auto">Auto</button><button class="segbtn" data-cs="pointer">Manual</button><button class="segbtn" data-cs="rate">Classic</button></div></div>
+          <div class="srow"><label id="lblMobileControl">Mobile control</label><div class="segtog" id="mobileControlTog"><button class="segbtn" data-mc="touch">Touch</button><button class="segbtn" data-mc="motion">Motion</button></div></div>
+          <div class="srow"><label id="lblAggression">Tilt aggression</label><div class="segtog" id="aggressionTog"><button class="segbtn" data-ag="casual">Casual</button><button class="segbtn" data-ag="balanced">Balanced</button><button class="segbtn" data-ag="direct">Direct</button></div></div>
+          <div class="srow"><label id="lblMotion">Motion sensor</label><div class="segtog"><button id="setEnableMotion" class="segbtn">Enable Motion</button><button id="setRecenter" class="segbtn">Recenter</button></div></div>
+          <div class="srow motion-note" id="motionNote" style="display:none"><span id="motionNoteTxt"></span></div>
+          <div class="srow"><label id="lblHaptics" for="setHaptics">Haptic feedback (vibration)</label><input id="setHaptics" type="checkbox"></div>
+          <div class="srow"><label id="lblBtnOpacity" for="setBtnOpacity">Button opacity</label><input id="setBtnOpacity" type="range" min="40" max="100" value="80"></div>
+          <div class="srow"><label id="lblBtnLayout">Button layout</label><div class="segtog" id="btnLayoutTog"><button class="segbtn" data-bl="right">Right</button><button class="segbtn" data-bl="left">Left</button><button class="segbtn" data-bl="compact">Compact</button></div></div>
+          <div class="srow"><label id="lblInvert" for="setInvert">Invert controls (full stick on touch, pitch on keyboard)</label><input id="setInvert" type="checkbox"></div>
+        </div>
+        <div class="sset-group" data-sset="audio">
+          <div class="srow"><label id="lblVol" for="setVol">Master volume</label><input id="setVol" type="range" min="0" max="100" value="55"></div>
+          <div class="srow"><label id="lblMute" for="setMute">Mute all audio</label><input id="setMute" type="checkbox"></div>
+        </div>
+        <div class="sset-group" data-sset="game">
+          <div class="srow"><label id="lblAutoLock" for="setAutoLock">Auto-lock nearest target (off = press F to lock)</label><input id="setAutoLock" type="checkbox"></div>
+          <div class="srow"><label id="lblWingman" for="setWingman">Launch with a starting wingman</label><input id="setWingman" type="checkbox"></div>
+          <div class="srow"><label id="lblRival" for="setRival">Nemesis rival ace (persistent named enemy)</label><input id="setRival" type="checkbox"></div>
+          <div class="srow"><label id="lblGroundWar" for="setGroundWar">Ground war (SAM/AAA sites, strike waves)</label><input id="setGroundWar" type="checkbox"></div>
+          <div class="srow"><label id="lblGunLead" for="setGunLead">Lead-computing gunsight (deflection pipper)</label><input id="setGunLead" type="checkbox"></div>
+          <div class="srow"><label id="lblDevUnlock" for="setDevUnlock">Unlock all aircraft (dev)</label><input id="setDevUnlock" type="checkbox"></div>
+        </div>
       </section>
     </div>
     </div>
