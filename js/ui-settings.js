@@ -28,6 +28,7 @@ function loadSettings() {
     if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
     if (typeof s.opMode === 'boolean') opMode = s.opMode;
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
+    if (typeof s.aimAssist === 'boolean') aimAssist = s.aimAssist;
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
@@ -132,7 +133,7 @@ function applyLang() {
   setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert'));
   setTxt('lblAutoLock', t('set.autoLock')); setTxt('lblWingman', t('set.wingman'));
   setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
-  setTxt('lblGunLead', t('set.gunLead')); setTxt('lblMute', t('set.mute'));
+  setTxt('lblGunLead', t('set.gunLead')); setTxt('lblAimAssist', t('set.aimAssist')); setTxt('lblMute', t('set.mute'));
   setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
   // mobile control settings labels + segmented button captions
   setTxt('lblControlScheme', t('set.controlScheme'));
@@ -279,7 +280,7 @@ function applyHudScale() {
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
+      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, aimAssist, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
     }));

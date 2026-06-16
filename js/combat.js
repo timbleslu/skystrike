@@ -957,6 +957,33 @@ function updatePlayer(dt) {
     if (autoYaw) player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, autoYaw));
   }
 
+  // AIM ASSIST — gently steer the nose toward the gun lead pip of the nearest forward target (the SAME
+  // interceptPoint drawGunPipper draws). Optional, ON by default. A bounded world-axis nudge: it only acts
+  // inside a forward cone within gun range, eases out with distance, is rate-capped (never a hard snap), and
+  // yields entirely during a barrel roll — player input always dominates. Mirrors the autoYaw premultiply above.
+  if (aimAssist && !player.noCannon && barrelRollAnim <= 0 && typeof pickGunTarget === 'function') {
+    const at = pickGunTarget();
+    if (at && at.alive) {
+      const pp = player.group.position;
+      const relV = aimT1.copy(at.vel || ZERO).addScaledVector(player.vel, -0.9);   // rounds inherit 0.9 of jet vel
+      const ip = interceptPoint(pp, at.group.position, relV, 1400 * (player.bulletSpeedMul || 1));
+      if (ip) {
+        const desired = aimT2.copy(ip).sub(pp);
+        const dist = desired.length();
+        if (dist > 1) {
+          desired.multiplyScalar(1 / dist);
+          const fwdv = fwdOf(player.group, aimT3);
+          const angErr = Math.acos(clamp(fwdv.dot(desired), -1, 1));
+          const step = aimAssistStep(angErr, dist, dt);
+          if (step > 0) {
+            const axis = aimT1.crossVectors(fwdv, desired);   // aimT1 free now (relV consumed)
+            if (axis.lengthSq() > 1e-9) player.group.quaternion.premultiply(q2.setFromAxisAngle(axis.normalize(), step));
+          }
+        }
+      }
+    }
+  }
+
   let tT = player.throttle;
   if (thr) tT += dt * (0.35 + st.accel * 0.22);
   if (brake) tT -= dt * (0.5 + st.accel * 0.3);

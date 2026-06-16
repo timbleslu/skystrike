@@ -179,6 +179,7 @@ let rivalEnabled = true;     // nemesis rival ace appearances (Settings toggle)
 let groundWar = true;        // ground units + strike waves (Settings toggle)
 let opMode = false;          // operation map mode vs endless (Hangar mode select)
 let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
+let aimAssist = true;    // aim assist: gently steers the nose toward the gun lead point (Settings toggle, on by default)
 let controlSensitivity = 1.0; // turn-rate multiplier (0.5–2.0, Settings slider)
 // mobile control settings (Settings tab; persisted via storage seam)
 let mobileControl = 'touch';      // 'touch' | 'motion' — active analog flight source on mobile
@@ -527,6 +528,7 @@ const eul = new THREE.Euler();
 const ZERO = new THREE.Vector3(0, 0, 0), UPV = new THREE.Vector3(0, 1, 0), ZAX = new THREE.Vector3(0, 0, 1);
 const m4 = new THREE.Matrix4();
 const pp1 = new THREE.Vector3(), pp2 = new THREE.Vector3(), pp3 = new THREE.Vector3();
+const aimT1 = new THREE.Vector3(), aimT2 = new THREE.Vector3(), aimT3 = new THREE.Vector3();  // aim-assist scratch (combat.js updatePlayer)
 
 function fwdOf(o, out) { return (out || new THREE.Vector3()).set(0, 0, -1).applyQuaternion(o.quaternion); }
 function rightOf(o, out) { return (out || new THREE.Vector3()).set(1, 0, 0).applyQuaternion(o.quaternion); }

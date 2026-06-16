@@ -269,6 +269,27 @@ function steerCommand(scheme, intent, currentBank, t) {
   return { pitchCmd, rollCmd };
 }
 
+/* ---------------- aim-assist core ---------------- */
+// AIM ASSIST tunables (combat.js reads these; the THREE geometry/quaternion glue lives there).
+//   range   : world units — beyond this the assist is inert.
+//   cone    : radians — only assist when the nose is already within this angle of the lead point
+//             (a larger error is the player deliberately pointing elsewhere; leave it alone).
+//   gain    : proportional pull (per second per radian of error).
+//   maxRate : radians/second — hard cap so the assist nudges, never snaps.
+const AIM_ASSIST = { range: 2600, cone: 0.6, gain: 3.0, maxRate: 1.8 };
+// PURE — radians to rotate the nose toward the gun lead point THIS frame.
+// angErr = angle between boresight and the lead direction (rad); dist = range to the lead point.
+// Returns 0 outside the cone or beyond range (player flies free); otherwise a proportional step that
+// eases out with distance, is capped at maxRate*dt, and never overshoots the remaining error.
+function aimAssistStep(angErr, dist, dt, cfg) {
+  cfg = cfg || AIM_ASSIST;
+  if (!(dt > 0) || !(dist > 0) || dist > cfg.range) return 0;
+  if (!(angErr > 1e-4) || angErr > cfg.cone) return 0;
+  const falloff = 1 - dist / cfg.range;            // stronger up close, fades to 0 at max range
+  const step = angErr * cfg.gain * falloff * dt;   // proportional pull toward the lead point
+  return Math.min(step, cfg.maxRate * dt, angErr); // rate-capped; never past the lead
+}
+
 /* ---------------- graphics-quality core (F11) ---------------- */
 const GFX_TIERS = ['auto', 'low', 'high'];
 // PURE — resolve the effective render tier ('low'|'high') from the gfxQuality setting plus a cheap
@@ -590,6 +611,7 @@ if (typeof module !== 'undefined' && module.exports) {
     BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
+    AIM_ASSIST, aimAssistStep,
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,
