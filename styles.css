@@ -169,8 +169,13 @@ canvas{display:block}
 .special.ready{color:var(--ink-on-primary);background:linear-gradient(90deg,var(--primary),var(--primary-bright));border-color:var(--primary);text-shadow:none;box-shadow:var(--glow-primary);animation:rdy 1.4s infinite}
 .special.wing{margin-top:5px;color:#4dffa0;border-color:rgba(var(--ok-rgb),.5);text-shadow:0 0 8px rgba(var(--ok-rgb),.35)}
 .special.wing.down{color:#ff9a36;border-color:rgba(var(--primary-rgb),.55);text-shadow:none}
-#wingSidebar{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:none;flex-direction:column;gap:5px;pointer-events:none;z-index:5}
-#wingSidebar.visible{display:flex}
+#wingSidebar{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:none;flex-direction:column;gap:5px;pointer-events:none;z-index:5;max-height:46vh;overflow-y:auto;overflow-x:hidden}
+#wingSidebar.visible{display:flex;pointer-events:auto}
+#wingSidebar::-webkit-scrollbar{width:5px}
+#wingSidebar::-webkit-scrollbar-track{background:transparent}
+#wingSidebar::-webkit-scrollbar-thumb{background:rgba(var(--primary-rgb),0.35);border-radius:3px}
+#wingSidebar::-webkit-scrollbar-thumb:hover{background:rgba(var(--primary-rgb),0.55)}
+#wingSidebar{scrollbar-width:thin;scrollbar-color:rgba(var(--primary-rgb),0.35) transparent}
 .wing-row{background:rgba(0,0,0,.6);border:1px solid rgba(var(--ok-rgb),.35);padding:5px 9px;font-family:var(--mono);font-size:10px;color:#4dffa0;min-width:128px}
 .wing-row.down{color:#ff9a36;border-color:rgba(var(--primary-rgb),.4)}
 .wing-row.cca{color:#49b6ff;border-color:rgba(73,182,255,.4)}
