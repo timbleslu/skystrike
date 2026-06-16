@@ -226,18 +226,25 @@ let pendingWingNode = null;
 function buyNode(node) {
   if (!choosingUpgrade || !player || !node) return;
   if (nodeState(node) !== 'avail') { audio.ui(); return; }
-  // FRONTIER DRAFT: on the TECH tab you DRAFT one of the 3 offers — tapping stages it (toggle), and the
-  // commit + wing-picker happen at DEPLOY. This makes "one pick per wave" visible (the rest grey out).
-  if (techTab === 'tech') {
-    if (!inOffer(node.id)) { audio.ui(); return; }
-    draftState.selected = (draftState.selected === node.id) ? null : node.id;
-    audio.ui();
-    renderTechTree(false);
+  // ARMORY tab: unrestricted, buy-as-many. Wing nodes never live here, but keep the guard for safety.
+  if (techTab !== 'tech') {
+    if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
+    commitNode(node);
     return;
   }
-  // ARMORY tab: unrestricted, buy-as-many. Wing nodes never live here, but keep the guard for safety.
+  // FRONTIER DRAFT: commit immediately, then reroll fresh 3 so the player can keep buying with RP.
+  if (!inOffer(node.id)) { audio.ui(); return; }
   if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
   commitNode(node);
+  rerollAfterPick();
+}
+function rerollAfterPick() {
+  draftState.visit++;
+  draftState.drafted = false;
+  draftState.rerollUsed = false;
+  draftState.selected = null;
+  rollDraftOffer(0);
+  renderTechTree(false);
 }
 
 function commitNode(node) {
@@ -276,8 +283,7 @@ function confirmWingPick(i) {
   if (!node) return;
   pendingWingShape = JETS[i].shape;
   commitNode(node);
-  // a drafted wing node opens this picker mid-DEPLOY; once the jet is chosen, finish the deploy it paused.
-  if (choosingUpgrade && techTab === 'tech') deployFromTech();
+  if (choosingUpgrade && techTab === 'tech') rerollAfterPick();
 }
 
 function closeWingPicker() {
