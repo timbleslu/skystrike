@@ -254,6 +254,32 @@ canvas{display:block}
 #touchControls.layout-compact .t-btn{transform:scale(calc(var(--ctrl-scale,1) * 0.85));}
 #touchControls.layout-compact .joy-base{transform:scale(calc(var(--ctrl-scale,1) * 0.85));}
 
+/* --- ORPHAN BUTTON FIX + touch declutter ---
+   #tb-spc2 (2nd special) and the AWACS trio (#tb-aws/#tb-ars/#tb-ajm) shipped with NO
+   position rule, so position:absolute parked them all at the top-left origin (the garbled
+   pill over the HP bars). Give them real homes; thin the right side on touch so the radar/
+   ammo block leaves the bottom-right thumb zone to the action buttons. */
+#tb-spc2{bottom:166px; right:18px; width:44px; height:44px; border-color:var(--yel); color:var(--yel);}
+#tb-spc2:active{background:rgba(var(--reward-rgb),0.4); color:#fff; box-shadow:0 0 20px rgba(var(--reward-rgb),0.6);}
+#tb-spc.ready, #tb-spc2.ready{border-color:var(--yel); color:var(--yel); box-shadow:0 0 16px rgba(var(--reward-rgb),0.7);}  /* mirrors the hidden desktop special chip's READY state */
+/* AWACS support: a centred row along the bottom, clear of both thumbs */
+#tb-aws, #tb-ars, #tb-ajm{bottom:14px; width:48px; height:38px; font-size:9px; border-color:var(--cy); color:var(--cy);}
+#tb-aws{left:calc(50% - 76px);}
+#tb-ars{left:calc(50% - 24px);}
+#tb-ajm{left:calc(50% + 28px);}
+#touchControls.layout-left #tb-spc2{right:auto; left:18px;}
+/* on a touch session, lift radar+ammo to the top-right and drop the redundant chip clutter
+   (SPC/SPC2 buttons carry the special state via .ready; AWACS chips → the buttons above) */
+:root.is-touch #hud .panel.br{top:34px; bottom:auto; right:56px; transform-origin:top right; gap:4px;}
+:root.is-touch #radar{width:90px; height:90px;}
+:root.is-touch .ammo{gap:12px;}
+:root.is-touch .ammo b{font-size:14px;}
+:root.is-touch #awacsHud, :root.is-touch .panel.br .special{display:none !important;}
+/* short phone landscape: the ally roster has no room — allies still show as radar markers */
+@media screen and (max-height:540px) and (orientation:landscape){
+  :root.is-touch #wingSidebar{display:none !important;}
+}
+
 /* ---------- HANGAR ---------- */
 #hangar{position:fixed;inset:0;z-index:60;display:flex;overflow-y:auto;
   background:radial-gradient(ellipse at 50% 40%,rgba(8,20,30,.55),rgba(2,5,10,.92));backdrop-filter:blur(2px);transition:opacity .5s}

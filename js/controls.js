@@ -207,6 +207,7 @@ function requestMotionPermission() {
 function initTouchControls() {
   if (isTouchEnabled) return;   // bind once
   isTouchEnabled = true;
+  document.documentElement.classList.add('is-touch');   // lets CSS thin the HUD for touch sessions (styles.css)
 
   const joyBase = g('joyBase'), joyStick = g('joyStick');
   const half = innerWidth / 2;

@@ -314,6 +314,7 @@ function updateDom(dt) {
   if (!hasSpecial(player.jet)) { el.special.textContent = t('hud.noSpecial'); el.special.classList.remove('ready'); }
   else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + t('hud.ready'); el.special.classList.add('ready'); }
   else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + t('hud.sec'); el.special.classList.remove('ready'); }
+  { const tbS = g('tb-spc'); if (tbS) tbS.classList.toggle('ready', hasSpecial(player.jet) && player.special.cd <= 0); }  // touch: SPC button carries READY (desktop chip hidden on touch)
   // SLOT 2 chip (feature #3): hidden when nothing equipped, else mirrors the slot-1 name + READY/countdown.
   // The mobile SPC2 button mirrors the chip's visibility (only shown when something is equipped).
   if (el.special2) {
@@ -327,7 +328,8 @@ function updateDom(dt) {
       if (s2.cd <= 0) { el.special2.textContent = nm + ' \u25B8 ' + t('hud.ready'); el.special2.classList.add('ready'); }
       else { el.special2.textContent = nm + ' \u25B8 ' + Math.ceil(s2.cd) + t('hud.sec'); el.special2.classList.remove('ready'); }
     }
-    const tb2 = g('tb-spc2'); if (tb2) tb2.style.display = (equipped && isTouchEnabled) ? '' : 'none';
+    const tb2 = g('tb-spc2');
+    if (tb2) { tb2.style.display = (equipped && isTouchEnabled) ? '' : 'none'; tb2.classList.toggle('ready', equipped && s2.cd <= 0); }
   }
   updateWingmanSidebar();
   tog(el.wStealth, player.stealth);
