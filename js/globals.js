@@ -466,6 +466,8 @@ let awacsLast = { strike: 0, resupply: 0, jam: 0 };   // sec-clock of last succe
 /* Touch controls state */
 let isTouchEnabled = false;
 let joyActive = false, joyTouchId = null, joyBaseCenter = {x:0, y:0}, touchInput = {x:0, y:0};
+let mouseFlight = false;                            // desktop mouse-pointer flight toggle (default off)
+let mouseInput = { x: 0, y: 0, active: false };     // normalized pointer offset from center, -1..1
 let touchBtns = { gun:false, msl:false, flr:false, spc:false, thr:false, brk:false };
 // unified flight-input seam (controls.js writes it each frame; combat.js consumes + adds keyboard)
 let flightInput = { pitch: 0, roll: 0 };           // normalized analog flight axes, -1..1
