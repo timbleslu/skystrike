@@ -963,6 +963,9 @@ function updatePlayer(dt) {
   if (aimAssist && !player.noCannon && barrelRollAnim <= 0 && typeof pickGunTarget === 'function') {
     const at = pickGunTarget();
     if (at && at.alive) {
+      // strongest tier "forces" toward the lead UNLESS the player is actively orienting elsewhere
+      const manualAim = down('KeyW') || down('KeyS') || down('KeyQ') || down('KeyE') || down('KeyA') || down('KeyD') || Math.hypot(flightInput.pitch || 0, flightInput.roll || 0) > 0.12;
+      const cfg = aimAssistCfg(aimStrength, manualAim);
       const pp = player.group.position;
       const relV = aimT1.copy(at.vel || ZERO).addScaledVector(player.vel, -0.9);   // rounds inherit 0.9 of jet vel
       const ip = interceptPoint(pp, at.group.position, relV, 1400 * (player.bulletSpeedMul || 1));
@@ -973,7 +976,7 @@ function updatePlayer(dt) {
           desired.multiplyScalar(1 / dist);
           const fwdv = fwdOf(player.group, aimT3);
           const angErr = Math.acos(clamp(fwdv.dot(desired), -1, 1));
-          const step = aimAssistStep(angErr, dist, dt);
+          const step = aimAssistStep(angErr, dist, dt, cfg);
           if (step > 0) {
             const axis = aimT1.crossVectors(fwdv, desired);   // aimT1 free now (relV consumed)
             if (axis.lengthSq() > 1e-9) player.group.quaternion.premultiply(q2.setFromAxisAngle(axis.normalize(), step));

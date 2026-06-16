@@ -276,7 +276,22 @@ function steerCommand(scheme, intent, currentBank, t) {
 //             (a larger error is the player deliberately pointing elsewhere; leave it alone).
 //   gain    : proportional pull (per second per radian of error).
 //   maxRate : radians/second — hard cap so the assist nudges, never snaps.
-const AIM_ASSIST = { range: 2600, cone: 0.6, gain: 3.0, maxRate: 1.8 };
+// 5 strength presets, weakest -> strongest. gain/maxRate/cone scale up; level 5 is the "forcing" tier.
+const AIM_ASSIST_LEVELS = [
+  { range: 2400, cone: 0.45, gain: 1.2, maxRate: 0.6 },  // 1 — barely a nudge
+  { range: 2500, cone: 0.52, gain: 2.0, maxRate: 1.0 },  // 2
+  { range: 2600, cone: 0.60, gain: 3.0, maxRate: 1.8 },  // 3 — original default
+  { range: 2800, cone: 0.75, gain: 4.5, maxRate: 3.0 },  // 4
+  { range: 3000, cone: 1.20, gain: 9.0, maxRate: 7.0 },  // 5 — strongest / forcing
+];
+const AIM_ASSIST = AIM_ASSIST_LEVELS[2];   // back-compat alias (the original default)
+// PURE — clamp a 1..5 level to its config. manualOverride (player actively steering) makes the strongest
+// tier yield to the player: it drops to the weakest preset so the assist only "forces" when hands-off.
+function aimAssistCfg(level, manualOverride) {
+  const i = Math.min(AIM_ASSIST_LEVELS.length, Math.max(1, level | 0)) - 1;
+  if (manualOverride && i >= 4) return AIM_ASSIST_LEVELS[0];   // top tier releases to barely-a-nudge
+  return AIM_ASSIST_LEVELS[i];
+}
 // PURE — radians to rotate the nose toward the gun lead point THIS frame.
 // angErr = angle between boresight and the lead direction (rad); dist = range to the lead point.
 // Returns 0 outside the cone or beyond range (player flies free); otherwise a proportional step that
@@ -611,7 +626,7 @@ if (typeof module !== 'undefined' && module.exports) {
     BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
-    AIM_ASSIST, aimAssistStep,
+    AIM_ASSIST, AIM_ASSIST_LEVELS, aimAssistCfg, aimAssistStep,
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,

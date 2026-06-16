@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { AIM_ASSIST, aimAssistStep } = require('../js/core.js');
+const { AIM_ASSIST, AIM_ASSIST_LEVELS, aimAssistCfg, aimAssistStep } = require('../js/core.js');
 
 const dt = 1 / 60;
 
@@ -69,6 +69,22 @@ const dt = 1 / 60;
     prev = err;
   }
   assert.ok(err < 0.5, 'assist made progress toward the lead point');
+}
+
+// ---- aimAssistCfg: 5 levels, monotonic strength, clamping, top-tier manual release ----
+{
+  assert.strictEqual(AIM_ASSIST_LEVELS.length, 5, 'five strength presets');
+  for (let i = 1; i < 5; i++) {
+    assert.ok(AIM_ASSIST_LEVELS[i].gain > AIM_ASSIST_LEVELS[i - 1].gain, 'gain rises weakest->strongest');
+    assert.ok(AIM_ASSIST_LEVELS[i].maxRate >= AIM_ASSIST_LEVELS[i - 1].maxRate, 'maxRate non-decreasing');
+  }
+  assert.strictEqual(aimAssistCfg(3, false), AIM_ASSIST_LEVELS[2], 'level 3 -> preset index 2');
+  assert.strictEqual(aimAssistCfg(0, false), AIM_ASSIST_LEVELS[0], 'clamps below 1');
+  assert.strictEqual(aimAssistCfg(99, false), AIM_ASSIST_LEVELS[4], 'clamps above 5');
+  assert.strictEqual(aimAssistCfg(5, false), AIM_ASSIST_LEVELS[4], 'top tier hands-off = strongest');
+  assert.strictEqual(aimAssistCfg(5, true), AIM_ASSIST_LEVELS[0], 'top tier yields to manual input');
+  assert.strictEqual(aimAssistCfg(3, true), AIM_ASSIST_LEVELS[2], 'lower tiers ignore manual flag');
+  assert.strictEqual(AIM_ASSIST, AIM_ASSIST_LEVELS[2], 'AIM_ASSIST stays the level-3 alias');
 }
 
 console.log('aim-assist.test.js OK');
