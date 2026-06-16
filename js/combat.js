@@ -836,19 +836,27 @@ function applySpecialEffect(id) {
     empFlash = 0.4; showBanner('ORDNANCE STORM'); audio.missile(); run.missiles += fired;
 
   } else if (id === 'F-47') {
-    // CCA SWARM — launch three vivid electric-blue drones far ahead where you can see them
+    // CCA SWARM — launch vivid electric-blue drones far ahead where you can see them
+    // SWARM RACK / HYDRA scale the swarm just like a missile salvo (3 / 6 / 9), extra ranks fanned out so they stay visible
     const fwd = fwdOf(player.group, new THREE.Vector3()), right = rightOf(player.group, new THREE.Vector3());
     const pp = player.group.position;
-    const offsets = [                             // staggered fan: centre + left + right
-      { ahead: 320, lateral:   0, vert:  10 },
-      { ahead: 240, lateral:-185, vert:  30 },
-      { ahead: 240, lateral: 185, vert:  30 },
+    const mult = 1 + (player.mslSwarm || 0);
+    const base = [                                // staggered fan per rank: centre + left + right
+      { ahead: 320, lateral:   0, vert: 10 },
+      { ahead: 240, lateral:-185, vert: 30 },
+      { ahead: 240, lateral: 185, vert: 30 },
     ];
     let launched = 0;
-    for (let k = 0; k < offsets.length; k++) {
-      const o = offsets[k];
-      const pt = pp.clone().addScaledVector(fwd, o.ahead).addScaledVector(right, o.lateral).addScaledVector(UPV, o.vert);
-      if (spawnCCA(pt)) launched++;
+    for (let r = 0; r < mult; r++) {
+      const spread = (r - (mult - 1) / 2) * 95;   // fan extra ranks left/right of centre so they don't overlap
+      for (let k = 0; k < base.length; k++) {
+        const o = base[k];
+        const pt = pp.clone()
+          .addScaledVector(fwd, o.ahead - r * 45)
+          .addScaledVector(right, o.lateral + spread)
+          .addScaledVector(UPV, o.vert + r * 6);
+        if (spawnCCA(pt)) launched++;
+      }
     }
     spawnShockwave(pp.clone());
     explode(pp.clone(), false);
@@ -946,6 +954,7 @@ function updatePlayer(dt) {
     // back to the start, so heading AND pitch are UNCHANGED when it completes. The pitch/yaw integrate AND
     // the auto-scheme heading yaw are both frozen for the duration, so nothing can drift the final facing.
     player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);   // tells (wingtip vapor, HUD) still read rollRate
+    player.invuln = Math.max(player.invuln, barrelRollAnim);   // keep i-frames topped up to the remaining roll time so projectile immunity spans the WHOLE roll, not just BARREL_ROLL_INVULN
     const prog = clamp(1 - barrelRollAnim / BARREL_ROLL_DURATION, 0, 1);
     player.group.quaternion.copy(player._brQuat0).multiply(q1.setFromAxisAngle(ZAX, barrelRollDir * prog * TWO_PI));
     player._brEnding = true;
