@@ -69,6 +69,14 @@ function readFlightInput() {
     const s = invertY ? -1 : 1;
     pitch = mapFlightInput(s * touchInput.y, a, false) * a.pitchClamp;
     roll = mapFlightInput(s * touchInput.x, a, false);
+  } else if (mouseFlight && mouseInput.active && state === 'playing') {
+    // DIRECTIONAL mouse pointer (desktop): the jet flies TOWARD the pointer's offset from screen
+    // center — same shaping + sign convention as the touch joystick (+y = dive, since combat.js
+    // applies pitchIn = -pitchCmd). invertY flips the WHOLE pointer like the touch stick.
+    const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
+    const s = invertY ? -1 : 1;
+    pitch = mapFlightInput(s * mouseInput.y, a, false) * a.pitchClamp;
+    roll  = mapFlightInput(s * mouseInput.x, a, false);
   }
   flightInput.pitch = clamp(pitch, -1, 1);
   flightInput.roll = clamp(roll, -1, 1);
@@ -297,3 +305,20 @@ function applyButtonStyle() {
   tc.classList.remove('layout-right', 'layout-left', 'layout-compact');
   tc.classList.add('layout-' + (buttonLayout || 'right'));
 }
+
+/* ---------------- mouse-pointer flight (desktop, optional) ---------------- */
+// Mirrors the directional touch joystick: while mouseFlight is on and playing, the normalized
+// pointer offset from screen center feeds the flight seam (above) via mouseInput. Off by default.
+function initMouseControls() {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('mousemove', (e) => {
+    if (!mouseFlight || state !== 'playing' || paused) return;
+    const nx = clamp((e.clientX - innerWidth / 2) / (innerWidth / 2), -1, 1);
+    const ny = clamp((e.clientY - innerHeight / 2) / (innerHeight / 2), -1, 1);
+    // small dead-zone near center so the jet can fly straight
+    if (Math.hypot(nx, ny) < 0.06) { mouseInput.x = 0; mouseInput.y = 0; mouseInput.active = true; return; }
+    mouseInput.x = nx; mouseInput.y = ny; mouseInput.active = true;
+  }, { passive: true });
+}
+
+if (typeof window !== 'undefined') initMouseControls();

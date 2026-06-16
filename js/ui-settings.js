@@ -24,6 +24,7 @@ function loadSettings() {
     if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
     if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
     if (typeof s.devUnlockAll === 'boolean') devUnlockAll = s.devUnlockAll;
+    if (typeof s.mouseFlight === 'boolean') mouseFlight = s.mouseFlight;   // F7: desktop mouse-pointer flight toggle
     if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
     if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
     if (typeof s.opMode === 'boolean') opMode = s.opMode;
@@ -131,7 +132,7 @@ function applyLang() {
   setTxt('manTab_tactics', t('manual.tabTactics')); setTxt('manTab_settings', t('manual.tabSettings'));
   // settings labels
   setTxt('lblLang', t('set.language')); setTxt('lblSens', t('set.sensitivity'));
-  setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert'));
+  setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert')); setTxt('lblMouseFlight', t('set.mouseFlight'));
   setTxt('lblAutoLock', t('set.autoLock')); setTxt('lblWingman', t('set.wingman'));
   setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
   setTxt('lblGunLead', t('set.gunLead')); setTxt('lblAimAssist', t('set.aimAssist')); setTxt('lblAimStrength', t('set.aimStrength')); setTxt('lblMute', t('set.mute'));
@@ -228,6 +229,8 @@ function syncControlSettingsUI() {
   mark('gfxQualityTog', 'gq', gfxQuality);
   const sh = g('setHaptics'); if (sh) sh.checked = haptics;
   const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
+  const smf = g('setMouseFlight');   // F7: desktop mouse-pointer flight toggle (bound once)
+  if (smf) { smf.checked = mouseFlight; if (!smf._bound) { smf._bound = true; smf.addEventListener('change', () => { mouseFlight = smf.checked; if (typeof audio !== 'undefined' && audio.on) audio.ui(); saveSettings(); }); } }
 }
 // Enable-Motion flow: request permission from this user gesture; fall back to Touch on deny/unsupported.
 function enableMotionFlow() {
@@ -282,7 +285,7 @@ function applyHudScale() {
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, devUnlockAll, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
+      volume, muted, invertY, autoLock, startWingman, devUnlockAll, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
     }));
