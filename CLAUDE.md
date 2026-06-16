@@ -60,12 +60,12 @@ After UI/CSS or i18n changes, perform visual verification by opening the page in
 Game is **feature-complete** for web. Playable at `index.html`.
 
 **All systems implemented (merged to master):**
-- Flight/combat: touch + motion controls, mobile THR slider (drag-to-throttle, replaces THR/BRK buttons), 3 control schemes (AUTO/ASSISTED/EXPERT), barrel-roll, camera shake, gfx quality tiers
-- Meta-progression: SP currency, perks, jet/skin unlocks, achievements, pilot callsign + emblem, run grading (S/A/B/C), star objectives
+- Flight/combat: touch + motion + optional desktop **mouse-pointer flight** (point-to-fly, mirrors the joystick), mobile THR slider (drag-to-throttle, replaces THR/BRK buttons), 3 control schemes (AUTO/ASSISTED/EXPERT), barrel-roll (i-frames now span the FULL 0.65s roll, not just 0.4s — projectile-immune the whole roll), camera shake, gfx quality tiers; F-47 CCA-SWARM drone count scales with missile-count techs (`mslSwarm`)
+- Meta-progression: SP currency, perks, jet/skin unlocks, **SP-gated 2nd special slot** (`meta.slot2`/`SLOT2_COST`/`slot2Unlocked`/`buySlot2`; fire equipped slot-2 with **B**), achievements, pilot callsign + emblem, run grading (S/A/B/C), star objectives; **"Unlock all aircraft (dev)" (`devUnlockAll`) now bypasses EVERY gate** — jets, skins, emblems, boss-rush, and the 2nd-slot unlock — for playtesting
 - Missions: 5 typed mission types, sector boss aces, scripted set-pieces (samCorridor/bomberRun/carrier), AWACS support
 - Game modes: daily seeded challenge, boss rush (unlocks after first campaign clear)
 - Content: weather + TOD gameplay, multi-phase bosses, named hostile aces, sound variety (per-jet engine timbre, lock/kill SFX)
-- UX: tabbed flight manual (4 panels per tab), tutorial opens immediately after controls screen, bilingual EN/ZH throughout
+- UX: tabbed flight manual (4 panels per tab; the Guide tab documents **B = 2nd special slot**), **scrollable ally/wingman/CCA sidebar** (`#wingSidebar` max-height + overflow-y), tutorial opens immediately after controls screen, bilingual EN/ZH throughout
 
 **iOS:**
 - Capacitor scaffold removed from repo (regenerate with `npx cap add ios` when ready to build)
