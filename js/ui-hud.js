@@ -188,7 +188,7 @@ function startTutorial() {
     el.tutSkip.textContent = t('tut.skip');
     if (!el.tutSkip._wired) {                        // wire Skip once
       el.tutSkip._wired = true;
-      el.tutSkip.addEventListener('click', () => { advanceTutorial('skip'); if (audio.on) audio.ui(); });
+      el.tutSkip.addEventListener('click', () => { skipTutorial(); });
     }
   }
   renderTutorial();
@@ -201,6 +201,14 @@ function finishTutorial() {
   showBanner(t('tut.done'));
   // (barrel roll is now its own tutorial step — no parting tip banner; that double-taught it)
   setTimeout(() => { if (state === 'playing' && tutorial.done) returnToHangar(); }, 4000);
+}
+// Skip = abandon the tutorial and return to the hangar immediately (do NOT keep flying the tutorial waves).
+// Latches tutorial.done so the start gate (ui-flow.js) won't relaunch it on the next mission.
+function skipTutorial() {
+  tutorial.active = false; tutorial.done = true;
+  if (el.tut) el.tut.classList.remove('show');
+  if (audio.on) audio.ui();
+  if (typeof returnToHangar === 'function') returnToHangar();
 }
 // feed one detected action event into the pure machine; re-render or finish on a step change.
 function advanceTutorial(event) {
