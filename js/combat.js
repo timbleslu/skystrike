@@ -935,20 +935,19 @@ function updatePlayer(dt) {
   const tgtYaw = yawIn * tb * 0.5;
   player.pitchRate = damp(player.pitchRate, tgtPitch, player.vectorSurge > 0 ? 6.5 : 4.5, dt);
   player.rollRate = damp(player.rollRate, tgtRoll, 5.5, dt);
-  // Barrel-roll animation: override roll rate to drive a full 360° spin over BARREL_ROLL_DURATION.
-  // TWO_PI / BARREL_ROLL_DURATION gives the required angular velocity; direction = player's last roll intent
-  // (or +1 if neutral). Overrides normal damped rate for the duration, then exits cleanly via normal damp.
-  if (barrelRollAnim > 0) {
-    player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);
-    // gentle pitch pulse through the roll midpoint for a real barrel-roll arc
-    const frac = 1 - barrelRollAnim / BARREL_ROLL_DURATION;
-    if (frac > 0.2 && frac < 0.8) player.pitchRate += tb * 0.35 * Math.sin((frac - 0.2) * Math.PI / 0.6);
-  }
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
 
-  eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
-  q1.setFromEuler(eul);
-  player.group.quaternion.multiply(q1);
+  if (barrelRollAnim > 0) {
+    // Barrel roll: a PURE roll about the body forward axis. A full 360° spins over BARREL_ROLL_DURATION,
+    // so when it completes the jet's heading and pitch are UNCHANGED (only the roll moved). No pitch pulse,
+    // and the pitch/yaw integrate is skipped for the duration so nothing drifts the final facing.
+    player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);   // tells (wingtip vapor, HUD) still read rollRate
+    player.group.quaternion.multiply(q1.setFromAxisAngle(ZAX, player.rollRate * dt));
+  } else {
+    eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
+    q1.setFromEuler(eul);
+    player.group.quaternion.multiply(q1);
+  }
   // AUTO scheme heading turn: a WORLD-axis yaw proportional to the current bank. Applied here (not in steerCommand)
   // and about the WORLD up axis so it's DECOUPLED from pitch — you can dive/climb while turning (diagonals work).
   // sign: bank right (currentBank>0) -> negative world yaw -> nose right. Scaled by tb so it tracks airframe agility.
