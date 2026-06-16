@@ -954,6 +954,8 @@ function updatePlayer(dt) {
       player.group.quaternion.copy(player._brQuat0);
       player._brEnding = false;
       player.rollRate = player.pitchRate = player.yawRate = 0;   // zero rates so this frame's integrate is identity (no drift)
+      player._brSettle = true;   // skip auto-yaw THIS frame: currentBank (read at the top of updatePlayer) is still the
+                                 // stale mid-roll bank, and feeding it to the coordinated-turn yaw would nudge heading
     }
     eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
     q1.setFromEuler(eul);
@@ -963,10 +965,11 @@ function updatePlayer(dt) {
   // and about the WORLD up axis so it's DECOUPLED from pitch — you can dive/climb while turning (diagonals work).
   // sign: bank right (currentBank>0) -> negative world yaw -> nose right. Scaled by tb so it tracks airframe agility.
   // Gated OFF during a barrel roll: otherwise the 360° bank sweep feeds this term a net heading yaw (drift).
-  if (controlScheme === 'auto' && barrelRollAnim <= 0) {
+  if (controlScheme === 'auto' && barrelRollAnim <= 0 && !player._brSettle) {
     const autoYaw = -STEER.autoYawGain * Math.sin(currentBank) * tb * dt;
     if (autoYaw) player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, autoYaw));
   }
+  player._brSettle = false;   // one-frame settle guard consumed; next frame reads a fresh (level) currentBank
 
   // AIM ASSIST — gently steer the nose toward the gun lead pip of the nearest forward target (the SAME
   // interceptPoint drawGunPipper draws). Optional, ON by default. A bounded world-axis nudge: it only acts
