@@ -180,6 +180,7 @@ let groundWar = true;        // ground units + strike waves (Settings toggle)
 let opMode = false;          // operation map mode vs endless (Hangar mode select)
 let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
 let aimAssist = true;    // aim assist: gently steers the nose toward the gun lead point (Settings toggle, on by default)
+let aimStrength = 3;     // aim-assist strength 1..5 (Settings slider, shown only when aimAssist is on; 5 = forcing)
 let controlSensitivity = 1.0; // turn-rate multiplier (0.5–2.0, Settings slider)
 // mobile control settings (Settings tab; persisted via storage seam)
 let mobileControl = 'touch';      // 'touch' | 'motion' — active analog flight source on mobile

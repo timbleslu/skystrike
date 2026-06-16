@@ -7,6 +7,8 @@ function renderKillBoard() {
     ? rival.board.slice().reverse().map(b => '<div class="rb-row"><span>☠ ' + b.name + '</span><span>' + b.jetName + '</span><span>' + tf('hud.killRow', { lv: b.level, wv: b.wave }) + '</span></div>').join('')
     : '<div class="rb-empty">' + t('hangar.noRivals') + '</div>';
 }
+// the aim-assist strength bar only appears while aim assist is enabled
+function updateAimStrengthVis() { const r = g('rowAimStrength'); if (r) r.style.display = aimAssist ? '' : 'none'; }
 function buildHangar() {
   // ---- single-jet carousel selector ----
   const dots = g('jetDots'); dots.innerHTML = '';
@@ -52,7 +54,9 @@ function buildHangar() {
   const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const saa = g('setAimAssist'); if (saa) { saa.checked = aimAssist; saa.addEventListener('change', () => { aimAssist = saa.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const saa = g('setAimAssist'); if (saa) { saa.checked = aimAssist; saa.addEventListener('change', () => { aimAssist = saa.checked; if (audio.on) audio.ui(); saveSettings(); updateAimStrengthVis(); }); }
+  const sas = g('setAimStrength'); if (sas) { sas.value = aimStrength; sas.addEventListener('input', () => { aimStrength = clamp(sas.value | 0, 1, 5); saveSettings(); }); }
+  updateAimStrengthVis();
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { controlSensitivity = clamp(ss.value / 100, 0.5, 2.0); saveSettings(); }); }
   // mobile control settings (controls.js owns the input layer; these just set state + persist)
