@@ -80,12 +80,11 @@ function buildHangar() {
   }
   applyHudScale();
   // Theming: visual language (skin) + color scheme (palette). Apply stored choice at boot, then wire selects.
-  const storedSkin = store.get('skystrike_skin') || 'futuristic';
+  const storedSkin = store.get('skystrike_skin') || 'standard';
   const storedPalette = store.get('skystrike_palette') || 'amber';
   if (typeof applySkin === 'function') applySkin(storedSkin);
   if (typeof applyPalette === 'function') applyPalette(storedPalette);
-  const ssk = g('setSkin');
-  if (ssk) { ssk.value = storedSkin; ssk.addEventListener('change', () => { applySkin(ssk.value); if (audio.on) audio.ui(); }); }
+  buildSkinGallery(storedSkin);
   const spal = g('setPalette');
   if (spal) { spal.value = storedPalette; spal.addEventListener('change', () => { applyPalette(spal.value); if (audio.on) audio.ui(); }); }
   const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); if (audio.on) audio.ui(); });
@@ -386,4 +385,60 @@ function onJetMetaClick(e) {
     else if (buySkin(jet, id)) { setSkin(jet, id); updateSpHud(); selectJet(selectedJet); audio.ui(); }
     else showBanner(t('meta.needSp'));
   }
+}
+
+/* ---- Visual-style picker: 6-card gallery, each card a mini-HUD preview rendered in its OWN skin.
+   Replaces the old <select>. Cards carry data-skin locally so the preview CSS (.skin-card[data-skin]
+   .pv-*) renders in-style without touching :root. Selection applies the skin live + persists. ---- */
+const SKIN_IDS = ['standard', 'futuristic', 'analog', 'manual', 'flat', 'blueprint'];
+function buildSkinGallery(current) {
+  const gal = g('skinGallery');
+  if (!gal) return;
+  if (!gal._built) {
+    gal._built = true;
+    SKIN_IDS.forEach(id => {
+      const card = document.createElement('button');
+      card.type = 'button'; card.className = 'skin-card'; card.dataset.skin = id; card.dataset.id = id;
+      card.setAttribute('role', 'radio');
+      card.innerHTML =
+        '<span class="sc-name"></span>' +
+        '<span class="sc-prev" aria-hidden="true">' +
+          '<span class="pv pv-spd"><i class="pv-dial"></i><i class="pv-needle"></i><b class="pv-val">340</b></span>' +
+          '<span class="pv pv-alt"><i class="pv-dial"></i><i class="pv-needle"></i><b class="pv-val">12.4k</b></span>' +
+          '<span class="pv pv-thr"><i class="pv-bar"></i><i class="pv-dial"></i><i class="pv-needle"></i></span>' +
+        '</span>' +
+        '<span class="sc-desc"></span>';
+      card.addEventListener('click', () => selectSkinCard(id));
+      gal.appendChild(card);
+    });
+    // roving-tabindex arrow navigation across the radiogroup
+    gal.addEventListener('keydown', (e) => {
+      const cur = SKIN_IDS.indexOf(activeSkin);
+      let ni = -1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') ni = (cur + 1) % SKIN_IDS.length;
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ni = (cur - 1 + SKIN_IDS.length) % SKIN_IDS.length;
+      if (ni < 0) return;
+      e.preventDefault();
+      selectSkinCard(SKIN_IDS[ni]);
+      const c = gal.children[ni]; if (c) c.focus();
+    });
+  }
+  refreshSkinGallery(current || activeSkin);
+}
+function selectSkinCard(id) {
+  applySkin(id);
+  refreshSkinGallery(id);
+  if (audio.on) audio.ui();
+}
+function refreshSkinGallery(current) {
+  const gal = g('skinGallery');
+  if (!gal) return;
+  Array.prototype.forEach.call(gal.children, (card) => {
+    const id = card.dataset.id, on = id === current;
+    card.classList.toggle('sel', on);
+    card.setAttribute('aria-checked', on ? 'true' : 'false');
+    card.tabIndex = on ? 0 : -1;
+    const nm = card.querySelector('.sc-name'); if (nm) nm.textContent = t('skin.' + id);
+    const ds = card.querySelector('.sc-desc'); if (ds) ds.textContent = t('skin.' + id + '.d');
+  });
 }

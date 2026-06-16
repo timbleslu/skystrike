@@ -123,7 +123,7 @@ let el = {};
 function g(id) { return document.getElementById(id); }
 function cacheEl() {
   el = {
-    hp: g('hpfill'), thr: g('thrfill'), shd: g('shfill'), spd: g('spd'), alt: g('alt'),
+    hudRoot: g('hud'), hp: g('hpfill'), thr: g('thrfill'), shd: g('shfill'), spd: g('spd'), alt: g('alt'),
     score: g('score'), wave: g('wave'), combo: g('combo'), tp: g('tp'),
     flares: g('flares'), missiles: g('missiles'), bullets: g('bullets'), special: g('special'), special2: g('special2'),
     hpbar: g('hpbar'), banner: g('banner'), sidebar: g('wingSidebar'),
@@ -276,8 +276,26 @@ function updateDom(dt) {
   el.shd.style.width = clamp(player.shield / player.maxShield * 100, 0, 100) + '%';
   el.thr.style.width = clamp(player.throttle * 100, 0, 100) + '%';
   el.abIndicator.style.display = (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none';
-  el.spd.textContent = Math.round(player.speed * 2.3);
-  el.alt.textContent = Math.round(Math.max(0, player.group.position.y) * 3.28);
+  const kt = Math.round(player.speed * 2.3);
+  const altFt = Math.round(Math.max(0, player.group.position.y) * 3.28);
+  el.spd.textContent = kt;
+  el.alt.textContent = altFt;
+  // INSTRUMENT SEAM: publish normalized flight state so per-skin CSS gauges (analog needles,
+  // blueprint dials, flat arcs) render the same numbers the bl-panel readouts show. CSS derives
+  // sweep angles from the *-frac via calc(); altimeter hands need real periodic angles, so we
+  // hand those over precomputed. Set on the #hud root so it cascades to every instrument widget.
+  if (el.hudRoot) {
+    const s = el.hudRoot.style, m = instrumentState(kt, altFt, player.throttle);
+    s.setProperty('--spd-kt', m.spdKt);
+    s.setProperty('--alt-ft', m.altFt);
+    s.setProperty('--spd-frac', m.spdFrac.toFixed(4));
+    s.setProperty('--alt-frac', m.altFrac.toFixed(4));
+    s.setProperty('--thr-frac', m.thrFrac.toFixed(4));
+    s.setProperty('--spd-deg', m.spdDeg.toFixed(1) + 'deg');     // airspeed dial sweep ±120°
+    s.setProperty('--thr-deg', m.thrDeg.toFixed(1) + 'deg');     // throttle arc ±135°
+    s.setProperty('--alt-deg', m.altDeg.toFixed(1) + 'deg');     // altimeter hundreds hand
+    s.setProperty('--alt-deg-k', m.altDegK.toFixed(1) + 'deg');  // altimeter thousands hand
+  }
   el.score.textContent = player.score.toLocaleString();
   if (el.tp) { el.tp.textContent = Math.floor(player.tp).toLocaleString(); el.tp.style.color = player.tp >= 120 ? '#ffe14d' : ''; }
   el.wave.textContent = wave;

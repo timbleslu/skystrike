@@ -152,6 +152,7 @@ function applyLang() {
   setTxt('callsignHint', t('pilot.hint'));
   setTxt('lblHudScale', t('set.hudScale'));
   setTxt('lblSkin', t('set.skin'));
+  if (typeof refreshSkinGallery === 'function') refreshSkinGallery(activeSkin);
   setTxt('lblPalette', t('set.palette'));
   setTxt('ssetTab_display', t('set.tab.display'));
   setTxt('ssetTab_controls', t('set.tab.controls'));

@@ -431,13 +431,14 @@ const PALETTES = {
   red:      { primary:'255,92,72',   primaryBright:'255,152,92',  danger:'255,40,40',   warn:'255,122,40',  ok:'255,172,62',  reward:'255,202,82',  velvec:'255,150,90',  ink:'240,182,162', dim:'152,96,82',   rival:'255,70,40',  boss:'255,80,160' },
 };
 const SKIN_HUDFONT = {
+  standard:   "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif",   // default: plain, no character
   futuristic: "'Share Tech Mono', monospace",
   analog:     "Georgia, 'Times New Roman', serif",
-  manual:     "'Arial Narrow', Impact, sans-serif",
+  manual:     "'Courier New', Courier, monospace",
   flat:       "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   blueprint:  "'Courier New', monospace",
 };
-let activePalette = 'amber', activeSkin = 'futuristic';
+let activePalette = 'amber', activeSkin = 'standard';
 function applyPalette(id) {
   if (!PALETTES[id]) id = 'amber';
   activePalette = id;
@@ -446,7 +447,7 @@ function applyPalette(id) {
   store.set('skystrike_palette', id);
 }
 function applySkin(id) {
-  if (!SKIN_HUDFONT[id]) id = 'futuristic';
+  if (!SKIN_HUDFONT[id]) id = 'standard';
   activeSkin = id;
   document.documentElement.dataset.skin = id;
   HUDFONT = SKIN_HUDFONT[id];

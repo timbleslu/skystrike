@@ -824,79 +824,289 @@ canvas{display:block}
   --info-rgb:255,152,112; --reward-rgb:255,202,82; --rival-rgb:255,70,40; --locked:#5a3a34;
 }
 
-/* ---- VISUAL LANGUAGES (futuristic = :root default, no block) ---- */
-/* Common: non-futuristic skins drop the MFD corner ticks (the futuristic signature) */
+/* ---- VISUAL LANGUAGES (data-skin) — futuristic == :root defaults ----
+   Each skin restyles BOTH layers: menu/hangar chrome AND the in-play HUD
+   instruments (speed/alt/thrust), driven by the #hud custom-prop seam
+   (ui-hud.js updateDom): --spd-kt --alt-ft · --spd-frac --alt-frac --thr-frac
+   · --spd-deg --thr-deg --alt-deg --alt-deg-k. */
+
+/* gauge layers are opt-in — the dial face / ticks / needle stay hidden until a skin reveals them */
+.inst .gauge,.inst .ticks,.inst .needle{display:none}
+/* the MFD corner ticks are the FUTURISTIC signature — every other skin drops them */
+:root[data-skin="standard"] #hud .panel::after,
 :root[data-skin="analog"] #hud .panel::after,
 :root[data-skin="manual"] #hud .panel::after,
 :root[data-skin="flat"] #hud .panel::after,
 :root[data-skin="blueprint"] #hud .panel::after{content:none}
 
-/* ANALOG INSTRUMENTS — vintage warbird: serif/typewriter, no glow, brushed-metal, square bezels */
+/* =========================================================
+   1) STANDARD — the no-theme baseline (default). Absence, not flatness. */
+:root[data-skin="standard"]{
+  --disp:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --bevel:0; --scan-opacity:0;
+  --glow-primary:none; --glow-danger:none; --glow-reward:none;
+  --ls-display:0; --ls-caps:.02em; --ls-btn:.02em;
+}
+:root[data-skin="standard"] #crt,:root[data-skin="standard"] #vignette{display:none}
+:root[data-skin="standard"] .hwrap,:root[data-skin="standard"] .uwrap,:root[data-skin="standard"] .mwrap,
+:root[data-skin="standard"] .gowrap,:root[data-skin="standard"] .op-box,:root[data-skin="standard"] .wp-box,
+:root[data-skin="standard"] .ob-onecard,:root[data-skin="standard"] .card,
+:root[data-skin="standard"] .btn-primary,:root[data-skin="standard"] #launch,:root[data-skin="standard"] .ghostbtn{
+  clip-path:none!important;border-radius:var(--r-sm)}
+:root[data-skin="standard"] .hwrap,:root[data-skin="standard"] .uwrap,:root[data-skin="standard"] .mwrap,
+:root[data-skin="standard"] .gowrap,:root[data-skin="standard"] .op-box,:root[data-skin="standard"] .wp-box,
+:root[data-skin="standard"] .ob-onecard,:root[data-skin="standard"] .card{
+  background:var(--surface-2);border:1px solid var(--hairline);box-shadow:none}
+:root[data-skin="standard"] h1,:root[data-skin="standard"] h2,:root[data-skin="standard"] h3,
+:root[data-skin="standard"] .stat b,:root[data-skin="standard"] .big b,:root[data-skin="standard"] .ls-title,
+:root[data-skin="standard"] .special{text-shadow:none!important;text-transform:none;font-weight:600;letter-spacing:0}
+/* instruments: plainest — numerals + one hairline thrust bar, nothing else */
+:root[data-skin="standard"] .big b{color:var(--ink-hi)}
+:root[data-skin="standard"] .meter{clip-path:none;border:1px solid var(--hairline);background:rgba(var(--ink-dim-rgb),.18)}
+:root[data-skin="standard"] .meter>div{box-shadow:none!important}
+:root[data-skin="standard"] .meter.thr>div{background:rgb(var(--primary-rgb))}
+
+/* =========================================================
+   2) FUTURISTIC — glass-cockpit holo (== :root defaults; only instrument extras here).
+   Keeps #crt scanlines, clip bevels, glow tokens. Thrust reads as lit segments. */
+:root[data-skin="futuristic"] .meter.thr>div{
+  background:linear-gradient(90deg,var(--primary-bright),var(--primary) 76%,var(--warn) 88%,var(--danger))}
+:root[data-skin="futuristic"] .meter.thr::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 7px,rgba(var(--base-rgb),.92) 7px 9px)}
+:root[data-skin="futuristic"] .inst-spd b,:root[data-skin="futuristic"] .inst-alt b{text-shadow:var(--glow-primary)}
+
+/* =========================================================
+   3) ANALOG INSTRUMENTS — steam-gauge cockpit (headline). Round dials, swinging needles. */
 :root[data-skin="analog"]{
   --disp:Georgia,'Times New Roman',serif; --mono:'Courier New',Courier,monospace;
   --bevel:0; --scan-opacity:0;
   --glow-primary:none; --glow-danger:none; --glow-reward:none;
-  --ls-display:0.06em; --ls-caps:0.10em;
+  --ls-display:.04em; --ls-caps:.06em;
 }
 :root[data-skin="analog"] #crt{opacity:.25;mix-blend-mode:multiply;animation:none}
 :root[data-skin="analog"] .hwrap,:root[data-skin="analog"] .uwrap,:root[data-skin="analog"] .mwrap,
 :root[data-skin="analog"] .gowrap,:root[data-skin="analog"] .op-box,:root[data-skin="analog"] .wp-box,
 :root[data-skin="analog"] .ob-onecard,:root[data-skin="analog"] .card{
-  background:repeating-linear-gradient(90deg,rgba(255,255,255,.018) 0 2px,transparent 2px 5px),linear-gradient(180deg,var(--surface-2),var(--surface-1));
-  border:1px solid rgba(var(--hairline-rgb),.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 2px 10px rgba(0,0,0,.5);border-radius:3px}
-:root[data-skin="analog"] h1,:root[data-skin="analog"] h2,:root[data-skin="analog"] .stat b,
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px),linear-gradient(180deg,#2a2c2e,#1c1e20);
+  border:1px solid #3a3d40;border-radius:var(--r-lg);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 6px rgba(0,0,0,.6),0 6px 18px rgba(0,0,0,.5)}
+:root[data-skin="analog"] h1,:root[data-skin="analog"] h2,:root[data-skin="analog"] h3,:root[data-skin="analog"] .stat b,
 :root[data-skin="analog"] .big b,:root[data-skin="analog"] .ls-title{text-shadow:0 1px 1px rgba(0,0,0,.6)!important;letter-spacing:.04em}
+/* round dial shared by all three instruments */
+:root[data-skin="analog"] .inst{flex-direction:column;align-items:center;gap:3px}
+:root[data-skin="analog"] .inst .gauge{display:block;position:relative;width:78px;height:78px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#f3ead3,#d9c9a6 70%,#b8a87f);
+  box-shadow:0 0 0 5px #2a2c2e,inset 0 0 10px rgba(0,0,0,.45),0 3px 8px rgba(0,0,0,.55)}
+:root[data-skin="analog"] .inst .gauge::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  background:linear-gradient(135deg,rgba(255,255,255,.4),transparent 45%)}
+:root[data-skin="analog"] .inst .gauge::before{content:"";position:absolute;left:50%;top:50%;width:10px;height:10px;z-index:3;
+  border-radius:50%;background:#1c1e20;transform:translate(-50%,-50%);box-shadow:0 0 0 2px #3a3d40}
+:root[data-skin="analog"] .inst .ticks{display:block;position:absolute;inset:5px;border-radius:50%;color:rgba(40,30,15,.7);
+  background:repeating-conic-gradient(from -125deg,currentColor 0 .5deg,transparent .5deg 12.5deg);
+  -webkit-mask:radial-gradient(transparent 64%,#000 65%);mask:radial-gradient(transparent 64%,#000 65%)}
+:root[data-skin="analog"] .inst .needle{display:block;position:absolute;left:calc(50% - 1.5px);bottom:50%;width:3px;height:33%;z-index:2;
+  background:rgb(var(--primary-rgb));transform-origin:50% 100%;border-radius:1px}
+:root[data-skin="analog"] .inst-spd .needle{transform:rotate(var(--spd-deg))}
+:root[data-skin="analog"] .inst-alt .needle-h{transform:rotate(var(--alt-deg));height:24%;width:4px}
+:root[data-skin="analog"] .inst-alt .needle-k{transform:rotate(var(--alt-deg-k));height:33%;width:2.5px;background:rgb(var(--ink-rgb))}
+/* thrust = compact throttle/RPM dial (hide the linear bar) */
+:root[data-skin="analog"] .inst-thr .meter.thr{display:none}
+:root[data-skin="analog"] .inst-thr .gauge-thr{width:54px;height:54px;box-shadow:0 0 0 4px #2a2c2e,inset 0 0 8px rgba(0,0,0,.45)}
+:root[data-skin="analog"] .inst-thr .needle{transform:rotate(var(--thr-deg))}
+/* digital sub-readout under each dial */
+:root[data-skin="analog"] .inst b{font-size:13px;color:var(--ink-hi);min-width:0}
+:root[data-skin="analog"] .inst .unit{font-size:8px;letter-spacing:1px}
+@media (prefers-reduced-motion:no-preference){
+  :root[data-skin="analog"] .inst .needle{transition:transform var(--dur-base) var(--ease-snap)}
+}
 
-/* FIELD MANUAL / STENCIL — flat matte, condensed caps, square, olive, no glow */
+/* =========================================================
+   4) FIELD MANUAL — printed technical-order: manila paper, ruled boxes, crosshatch, CLASSIFIED stamp. */
 :root[data-skin="manual"]{
   --disp:'Arial Narrow','Oswald',Impact,sans-serif; --mono:'Courier New',Courier,monospace;
   --bevel:0; --scan-opacity:0;
   --glow-primary:none; --glow-danger:none; --glow-reward:none;
-  --ls-display:0.14em; --ls-caps:0.16em;
+  --ls-display:.12em; --ls-caps:.12em;
 }
 :root[data-skin="manual"] #crt{display:none}
 :root[data-skin="manual"] .hwrap,:root[data-skin="manual"] .uwrap,:root[data-skin="manual"] .mwrap,
 :root[data-skin="manual"] .gowrap,:root[data-skin="manual"] .op-box,:root[data-skin="manual"] .wp-box,
 :root[data-skin="manual"] .ob-onecard,:root[data-skin="manual"] .card{
-  background:linear-gradient(180deg,rgba(26,30,18,.9),rgba(18,22,14,.92));border:1px solid rgba(var(--hairline-rgb),.55);border-radius:0;box-shadow:none}
+  background-color:#e9e2cf;background-image:radial-gradient(rgba(0,0,0,.06) 1px,transparent 1.2px);background-size:4px 4px;
+  border:2px solid #1c1a14;box-shadow:inset 0 0 0 3px #e9e2cf,inset 0 0 0 4px #1c1a14;border-radius:0;color:#1c1a14}
+:root[data-skin="manual"] .card .cspecs b,:root[data-skin="manual"] .card .cblurb,:root[data-skin="manual"] .card .cabilitydesc,
+:root[data-skin="manual"] .hwrap .sub,:root[data-skin="manual"] .mwrap p,:root[data-skin="manual"] .mwrap li{color:#2a2618}
 :root[data-skin="manual"] h1,:root[data-skin="manual"] h2,:root[data-skin="manual"] h3,
-:root[data-skin="manual"] .stat b,:root[data-skin="manual"] .big b,:root[data-skin="manual"] .special,
-:root[data-skin="manual"] .ls-title{text-shadow:none!important;text-transform:uppercase}
+:root[data-skin="manual"] .stat b,:root[data-skin="manual"] .ls-title{text-shadow:none!important;text-transform:uppercase;color:#1c1a14}
+:root[data-skin="manual"] .card::after{content:"CLASSIFIED";position:absolute;top:10px;right:10px;transform:rotate(-12deg);pointer-events:none;
+  color:rgba(var(--danger-rgb),.6);border:3px solid currentColor;font:700 11px/1 'Courier New',monospace;letter-spacing:2px;padding:3px 6px}
+/* instruments: ruled ink boxes with crosshatch fill bars */
+:root[data-skin="manual"] .inst-spd,:root[data-skin="manual"] .inst-alt{flex-direction:column;align-items:stretch;gap:3px;
+  border:2px solid #1c1a14;background:#e9e2cf;padding:3px 7px;min-width:150px}
+:root[data-skin="manual"] .inst-spd b,:root[data-skin="manual"] .inst-alt b{color:#1c1a14;text-shadow:none;font-family:'Courier New',monospace;min-width:0;order:1}
+:root[data-skin="manual"] .inst-spd .unit,:root[data-skin="manual"] .inst-alt .unit{color:#5a5340;order:1}
+:root[data-skin="manual"] .inst-spd .gauge,:root[data-skin="manual"] .inst-alt .gauge{display:block;position:relative;width:100%;height:8px;
+  border:1.5px solid #1c1a14;background:transparent;order:2}
+:root[data-skin="manual"] .inst-spd .gauge::before{content:"";position:absolute;inset:0;width:calc(var(--spd-frac,0)*100%);
+  background:repeating-linear-gradient(45deg,#1c1a14 0 2px,transparent 2px 5px)}
+:root[data-skin="manual"] .inst-alt .gauge::before{content:"";position:absolute;inset:0;width:calc(var(--alt-frac,0)*100%);
+  background:repeating-linear-gradient(45deg,#1c1a14 0 2px,transparent 2px 5px)}
+:root[data-skin="manual"] .meter{background:#e9e2cf;border:1.5px solid #1c1a14;clip-path:none;border-radius:0}
+:root[data-skin="manual"] .meter>div{background:repeating-linear-gradient(45deg,#1c1a14 0 2px,transparent 2px 5px)!important;box-shadow:none!important}
 
-/* MODERN FLAT — clean system sans, rounded, no glow, no scan, minimal chrome */
+/* =========================================================
+   5) MODERN FLAT — designed material UI: rounded cards, soft shadow, pills, progress rings. */
 :root[data-skin="flat"]{
   --disp:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
   --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   --bevel:0; --scan-opacity:0;
   --glow-primary:none; --glow-danger:none; --glow-reward:none;
-  --ls-display:0.02em; --ls-caps:0.06em; --ls-btn:0.04em;
+  --ls-display:.02em; --ls-caps:.06em; --ls-btn:.04em;
 }
 :root[data-skin="flat"] #crt,:root[data-skin="flat"] #vignette{display:none}
 :root[data-skin="flat"] .hwrap,:root[data-skin="flat"] .uwrap,:root[data-skin="flat"] .mwrap,
 :root[data-skin="flat"] .gowrap,:root[data-skin="flat"] .op-box,:root[data-skin="flat"] .wp-box,
-:root[data-skin="flat"] .ob-onecard,:root[data-skin="flat"] .card,
-:root[data-skin="flat"] .btn-primary,:root[data-skin="flat"] #launch,:root[data-skin="flat"] .ghostbtn{
-  border-radius:10px;clip-path:none!important}
-:root[data-skin="flat"] .hwrap,:root[data-skin="flat"] .uwrap,:root[data-skin="flat"] .mwrap,
-:root[data-skin="flat"] .gowrap,:root[data-skin="flat"] .op-box,:root[data-skin="flat"] .wp-box,
-:root[data-skin="flat"] .card{background:var(--surface-2);border:1px solid rgba(var(--hairline-rgb),.4);box-shadow:0 4px 24px rgba(0,0,0,.4)}
+:root[data-skin="flat"] .ob-onecard,:root[data-skin="flat"] .card{
+  background:var(--surface-2);border:1px solid rgba(var(--hairline-rgb),.4);border-radius:14px;clip-path:none!important;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+:root[data-skin="flat"] .btn-primary,:root[data-skin="flat"] #launch,:root[data-skin="flat"] .ghostbtn,
+:root[data-skin="flat"] #redeploy,:root[data-skin="flat"] #techDeploy{border-radius:999px;clip-path:none!important}
 :root[data-skin="flat"] h1,:root[data-skin="flat"] h2,:root[data-skin="flat"] h3,
 :root[data-skin="flat"] .stat b,:root[data-skin="flat"] .big b,:root[data-skin="flat"] .ls-title,
-:root[data-skin="flat"] .special{text-shadow:none!important;text-transform:none}
+:root[data-skin="flat"] .special{text-shadow:none!important;text-transform:none;letter-spacing:0}
+/* speed/alt = thin progress ring with centered numeral */
+:root[data-skin="flat"] .inst-spd,:root[data-skin="flat"] .inst-alt{position:relative;width:74px;height:74px;justify-content:center;align-items:center;margin-bottom:8px}
+:root[data-skin="flat"] .inst-spd .gauge,:root[data-skin="flat"] .inst-alt .gauge{display:block;position:absolute;inset:0;border-radius:50%;
+  -webkit-mask:radial-gradient(transparent 60%,#000 61%);mask:radial-gradient(transparent 60%,#000 61%)}
+:root[data-skin="flat"] .inst-spd .gauge{background:conic-gradient(rgb(var(--primary-rgb)) calc(var(--spd-frac,0)*360deg),rgba(var(--ink-dim-rgb),.18) 0)}
+:root[data-skin="flat"] .inst-alt .gauge{background:conic-gradient(rgb(var(--primary-rgb)) calc(var(--alt-frac,0)*360deg),rgba(var(--ink-dim-rgb),.18) 0)}
+:root[data-skin="flat"] .inst-spd b,:root[data-skin="flat"] .inst-alt b{position:relative;z-index:1;font-weight:700;font-size:17px;color:var(--ink-hi);min-width:0}
+:root[data-skin="flat"] .inst-spd .unit,:root[data-skin="flat"] .inst-alt .unit{display:none}
+@media (prefers-reduced-motion:no-preference){
+  :root[data-skin="flat"] .inst-spd .gauge,:root[data-skin="flat"] .inst-alt .gauge{transition:background var(--dur-base) var(--ease-out)}
+}
+/* thrust = soft segmented pill bar */
+:root[data-skin="flat"] .meter.thr{background:rgba(var(--ink-dim-rgb),.18);border:none;border-radius:999px;height:10px;clip-path:none}
+:root[data-skin="flat"] .meter.thr>div{background:rgb(var(--primary-rgb));border-radius:999px;box-shadow:none}
+:root[data-skin="flat"] .meter.thr::after{content:"";position:absolute;inset:0;border-radius:999px;pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 9%,rgba(var(--base-rgb),.55) 9% 10%)}
 
-/* BLUEPRINT — drafting schematic: grid-paper ground, fine lines, no glow, thin strokes */
+/* =========================================================
+   6) BLUEPRINT — drafting sheet: cyan-on-navy grid, schematic dials, dimension lines, title block. */
 :root[data-skin="blueprint"]{
   --disp:'Courier New',Courier,monospace; --mono:'Courier New',Courier,monospace;
   --bevel:0; --scan-opacity:0;
   --glow-primary:none; --glow-danger:none; --glow-reward:none;
-  --ls-display:0.10em; --ls-caps:0.12em;
+  --ls-display:.10em; --ls-caps:.12em;
 }
 :root[data-skin="blueprint"] #crt{display:none}
 :root[data-skin="blueprint"] .hwrap,:root[data-skin="blueprint"] .uwrap,:root[data-skin="blueprint"] .mwrap,
 :root[data-skin="blueprint"] .gowrap,:root[data-skin="blueprint"] .op-box,:root[data-skin="blueprint"] .wp-box,
 :root[data-skin="blueprint"] .ob-onecard,:root[data-skin="blueprint"] .card{
-  background-color:var(--surface-1);
-  background-image:linear-gradient(rgba(var(--hairline-rgb),.14) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--hairline-rgb),.14) 1px,transparent 1px);
-  background-size:22px 22px;border:1px solid rgba(var(--primary-rgb),.5);border-radius:0;box-shadow:inset 0 0 0 3px rgba(var(--primary-rgb),.06)}
-:root[data-skin="blueprint"] h1,:root[data-skin="blueprint"] h2,:root[data-skin="blueprint"] .stat b,
-:root[data-skin="blueprint"] .big b,:root[data-skin="blueprint"] .ls-title{text-shadow:none!important;font-weight:400}
+  background-color:#0d2438;
+  background-image:linear-gradient(rgba(var(--info-rgb),.12) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--info-rgb),.12) 1px,transparent 1px);
+  background-size:22px 22px;border:1px solid rgba(var(--info-rgb),.5);border-radius:0;box-shadow:inset 0 0 0 2px rgba(var(--info-rgb),.08);color:rgb(var(--info-rgb))}
+:root[data-skin="blueprint"] h1,:root[data-skin="blueprint"] h2,:root[data-skin="blueprint"] h3,:root[data-skin="blueprint"] .stat b,
+:root[data-skin="blueprint"] .big b,:root[data-skin="blueprint"] .ls-title{text-shadow:none!important;font-weight:400;color:rgb(var(--info-rgb))}
+:root[data-skin="blueprint"] .card.cardbig::after{content:"SKYSTRIKE · HANGAR · SHT 1/1 · REV C";position:absolute;right:10px;bottom:8px;pointer-events:none;
+  font:10px/1 'Courier New',monospace;letter-spacing:1px;color:rgba(var(--info-rgb),.8);border:1px solid rgba(var(--info-rgb),.5);padding:4px 7px}
+/* instruments: schematic drafted dials with a thin needle */
+:root[data-skin="blueprint"] .inst{flex-direction:column;align-items:center;gap:2px}
+:root[data-skin="blueprint"] .inst .gauge{display:block;position:relative;width:66px;height:66px;border-radius:50%;
+  border:1px solid rgba(var(--info-rgb),.85);background:transparent}
+:root[data-skin="blueprint"] .inst .gauge::before{content:"";position:absolute;inset:3px;border-radius:50%;
+  background:repeating-conic-gradient(from -135deg,rgba(var(--info-rgb),.6) 0 1deg,transparent 1deg 18deg);
+  -webkit-mask:radial-gradient(transparent 72%,#000 73%);mask:radial-gradient(transparent 72%,#000 73%)}
+:root[data-skin="blueprint"] .inst .gauge::after{content:"";position:absolute;left:50%;top:6px;bottom:6px;width:1px;background:rgba(var(--info-rgb),.35);transform:translateX(-50%)}
+:root[data-skin="blueprint"] .inst .needle{display:block;position:absolute;left:calc(50% - .5px);bottom:50%;width:1px;height:40%;z-index:2;
+  background:rgb(var(--primary-rgb));transform-origin:50% 100%}
+:root[data-skin="blueprint"] .inst-spd .needle{transform:rotate(var(--spd-deg))}
+:root[data-skin="blueprint"] .inst-alt .needle-k{transform:rotate(var(--alt-deg-k))}
+:root[data-skin="blueprint"] .inst-alt .needle-h{display:none}
+:root[data-skin="blueprint"] .inst-thr .meter.thr{display:none}
+:root[data-skin="blueprint"] .inst-thr .gauge-thr{width:66px;height:66px}
+:root[data-skin="blueprint"] .inst-thr .needle{transform:rotate(var(--thr-deg))}
+:root[data-skin="blueprint"] .inst b{font-family:'Courier New',monospace;font-size:12px;color:rgb(var(--info-rgb));min-width:0;text-shadow:none}
+:root[data-skin="blueprint"] .inst .unit{font-size:8px;letter-spacing:1px;color:rgba(var(--info-rgb),.7)}
+@media (prefers-reduced-motion:no-preference){
+  :root[data-skin="blueprint"] .inst .needle{transition:transform var(--dur-base) var(--ease-out)}
+}
+
+/* ============================================================
+   STYLE PICKER — card gallery (replaces the old <select>). Each card carries its
+   own data-skin and renders a mini speed/alt/thrust cluster in that style, so the
+   player previews every visual language before committing. Built in ui-hangar.js. */
+.srow-skins{flex-direction:column;align-items:stretch;gap:10px}
+.skin-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);width:100%}
+@media(max-width:760px){.skin-gallery{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.skin-gallery{grid-template-columns:1fr}}
+.skin-card{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:6px;text-align:left;cursor:pointer;
+  padding:10px 11px;border:var(--bd);background:var(--surface-2);border-radius:var(--r-md);color:var(--ink);
+  font-family:inherit;transition:border-color var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+.skin-card:hover{border-color:var(--hairline-lit);transform:translateY(-2px)}
+.skin-card.sel{border:2px solid var(--primary);box-shadow:var(--glow-primary)}
+.skin-card.sel::after{content:"\2713";position:absolute;top:6px;right:8px;width:16px;height:16px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--primary);color:var(--ink-on-primary)}
+.skin-card:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.sc-name{font-family:var(--disp);font-size:12px;letter-spacing:1px;color:var(--ink-hi)}
+.sc-desc{font-size:10px;line-height:1.3;color:var(--ink-dim);text-transform:none}
+.sc-prev{display:flex;align-items:center;justify-content:space-around;gap:6px;height:64px;padding:6px;
+  border-radius:var(--r-sm);background:rgba(var(--base-rgb),.5);overflow:hidden}
+@media(prefers-reduced-motion:reduce){.skin-card:hover{transform:none}}
+/* preview cluster base — sub-elements opt-in per skin (fixed demo values, no JS) */
+.sc-prev .pv{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sc-prev .pv-dial,.sc-prev .pv-needle,.sc-prev .pv-bar{display:none}
+.sc-prev .pv-val{font-size:10px;color:var(--ink);font-family:var(--mono)}
+
+/* STANDARD preview — bare numerals + one plain bar */
+.skin-card[data-skin="standard"] .sc-name,.skin-card[data-skin="standard"] .sc-prev{font-family:'Inter',system-ui,sans-serif;letter-spacing:0}
+.skin-card[data-skin="standard"] .pv-val{color:#f6fff4;font-weight:600;font-family:'Inter',system-ui,sans-serif}
+.skin-card[data-skin="standard"] .pv-thr .pv-bar{display:block;width:34px;height:6px;background:rgba(var(--ink-dim-rgb),.3);position:relative}
+.skin-card[data-skin="standard"] .pv-thr .pv-bar::after{content:"";position:absolute;inset:0;width:62%;background:rgb(var(--primary-rgb))}
+
+/* FUTURISTIC preview — glow numerals + segmented bar */
+.skin-card[data-skin="futuristic"] .sc-name,.skin-card[data-skin="futuristic"] .pv-val{font-family:'Share Tech Mono',monospace;color:rgb(var(--primary-rgb));text-shadow:0 0 8px rgba(var(--primary-rgb),.6)}
+.skin-card[data-skin="futuristic"] .pv-thr .pv-bar{display:block;width:34px;height:7px;background:rgba(var(--base-rgb),.8);position:relative;overflow:hidden}
+.skin-card[data-skin="futuristic"] .pv-thr .pv-bar::before{content:"";position:absolute;inset:0;width:62%;background:linear-gradient(90deg,var(--primary-bright),var(--primary));box-shadow:0 0 8px rgba(var(--primary-rgb),.7)}
+.skin-card[data-skin="futuristic"] .pv-thr .pv-bar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 5px,rgba(var(--base-rgb),.9) 5px 7px)}
+
+/* ANALOG preview — mini brushed dials with needles (spd + thr), numeral alt */
+.skin-card[data-skin="analog"] .sc-prev{background:linear-gradient(180deg,#2a2c2e,#1c1e20)}
+.skin-card[data-skin="analog"] .sc-name{font-family:Georgia,serif}
+.skin-card[data-skin="analog"] .pv-spd,.skin-card[data-skin="analog"] .pv-thr{width:34px;height:34px}
+.skin-card[data-skin="analog"] .pv-spd .pv-dial,.skin-card[data-skin="analog"] .pv-thr .pv-dial{display:block;position:absolute;inset:0;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#f3ead3,#d9c9a6 70%,#b8a87f);box-shadow:0 0 0 3px #2a2c2e,inset 0 0 5px rgba(0,0,0,.4)}
+.skin-card[data-skin="analog"] .pv-spd .pv-needle,.skin-card[data-skin="analog"] .pv-thr .pv-needle{display:block;position:absolute;left:calc(50% - 1px);bottom:50%;width:2px;height:13px;background:rgb(var(--primary-rgb));transform-origin:50% 100%;z-index:1}
+.skin-card[data-skin="analog"] .pv-spd .pv-needle{transform:rotate(-40deg)}
+.skin-card[data-skin="analog"] .pv-thr .pv-needle{transform:rotate(35deg)}
+.skin-card[data-skin="analog"] .pv-spd .pv-val,.skin-card[data-skin="analog"] .pv-thr .pv-val{display:none}
+.skin-card[data-skin="analog"] .pv-val{font-family:Georgia,serif;color:#f6fff4}
+
+/* FIELD MANUAL preview — manila paper + crosshatch boxes */
+.skin-card[data-skin="manual"] .sc-prev{background:#e9e2cf}
+.skin-card[data-skin="manual"] .sc-name{font-family:'Arial Narrow',sans-serif;text-transform:uppercase}
+.skin-card[data-skin="manual"] .pv-val{color:#1c1a14;font-family:'Courier New',monospace}
+.skin-card[data-skin="manual"] .pv-spd .pv-bar,.skin-card[data-skin="manual"] .pv-thr .pv-bar{display:block;width:30px;height:7px;border:1px solid #1c1a14;position:relative}
+.skin-card[data-skin="manual"] .pv-spd .pv-bar::after,.skin-card[data-skin="manual"] .pv-thr .pv-bar::after{content:"";position:absolute;inset:0;width:62%;background:repeating-linear-gradient(45deg,#1c1a14 0 2px,transparent 2px 4px)}
+.skin-card[data-skin="manual"] .pv-thr .pv-val{display:none}
+
+/* MODERN FLAT preview — thin rings + pill bar */
+.skin-card[data-skin="flat"] .sc-prev{background:rgba(var(--base-rgb),.4);border-radius:10px}
+.skin-card[data-skin="flat"] .sc-name{font-family:system-ui,sans-serif;text-transform:none}
+.skin-card[data-skin="flat"] .pv-spd,.skin-card[data-skin="flat"] .pv-alt{width:34px;height:34px}
+.skin-card[data-skin="flat"] .pv-spd .pv-dial,.skin-card[data-skin="flat"] .pv-alt .pv-dial{display:block;position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(rgb(var(--primary-rgb)) 223deg,rgba(var(--ink-dim-rgb),.2) 0);-webkit-mask:radial-gradient(transparent 58%,#000 59%);mask:radial-gradient(transparent 58%,#000 59%)}
+.skin-card[data-skin="flat"] .pv-val{position:relative;z-index:1;font-size:9px;color:#f6fff4;font-family:system-ui,sans-serif}
+.skin-card[data-skin="flat"] .pv-thr .pv-bar{display:block;width:34px;height:7px;border-radius:999px;background:rgba(var(--ink-dim-rgb),.25);position:relative}
+.skin-card[data-skin="flat"] .pv-thr .pv-bar::after{content:"";position:absolute;inset:0;width:62%;border-radius:999px;background:rgb(var(--primary-rgb))}
+.skin-card[data-skin="flat"] .pv-thr .pv-val{display:none}
+
+/* BLUEPRINT preview — cyan schematic dials on a grid */
+.skin-card[data-skin="blueprint"] .sc-prev{background:#0d2438;background-image:linear-gradient(rgba(var(--info-rgb),.12) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--info-rgb),.12) 1px,transparent 1px);background-size:11px 11px}
+.skin-card[data-skin="blueprint"] .sc-name,.skin-card[data-skin="blueprint"] .pv-val{font-family:'Courier New',monospace;color:rgb(var(--info-rgb))}
+.skin-card[data-skin="blueprint"] .pv-spd,.skin-card[data-skin="blueprint"] .pv-thr{width:32px;height:32px}
+.skin-card[data-skin="blueprint"] .pv-spd .pv-dial,.skin-card[data-skin="blueprint"] .pv-thr .pv-dial{display:block;position:absolute;inset:0;border-radius:50%;border:1px solid rgba(var(--info-rgb),.85)}
+.skin-card[data-skin="blueprint"] .pv-spd .pv-needle,.skin-card[data-skin="blueprint"] .pv-thr .pv-needle{display:block;position:absolute;left:calc(50% - .5px);bottom:50%;width:1px;height:13px;background:rgb(var(--primary-rgb));transform-origin:50% 100%;z-index:1}
+.skin-card[data-skin="blueprint"] .pv-spd .pv-needle{transform:rotate(-40deg)}
+.skin-card[data-skin="blueprint"] .pv-thr .pv-needle{transform:rotate(35deg)}
+.skin-card[data-skin="blueprint"] .pv-spd .pv-val,.skin-card[data-skin="blueprint"] .pv-thr .pv-val{display:none}

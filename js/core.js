@@ -609,6 +609,28 @@ function stealthWon(m) {
 }
 
 /* ===================================================================
+   INSTRUMENT SEAM (pure) — map raw flight values to the CSS custom-prop set the per-skin HUD
+   gauges read (analog needles, blueprint dials, flat arcs, futuristic tapes, manual hatch bars).
+   Mirrored by ui-hud.js updateDom; tested in tests/instruments.test.js. Angles pre-clamped here
+   so the CSS only rotates. Speed full-scale = 1000 kt; altitude arc full-scale = 20000 ft.
+   =================================================================== */
+function instrumentState(kt, altFt, throttle) {
+  kt = Math.max(0, kt | 0);
+  altFt = Math.max(0, altFt | 0);
+  const thr = Math.min(1, Math.max(0, +throttle || 0));
+  const spdFrac = Math.min(1, kt / 1000);
+  const altFrac = Math.min(1, altFt / 20000);
+  return {
+    spdKt: kt, altFt: altFt,
+    spdFrac: spdFrac, altFrac: altFrac, thrFrac: thr,
+    spdDeg: spdFrac * 240 - 120,             // airspeed dial sweep, ±120°
+    thrDeg: thr * 270 - 135,                 // throttle arc, ±135°
+    altDeg: (altFt % 1000) / 1000 * 360,     // altimeter hundreds hand (1 rev / 1000 ft)
+    altDegK: (altFt % 10000) / 10000 * 360,  // altimeter thousands hand (1 rev / 10000 ft)
+  };
+}
+
+/* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
    =================================================================== */
@@ -634,5 +656,6 @@ if (typeof module !== 'undefined' && module.exports) {
     ARCHETYPES, pickArchetype, shouldJink, pincerSign,
     equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
     DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
+    instrumentState,
   };
 }

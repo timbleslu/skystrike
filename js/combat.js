@@ -920,6 +920,9 @@ function updatePlayer(dt) {
     barrelRollDir = (rollIn !== 0) ? Math.sign(rollIn) : 1;   // capture roll intent at trigger
     barrelRollAnim = BARREL_ROLL_DURATION;
     barrelRollCooldown = BARREL_ROLL_COOLDOWN;
+    // capture the orientation at trigger; the roll is anchored to it so a full 360° returns EXACTLY here
+    if (!player._brQuat0) player._brQuat0 = player.group.quaternion.clone();
+    else player._brQuat0.copy(player.group.quaternion);
     player.invuln = Math.max(player.invuln, BARREL_ROLL_INVULN);
     haptic(80);
     if (typeof showBanner === 'function') showBanner(t('banner.evade'), 1.2);
@@ -938,12 +941,20 @@ function updatePlayer(dt) {
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
 
   if (barrelRollAnim > 0) {
-    // Barrel roll: a PURE roll about the body forward axis. A full 360° spins over BARREL_ROLL_DURATION,
-    // so when it completes the jet's heading and pitch are UNCHANGED (only the roll moved). No pitch pulse,
-    // and the pitch/yaw integrate is skipped for the duration so nothing drifts the final facing.
+    // Barrel roll: a PURE body-Z roll ANCHORED to the orientation captured at trigger (player._brQuat0).
+    // Drive it by progress so the rotation is exactly barrelRollDir·2π·prog — at prog=1 that's a full turn
+    // back to the start, so heading AND pitch are UNCHANGED when it completes. The pitch/yaw integrate AND
+    // the auto-scheme heading yaw are both frozen for the duration, so nothing can drift the final facing.
     player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);   // tells (wingtip vapor, HUD) still read rollRate
-    player.group.quaternion.multiply(q1.setFromAxisAngle(ZAX, player.rollRate * dt));
+    const prog = clamp(1 - barrelRollAnim / BARREL_ROLL_DURATION, 0, 1);
+    player.group.quaternion.copy(player._brQuat0).multiply(q1.setFromAxisAngle(ZAX, barrelRollDir * prog * TWO_PI));
+    player._brEnding = true;
   } else {
+    if (player._brEnding && player._brQuat0) {   // roll just finished: pin EXACTLY back to the captured orientation
+      player.group.quaternion.copy(player._brQuat0);
+      player._brEnding = false;
+      player.rollRate = player.pitchRate = player.yawRate = 0;   // zero rates so this frame's integrate is identity (no drift)
+    }
     eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
     q1.setFromEuler(eul);
     player.group.quaternion.multiply(q1);
@@ -951,7 +962,8 @@ function updatePlayer(dt) {
   // AUTO scheme heading turn: a WORLD-axis yaw proportional to the current bank. Applied here (not in steerCommand)
   // and about the WORLD up axis so it's DECOUPLED from pitch — you can dive/climb while turning (diagonals work).
   // sign: bank right (currentBank>0) -> negative world yaw -> nose right. Scaled by tb so it tracks airframe agility.
-  if (controlScheme === 'auto') {
+  // Gated OFF during a barrel roll: otherwise the 360° bank sweep feeds this term a net heading yaw (drift).
+  if (controlScheme === 'auto' && barrelRollAnim <= 0) {
     const autoYaw = -STEER.autoYawGain * Math.sin(currentBank) * tb * dt;
     if (autoYaw) player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, autoYaw));
   }
