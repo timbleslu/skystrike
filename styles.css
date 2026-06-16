@@ -660,6 +660,19 @@ canvas{display:block}
 #tutArrow.up{border-top:0;border-bottom:20px solid var(--cy)}
 @keyframes tutBob{0%,100%{margin-top:0}50%{margin-top:7px}}
 @media(max-width:640px){#tutCard{bottom:20%}.tut-text{font-size:14px}}
+@media screen and (max-height:500px) and (orientation:landscape){
+  #tutCard{bottom:4%;padding:8px 14px 10px}
+  .tut-text{font-size:12px;line-height:1.3}
+  .tut-step{font-size:9px;margin-bottom:3px}
+  .tut-skip{margin-top:7px;padding:5px 16px}
+}
+/* notch / home-indicator safe area for all fixed UI screens */
+#hangar,#upgrade,#gameover,#meta,#langSelect,#onboard,#wingpick{
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+}
 /* settings language toggle */
 .langtog{display:flex;gap:8px}
 .langbtn{background:transparent;border:1px solid rgba(var(--hairline-rgb),.5);color:var(--txt);font-family:var(--mono);font-size:12px;padding:5px 12px;cursor:pointer}

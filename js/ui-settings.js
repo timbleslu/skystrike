@@ -33,7 +33,8 @@ function loadSettings() {
     if (typeof s.aimStrength === 'number') aimStrength = clamp(s.aimStrength | 0, 1, 5);
     if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
-    if (typeof s.hudScale === 'number') hudScale = Math.max(0.6, Math.min(1.6, s.hudScale));
+    if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
+    else if ('ontouchstart' in window) hudScale = 0.8;
     controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
@@ -160,11 +161,12 @@ function applyLang() {
   setTxt('ssetTab_audio', t('set.tab.audio'));
   setTxt('ssetTab_game', t('set.tab.game'));
   const shs2 = g('setHudScale');
-  if (shs2 && shs2.options.length >= 4) {
-    shs2.options[0].textContent = t('set.hudSmall');
-    shs2.options[1].textContent = t('set.hudNormal');
-    shs2.options[2].textContent = t('set.hudLarge');
-    shs2.options[3].textContent = t('set.hudXl');
+  if (shs2 && shs2.options.length >= 5) {
+    shs2.options[0].textContent = t('set.hudXs');
+    shs2.options[1].textContent = t('set.hudSmall');
+    shs2.options[2].textContent = t('set.hudNormal');
+    shs2.options[3].textContent = t('set.hudLarge');
+    shs2.options[4].textContent = t('set.hudXl');
   }
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
@@ -280,6 +282,9 @@ function installMotionStatus() {
 function applyHudScale() {
   const h = g('hud');
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
+  ['hangar', 'upgrade', 'gameover', 'wingpick', 'opmap', 'meta', 'langSelect', 'onboard'].forEach(id => {
+    const el = g(id); if (el) el.style.zoom = String(hudScale);
+  });
   if (typeof applyButtonStyle === 'function') applyButtonStyle();
 }
 function saveSettings() {
