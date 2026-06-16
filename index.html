@@ -244,6 +244,42 @@
   </div>
 </div>
 
+<!-- Operations campaign (linear multi-operation revamp): operations-select -> level map -> mission briefing -->
+<div id="opsSelect">
+  <div class="cmp-box">
+    <div class="cmp-title" id="opsTitle">OPERATIONS</div>
+    <div class="cmp-sub">// SELECT OPERATION //</div>
+    <div id="opsList" class="ops-list"></div>
+    <button id="opsBack" class="cmp-btn cmp-back">&#9664; BACK</button>
+  </div>
+</div>
+<div id="levelMap">
+  <div class="cmp-box">
+    <div class="cmp-title" id="levelMapTitle">OPERATION</div>
+    <div class="cmp-sub">// MISSION SELECT //</div>
+    <div id="levelNodes" class="level-nodes"></div>
+    <div class="cmp-actions">
+      <button id="levelMapBack" class="cmp-btn cmp-back">&#9664; BACK</button>
+      <button id="levelMapTech" class="cmp-btn">&#9874; R&amp;D</button>
+    </div>
+  </div>
+</div>
+<div id="briefing">
+  <div class="brief-box">
+    <div class="brief-title" id="briefTitle">MISSION BRIEFING</div>
+    <div class="brief-grid">
+      <div class="brief-sec"><div class="brief-h" id="briefLoreH">SITUATION</div><div class="brief-body" id="briefLore"></div></div>
+      <div class="brief-sec"><div class="brief-h" id="briefObjH">OBJECTIVES</div><div class="brief-body" id="briefObjectives"></div></div>
+      <div class="brief-sec"><div class="brief-h" id="briefIntelH">ENEMY INTEL</div><div class="brief-body brief-pre" id="briefIntel"></div></div>
+      <div class="brief-sec"><div class="brief-h" id="briefLoadoutH">LOADOUT</div><div class="brief-body" id="briefLoadout"></div></div>
+    </div>
+    <div class="brief-actions">
+      <button id="briefBack" class="cmp-btn cmp-back">&#9664; BACK</button>
+      <button id="briefPlay" class="cmp-btn cmp-play">&#9654; LAUNCH</button>
+    </div>
+  </div>
+</div>
+
 <div id="manual">
   <div class="mwrap">
     <h2 id="manTitle">FLIGHT MANUAL</h2>

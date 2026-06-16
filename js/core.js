@@ -630,6 +630,123 @@ function instrumentState(kt, altFt, throttle) {
   };
 }
 
+/* ---------------- campaign / operations cores (Operations Map revamp) ----------------
+   PURE progression + bounded-level wave scaling + checkpoint snapshot/rollback for the linear
+   multi-operation campaign. `campaign` is the meta.campaign progress map
+   ({ [opId]: { unlocked, furthest, levels: { [levelId]:{cleared,bestScore,bestStars} } } });
+   `ops` is the OPERATIONS data table, INJECTED so this file stays load-order-free + require-safe.
+   The store-touching wrappers (campaignClearLevel/…) live in meta.js. */
+const LEVEL_WAVE_MIN = 2;
+const LEVEL_WAVE_CAP = 4;
+// bounded wave bank for a level: 2 + floor(index/2), clamped [MIN, cap]. A level row's literal
+// `waves` (recon/stealth=1; boss handled separately) overrides this at the call site.
+function campaignWaveCount(index, cap) {
+  return clamp(2 + (index >> 1), LEVEL_WAVE_MIN, cap === undefined ? LEVEL_WAVE_CAP : cap);
+}
+// a bounded level is done once its whole wave bank is cleared AND the typed objective (if any)
+// resolved 'won'. missionDone is true for objectiveless levels.
+function levelCleared(wavesCleared, totalWaves, missionDone) {
+  return wavesCleared >= totalWaves && !!missionDone;
+}
+// internal — has a specific level been cleared in the campaign map?
+function _levelIsCleared(campaign, opId, levelId) {
+  const op = campaign && campaign[opId];
+  return !!(op && op.levels && op.levels[levelId] && op.levels[levelId].cleared);
+}
+// operation unlocked iff it's the first, or the previous operation's last (boss) level is cleared.
+function isOpUnlocked(campaign, ops, opId) {
+  const idx = ops.findIndex(function (o) { return o.id === opId; });
+  if (idx < 0) return false;            // unknown op id
+  if (idx === 0) return true;           // first op always open
+  const prev = ops[idx - 1];
+  const last = prev.levels[prev.levels.length - 1];
+  return _levelIsCleared(campaign, prev.id, last.id);
+}
+// level unlocked iff its op is unlocked AND (first level OR the prior level is cleared).
+function isLevelUnlocked(campaign, ops, opId, levelIndex) {
+  if (!isOpUnlocked(campaign, ops, opId)) return false;
+  const op = ops.find(function (o) { return o.id === opId; });
+  if (!op || levelIndex < 0 || levelIndex >= op.levels.length) return false;
+  if (levelIndex === 0) return true;
+  return _levelIsCleared(campaign, opId, op.levels[levelIndex - 1].id);
+}
+// 'locked' | 'unlocked' | 'cleared' for the level-map node renderer.
+function levelState(campaign, ops, opId, levelIndex) {
+  const op = ops.find(function (o) { return o.id === opId; });
+  if (!op || levelIndex < 0 || levelIndex >= op.levels.length) return 'locked';
+  if (_levelIsCleared(campaign, opId, op.levels[levelIndex].id)) return 'cleared';
+  return isLevelUnlocked(campaign, ops, opId, levelIndex) ? 'unlocked' : 'locked';
+}
+// internal — clone one operation's progress record (plain JSON-able data).
+function _cloneOpRec(rec) {
+  const c = { unlocked: !!rec.unlocked, furthest: rec.furthest || 0, levels: {} };
+  if (rec.levels) for (const id in rec.levels) {
+    const r = rec.levels[id];
+    c.levels[id] = { cleared: !!r.cleared, bestScore: r.bestScore || 0, bestStars: r.bestStars || 0 };
+  }
+  return c;
+}
+// returns a NEW campaign map with (opId, levelIndex) marked cleared, the op's `furthest` advanced,
+// and bestScore/bestStars folded MONOTONICALLY. Never mutates the input; unknown op/level returns
+// the input unchanged.
+function markLevelCleared(campaign, ops, opId, levelIndex, score, stars, levelId) {
+  const op = ops.find(function (o) { return o.id === opId; });
+  if (!op) return campaign;
+  const lvl = op.levels[levelIndex];
+  if (!lvl) return campaign;
+  const id = levelId || lvl.id;
+  const next = {};
+  for (const k in campaign) next[k] = _cloneOpRec(campaign[k]);
+  const cur = next[opId] || { unlocked: true, furthest: 0, levels: {} };
+  cur.unlocked = true;
+  if (!cur.levels) cur.levels = {};
+  const prev = cur.levels[id] || { cleared: false, bestScore: 0, bestStars: 0 };
+  cur.levels[id] = {
+    cleared: true,
+    bestScore: Math.max(prev.bestScore || 0, score || 0),
+    bestStars: Math.max(prev.bestStars || 0, stars || 0),
+  };
+  cur.furthest = Math.max(cur.furthest || 0, Math.min(levelIndex + 1, op.levels.length - 1));
+  next[opId] = cur;
+  return next;
+}
+// highest unlocked level index reached in an operation (map cursor / resume).
+function furthestLevel(campaign, opId) {
+  return (campaign && campaign[opId] && campaign[opId].furthest) || 0;
+}
+/* checkpoint snapshot/rollback (checkpoint-hybrid economy). PURE value copies — the glue
+   (ui-flow.js) reads the live player, stashes the snapshot at level launch, and on death assigns
+   the rollback values back + RE-DERIVES stats (commitNode mutates derived player stats in place,
+   so the glue must rebuild, not just restore). Loadout rides along as an opaque copy. */
+function captureSnapshot(p) {
+  if (!p) return null;
+  return {
+    rp: p.tp || 0, score: p.score || 0,
+    tech: (p.tech || []).slice(),
+    techRepeat: Object.assign({}, p.techRepeat || {}),
+    upgrades: (p.upgrades || []).slice(),
+    loadout: Object.assign({}, p.loadout || {}),
+  };
+}
+function rollbackSnapshot(snap) {
+  if (!snap) return null;
+  return {
+    rp: snap.rp || 0, score: snap.score || 0,
+    tech: (snap.tech || []).slice(),
+    techRepeat: Object.assign({}, snap.techRepeat || {}),
+    upgrades: (snap.upgrades || []).slice(),
+    loadout: Object.assign({}, snap.loadout || {}),
+  };
+}
+/* level-clear rewards. PURE. Replays re-grant by default (farmable BY DESIGN per the brief); flip
+   CAMPAIGN_REPLAY_REWARDS (or pass farmable=false) to make a cleared level's replay grant nothing. */
+const CAMPAIGN_REPLAY_REWARDS = true;
+function grantLevelRewards(index, isBoss, alreadyCleared, farmable) {
+  const farm = (farmable === undefined) ? CAMPAIGN_REPLAY_REWARDS : farmable;
+  if (alreadyCleared && !farm) return { rp: 0, score: 0 };
+  return { rp: 40 + 20 * index + (isBoss ? 150 : 0), score: 1000 + 500 * index + (isBoss ? 5000 : 0) };
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -657,5 +774,8 @@ if (typeof module !== 'undefined' && module.exports) {
     equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
     DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
     instrumentState,
+    LEVEL_WAVE_MIN, LEVEL_WAVE_CAP, campaignWaveCount, levelCleared,
+    isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
+    captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
   };
 }

@@ -49,6 +49,7 @@ function onMetaGridClick(e) {
 function startGame(i, daily, rush) {
   if (state !== 'hangar') return;
   if (!daily && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
+  if (opMode && !daily && !rush) { selectedJet = i; openOperationsSelect(); return; }   // Operations: enter campaign navigation (player built per-operation in launchLevel), not a direct run
   const _ptag = g('pilotTag');
   if (_ptag) {
     setTxt('pilotCallsignTxt', (meta && meta.callsign) || '');
@@ -81,7 +82,7 @@ function startGame(i, daily, rush) {
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
   weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
-  if (opMode) { opMap = genOpMap(groundWar); openOpMap(); }
+  // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   resetDraftState();   // FRONTIER DRAFT (feature 4): fresh run seed + clear pin/pity/visit counter
@@ -100,6 +101,7 @@ function startGame(i, daily, rush) {
 }
 function gameOver() {
   if (state !== 'playing') return;
+  if (campaignMode) { campaignLevelFailed(); return; }   // Operations campaign: roll back to the pre-level checkpoint + return to the map (NOT run-end)
   state = 'dead';
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   explode(player.group.position, true);
@@ -183,6 +185,197 @@ function operationComplete() {
   showBanner(t('banner.operationComplete'));
   endRun(t('banner.operationComplete'), true);
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // reflect the new unlock in the hangar
+}
+
+/* ===================== Operations campaign (linear multi-operation revamp) =====================
+   Three-tier navigation: operations-select → linear level map → mission briefing → bounded level.
+   ONE player persists across an operation's levels (RP/tech accumulate); each level snapshots the
+   pre-level economy and rolls back on death. There is NO mid-level tech screen (shopping happens
+   between levels from the map), so a failed attempt only loses in-level RP/score — tech bought
+   between levels lives in the next level's snapshot and is preserved. Beating the operation's boss
+   level completes the operation (unlocks the next) via operationComplete. */
+let campaignBriefOp = null, campaignBriefIdx = -1;   // briefing-screen target
+
+// clear the live arena between levels but KEEP the player (clearArena nulls the player; we don't want that)
+function clearCampaignArena() {
+  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
+  for (let i = 0; i < bullets.length; i++) scene.remove(bullets[i].mesh);
+  for (let i = 0; i < missiles.length; i++) scene.remove(missiles[i].mesh);
+  for (let i = 0; i < flares.length; i++) scene.remove(flares[i].mesh);
+  for (let i = 0; i < loots.length; i++) scene.remove(loots[i].mesh);
+  for (let i = 0; i < particles.length; i++) scene.remove(particles[i].mesh);
+  for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
+  clearWingmen();
+  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
+  pendingSpawns.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
+  if (typeof BPOOL !== 'undefined') BPOOL.length = 0;
+  mission = null; setpieceActive = null;
+}
+
+// hangar "Operations" launch entry → the operations-select screen (player NOT built yet)
+function openOperationsSelect() {
+  campaignMode = false; campaignOpId = null; opSector = null; paused = true;
+  g('hangar').classList.add('hide');
+  const ov = g('opsSelect'); if (!ov) return;
+  renderOperationsSelect();
+  g('briefing') && g('briefing').classList.remove('show');
+  g('levelMap') && g('levelMap').classList.remove('show');
+  ov.classList.add('show');
+  setTxt('opsTitle', t('campaign.operations'));
+  const back = g('opsBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); campaignPlayerOpId = null; returnToHangar(); }; }
+  if (audio.on) audio.ui();
+}
+function renderOperationsSelect() {
+  const wrap = g('opsList'); if (!wrap) return;
+  wrap.innerHTML = OPERATIONS.map((op, oi) => {
+    const unlocked = campaignOpUnlocked(op.id);
+    const beaten = campaignLevelState(op.id, op.levels.length - 1) === 'cleared';
+    const cls = 'op-card' + (unlocked ? '' : ' locked') + (beaten ? ' done' : '');
+    const sub = !unlocked ? t('campaign.locked') : beaten ? t('campaign.cleared') : t(op.theaterKey);
+    return '<div class="' + cls + '" data-op="' + op.id + '"><div class="op-card-n">' + (oi + 1) +
+      '</div><div class="op-card-name">' + t(op.nameKey) + '</div><div class="op-card-sub">' + sub + '</div></div>';
+  }).join('');
+  wrap.querySelectorAll('.op-card:not(.locked)').forEach(c => c.addEventListener('click', () => {
+    g('opsSelect').classList.remove('show');
+    openLevelMap(c.getAttribute('data-op'));
+  }));
+}
+
+// the linear level map for one operation (paused overlay; player persists if mid-operation)
+function openLevelMap(opId) {
+  campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
+  const ov = g('levelMap'); if (!ov) return;
+  renderLevelMap(opId);
+  g('briefing') && g('briefing').classList.remove('show');
+  ov.classList.add('show');
+  const rd = g('levelMapTech'); if (rd) { rd.textContent = '⚒ ' + t('campaign.rd'); rd.onclick = () => { if (campaignPlayerOpId === opId && player && typeof openTechScreen === 'function') { ov.classList.remove('show'); openTechScreen(); } }; }
+  const back = g('levelMapBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); openOperationsSelect(); }; }
+  if (audio.on) audio.ui();
+}
+function renderLevelMap(opId) {
+  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const title = g('levelMapTitle'); if (title) title.textContent = t(op.nameKey);
+  const rd = g('levelMapTech'); if (rd) rd.style.display = (campaignPlayerOpId === opId && player) ? '' : 'none';   // R&D only mid-operation
+  const wrap = g('levelNodes'); if (!wrap) return;
+  wrap.innerHTML = op.levels.map((lvl, i) => {
+    const st = campaignLevelState(opId, i);   // 'locked' | 'unlocked' | 'cleared'
+    const rec = meta && meta.campaign && meta.campaign[opId] && meta.campaign[opId].levels[lvl.id];
+    const stars = (rec && rec.bestStars) || 0;
+    const pips = st === 'cleared' ? '<div class="level-stars">' + '★'.repeat(stars) + '☆'.repeat(3 - stars) + '</div>' : '';
+    return '<div class="level-node ' + st + (lvl.isBoss ? ' boss' : '') + '" data-idx="' + i + '">' +
+      '<div class="level-node-n">' + (i + 1) + '</div><div class="level-node-name">' + t(lvl.nameKey) + '</div>' + pips + '</div>';
+  }).join('');
+  wrap.querySelectorAll('.level-node.unlocked, .level-node.cleared').forEach(n =>
+    n.addEventListener('click', () => openBriefing(opId, +n.getAttribute('data-idx'))));
+}
+
+// full-screen mission briefing (a navigation layer visited BEFORE launch — not the in-game modal)
+function openBriefing(opId, idx) {
+  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const lvl = op.levels[idx]; if (!lvl) return;
+  campaignBriefOp = opId; campaignBriefIdx = idx;
+  g('levelMap') && g('levelMap').classList.remove('show');
+  const ov = g('briefing'); if (!ov) return;
+  setTxt('briefTitle', t(op.nameKey) + ' — ' + t('campaign.level') + ' ' + (idx + 1) + ': ' + t(lvl.nameKey));
+  setTxt('briefLore', t(lvl.isBoss && lvl.boss && lvl.boss.introKey ? lvl.boss.introKey : lvl.loreKey));
+  setTxt('briefObjectives', t(lvl.objectivesKey));
+  let intel = t(lvl.enemyIntelKey);
+  if (lvl.isBoss && lvl.boss && lvl.boss.phases) intel += '\n' + lvl.boss.phases.map(ph => '• ' + t(ph.descKey)).join('\n');
+  setTxt('briefIntel', intel);
+  setTxt('briefLoadout', campaignLoadoutSummary(opId));
+  setTxt('briefLoreH', t('campaign.situation')); setTxt('briefObjH', t('campaign.objectives'));
+  setTxt('briefIntelH', t('campaign.enemyIntel')); setTxt('briefLoadoutH', t('campaign.loadout'));
+  ov.classList.add('show');
+  const play = g('briefPlay'); if (play) { play.textContent = '▶ ' + t('campaign.play'); play.onclick = () => launchLevel(opId, idx); }
+  const back = g('briefBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); openLevelMap(opId); }; }
+  if (audio.on) audio.ui();
+}
+// read-only loadout summary for the briefing screen
+function campaignLoadoutSummary(opId) {
+  const jet = JETS[selectedJet];
+  const parts = [];
+  if (jet) parts.push(jet.name || jet.id);
+  const rp = (campaignPlayerOpId === opId && player) ? (player.tp || 0) : 0;
+  parts.push('RP ' + rp);
+  if (special2Id) parts.push('SPC2');
+  return parts.join('  ·  ');
+}
+
+// build a fresh player for a NEW operation run (RP 0, no in-run tech; meta perks applied)
+function enterOperationRun(opId) {
+  clearCampaignArena();
+  if (player && player.group) scene.remove(player.group);
+  player = null;
+  dailyMode = false; bossRush = false;
+  wingDmgMul = 1;
+  createPlayer(selectedJet);
+  applyMetaPerks(player);
+  equipSpecial2(player, special2Id, JETS[selectedJet].id);
+  player._cheatUsed = false;
+  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
+  campaignPlayerOpId = opId;
+  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
+  weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;
+  if (typeof applyWeather === 'function') applyWeather('clear');
+  resetDraftState();
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };
+  awacsLast = { strike: 0, resupply: 0, jam: 0 };
+}
+
+// PLAY: launch the bounded level (builds the op player on first entry, reuses it after)
+function launchLevel(opId, idx) {
+  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const lvl = op.levels[idx]; if (!lvl) return;
+  g('briefing') && g('briefing').classList.remove('show');
+  g('opsSelect') && g('opsSelect').classList.remove('show');
+  g('levelMap') && g('levelMap').classList.remove('show');
+  if (campaignPlayerOpId !== opId || !player) enterOperationRun(opId);   // fresh op run, or switching ops
+  campaignOpId = opId; campaignLevelIdx = idx;
+  campaignWavesLeft = lvl.waves || campaignWaveCount(idx);
+  // every level starts at full health/ordnance (also covers retry after a failed attempt)
+  player.hp = player.maxHp; if (player.maxShield) player.shield = player.maxShield;
+  player.missiles = player.maxMissiles; player.flares = player.maxFlares;
+  if (player.group) player.group.visible = true;
+  campaignSnapshot = captureSnapshot(player);   // pre-level economy checkpoint (tp/score)
+  wave = 0; betweenWaves = true; waveTimer = 1.4; strikeWaveActive = false;
+  mission = null; setpieceActive = null; campaignBossPhases = null; noDamageWave = false;
+  campaignMode = true; opSector = lvl.type;   // opSector reused as the level's mission/sector type
+  state = 'playing'; paused = false;
+  if (clock) clock.getDelta();
+  if (isTouchEnabled) g('touchControls').classList.add('show');
+  if (startWingman) spawnWingman(false, 'STD');
+  showBanner(t('banner.launching'));
+}
+
+// WIN: commit rewards, persist the clear, return to the map (boss level → operation complete)
+function campaignLevelComplete() {
+  const opId = campaignOpId, idx = campaignLevelIdx;
+  const lvl = currentCampaignLevel(); if (!lvl) return;
+  campaignMode = false; campaignSnapshot = null; opSector = null;
+  const firstClear = campaignLevelState(opId, idx) !== 'cleared';
+  const rw = grantLevelRewards(idx, !!lvl.isBoss, !firstClear, CAMPAIGN_REPLAY_REWARDS);
+  if (player) { player.tp = (player.tp || 0) + rw.rp; player.score += rw.score; }
+  const stars = evalStars(run, player);
+  campaignClearLevel(opId, idx, lvl.id, (player && player.score) || 0, stars);   // persists + advances furthest unlocked
+  if (lvl.isBoss) { operationComplete(); return; }   // op boss → victory/debrief + unlock next operation
+  clearCampaignArena();
+  showBanner(t('campaign.cleared'));
+  openLevelMap(opId);   // back to the paused map; the next node is now unlocked
+}
+
+// FAIL (death or objective failure): roll back the economy, return to the map, level stays unlocked
+function campaignLevelFailed() {
+  const opId = campaignOpId;
+  campaignMode = false;
+  if (campaignSnapshot && player) {
+    const r = rollbackSnapshot(campaignSnapshot);   // pure; tech untouched (no mid-level shop) — only restore economy
+    player.tp = r.rp; player.score = r.score;
+  }
+  campaignSnapshot = null; opSector = null;
+  if (player && player.group) player.group.visible = true;   // un-hide (the gameOver guard returned before exploding)
+  clearCampaignArena();
+  showBanner(t('banner.missionFailed'));
+  openLevelMap(opId);
 }
 
 // ===== Boss Rush mode (F15) =====

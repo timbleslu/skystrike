@@ -209,7 +209,7 @@ function setCallsign(str) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, campaign: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -231,6 +231,7 @@ function loadMeta() {
   if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
   if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
   if (typeof meta.slot2 !== 'boolean') meta.slot2 = false;   // F3: 2nd-special-slot unlock
+  if (!meta.campaign || typeof meta.campaign !== 'object') meta.campaign = {};   // Operations Map revamp — campaign progress (heal, never wipe)
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
@@ -321,6 +322,26 @@ function jetPaint(jet) {
   return { color: jet.color, accent: jet.accent };
 }
 
+/* ---------------- campaign progress (Operations Map revamp) ----------------
+   Thin store-touching wrappers over the PURE cores in core.js (isOpUnlocked / isLevelUnlocked /
+   levelState / markLevelCleared). `OPERATIONS` is the opmap.js data table — a global at runtime;
+   these are only ever called after load order completes. meta.campaign persists inside the
+   existing skystrike_meta blob (no new storage key, no version bump — healed in loadMeta). */
+function campaignOpUnlocked(opId) {
+  return isOpUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId);
+}
+function campaignLevelUnlocked(opId, levelIndex) {
+  return isLevelUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
+}
+function campaignLevelState(opId, levelIndex) {
+  return levelState((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
+}
+function campaignClearLevel(opId, levelIndex, levelId, score, stars) {
+  if (!meta) return;
+  meta.campaign = markLevelCleared(meta.campaign || {}, OPERATIONS, opId, levelIndex, score, stars, levelId);
+  saveMeta();
+}
+
 /* ---------------- achievements ---------------- */
 function achEarned(id) { return !!(meta && meta.ach[id]); }
 function grantAch(id) {
@@ -358,6 +379,8 @@ if (typeof module !== 'undefined' && module.exports) {
     slot2Unlocked, buySlot2, SLOT2_COST,
     // achievements
     achEarned, grantAch, checkAchievements,
+    // campaign progress (Operations Map revamp)
+    campaignOpUnlocked, campaignLevelUnlocked, campaignLevelState, campaignClearLevel,
     // tables & constants
     META_KEY, META_VERSION, STARTER_JETS, STAR_KILL_FRAC,
     META_PERKS, META_BY_ID, SKINS, ACHIEVEMENTS, EMBLEMS,

@@ -346,9 +346,8 @@ function deployFromTech() {
   choosingUpgrade = false; paused = false;
   if (clock) clock.getDelta();   // swallow the paused interval so dt doesn't spike
   if (isTouchEnabled && state === 'playing') g('touchControls').classList.add('show');
-  if (opMode && opMap) {
-    if (opStage >= opMap.length) return;          // FINAL already cleared; victory path owns the flow
-    openOpMap(); return;
+  if (campaignPlayerOpId && !campaignMode) {   // Operations campaign: the tech screen is opened from the level map → return to it
+    openLevelMap(campaignOpId); return;
   }
   betweenWaves = true; waveTimer = 1.4;   // short breather, then the next wave spawns
   showBanner(tf('banner.waveInbound', { n: wave + 1 })); audio.ui();

@@ -1324,6 +1324,14 @@ function updateEnemy(e, dt) {
   }
   const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
   if (agl < 220) desired.y = Math.max(desired.y, 0.45);
+  // ----- campaign boss phase descriptors (Operations map). Gated on e._phaseCfg (set at spawn by
+  // main.js); absent for endless/boss-rush/rivals, so their AI is byte-identical. Phase 1's cfg is
+  // applied lazily here once (bossEnterPhase in combat.js only fires for crossed thresholds 2/3), then
+  // _pattern/_flags bias the ALREADY-computed `desired` heading rather than rewriting the AI. -----
+  if (e._phaseCfg) {
+    if (e.phase === 1 && !e._cfgInit && typeof bossApplyPhaseCfg === 'function') bossApplyPhaseCfg(e, 1);
+    bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer);
+  }
   // ----- baiter break-turn (2026-06): when the player is locking this enemy, juke HARD sideways on a
   // short cooldown to break the lock, then settle back. Adds a big lateral offset to the heading +
   // a transient turn-rate boost so the juke actually snaps. Counter: stay on it / lead the juke. -----
@@ -1395,6 +1403,53 @@ function updateEnemy(e, dt) {
     }
   }
   if (e.type === 'boss' && !(e.stun > 0)) updateBossSpecials(e, dt, dist);
+}
+
+// Campaign-boss movement polish (Operations map). Reads e._pattern / e._flags (set from the phase
+// descriptor in combat.js bossApplyPhaseCfg). Biases the ALREADY-computed `desired` heading and reuses
+// existing systems (enemyFlares for chaff, the baiter _jinkT break for mirror) — no new engine. Only
+// touches scratch tA, which updateEnemy no longer reads after this call. Inert when no pattern/flag set.
+function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
+  const pat = e._pattern;
+  if (pat === 'standoff') {
+    // GLACIER p1 — BVR: hold missile range, refuse the gun merge. Push away when inside ~2400u.
+    if (dist < 2400) { desired.copy(e.group.position).sub(player.group.position).normalize(); desired.y += 0.05; desired.normalize(); }
+  } else if (pat === 'headOn') {
+    // WARLORD p3 / CORSAIR p3 — commit to a high-closure head-on merge at the player's predicted position.
+    const lead = interceptPoint(e.group.position, player.group.position, player.vel, 1400);
+    if (lead) { tA.copy(lead).sub(e.group.position).normalize(); desired.lerp(tA, 0.85).normalize(); }
+    else { desired.lerp(toP, 0.85).normalize(); }
+    e.speed = lerp(e.speed, 300, dt);                    // bore in hard
+  } else if (pat === 'dive') {
+    // GLACIER p3 — climb for altitude, then a steep diving attack. Hysteresis on _diving so it commits.
+    const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
+    if (!e._diving && agl > 2000) e._diving = true;       // reached perch -> roll into the dive
+    else if (e._diving && agl < 700) e._diving = false;   // bottomed out -> climb again
+    if (e._diving) { desired.copy(toP); desired.y = Math.min(desired.y, -0.55); desired.normalize(); e.speed = lerp(e.speed, 320, dt); }
+    else { desired.y = Math.max(desired.y, 0.6); desired.normalize(); e.speed = lerp(e.speed, 230, dt); }
+  }
+  const flags = e._flags;
+  if (flags && flags.length) {
+    // chaff (WARLORD p2): periodically seed decoys from the boss via the EXISTING enemy flare pathway.
+    if (flags.indexOf('chaff') >= 0) {
+      e._chaffCd = (e._chaffCd || 0) - dt;
+      if (e._chaffCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e._chaffCd = 1.8; }
+    }
+    // mirror (CORSAIR p1): a small canned-counter feel — on a cooldown, when the player locks the boss,
+    // fire one of 3 scripted reactions by reusing the baiter break (flip orbit + a transient turn boost
+    // via _jinkT, which the block below already turns into a hard lateral juke). Reads as adaptive briefly.
+    if (flags.indexOf('mirror') >= 0) {
+      e._mirrorCd = (e._mirrorCd || 0) - dt;
+      if (lockedByPlayer && e._mirrorCd <= 0) {
+        e._mirrorCd = 2.4;
+        e._mirrorMove = ((e._mirrorMove || 0) + 1) % 3;   // 0=break left/right, 1=hard break + dump chaff, 2=extend
+        e.orbitSign = -e.orbitSign;
+        e._jinkT = 0.5;                                   // reuse baiter snap (turnMul=1.6 in the block below)
+        if (e._mirrorMove === 1 && e.flareAmmo > 0) enemyFlares(e);
+        else if (e._mirrorMove === 2) { desired.copy(e.group.position).sub(player.group.position).normalize(); desired.y += 0.04; desired.normalize(); }
+      }
+    }
+  }
 }
 
 function updateBomber(e, dt) {

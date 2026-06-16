@@ -1,24 +1,88 @@
 /* SKYSTRIKE — opmap.js: operation mode map generation + sector plans. Loaded after rival.js. */
-let opMap = null;       // stages array from genOpMap
+let opMap = null;       // legacy stages array (retired with genOpMap; campaign now reads OPERATIONS)
 let opStage = 0;        // index of the stage the NEXT pick comes from
 let opSector = null;    // currently-flying sector type (string) or null
 
-// Fixed campaign progression — the same hand-authored map every run (no longer random).
-// Each stage offers a choice of sectors; the player picks one per column, left to right.
-// All five mission types (sweep/intercept/escort/defend/strike) appear as labelled sectors,
-// a mid-campaign DEPOT gives a resupply breather, and FINAL caps the operation with the boss.
-// STRIKE needs the ground war; when it's off those sectors fall back to an air INTERCEPT.
-function genOpMap(groundOn) {
-  const strike = groundOn ? 'STRIKE' : 'INTERCEPT';
-  return [
-    ['FURBALL', 'INTERCEPT'],
-    [strike, 'ESCORT'],
-    ['DEFEND', 'RECON'],     // non-combat photo-pass alt (FURBALL still reachable in stage 1)
-    ['DEPOT', 'STEALTH'],    // no-kill infiltration alt (INTERCEPT still reachable in stage 1)
-    ['ESCORT', strike],
-    ['ELITE', 'DEFEND'],
-    ['FINAL'],
-  ];
+/* ---- OPERATIONS table (Operations Map revamp) ----
+   The fixed three-operation campaign as DATA. Every level row is hand-authored with an
+   ABSOLUTE spawn budget (D2 — no wave-scaled procedural plan) plus the typed-mission `type`,
+   a bounded `waves` bank, and i18n KEYS for all user-facing text (strings authored in i18n.js).
+   Boss levels (`type:'FINAL'`, `isBoss:true`) carry a 3-phase `boss` descriptor (PROPOSAL §2.5).
+   Meta is keyed on `${opId}.${id}` — ids are stable and MUST NOT be renumbered. */
+const OPERATIONS = [
+  {
+    id: 'ironVeil', nameKey: 'op.ironVeil.name', theaterKey: 'op.ironVeil.theater', loreKey: 'op.ironVeil.lore',
+    levels: [
+      { id: 'firstLight',  nameKey: 'op.ironVeil.l1.name', type: 'RECON',     loreKey: 'op.ironVeil.l1.lore', objectivesKey: 'op.ironVeil.l1.obj', enemyIntelKey: 'op.ironVeil.l1.intel', waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: false } },
+      { id: 'openSkies',   nameKey: 'op.ironVeil.l2.name', type: 'FURBALL',   loreKey: 'op.ironVeil.l2.lore', objectivesKey: 'op.ironVeil.l2.obj', enemyIntelKey: 'op.ironVeil.l2.intel', waves: 2, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
+      { id: 'blindspot',   nameKey: 'op.ironVeil.l3.name', type: 'STEALTH',   loreKey: 'op.ironVeil.l3.lore', objectivesKey: 'op.ironVeil.l3.obj', enemyIntelKey: 'op.ironVeil.l3.intel', waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'fog', tod: 2, hostileAce: false } },
+      { id: 'tripwire',    nameKey: 'op.ironVeil.l4.name', type: 'INTERCEPT', loreKey: 'op.ironVeil.l4.lore', objectivesKey: 'op.ironVeil.l4.obj', enemyIntelKey: 'op.ironVeil.l4.intel', waves: 3, spawn: { fighters: 3, aces: 0, bombers: 2, ground: false, weather: 'fog', tod: 1, hostileAce: true } },
+      { id: 'ironShield',  nameKey: 'op.ironVeil.l5.name', type: 'DEFEND',    loreKey: 'op.ironVeil.l5.lore', objectivesKey: 'op.ironVeil.l5.obj', enemyIntelKey: 'op.ironVeil.l5.intel', waves: 3, spawn: { fighters: 3, aces: 1, bombers: 1, ground: false, weather: 'storm', tod: 1, hostileAce: true } },
+      { id: 'lifeline',    nameKey: 'op.ironVeil.l6.name', type: 'ESCORT',    loreKey: 'op.ironVeil.l6.lore', objectivesKey: 'op.ironVeil.l6.obj', enemyIntelKey: 'op.ironVeil.l6.intel', waves: 4, spawn: { fighters: 3, aces: 1, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
+      { id: 'hammerFall',  nameKey: 'op.ironVeil.l7.name', type: 'STRIKE',    loreKey: 'op.ironVeil.l7.lore', objectivesKey: 'op.ironVeil.l7.obj', enemyIntelKey: 'op.ironVeil.l7.intel', waves: 4, spawn: { fighters: 3, aces: 0, bombers: 0, ground: true, weather: 'storm', tod: 0, hostileAce: true } },
+      { id: 'warlord',     nameKey: 'op.ironVeil.l8.name', type: 'FINAL',     loreKey: 'op.ironVeil.l8.lore', objectivesKey: 'op.ironVeil.l8.obj', enemyIntelKey: 'op.ironVeil.l8.intel', waves: 1, isBoss: true, bossApproachWave: true, spawn: { fighters: 4, aces: 2, bombers: 0, ground: false, weather: 'storm', tod: 2, hostileAce: false },
+        boss: { callsignKey: 'boss.warlord', introKey: 'op.ironVeil.l8.bossIntro', phases: [
+          { descKey: 'boss.warlord.p1', turnMul: 1.0, fireMul: 1.0, extraMissiles: 0 },
+          { descKey: 'boss.warlord.p2', turnMul: 1.0, fireMul: 1.3, extraMissiles: 2, weather: 'storm', flags: ['chaff'] },
+          { descKey: 'boss.warlord.p3', turnMul: 1.4, fireMul: 1.0, extraMissiles: 0, pattern: 'headOn' },
+        ] } },
+    ],
+  },
+  {
+    id: 'midnightMeridian', nameKey: 'op.midnightMeridian.name', theaterKey: 'op.midnightMeridian.theater', loreKey: 'op.midnightMeridian.lore',
+    levels: [
+      { id: 'deadChannel',  nameKey: 'op.midnightMeridian.l1.name', type: 'STEALTH',   loreKey: 'op.midnightMeridian.l1.lore', objectivesKey: 'op.midnightMeridian.l1.obj', enemyIntelKey: 'op.midnightMeridian.l1.intel', waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: true,  weather: 'fog',   tod: 2, hostileAce: false } },
+      { id: 'ghostSignal',  nameKey: 'op.midnightMeridian.l2.name', type: 'RECON',     loreKey: 'op.midnightMeridian.l2.lore', objectivesKey: 'op.midnightMeridian.l2.obj', enemyIntelKey: 'op.midnightMeridian.l2.intel', waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'fog',   tod: 2, hostileAce: false } },
+      { id: 'coldIron',     nameKey: 'op.midnightMeridian.l3.name', type: 'FURBALL',   loreKey: 'op.midnightMeridian.l3.lore', objectivesKey: 'op.midnightMeridian.l3.obj', enemyIntelKey: 'op.midnightMeridian.l3.intel', waves: 3, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'storm', tod: 1, hostileAce: true } },
+      { id: 'ironCurtain',  nameKey: 'op.midnightMeridian.l4.name', type: 'INTERCEPT', loreKey: 'op.midnightMeridian.l4.lore', objectivesKey: 'op.midnightMeridian.l4.obj', enemyIntelKey: 'op.midnightMeridian.l4.intel', waves: 3, spawn: { fighters: 3, aces: 0, bombers: 3, ground: false, weather: 'fog',   tod: 1, hostileAce: true } },
+      { id: 'lastLine',     nameKey: 'op.midnightMeridian.l5.name', type: 'DEFEND',    loreKey: 'op.midnightMeridian.l5.lore', objectivesKey: 'op.midnightMeridian.l5.obj', enemyIntelKey: 'op.midnightMeridian.l5.intel', waves: 4, spawn: { fighters: 3, aces: 1, bombers: 2, ground: false, weather: 'storm', tod: 2, hostileAce: true } },
+      { id: 'longReach',    nameKey: 'op.midnightMeridian.l6.name', type: 'STRIKE',    loreKey: 'op.midnightMeridian.l6.lore', objectivesKey: 'op.midnightMeridian.l6.obj', enemyIntelKey: 'op.midnightMeridian.l6.intel', waves: 4, spawn: { fighters: 3, aces: 1, bombers: 0, ground: true,  weather: 'storm', tod: 1, hostileAce: true } },
+      { id: 'extraction',   nameKey: 'op.midnightMeridian.l7.name', type: 'ESCORT',    loreKey: 'op.midnightMeridian.l7.lore', objectivesKey: 'op.midnightMeridian.l7.obj', enemyIntelKey: 'op.midnightMeridian.l7.intel', waves: 4, spawn: { fighters: 4, aces: 1, bombers: 0, ground: false, weather: 'storm', tod: 2, hostileAce: true } },
+      { id: 'glacier',      nameKey: 'op.midnightMeridian.l8.name', type: 'FINAL',     loreKey: 'op.midnightMeridian.l8.lore', objectivesKey: 'op.midnightMeridian.l8.obj', enemyIntelKey: 'op.midnightMeridian.l8.intel', waves: 1, isBoss: true, bossApproachWave: true, spawn: { fighters: 4, aces: 2, bombers: 0, ground: false, weather: 'storm', tod: 1, hostileAce: false },
+        boss: { callsignKey: 'boss.glacier', introKey: 'op.midnightMeridian.l8.bossIntro', phases: [
+          { descKey: 'boss.glacier.p1', turnMul: 0.8, fireMul: 1.0, extraMissiles: 2, pattern: 'standoff', weather: 'fog', tod: 2 },
+          { descKey: 'boss.glacier.p2', turnMul: 1.3, fireMul: 1.2, extraMissiles: 0, weather: 'storm' },
+          { descKey: 'boss.glacier.p3', turnMul: 1.4, fireMul: 1.0, extraMissiles: 0, pattern: 'dive' },
+        ] } },
+    ],
+  },
+  {
+    id: 'sunfireHorizon', nameKey: 'op.sunfireHorizon.name', theaterKey: 'op.sunfireHorizon.theater', loreKey: 'op.sunfireHorizon.lore',
+    levels: [
+      { id: 'openWater',     nameKey: 'op.sunfireHorizon.l1.name', type: 'FURBALL',   loreKey: 'op.sunfireHorizon.l1.lore', objectivesKey: 'op.sunfireHorizon.l1.obj', enemyIntelKey: 'op.sunfireHorizon.l1.intel', waves: 2, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
+      { id: 'sunscreen',     nameKey: 'op.sunfireHorizon.l2.name', type: 'INTERCEPT', loreKey: 'op.sunfireHorizon.l2.lore', objectivesKey: 'op.sunfireHorizon.l2.obj', enemyIntelKey: 'op.sunfireHorizon.l2.intel', waves: 2, spawn: { fighters: 3, aces: 1, bombers: 2, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
+      { id: 'deadReckoning', nameKey: 'op.sunfireHorizon.l3.name', type: 'RECON',     loreKey: 'op.sunfireHorizon.l3.lore', objectivesKey: 'op.sunfireHorizon.l3.obj', enemyIntelKey: 'op.sunfireHorizon.l3.intel', waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 1, hostileAce: false } },
+      { id: 'shieldwall',    nameKey: 'op.sunfireHorizon.l4.name', type: 'DEFEND',    loreKey: 'op.sunfireHorizon.l4.lore', objectivesKey: 'op.sunfireHorizon.l4.obj', enemyIntelKey: 'op.sunfireHorizon.l4.intel', waves: 3, spawn: { fighters: 3, aces: 1, bombers: 2, ground: true,  weather: 'storm', tod: 0, hostileAce: true } },
+      { id: 'lifeguard',     nameKey: 'op.sunfireHorizon.l5.name', type: 'ESCORT',    loreKey: 'op.sunfireHorizon.l5.lore', objectivesKey: 'op.sunfireHorizon.l5.obj', enemyIntelKey: 'op.sunfireHorizon.l5.intel', waves: 3, spawn: { fighters: 3, aces: 1, bombers: 0, ground: false, weather: 'clear', tod: 1, hostileAce: true } },
+      { id: 'silentEntry',   nameKey: 'op.sunfireHorizon.l6.name', type: 'STEALTH',   loreKey: 'op.sunfireHorizon.l6.lore', objectivesKey: 'op.sunfireHorizon.l6.obj', enemyIntelKey: 'op.sunfireHorizon.l6.intel', waves: 1, spawn: { fighters: 3, aces: 0, bombers: 0, ground: true,  weather: 'fog',   tod: 2, hostileAce: false } },
+      { id: 'firstVolley',   nameKey: 'op.sunfireHorizon.l7.name', type: 'STRIKE',    loreKey: 'op.sunfireHorizon.l7.lore', objectivesKey: 'op.sunfireHorizon.l7.obj', enemyIntelKey: 'op.sunfireHorizon.l7.intel', waves: 4, spawn: { fighters: 3, aces: 1, bombers: 0, ground: true,  weather: 'storm', tod: 1, hostileAce: true } },
+      { id: 'secondSun',     nameKey: 'op.sunfireHorizon.l8.name', type: 'STRIKE',    loreKey: 'op.sunfireHorizon.l8.lore', objectivesKey: 'op.sunfireHorizon.l8.obj', enemyIntelKey: 'op.sunfireHorizon.l8.intel', waves: 4, spawn: { fighters: 4, aces: 1, bombers: 0, ground: true,  weather: 'storm', tod: 2, hostileAce: true } },
+      { id: 'corsair',       nameKey: 'op.sunfireHorizon.l9.name', type: 'FINAL',     loreKey: 'op.sunfireHorizon.l9.lore', objectivesKey: 'op.sunfireHorizon.l9.obj', enemyIntelKey: 'op.sunfireHorizon.l9.intel', waves: 1, isBoss: true, bossApproachWave: true, spawn: { fighters: 4, aces: 2, bombers: 0, ground: false, weather: 'storm', tod: 2, hostileAce: false },
+        boss: { callsignKey: 'boss.corsair', introKey: 'op.sunfireHorizon.l9.bossIntro', phases: [
+          { descKey: 'boss.corsair.p1', turnMul: 1.2, fireMul: 1.0, extraMissiles: 0, flags: ['mirror'] },
+          { descKey: 'boss.corsair.p2', turnMul: 1.2, fireMul: 1.3, extraMissiles: 2 },
+          { descKey: 'boss.corsair.p3', turnMul: 1.5, fireMul: 1.3, extraMissiles: 2, pattern: 'headOn' },
+        ] } },
+    ],
+  },
+];
+
+// PURE: build the authored-absolute spawn plan for a level row. Unlike sectorPlan(type, wave)
+// (whose wave-scaled branches are DEAD at bounded waves), this reads the level's hand-authored
+// `spawn` budget verbatim, adds the typed-mission descriptor + boss flag, and folds an optional
+// set-piece. Returns a NEW object; the level row is never mutated (mirrors setpiecePlan).
+function levelPlan(lvl) {
+  const s = lvl.spawn || {};
+  const plan = {
+    fighters: s.fighters, aces: s.aces, bombers: s.bombers,
+    ground: !!s.ground, weather: s.weather, tod: s.tod,
+    hostileAce: !!s.hostileAce,
+    rival: false, depot: false,
+    mission: sectorMission(lvl.type),
+    boss: lvl.type === 'FINAL',
+  };
+  if (lvl.setpiece) return setpiecePlan(lvl.setpiece, plan);
+  return plan;
 }
 // sector type -> mission type for the typed-mission layer (missions.js). Pure + deterministic.
 // ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
@@ -69,13 +133,9 @@ const SETPIECES = {
   carrier:     { mission: 'intercept', ground: false, bombers: 5, convoy: 0, name: 'setpiece.carrier',     intro: 'setpiece.carrier.intro',     outro: 'setpiece.carrier.outro' },
 };
 
-// PURE + deterministic: which authored set-piece (if any) a campaign node triggers.
-// Keyed on (sector type, stage index) against the FIXED genOpMap campaign, so a given
-// run's node always plays the same scripted event. Returns an id into SETPIECES or null.
-// 1–2 per campaign: STRIKE @ stage 1 = the SAM corridor; ESCORT @ stage 4 = the bomber run.
+// RETIRED with genOpMap: set-pieces are now opt-in per level row (`lvl.setpiece`, folded by
+// levelPlan), not keyed on stage coordinates. Kept exported for back-compat; always returns null.
 function setpieceFor(type, stage) {
-  if (type === 'STRIKE' && stage === 1) return 'samCorridor';
-  if (type === 'ESCORT' && stage === 4) return 'bomberRun';
   return null;
 }
 
@@ -108,5 +168,5 @@ function setpieceOutcome(id, won) {
 
 /* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { genOpMap, sectorMission, sectorPlan, SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome };
+  module.exports = { OPERATIONS, levelPlan, sectorMission, sectorPlan, SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome };
 }

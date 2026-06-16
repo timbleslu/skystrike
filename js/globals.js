@@ -178,6 +178,15 @@ let startWingman = true; // launch each sortie with a starting AI escort (toggle
 let rivalEnabled = true;     // nemesis rival ace appearances (Settings toggle)
 let groundWar = true;        // ground units + strike waves (Settings toggle)
 let opMode = false;          // operation map mode vs endless (Hangar mode select)
+// Operations Map revamp — bounded linear campaign. opMode = "Operations selected in hangar";
+// campaignMode = "currently flying a bounded campaign level" (the distinct in-flight path).
+let campaignMode = false;    // true only while a bounded campaign level's combat is live
+let campaignOpId = null;     // operation id being played (set on entering an operation)
+let campaignLevelIdx = -1;   // level index within the operation currently launched
+let campaignWavesLeft = 0;   // bounded wave-bank countdown for the active level
+let campaignSnapshot = null; // pre-level {tp,score,…} checkpoint for death rollback
+let campaignPlayerOpId = null; // which operation the live player belongs to (null = no op player built)
+let campaignBossPhases = null; // authored boss phase descriptors handed to spawnBoss → e._phaseCfg
 let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
 let aimAssist = true;    // aim assist: gently steers the nose toward the gun lead point (Settings toggle, on by default)
 let aimStrength = 3;     // aim-assist strength 1..5 (Settings slider, shown only when aimAssist is on; 5 = forcing)

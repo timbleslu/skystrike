@@ -3,6 +3,12 @@
 /* ---------------- waves ---------------- */
 function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
 function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
+// Operations campaign: resolve the level row currently being flown (or null outside a campaign level).
+function currentCampaignLevel() {
+  if (typeof OPERATIONS === 'undefined' || !campaignOpId) return null;
+  const op = OPERATIONS.find(o => o.id === campaignOpId);
+  return op ? (op.levels[campaignLevelIdx] || null) : null;
+}
 function nextWave() {
   wave++;
   noDamageWave = true;   // arm the per-wave no-damage star tracker; damagePlayer clears it on a hit
@@ -10,29 +16,30 @@ function nextWave() {
   awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clears each sector/wave (cooldown-gated, balance 2026-06)
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
-  if (opMode && opSector) {
-    let plan = sectorPlan(opSector, wave);
-    // F14: certain campaign nodes run an AUTHORED set-piece instead of procedural waves. The
-    // current sector sits at stage opStage-1 (launchSector already advanced opStage past it).
-    // Fire once on the sector's first entry, then fold the encounter onto the plan.
-    const spId = setpieceFor(opSector, opStage - 1);
-    if (spId && !run.setpieceDone[opSector]) { run.setpieceDone[opSector] = true; plan = setpiecePlan(spId, plan); }
+  if (campaignMode && campaignOpId) {
+    // Operations campaign: a BOUNDED level. The plan is AUTHORED per level (levelPlan reads the level's
+    // own spawn fields — NOT sectorPlan(type,wave), whose wave-scaled branches are dead at the small
+    // bounded wave counts). Difficulty/weather/tod are FIXED by the level row. Distinct path; the
+    // endless scheduler below is untouched.
+    const lvl = currentCampaignLevel();
+    let plan = levelPlan(lvl);
+    if (lvl.setpiece && !run.setpieceDone[lvl.id]) { run.setpieceDone[lvl.id] = true; plan = setpiecePlan(lvl.setpiece, plan); }
     strikeWaveActive = plan.ground;
-    bossWaveActive = lastWaveWasBoss = !!plan.boss;   // Operation: the FINAL sector IS the boss wave (drives tech-screen cadence)
-    applyWeather(rollWeather(weatherSeed + wave)); applyTimeOfDay(plan.tod);   // random weather per wave, TOD fixed to sector type
-    startSectorMission(plan, wave);   // sets `mission` + spawns escort convoy / defend asset (+ set-piece intro)
-    const sectorLine = plan.boss ? t('banner.finalTarget') : tf('banner.sector', { s: t('op.' + opSector) });
-    const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);   // intro line names the condition
+    bossWaveActive = lastWaveWasBoss = !!plan.boss;
+    applyWeather(plan.weather || 'clear'); applyTimeOfDay(plan.tod || 0);   // authored condition, fixed per level (not rolled)
+    startSectorMission(plan, wave);
+    const sectorLine = plan.boss ? t('banner.finalTarget') : t(lvl.nameKey);
+    const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);
     for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
     for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
     for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
-    // FINAL boss graduates from the nemesis system — the rival ace IS the sector cap
-    if (plan.boss) { if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss); }
+    if (plan.boss) {
+      campaignBossPhases = (lvl.boss && lvl.boss.phases) || null;   // hand authored phase knobs to spawnBoss → e._phaseCfg
+      if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss);
+    }
     if (plan.ground) queueStrikeSite(wave);
-    if (plan.rival && rivalEnabled && !plan.boss) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
-    else if (rivalDue(wave, run.lastRivalWave, rivalEnabled) && !plan.boss && !plan.ground) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
-    // F8: named hostile ace — spawns once per sector (guarded by run.sectorAceSpawned)
-    if (plan.hostileAce && !run.sectorAceSpawned[opSector]) { run.sectorAceSpawned[opSector] = true; pendingSpawns.push(spawnHostileAce); }
+    const aceKey = campaignOpId + ':' + campaignLevelIdx;
+    if (plan.hostileAce && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
     return;
   }
   applyWeather(rollWeather(weatherSeed + wave));
@@ -165,11 +172,14 @@ function spawnFinalRival() {
   const before = enemies.length;
   spawnRival();
   const e = enemies[enemies.length - 1];
-  if (e && enemies.length > before) { e.finalCap = true; e.noFlee = true; e.hp = e.maxHp = Math.round(e.maxHp * 1.25); }
+  if (e && enemies.length > before) { e.finalCap = true; e.noFlee = true; e.hp = e.maxHp = Math.round(e.maxHp * 1.25); if (campaignBossPhases) e._phaseCfg = campaignBossPhases; }
 }
 function spawnBoss() {
   const px = player.group.position.x + rand(-1200, 1200), pz = player.group.position.z - 4200, py = player.group.position.y + 450;
   createEnemy('boss', new THREE.Vector3(px, py, pz));
+  const e = enemies[enemies.length - 1];
+  if (campaignBossPhases && e && e.type === 'boss') e._phaseCfg = campaignBossPhases;   // authored multi-phase knobs (campaign); absent in endless/boss-rush
+  return e;
 }
 function spawnGround() {
   createEnemy('ground', groundSpawnPos(1600, 4200));
@@ -237,7 +247,7 @@ function updateBossSpecials(e, dt, dist) {
       e.attack = null;
       if (u.core) u.core.material.emissiveIntensity = 1.2;
       if (u.ring) u.ring.scale.setScalar(1);
-      e.specialCd = e.phase >= 3 ? rand(2.6, 4.2) : e.phase >= 2 ? rand(3.5, 5.5) : rand(6, 9);
+      e.specialCd = (e.phase >= 3 ? rand(2.6, 4.2) : e.phase >= 2 ? rand(3.5, 5.5) : rand(6, 9)) / (e._fireMul || 1);   // _fireMul: authored campaign boss cadence (default 1)
     }
     return;
   }
@@ -267,7 +277,7 @@ function fireBossAttack(e, dist) {
   const p3 = e.phase >= 3;
   if (e.attack === 'barrage') {
     // radial fan of homing missiles — wide spread so positioning + flares matter
-    const count = p3 ? 16 : enr ? 12 : 8;
+    const count = (p3 ? 16 : enr ? 12 : 8) + (e._extraMissiles || 0);   // _extraMissiles: authored campaign boss salvo bonus (default 0)
     const fwd = fwdQ(e.logicQuat, t3);
     const spread = p3 ? 3.1 : enr ? 2.6 : 1.9;
     for (let i = 0; i < count; i++) {
@@ -649,6 +659,12 @@ function handleWaves(dt) {
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0 && !(mission && mission.status === 'active')) {
       if (noDamageWave) run.cleanWaves = (run.cleanWaves || 0) + 1;   // cleared a full wave untouched → no-damage star progress
       betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
+      if (campaignMode) {   // Operations campaign: BOUNDED level clear — distinct path, never the endless scheduler
+        campaignWavesLeft--;
+        const clvl = currentCampaignLevel();
+        if ((clvl && clvl.isBoss) || campaignWavesLeft <= 0) { campaignLevelComplete(); return; }
+        return;   // more bounded waves remain: the waveTimer auto-advances; NO mid-level tech screen
+      }
       if (opMode && opSector === 'FINAL') { operationComplete(); return; }
       // Tech-screen cadence (balance pass 2026-06): in OPERATION mode the tech screen is also the
       // campaign-navigation hub (deployFromTech → openOpMap is the ONLY path to the next sector), so

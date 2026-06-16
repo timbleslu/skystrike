@@ -554,7 +554,13 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
 // fires a visual cue + banner + screen shake. Reusable by a future Boss-Rush mode.
 function bossEnterPhase(e, ph) {
   e.phase = ph;
-  e.turnRate *= 1.18;                                    // each phase is a little twitchier
+  // Capture the boss's BASE turnRate once so per-phase multipliers compose cleanly off it
+  // (instead of the old compounding ×1.18). Campaign bosses carry e._phaseCfg (set at spawn by
+  // main.js) with an authored turnMul per phase; endless/boss-rush/rivals have no _phaseCfg and
+  // keep the byte-identical ×1.18 ramp below.
+  if (e._baseTurnRate === undefined) e._baseTurnRate = e.turnRate;
+  if (e._phaseCfg) bossApplyPhaseCfg(e, ph);            // data-driven: turnMul + stash fire/pattern/flags for entities.js + main.js
+  else e.turnRate *= 1.18;                              // legacy: each phase is a little twitchier
   empFlash = Math.max(empFlash, ph >= 3 ? 0.6 : 0.45);  // afterburner-ignition screen flash
   if (e.group.userData.body) e.group.userData.body.emissiveIntensity = ph >= 3 ? 2.4 : 1.8;
   if (e.group.userData.core) e.group.userData.core.material.emissiveIntensity = ph >= 3 ? 5.5 : 3.5;
@@ -563,6 +569,24 @@ function bossEnterPhase(e, ph) {
   audio.power(); audio.warn();
   haptic([40, 30, 60]);
   if (typeof shakeCam === 'function') shakeCam(ph >= 3 ? 1.0 : 0.8);   // shakeCam may not be merged yet
+}
+// Campaign bosses only: apply phase descriptor `e._phaseCfg[ph-1]` = {turnMul, fireMul, extraMissiles,
+// weather?, tod?, pattern?, flags?}. turnRate is set RELATIVE to the captured base so phases compose;
+// fireMul/extraMissiles are STASHED on the enemy for main.js (updateBossSpecials/fireBossAttack) to read —
+// this file does NOT fire boss weapons. pattern/flags are read by entities.js updateEnemy movement AI.
+// weather/tod (if present) shift the arena via the existing engine hooks (guarded like shakeCam above).
+function bossApplyPhaseCfg(e, ph) {
+  const cfg = e._phaseCfg[ph - 1];
+  if (!cfg) return;
+  if (e._baseTurnRate === undefined) e._baseTurnRate = e.turnRate;
+  e.turnRate = e._baseTurnRate * (cfg.turnMul != null ? cfg.turnMul : 1);
+  e._fireMul = cfg.fireMul != null ? cfg.fireMul : 1;       // consumed by main.js fire-cadence wiring
+  e._extraMissiles = cfg.extraMissiles || 0;                // consumed by main.js extra-salvo wiring
+  e._pattern = cfg.pattern || null;                         // movement pattern (entities.js)
+  e._flags = cfg.flags || [];                               // behavior flags e.g. 'chaff','mirror' (entities.js)
+  e._cfgInit = true;                                        // entities.js: phase cfg now applied for this phase
+  if (cfg.weather && typeof applyWeather === 'function') applyWeather(cfg.weather);   // e.g. WARLORD p2 -> storm
+  if (cfg.tod != null && typeof applyTimeOfDay === 'function') applyTimeOfDay(cfg.tod);
 }
 function tpBaseFor(e) {
   return e.type === 'boss' ? TP.boss : e.type === 'bomber' ? TP.bomber : e.elite ? TP.ace
