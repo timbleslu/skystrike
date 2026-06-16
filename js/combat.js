@@ -948,6 +948,14 @@ function updatePlayer(dt) {
   player.rollRate = damp(player.rollRate, tgtRoll, 5.5, dt);
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
 
+  // ANALOG DIRECTIONAL MODE: when a joystick / mouse-flight / motion source is driving, the jet flies
+  // TOWARD the stick in screen space and auto-levels. Pitch is referenced to the WORLD horizon and the
+  // turn is a WORLD-up yaw, so steering is identical regardless of bank/inversion (never flips upside-down).
+  const _motionDriving = (typeof mobileControl !== 'undefined' && mobileControl === 'motion' && typeof motionInput !== 'undefined' && motionInput && motionInput.ready);
+  const _mouseDriving  = (typeof mouseFlight !== 'undefined' && mouseFlight);
+  const _touchDriving  = (typeof isTouchEnabled !== 'undefined' && isTouchEnabled && !(typeof mobileControl !== 'undefined' && mobileControl === 'motion'));
+  const directional = _motionDriving || _mouseDriving || _touchDriving;
+
   if (barrelRollAnim > 0) {
     // Barrel roll: a PURE body-Z roll ANCHORED to the orientation captured at trigger (player._brQuat0).
     // Drive it by progress so the rotation is exactly barrelRollDir·2π·prog — at prog=1 that's a full turn
@@ -966,15 +974,36 @@ function updatePlayer(dt) {
       player._brSettle = true;   // skip auto-yaw THIS frame: currentBank (read at the top of updatePlayer) is still the
                                  // stale mid-roll bank, and feeding it to the coordinated-turn yaw would nudge heading
     }
-    eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
-    q1.setFromEuler(eul);
-    player.group.quaternion.multiply(q1);
+    if (directional && !player._brSettle) {
+      // World-relative "fly toward the stick" + auto-level. stick in point-to-fly signs: +sx = steer right,
+      // +sy = climb (flightInput.pitch is negative-for-climb, so negate). Keyboard still folds in on top.
+      let sx = flightInput.roll, sy = -flightInput.pitch;
+      if (down('KeyW')) sy += 1; if (down('KeyS')) sy -= 1;
+      if (down('KeyD')) sx += 1; if (down('KeyA')) sx -= 1;
+      sx = clamp(sx, -1, 1); sy = clamp(sy, -1, 1);
+      player.yawRate   = damp(player.yawRate,   sx * tb * 1.15, 6.0, dt);   // heading-turn magnitude
+      player.pitchRate = damp(player.pitchRate, sy * tb * 1.00, 5.5, dt);   // climb/dive magnitude
+      const fwd = fwdOf(player.group, t3);
+      const hr  = t4.copy(fwd).cross(UPV);                  // world-horizontal axis ⟂ heading → bank-independent pitch
+      if (hr.lengthSq() < 1e-5) hr.copy(rightOf(player.group, t4));   // near-vertical: fall back to body right
+      hr.normalize();
+      player.group.quaternion.premultiply(q1.setFromAxisAngle(hr, player.pitchRate * dt));   // pitch toward world up/down (no inversion)
+      player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, -player.yawRate * dt));   // turn heading (right stick = right)
+      const tgtBank = sx * STEER.autoMaxBank;               // cosmetic bank INTO the turn; 0 when centered → wings auto-level
+      const rollStep = clamp((tgtBank - currentBank) * STEER.bankGain, -8, 8) * dt;
+      player.group.quaternion.multiply(q1.setFromAxisAngle(ZAX, -rollStep));                 // body roll toward target bank / level
+      player.rollRate = -rollStep / Math.max(dt, 1e-4);     // keep the wingtip-vapor / HUD roll tell in sync
+    } else if (!directional) {
+      eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
+      q1.setFromEuler(eul);
+      player.group.quaternion.multiply(q1);
+    }
   }
   // AUTO scheme heading turn: a WORLD-axis yaw proportional to the current bank. Applied here (not in steerCommand)
   // and about the WORLD up axis so it's DECOUPLED from pitch — you can dive/climb while turning (diagonals work).
   // sign: bank right (currentBank>0) -> negative world yaw -> nose right. Scaled by tb so it tracks airframe agility.
   // Gated OFF during a barrel roll: otherwise the 360° bank sweep feeds this term a net heading yaw (drift).
-  if (controlScheme === 'auto' && barrelRollAnim <= 0 && !player._brSettle) {
+  if (controlScheme === 'auto' && !directional && barrelRollAnim <= 0 && !player._brSettle) {
     const autoYaw = -STEER.autoYawGain * Math.sin(currentBank) * tb * dt;
     if (autoYaw) player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, autoYaw));
   }
@@ -1083,7 +1112,7 @@ function updatePlayer(dt) {
       player._trailT = 0.07;
   }
 
-  if (down('Space') || touchBtns.gun) fireGun();
+  if (down('Space') || touchBtns.gun || mouseFiring) fireGun();
   updateLockOn(dt);
 
   // ---- DEW LANCE (NGAD): sustained directed-energy beam down the boresight ----

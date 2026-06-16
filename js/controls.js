@@ -319,6 +319,15 @@ function initMouseControls() {
     if (Math.hypot(nx, ny) < 0.06) { mouseInput.x = 0; mouseInput.y = 0; mouseInput.active = true; return; }
     mouseInput.x = nx; mouseInput.y = ny; mouseInput.active = true;
   }, { passive: true });
+  // Left-click fires the gun (independent of mouse-flight): a mousedown on the play field while flying
+  // arms continuous fire (combat.js reads `mouseFiring`); release / window blur disarms. UI clicks ignored.
+  window.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || state !== 'playing' || paused) return;
+    if (e.target && e.target.closest && e.target.closest('button, input, select, a, .segbtn, #manual, #touchControls')) return;
+    mouseFiring = true;
+  });
+  window.addEventListener('mouseup', (e) => { if (e.button === 0) mouseFiring = false; });
+  window.addEventListener('blur', () => { mouseFiring = false; });
 }
 
 if (typeof window !== 'undefined') initMouseControls();

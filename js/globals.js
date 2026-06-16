@@ -468,6 +468,7 @@ let isTouchEnabled = false;
 let joyActive = false, joyTouchId = null, joyBaseCenter = {x:0, y:0}, touchInput = {x:0, y:0};
 let mouseFlight = false;                            // desktop mouse-pointer flight toggle (default off)
 let mouseInput = { x: 0, y: 0, active: false };     // normalized pointer offset from center, -1..1
+let mouseFiring = false;                             // left mouse button held over the play field → fire gun (combat.js)
 let touchBtns = { gun:false, msl:false, flr:false, spc:false, thr:false, brk:false };
 // unified flight-input seam (controls.js writes it each frame; combat.js consumes + adds keyboard)
 let flightInput = { pitch: 0, roll: 0 };           // normalized analog flight axes, -1..1
