@@ -163,6 +163,7 @@ function sanitizeCallsign(str) {
 }
 /* true if the emblem is accessible to the player given current meta state. */
 function emblemUnlocked(id, m) {
+  if (devUnlockAll) return true;   // F4: dev-unlock everything
   if (!m) return false;
   for (var j = 0; j < EMBLEMS.length; j++) {
     var e = EMBLEMS[j];
@@ -208,7 +209,7 @@ function setCallsign(str) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, bossRushUnlocked: false, bossRushBest: 0 };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -229,6 +230,7 @@ function loadMeta() {
   if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
   if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
   if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
+  if (typeof meta.slot2 !== 'boolean') meta.slot2 = false;   // F3: 2nd-special-slot unlock
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
@@ -270,7 +272,7 @@ function buyJet(key) {
 const SKIN_COST = 120;                // flat SP cost per cosmetic skin
 function skinOwned(key, id) {
   if (id === 'default') return true;
-  return !!(meta && meta.skins[key] && meta.skins[key].indexOf(id) !== -1);
+  return devUnlockAll || !!(meta && meta.skins[key] && meta.skins[key].indexOf(id) !== -1);
 }
 function skinCost(key, id) { return SKIN_COST; }
 function buySkin(key, id) {
@@ -280,6 +282,17 @@ function buySkin(key, id) {
   meta.sp -= cost;
   if (!meta.skins[key]) meta.skins[key] = [];
   meta.skins[key].push(id);
+  saveMeta();
+  return true;
+}
+// SLOT-2 unlock (feature #3): one-time SP purchase that enables equipping a second special.
+const SLOT2_COST = 300;               // flat SP cost to unlock the second special slot
+function slot2Unlocked() { return devUnlockAll || !!(meta && meta.slot2); }   // devUnlockAll bypass (feature #4)
+function buySlot2() {
+  if (!meta || slot2Unlocked()) return false;
+  if (meta.sp < SLOT2_COST) return false;
+  meta.sp -= SLOT2_COST;
+  meta.slot2 = true;
   saveMeta();
   return true;
 }
@@ -341,6 +354,8 @@ if (typeof module !== 'undefined' && module.exports) {
     perkLevel, perkMaxed, perkUnlocked, buyPerk,
     // jet/skin API
     jetUnlocked, jetCost, buyJet, skinOwned, skinCost, buySkin,
+    // second-special-slot unlock (F3)
+    slot2Unlocked, buySlot2, SLOT2_COST,
     // achievements
     achEarned, grantAch, checkAchievements,
     // tables & constants

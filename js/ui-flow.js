@@ -191,7 +191,7 @@ function operationComplete() {
 // time recorded (gameOver → endRun). Completion records the time, then shows the result screen.
 function startBossRush() {
   if (state !== 'hangar') return;
-  if (!meta || !meta.bossRushUnlocked) { showBanner(t('bossrush.locked')); audio.ui(); return; }
+  if (!meta || (!meta.bossRushUnlocked && !devUnlockAll)) { showBanner(t('bossrush.locked')); audio.ui(); return; }
   // fixed airframe: the player's first starter jet (always owned) — boss-rush is a level playing field.
   let jetIdx = 0;
   for (let k = 0; k < JETS.length; k++) { if (JETS[k].id === STARTER_JETS[0]) { jetIdx = k; break; } }
@@ -216,7 +216,7 @@ function bossRushTimeStr(secs) { return (Math.floor(secs / 60)) + ':' + ('0' + (
 // hangar entry: lock the button until unlocked; show the best time once set
 function refreshBossRushEntry() {
   const btn = g('bossRushBtn'); if (!btn) return;
-  const unlocked = !!(meta && meta.bossRushUnlocked);
+  const unlocked = devUnlockAll || !!(meta && meta.bossRushUnlocked);
   btn.disabled = !unlocked;
   btn.classList.toggle('disabled', !unlocked);
   btn.classList.toggle('is-locked', !unlocked);   // §3l: designed locked treatment, not just dimmed

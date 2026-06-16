@@ -263,6 +263,19 @@ function renderJetCard(i) {
 // this jet's own (that is slot 1). Persists via setSpecial2 → saveSettings (the selectedJet seam).
 function renderSpecial2Picker(i) {
   const wrap = g('special2Row'); if (!wrap) return;
+  // feature #3: equipping a 2nd special is gated behind a one-time SP unlock (devUnlockAll bypasses)
+  if (!slot2Unlocked()) {
+    if (special2Id) { special2Id = null; saveSettings(); }   // drop any stale equip while the slot is locked
+    wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
+                     '<div class="cabilitydesc">' + t('card.slot2Locked') + '</div>' +
+                     '<button id="slot2Unlock" class="segbtn" style="margin-top:6px">' + tf('card.slot2Unlock', { n: SLOT2_COST }) + '</button>';
+    const ub = g('slot2Unlock');
+    if (ub) ub.addEventListener('click', () => {
+      if (buySlot2()) { if (audio.on) audio.ui(); renderJetCard(selectedJet); }
+      else { if (audio.on) audio.ui(); ub.textContent = t('card.slot2NoSP'); }
+    });
+    return;
+  }
   const pool = equippableSpecials(unlockedJetIds(), JETS, JETS[i].id);
   if (!pool.length) {                                   // nothing to equip yet — surface why, no control
     wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
