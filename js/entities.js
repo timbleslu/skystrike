@@ -1278,8 +1278,6 @@ function applyJetPassives(p, j) {
 /* ---------------- enemies ---------------- */
 const FIGHTER_SHAPES = ['STD'];   // regular fodder all fly the plain trainer; aces fly the named real jets
 const ACE_SHAPES     = ['J20', 'F22', 'SU57', 'EFT'];
-function aceShapePool() { return JETS.filter(j => j.shape !== 'STD').map(j => j.shape); }
-function jetNameForShape(shape) { const j = JETS.find(x => x.shape === shape); return j ? j.name : shape; }
 const CALLPFX = ['BANDIT','BOGEY','TANGO','VENOM','GHOST','REAPER','TALON','VIPER','RAVEN','SPECTRE'];
 function genCallsign(pfx) { return (pfx || CALLPFX[randInt(0, CALLPFX.length - 1)]) + '-' + randInt(1, 99).toString().padStart(2, '0'); }
 

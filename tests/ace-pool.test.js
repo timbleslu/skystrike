@@ -1,24 +1,17 @@
 'use strict';
 const assert = require('assert');
 
-// store stub so js/rival.js (which references store inside loadRival/saveRival/genRival)
-// loads cleanly under Node. Rival cores imported below; entities.js is THREE-coupled
-// (not require-safe) so aceShapePool/jetNameForShape stay mirrored inline.
+// rival.js touches `store` inside its fns — stub it so require() is clean under Node.
 global.store = { get: () => null, set: () => {} };
 const { HOSTILE_ACES, hostileAceFor, hostileAceDeltas } = require('../js/rival.js');
-
-// mirror of js/entities.js aceShapePool + jetNameForShape, fed a stub roster
-const JETS = [
-  { id:'FT-1', shape:'STD',  name:'FT-1 STANDARD' },
-  { id:'F-22', shape:'F22',  name:'F-22 RAPTOR' },
-  { id:'SU-57', shape:'SU57', name:'SU-57 FELON' },
-];
-function aceShapePool() { return JETS.filter(j => j.shape !== 'STD').map(j => j.shape); }
-function jetNameForShape(shape) { const j = JETS.find(x => x.shape === shape); return j ? j.name : shape; }
+// aceShapePool/jetNameForShape + the roster now import the REAL impl (js/roster.js,
+// require-safe) instead of a hand-mirrored stub copy that silently drifts from the game.
+const { JETS, aceShapePool, jetNameForShape } = require('../js/roster.js');
 
 const pool = aceShapePool();
 assert.ok(!pool.includes('STD'), 'ace pool must exclude the plain STD airframe');
-assert.deepStrictEqual(pool, ['F22', 'SU57'], 'ace pool is every real roster shape');
+assert.strictEqual(pool.length, JETS.length - 1, 'ace pool is every roster shape except the lone STD trainer');
+assert.ok(pool.includes('F22') && pool.includes('SU57') && pool.includes('J20'), 'ace pool contains the named real jets');
 assert.strictEqual(jetNameForShape('F22'), 'F-22 RAPTOR', 'shape resolves to roster name');
 assert.strictEqual(jetNameForShape('CCAJET'), 'CCAJET', 'unknown shape falls back to its key');
 
