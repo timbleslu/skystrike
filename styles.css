@@ -918,13 +918,15 @@ canvas{display:block}
 /* C2: the HANGAR PREVIEW GUTTER FRAMING was removed — the 3D jet preview now renders to its own isolated
    canvas hosted INSIDE the jet card (.jetpreview3d hero), so the hangar column is centred normally and
    the shared #gl backdrop owns the full screen behind the card. */
-/* ---- pilot callsign + emblem panel (F13) ---- */
-#pilotPanel{margin:8px 0 4px;border:1px solid rgba(var(--hairline-rgb),.25);background:rgba(10,22,30,.4);padding:10px 14px;display:flex;flex-direction:column;gap:8px}
-.pilotRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(var(--primary-rgb),.35);color:var(--cy);font-family:var(--mono);font-size:13px;letter-spacing:3px;padding:6px 10px;width:140px;text-transform:uppercase;outline:none;transition:.15s}
+/* ---- pilot callsign + emblem panel (F13) ----
+   Secondary content on the jet-select screen: shrunk + de-emphasised (smaller type/badges, lighter
+   frame) so the jet card, stats and SELECT button keep the focus. The functional copy lives in-HUD. */
+#pilotPanel{margin:6px 0 2px;border:1px solid rgba(var(--hairline-rgb),.16);background:rgba(10,22,30,.28);padding:6px 10px;display:flex;flex-direction:column;gap:5px;opacity:.82}
+.pilotRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(var(--primary-rgb),.3);color:var(--cy);font-family:var(--mono);font-size:11px;letter-spacing:2px;padding:4px 8px;width:116px;text-transform:uppercase;outline:none;transition:.15s}
 #callsignInput:focus{border-color:var(--cy);background:rgba(4,9,14,.9)}
-#emblemGrid{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.emblembtn{width:38px;height:38px;border:2px solid rgba(var(--hairline-rgb),.4);background:rgba(4,9,14,.6);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;padding:0}
+#emblemGrid{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.emblembtn{width:28px;height:28px;border:1px solid rgba(var(--hairline-rgb),.4);background:rgba(4,9,14,.6);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;padding:0}
 .emblembtn:hover{border-color:var(--cy)}
 .emblembtn.active{border-color:var(--cy);background:rgba(var(--primary-rgb),.1);box-shadow:0 0 8px rgba(var(--primary-rgb),.4)}
 .emblembtn.elocked{opacity:.55;cursor:default}
@@ -937,8 +939,13 @@ canvas{display:block}
 .awacs-chip{display:inline-flex;align-items:center;gap:4px;font:10px/1 monospace;padding:2px 5px;border:1px solid rgba(120,200,255,.4);border-radius:3px;background:rgba(10,25,40,.55);color:#bfe6ff;letter-spacing:.5px}
 .awacs-chip b{color:#fff;font-weight:700}
 .awacs-chip i{color:#7fd0ff;font-style:normal;opacity:.85}
-/* ---- pilot HUD tag (F13) ---- */
-.pilot-tag{position:absolute;left:12px;bottom:150px;display:flex;align-items:center;gap:6px;font:13px/1 monospace;color:rgba(190,230,255,.78);letter-spacing:1px;text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none;z-index:6}
+/* ---- pilot HUD nameplate + emblem corner badge (F13) ----
+   Tucked under the top-left HP/SHD/THR cluster (clears the tr/bl/br corners). The emblem renders as
+   a small boxed corner badge; the callsign sits beside it as a nameplate (hidden when empty). */
+.pilot-tag{position:absolute;left:14px;top:98px;display:flex;align-items:center;gap:7px;font:12px/1 var(--mono,monospace);color:rgba(190,230,255,.72);letter-spacing:1.5px;text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none;z-index:6}
+.pilot-tag #pilotEmblemIcon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;font-size:14px;color:var(--primary);background:rgba(4,12,18,.5);border:1px solid rgba(var(--primary-rgb),.4);box-shadow:0 0 8px rgba(var(--primary-rgb),.2) inset}
+.pilot-tag #pilotCallsignTxt{text-transform:uppercase}
+.pilot-tag #pilotCallsignTxt:empty{display:none}
 
 /* ============================================================
    GLASS COCKPIT TREATMENT — signature avionics detailing
@@ -966,7 +973,6 @@ canvas{display:block}
   #langSelect.show .ls-flags,#langSelect.show .ls-begin{animation:none}
   #hud .panel.tl::after,#hud .panel.tr::after,#hud .panel.bl::after,#hud .panel.br::after{opacity:.5}
 }
-.pilot-tag #pilotEmblemIcon{font-size:16px}
 
 /* ============================================================
    THEMING — 5 COLOR SCHEMES (data-palette) × 5 VISUAL LANGUAGES (data-skin)

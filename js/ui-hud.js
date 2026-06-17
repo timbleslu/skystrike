@@ -397,6 +397,7 @@ function updateDom(dt) {
   if (empFlash > 0) { empFlash -= dt; el.flash.style.opacity = (empFlash * 0.5).toFixed(3); } else el.flash.style.opacity = '0';
   updateAwacsHud();
   const _pt = g('pilotTag');
-  if (_pt) _pt.style.display = (state === 'playing' && !paused && meta && meta.callsign) ? 'flex' : 'none';
+  // show the pilot nameplate + emblem badge while flying; the emblem always shows (callsign text self-hides when empty via :empty)
+  if (_pt) _pt.style.display = (state === 'playing' && !paused && meta) ? 'flex' : 'none';
 }
 
