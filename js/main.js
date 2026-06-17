@@ -98,7 +98,7 @@ function styleElite(e, bodyHex, emissiveHex, intensity, glowHex, flameHex) {
   e.marker.material.color.setHex(glowHex);
 }
 function spawnAce() {
-  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool() });
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool(), useGLTF: true });
   e.elite = true;
   e.aceName = jetNameForShape(e.shapeKey);
   e.callsign = genCallsign('ACE');
@@ -112,7 +112,7 @@ function spawnAce() {
 function spawnHostileAce() {
   const aceEntry = hostileAceFor(opSector);
   if (!aceEntry) return;
-  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool() });
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool(), useGLTF: true });
   e.elite = true;
   e.aceName = jetNameForShape(e.shapeKey);
   e.callsign = aceEntry.callsign;
@@ -128,7 +128,7 @@ function spawnHostileAce() {
   showBanner(tf('banner.hostileAceInbound', { name: aceEntry.callsign }));
 }
 function spawnRival() {
-  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape] });
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape], useGLTF: true });
   e.elite = true; e.rival = true;
   e.aceName = rival.jetName;
   e.callsign = rival.name;

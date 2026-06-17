@@ -923,44 +923,56 @@ function buildJet(color, accent, cfg, hero) {
    Loaded once, oriented (length → -Z) / centered / scaled to the procedural footprint, then cloned
    per spawn. Geometry + materials are tagged userData.shared so disposeGroup never frees the shared
    template. Falls back to buildJet on Low tier or until the model finishes loading. */
+/* shape id → { file, rotY (radians, to point nose → game forward -Z), len (target max-dim) }.
+   rotY was derived + verified per model via a top-down contact-sheet render (the models do NOT
+   share a native orientation): nose -X → -π/2, +X → +π/2, +Z → π. Fighters scale to len 26
+   (the proven F-22 footprint); the BOMBER flying wing is bigger (≈ the old procedural ×1.7). */
+const JET_MODELS = {
+  F22:    { file: 'f22.glb',    rotY: -Math.PI / 2, len: 26 },
+  SU57:   { file: 'su57.glb',   rotY:  Math.PI / 2, len: 26 },
+  RAFALE: { file: 'rafale.glb', rotY:  Math.PI,     len: 26 },
+  EFT:    { file: 'eft.glb',    rotY:  Math.PI / 2, len: 26 },
+  FA18:   { file: 'fa18.glb',   rotY:  Math.PI / 2, len: 26 },
+  J20:    { file: 'j20.glb',    rotY:  Math.PI / 2, len: 26 },
+  J36:    { file: 'j36.glb',    rotY:  Math.PI / 2, len: 28 },
+  F35:    { file: 'f35.glb',    rotY:  Math.PI,     len: 26 },
+  F47:    { file: 'f47.glb',    rotY:  Math.PI,     len: 26 },
+  J50:    { file: 'j50.glb',    rotY:  Math.PI,     len: 26 },
+  TEJAS:  { file: 'tejas.glb',  rotY:  Math.PI,     len: 24 },
+  STD:    { file: 'std.glb',    rotY:  Math.PI / 2, len: 26 },
+  BOMBER: { file: 'bomber.glb', rotY: -Math.PI / 2, len: 44 },
+};
 function loadJetModels() {
   if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader !== 'function') return;
-  new THREE.GLTFLoader().load('assets/jets/f22.glb', (gl) => {
-    const obj = gl.scene;
-    const box = new THREE.Box3().setFromObject(obj);
-    obj.position.sub(box.getCenter(new THREE.Vector3()));     // centre model at its own origin
-    const wrap = new THREE.Group(); wrap.add(obj);
-    wrap.rotation.y = -Math.PI / 2;                           // model length runs along X → nose to game forward (-Z)
-    const size = box.getSize(new THREE.Vector3());
-    wrap.scale.setScalar(26 / Math.max(size.x, size.y, size.z));   // match the procedural F-22 footprint
-    wrap.traverse(o => {                                      // shared template — disposeGroup must never free it
-      if (o.isMesh) {
-        if (o.geometry) o.geometry.userData.shared = true;
-        const m = o.material; (Array.isArray(m) ? m : [m]).forEach(mm => { if (mm) mm.userData.shared = true; });
-        if (!o.material || !o.material.transparent) o.castShadow = true;
-      }
-    });
-    jetGLTF.F22 = wrap;
-    if (typeof previewJet !== 'undefined' && previewJet && typeof JETS !== 'undefined' && JETS[selectedJet] && JETS[selectedJet].shape === 'F22' && typeof selectJet === 'function') selectJet(selectedJet);
-  }, undefined, (err) => { try { console.warn('jet glTF load failed:', (err && err.message) || err); } catch (e) {} });
-}
-
-/* per-frame control-surface deflection for the glTF hero: pivots hinge about their leading edge.
-   pitch/roll/yaw are -1..1 command intents (the same the flight model integrates); t = seconds.
-   ailerons ∝ roll (anti-symmetric L/R via sign), elevators ∝ pitch (symmetric), rudders ∝ yaw,
-   plus a faint idle flutter so the surfaces never look frozen. No-op for procedural jets. */
-function updateControlSurfaces(group, pitch, roll, yaw, t) {
-  const surf = group && group.userData && group.userData.surfaces; if (!surf) return;
-  const MAX = 0.4;                                  // hard deflection clamp (~23°)
-  for (let i = 0; i < surf.length; i++) {
-    const s = surf[i];
-    let d;
-    if (s.role === 'aileron')      d = roll  * 0.9 * s.sign;   // bank: ailerons split opposite L/R
-    else if (s.role === 'elevator') d = pitch * 0.9;           // pitch: stabilators move together
-    else                            d = yaw   * 0.9;           // rudder: yaw
-    d = clamp(d, -MAX, MAX) + 0.03 * Math.sin(t * 6 + (s.phase || 0));   // + idle flutter
-    s.pivot.rotation[s.axis] = d;
+  if (typeof gfxTier !== 'undefined' && gfxTier === 'low') return;   // low/mobile tier = procedural only; skip the model memory entirely
+  const loader = new THREE.GLTFLoader();
+  if (typeof THREE.DRACOLoader === 'function') {                      // some models ship Draco-compressed (vendor/draco decoder)
+    const draco = new THREE.DRACOLoader();
+    draco.setDecoderPath('vendor/draco/');
+    loader.setDRACOLoader(draco);
   }
+  Object.keys(JET_MODELS).forEach(id => {
+    const spec = JET_MODELS[id];
+    loader.load('assets/jets/' + spec.file, (gl) => {
+      const obj = gl.scene;
+      const box = new THREE.Box3().setFromObject(obj);
+      obj.position.sub(box.getCenter(new THREE.Vector3()));     // centre model at its own origin
+      const wrap = new THREE.Group(); wrap.add(obj);
+      wrap.rotation.y = spec.rotY;                              // verified per-model: nose → game forward (-Z)
+      const size = box.getSize(new THREE.Vector3());
+      wrap.scale.setScalar(spec.len / Math.max(size.x, size.y, size.z));
+      wrap.traverse(o => {                                      // shared template — disposeGroup must never free it
+        if (o.isMesh) {
+          if (o.geometry) o.geometry.userData.shared = true;
+          const m = o.material; (Array.isArray(m) ? m : [m]).forEach(mm => { if (mm) mm.userData.shared = true; });
+          if (!o.material || !o.material.transparent) o.castShadow = true;
+        }
+      });
+      jetGLTF[id] = wrap;
+      // if the hangar is previewing this exact shape, re-run selectJet so the model swaps in once loaded
+      if (typeof previewJet !== 'undefined' && previewJet && typeof JETS !== 'undefined' && JETS[selectedJet] && JETS[selectedJet].shape === id && typeof selectJet === 'function') selectJet(selectedJet);
+    }, undefined, (err) => { try { console.warn('jet glTF load failed:', spec.file, (err && err.message) || err); } catch (e) {} });
+  });
 }
 
 /* F-22 afterburner + control-surface overlay, attached to the OUTER game-space group (so coords are
@@ -997,56 +1009,49 @@ function addF22Burner(g, accent) {
   g.userData.heatMat = heatMat;   // no nozzle-interior mesh on the fused model; harmless emissive sink
 }
 
-function addF22Surfaces(g) {
-  const surfMat = new THREE.MeshStandardMaterial({ color: 0x605f5f, roughness: 0.78, metalness: 0.1 });   // matches the model's "Grey"
-  const surf = [];
-  // helper: pivot at the hinge line; thin panel parented to it, offset aft so the TE swings.
-  // w=span(X) chord(Z) thick(Y); hingePos at the LEADING edge; panel centre offset -chord/2 in Z.
-  function panel(role, sign, axis, hx, hy, hz, w, chord, thick, dihedral) {
-    const pivot = new THREE.Group(); pivot.position.set(hx, hy, hz);
-    if (dihedral) pivot.rotation.z = dihedral;          // cant for the rudders
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, thick, chord), surfMat);
-    m.position.set(0, 0, -chord / 2 - 0.05);            // panel hangs aft of the hinge (-Z = toward tail)
-    pivot.add(m); g.add(pivot);
-    surf.push({ pivot, role, sign, axis, phase: surf.length * 1.7 });
-  }
-  // AILERONS — outboard main-wing TE, hinge about X (spanwise). TE at Z≈-6.8, wing Y≈-1.0, outboard X≈±6.6.
-  panel('aileron', +1, 'x',  6.6, -1.0, -6.4, 3.0, 1.5, 0.16, 0);
-  panel('aileron', -1, 'x', -6.6, -1.0, -6.4, 3.0, 1.5, 0.16, 0);
-  // ELEVATORS / stabilators — horizontal-tail TE, hinge about X. TE Z≈-9.0, Y≈-1.0, X≈±2.6.
-  panel('elevator', +1, 'x',  2.6, -1.0, -8.4, 2.4, 1.5, 0.16, 0);
-  panel('elevator', -1, 'x', -2.6, -1.0, -8.4, 2.4, 1.5, 0.16, 0);
-  // RUDDERS — canted vertical fins, hinge about Y. Fin TE Z≈-8.3, mid-height Y≈0.9, X≈±4 (cant outward).
-  panel('rudder', +1, 'y',  4.0, 0.9, -7.9, 0.16, 1.6, 2.2, -0.42);
-  panel('rudder', -1, 'y', -4.0, 0.9, -7.9, 0.16, 1.6, 2.2,  0.42);
-  markShadowCasters(g);
-  g.userData.surfaces = surf;
-}
-
 /* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
    is nested in a NEW outer game-space group so the afterburner + control-surface overlays attach in
    un-scaled game coords. */
-function cloneJetGLTF(id, accent) {
+/* enemy glTF clones can't take the game's red enemy paint (textures are baked), so friend/foe is
+   unreadable in a furball. Give each enemy INSTANCE a red emissive sheen. The template's materials
+   are userData.shared and must never be mutated, so clone the material per mesh and tag the clone
+   shared:false (disposeGroup frees it; the player's same-type jet stays normal-coloured). */
+function applyFoeTint(obj) {
+  const tintOne = (m) => {
+    const c = m.clone();
+    c.userData = { shared: false };
+    if (c.emissive) { c.emissive = new THREE.Color(0x6e0000); c.emissiveIntensity = 0.6; }
+    return c;
+  };
+  obj.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    o.material = Array.isArray(o.material) ? o.material.map(tintOne) : tintOne(o.material);
+  });
+}
+function cloneJetGLTF(id, accent, opts) {
+  opts = opts || {};
   const inner = jetGLTF[id].clone(true);
   const g = new THREE.Group();
   g.add(inner);
-  // The overlay rig (burner + surfaces) was authored for the model's raw (+Z-nose) orientation.
-  // The model is now flipped to nose -Z (game forward), so carry the rig in a 180° group so the
-  // afterburner + control surfaces stay on the tail and stream/deflect the right way.
-  const fx = new THREE.Group(); fx.rotation.y = Math.PI;
-  addF22Burner(fx, accent);      // afterburner -> fx.userData.engines (+ heatMat); animEngines drives it
-  addF22Surfaces(fx);            // control surfaces -> fx.userData.surfaces; updateControlSurfaces drives them
-  g.add(fx);
-  g.userData.engines = fx.userData.engines;
-  g.userData.heatMat = fx.userData.heatMat;
-  g.userData.surfaces = fx.userData.surfaces;
+  if (opts.enemy) applyFoeTint(inner);   // per-instance red sheen for foe readability
+  if (opts.rig) {
+    // The afterburner rig was authored for the F-22 model's raw (+Z-nose) orientation. The model is
+    // flipped to nose -Z (game forward), so carry the rig in a 180° group so the plume stays on the tail.
+    const fx = new THREE.Group(); fx.rotation.y = Math.PI;
+    addF22Burner(fx, accent);      // afterburner -> fx.userData.engines (+ heatMat); animEngines drives it
+    g.add(fx);
+    g.userData.engines = fx.userData.engines;
+    g.userData.heatMat = fx.userData.heatMat;
+  }
   g.userData.gltf = true;
   return g;
 }
 
 /* hero jets use the glTF model on High tier once loaded; everything else uses the procedural builder */
-function buildJetOrGLTF(color, accent, cfg, hero) {
-  if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low')) return cloneJetGLTF(cfg.id, accent);
+function buildJetOrGLTF(color, accent, cfg, hero, opts) {
+  opts = opts || {};
+  if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low'))
+    return cloneJetGLTF(cfg.id, accent, { enemy: !!opts.enemy, rig: (cfg.id === 'F22' && !opts.enemy) });   // burner+surface rig: player F-22 only
   return buildJet(color, accent, cfg, hero);
 }
 function buildBoss() {
@@ -1244,11 +1249,15 @@ function createEnemy(type, pos, opts) {
     hp = gk === 'radar' ? 110 : gk === 'truck' ? 45 : gk === 'aaa' ? 90 : 75;
   }
   else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // balance 2026-06: was *1.4 — keeps late-run swarms threatening (drones were one-tapped past ~wave 10)
-  else if (type === 'bomber') { mesh = buildJet(0x8a9468, 0xffb060, SHAPES.BOMBER); mesh.scale.setScalar(1.7); hp = 240 + wave * 8; }
+  else if (type === 'bomber') {
+    mesh = buildJetOrGLTF(0x8a9468, 0xffb060, SHAPES.BOMBER, true, { enemy: true });   // always glTF-eligible on High tier
+    if (!mesh.userData.gltf) mesh.scale.setScalar(1.7);   // procedural fallback still needs the ×1.7 bump; glTF is pre-scaled
+    hp = 240 + wave * 8;
+  }
   else {
     const pool = opts.shapePool || FIGHTER_SHAPES;
     shapeKey = pool[randInt(0, pool.length - 1)];
-    mesh = buildJet(0xff5a5a, 0xff2a2a, SHAPES[shapeKey] || SHAPES.ENEMY);
+    mesh = buildJetOrGLTF(0xff5a5a, 0xff2a2a, SHAPES[shapeKey] || SHAPES.ENEMY, !!opts.useGLTF, { enemy: true });   // aces/rivals set useGLTF; mooks stay procedural
     hp = 46 + wave * 4;
   }
   scene.add(mesh); mesh.position.copy(pos);
