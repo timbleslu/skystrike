@@ -687,17 +687,18 @@ function buildAssets() {
     const exDisc = new THREE.CircleGeometry(0.62, 16); exDisc.translate(0, 0, 11.22);
     ASSET.missileTrimGeo = mergeGeos([seeker, band1, band2, exDisc]);
   }
-  ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xdfe6ec, metalness: 0.62, roughness: 0.3, envMapIntensity: 1.35 });
-  ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0x3a4148, metalness: 0.6, roughness: 0.42, envMapIntensity: 1.2, emissive: 0x331108, emissiveIntensity: 0.6 });
-  ASSET.missileTrimPlayer = new THREE.MeshStandardMaterial({ color: 0x101820, emissive: 0x2ec8ff, emissiveIntensity: 2.2, metalness: 0.4, roughness: 0.3 });
-  ASSET.missileTrimEnemy  = new THREE.MeshStandardMaterial({ color: 0x180e0a, emissive: 0xff5a22, emissiveIntensity: 2.4, metalness: 0.4, roughness: 0.3 });
-  ASSET.mslHaloPlayer = new THREE.SpriteMaterial({ map: glowTex(), color: 0x38d6ff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
-  ASSET.mslHaloEnemy  = new THREE.SpriteMaterial({ map: glowTex(), color: 0xff6a2e, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false });
-  ASSET.mslExhaust    = new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd9a8, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, depthWrite: false, fog: false });
+  // matte/metallic hulls — subtle cool-grey (player) vs darker warm-grey (enemy) tint, NO neon emissive
+  ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xc6ccd2, metalness: 0.6, roughness: 0.5, envMapIntensity: 1.1 });
+  ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0x4a4640, metalness: 0.55, roughness: 0.6, envMapIntensity: 1.0 });
+  // trim/seeker/bands: plain matte paint accents — emissive zeroed (was bright neon)
+  ASSET.missileTrimPlayer = new THREE.MeshStandardMaterial({ color: 0x20262c, metalness: 0.45, roughness: 0.5 });
+  ASSET.missileTrimEnemy  = new THREE.MeshStandardMaterial({ color: 0x241a14, metalness: 0.45, roughness: 0.55 });
+  // small constant rear thruster flame — warm, soft, additive (NOT a big plume); reuses the fire texture
+  ASSET.mslExhaust    = new THREE.SpriteMaterial({ map: fireTex(), color: 0xffb267, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false, fog: false });
   // every missile shares these — tag so disposeGroup (boss/tip-missile teardown) never frees them
   [ASSET.missileHullGeo, ASSET.missileTrimGeo].forEach(g => { g.userData.shared = true; });
   [ASSET.missileMatPlayer, ASSET.missileMatEnemy, ASSET.missileTrimPlayer, ASSET.missileTrimEnemy,
-   ASSET.mslHaloPlayer, ASSET.mslHaloEnemy, ASSET.mslExhaust].forEach(m => { m.userData.shared = true; });
+   ASSET.mslExhaust].forEach(m => { m.userData.shared = true; });
   ASSET.flareGeo = new THREE.SphereGeometry(3.2, 5, 4);
   ASSET.flareMat = new THREE.MeshBasicMaterial({ color: 0xffb33a, fog: false });
   ASSET.sparkGeo = new THREE.BoxGeometry(1.6, 1.6, 5);
@@ -713,18 +714,16 @@ function buildAssets() {
   if (typeof loadJetModels === 'function') loadJetModels();   // preload glTF hero models (async; swaps in when ready)
 }
 
-/* assemble a flight-ready missile from the shared assets: hull + emissive trim +
-   tracking halo + motor exhaust. Everything is shared, so teardown is plain
-   scene.remove — nothing per-instance to dispose. */
+/* assemble a flight-ready missile from the shared assets: matte/metallic hull +
+   matte trim accents + a SMALL warm rear thruster flame (no neon halo). Everything
+   is shared, so teardown is plain scene.remove — nothing per-instance to dispose. */
 function buildMissileMesh(enemy) {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(ASSET.missileHullGeo, enemy ? ASSET.missileMatEnemy : ASSET.missileMatPlayer));
   g.add(new THREE.Mesh(ASSET.missileTrimGeo, enemy ? ASSET.missileTrimEnemy : ASSET.missileTrimPlayer));
-  const halo = new THREE.Sprite(enemy ? ASSET.mslHaloEnemy : ASSET.mslHaloPlayer);
-  halo.scale.setScalar(enemy ? 46 : 40); g.add(halo);
   const exhaust = new THREE.Sprite(ASSET.mslExhaust);
-  exhaust.position.z = 12.2; exhaust.scale.setScalar(15); g.add(exhaust);
-  g.userData.halo = halo; g.userData.exhaust = exhaust;
+  exhaust.position.z = 12.0; exhaust.scale.setScalar(6); g.add(exhaust);
+  g.userData.exhaust = exhaust;
   return g;
 }
 
@@ -809,15 +808,13 @@ function spawnShockwave(pos) {
   ring.position.copy(pos); ring.lookAt(camera.position); scene.add(ring);
   particles.push({ mesh: ring, vel: null, life: 0.6, max: 0.6, type: 'ring' });
 }
-/* fat, glowing missile exhaust — bright core puff + expanding textured smoke so the trail reads clearly */
+/* thin white/grey missile contrail — a single small low-opacity smoke puff, no glowing core.
+   `color` tints the smoke (subtle cool-/warm-grey per side), never neon. */
 function spawnMissileTrail(pos, color) {
   if (particles.length > 620) return;
-  const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  core.position.copy(pos); core.scale.setScalar(rand(9, 13)); scene.add(core);
-  particles.push({ mesh: core, vel: null, life: 0.5, max: 0.5, type: 'mcore', grow: 14 });
-  const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: 0xcfd8e2, transparent: true, opacity: 0.5, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
-  puff.position.copy(pos); puff.scale.setScalar(rand(12, 18)); scene.add(puff);
-  particles.push({ mesh: puff, vel: new THREE.Vector3(rand(-4, 4), rand(-2, 4), rand(-4, 4)), life: rand(0.8, 1.3), max: 1.3, type: 'smoke', grow: 30, rot: rand(-1.5, 1.5) });
+  const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: color || 0xdfe2e6, transparent: true, opacity: 0.26, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
+  puff.position.copy(pos); puff.scale.setScalar(rand(4, 7)); scene.add(puff);
+  particles.push({ mesh: puff, vel: new THREE.Vector3(rand(-2, 2), rand(-1, 2), rand(-2, 2)), life: rand(0.7, 1.1), max: 1.1, type: 'smoke', grow: 16, rot: rand(-1.2, 1.2) });
 }
 /* floating supply crate: glowing box, wire edges, spin ring, beacon glow + sky beam */
 function buildCrate() {

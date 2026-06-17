@@ -60,8 +60,8 @@ for (const [name, c] of frames) {
 // missile + tracer rounds staged over the platform
 await page.evaluate(() => {
   scene.remove(previewJet);
-  const m = buildMissileMesh(false); m.position.set(-2, 5, 0); m.rotation.y = 0.55; m.userData.halo.visible = false; scene.add(m);
-  const me = buildMissileMesh(true); me.position.set(2.5, 8, -3); me.rotation.y = 0.7; me.userData.halo.visible = false; scene.add(me);
+  const m = buildMissileMesh(false); m.position.set(-2, 5, 0); m.rotation.y = 0.55; scene.add(m);
+  const me = buildMissileMesh(true); me.position.set(2.5, 8, -3); me.rotation.y = 0.7; scene.add(me);
   for (let i = 0; i < 3; i++) {
     const b = new THREE.Mesh(ASSET.bulletGeo, i % 2 ? ASSET.ebulletMat : ASSET.bulletMat);
     b.position.set(-7 + i * 6, 2.2, 5); b.rotation.y = 0.6; scene.add(b);
