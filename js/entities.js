@@ -946,14 +946,17 @@ const JET_MODELS = {
    default 1.1; dy = raise(+)/lower(-) the plume; dz = aft(+)/forward(-) the plume). Tuned visually
    against the model nozzles (scripts/verify-jets.mjs top+rear). */
 const BURN_OVERRIDE = {
-  SU57:   { xw: 1.7, dz: -1.5 },          // nozzles sit wider; pull plume forward
+  SU57:   { xw: 2.0, dy: 0.6, dz: -1.5 }, // wide nozzles; raised + pulled forward
   EFT:    { dy: -0.8, dz: -1.6 },         // was too high + too far aft
   RAFALE: { dy: -0.8, dz: -1.6 },
   FA18:   { dz: -1.2 },                    // a touch too far aft
-  F47:    { xw: 1.7, dy: 0.9 },           // was too close + too low
-  J36:    { xw: 0.75, dy: 1.0 },          // trijet: narrow the splay + raise
+  F47:    { xw: 2.0, dy: 1.4 },           // wider + raised
+  J36:    { xw: 0.95, dy: 1.6 },          // trijet: widen splay back a bit + raise more
   J50:    { dy: 1.0, dz: -1.5 },          // was too low + too far aft
 };
+/* shapes whose glb is geometry-only (no baked textures) → render flat grey, so recolour them in-code
+   via the SKINS paint (applyPaint). The other airframes ship textures and must NOT be repainted. */
+const TEXTURELESS_SHAPES = { F47: 1, J20: 1, J36: 1, J50: 1, STD: 1 };
 function loadJetModels() {
   if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader !== 'function') return;
   if (typeof gfxTier !== 'undefined' && gfxTier === 'low') return;   // low/mobile tier = procedural only; skip the model memory entirely
@@ -980,6 +983,7 @@ function loadJetModels() {
           if (!o.material || !o.material.transparent) o.castShadow = true;
         }
       });
+      wrap.userData.textureless = !!TEXTURELESS_SHAPES[id];     // geometry-only export → recolour in-code via skins (applyPaint)
       // afterburner anchors derived from the oriented template: nozzles at the tail (+Z), spread by engine count
       const bb = new THREE.Box3().setFromObject(wrap);
       const bs = bb.getSize(new THREE.Vector3()), bc = bb.getCenter(new THREE.Vector3());
@@ -1052,14 +1056,26 @@ function applyFoeTint(obj) {
     o.material = Array.isArray(o.material) ? o.material.map(tintOne) : tintOne(o.material);
   });
 }
+/* solid in-code paint for the texture-less jets (geometry-only glTF exports render flat grey).
+   Clones materials PER INSTANCE (templates are userData.shared — never mutate them) and sets the base
+   colour; tag the clone shared:false so disposeGroup frees it. */
+function applyPaint(obj, color) {
+  obj.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    const paintOne = (m) => { const c = m.clone(); c.userData = { shared: false }; if (c.color) c.color = new THREE.Color(color); return c; };
+    o.material = Array.isArray(o.material) ? o.material.map(paintOne) : paintOne(o.material);
+  });
+}
+
 /* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
    nests in a NEW outer game-space group; the afterburner attaches there in un-scaled game coords. */
-function cloneJetGLTF(id, accent, opts) {
+function cloneJetGLTF(id, color, accent, opts) {
   opts = opts || {};
   const inner = jetGLTF[id].clone(true);
   const g = new THREE.Group();
   g.add(inner);
-  if (opts.enemy) applyFoeTint(inner);                 // per-instance red sheen for foe readability
+  if (jetGLTF[id].userData.textureless && typeof color === 'number') applyPaint(inner, color);   // skin paint (player) / enemy-red (foe)
+  else if (opts.enemy) applyFoeTint(inner);            // textured enemy: per-instance red sheen for foe readability
   const burn = jetGLTF[id].userData.burn;
   if (burn) addBurner(g, burn, accent);                // afterburner per jet (player: animEngines drives it; enemies: static cruise plume)
   g.userData.gltf = true;
@@ -1070,7 +1086,7 @@ function cloneJetGLTF(id, accent, opts) {
 function buildJetOrGLTF(color, accent, cfg, hero, opts) {
   opts = opts || {};
   if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low'))
-    return cloneJetGLTF(cfg.id, accent, { enemy: !!opts.enemy });
+    return cloneJetGLTF(cfg.id, color, accent, { enemy: !!opts.enemy });
   return buildJet(color, accent, cfg, hero);
 }
 function buildBoss() {

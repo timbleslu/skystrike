@@ -127,10 +127,17 @@ function applyMetaPerks(player) {
 /* ---------------- cosmetic skins (per airframe) ----------------
    id 'default' is always owned (the jet's stock color/accent, color:null = use the JETS row).
    Others cost SP and override the paint via color/accent at build time. */
+/* In-code paint skins ONLY for the texture-less glTF jets (geometry-only exports render flat grey):
+   FT-1, F-47, J-20, J-36, J-50. cloneJetGLTF→applyPaint recolours their bare materials to the chosen
+   skin's `color`. The other airframes ship baked textures/liveries and are intentionally absent here —
+   their glTF can't be repainted, so they show no skin chips. Every entry's `default` carries a real
+   colour (not null) so even the stock skin paints the model. */
 const SKINS = {
-  'FT-1':  [{ id: 'default', color: null }, { id: 'sand', color: 0xc8b88a, accent: 0xe0c060 }, { id: 'arctic', color: 0xdfe8ef, accent: 0x8fd0ff }],
-  'F-22':  [{ id: 'default', color: null }, { id: 'splinter', color: 0x4a5a6a, accent: 0x9fe0ff }, { id: 'raptor', color: 0x1a2a3a, accent: 0xff3a3a }],
-  'SU-57': [{ id: 'default', color: null }, { id: 'felon', color: 0x3a3a44, accent: 0xff6a2a }, { id: 'aurora', color: 0x2a3a5a, accent: 0x60ffd0 }],
+  'FT-1': [{ id: 'default', color: 0x9aa3ad, accent: 0xffb050 }, { id: 'shadow', color: 0x3a4048, accent: 0x8fd0ff }, { id: 'blaze', color: 0xb5552a, accent: 0xffd24a }],
+  'F-47': [{ id: 'default', color: 0x3c4a58, accent: 0x7fd8ff }, { id: 'shadow', color: 0x20262e, accent: 0x66e0ff }, { id: 'blaze', color: 0x6a2f33, accent: 0xff7a3a }],
+  'J-20': [{ id: 'default', color: 0x2d3138, accent: 0xffd24a }, { id: 'shadow', color: 0x15181d, accent: 0xffe06a }, { id: 'blaze', color: 0x5a2530, accent: 0xff5a4a }],
+  'J-36': [{ id: 'default', color: 0x4a525c, accent: 0xff5a3a }, { id: 'shadow', color: 0x282d34, accent: 0xff8a4a }, { id: 'blaze', color: 0x2a3a5a, accent: 0x60ffd0 }],
+  'J-50': [{ id: 'default', color: 0xc2c8ce, accent: 0x5aa8ff }, { id: 'shadow', color: 0x6a7178, accent: 0x8fd0ff }, { id: 'blaze', color: 0xd0c0a0, accent: 0xff9a40 }],
 };
 
 /* ---------------- achievements ----------------

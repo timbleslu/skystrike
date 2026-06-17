@@ -42,7 +42,9 @@ const dataUrl = await page.evaluate(({ view, shapesArg }) => {
   const loaded = [];
   for (let k = 0; k < present.length; k++) {
     const id = present[k];
-    const clone = buildJetOrGLTF(0xdfe4ea, 0xff7a2a, SHAPES[id], true);   // player path -> burner
+    const jet = (typeof JETS !== 'undefined') && JETS.find(j => j.shape === id);
+    const paint = (jet && typeof jetPaint === 'function') ? jetPaint(jet) : { color: 0xdfe4ea, accent: 0xff7a2a };
+    const clone = buildJetOrGLTF(paint.color, paint.accent, SHAPES[id], true);   // player path -> skin paint + burner
     if (clone.userData.engines && typeof animEngines === 'function') animEngines(clone, 0.95);
     const gx = ((k % cols) - (cols - 1) / 2) * cell;
     const gr = (Math.floor(k / cols) - (rows - 1) / 2) * cell;

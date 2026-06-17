@@ -588,6 +588,7 @@ const I18N = {
       'skin.sand':     { name: 'DESERT' }, 'skin.arctic': { name: 'ARCTIC' },
       'skin.splinter': { name: 'SPLINTER' }, 'skin.raptor': { name: 'PREDATOR' },
       'skin.felon':    { name: 'FELON' }, 'skin.aurora': { name: 'AURORA' },
+      'skin.shadow':   { name: 'SHADOW' }, 'skin.blaze': { name: 'BLAZE' },
     },
   },
 
@@ -1290,6 +1291,7 @@ const I18N = {
       'skin.sand':     { name: '沙漠' }, 'skin.arctic': { name: '极地' },
       'skin.splinter': { name: '碎裂迷彩' }, 'skin.raptor': { name: '猛禽' },
       'skin.felon':    { name: '重罪' }, 'skin.aurora': { name: '极光' },
+      'skin.shadow':   { name: '暗影' }, 'skin.blaze': { name: '烈焰' },
     },
   },
 };
