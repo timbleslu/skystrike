@@ -8,19 +8,7 @@ let techTab = 'tech';
 function owns(id) { return player.tech.indexOf(id) >= 0; }
 function repeatCount(node) { return player.techRepeat[node.id] || 0; }
 function nodeCost(node) { return node.repeat ? node.cost + (node.costStep || 0) * repeatCount(node) : node.cost; }
-function reqSatisfied(node, ownsFn, byId, groundOn) {
-  // a single prerequisite is met if it's owned — or if it's a hidden ground node,
-  // in which case we look through it to its own prerequisites instead
-  const met = (id) => {
-    const rn = byId[id];
-    if (!groundOn && rn && rn.ground) return reqSatisfied(rn, ownsFn, byId, groundOn);   // bypass hidden ground nodes
-    return ownsFn(id);
-  };
-  if (node.reqAll && !node.reqAll.every(met)) return false;        // AND-gate: every listed node required
-  const req = node.req;
-  if (!req) return true;
-  return Array.isArray(req) ? req.some(met) : met(req);            // OR-gate: any one parent unlocks
-}
+// reqSatisfied(node, ownsFn, byId, groundOn) → js/core.js (pure, require-safe; tests import the real impl). Called below at call-time.
 /* ---------------- FRONTIER DRAFT (feature 4) ----------------
    Run-scoped draft state. The full tech tree still renders (positions/connectors unchanged); only a
    few currently-unlockable FRONTIER nodes are OFFERED as buyable each visit. PIN biases the offer

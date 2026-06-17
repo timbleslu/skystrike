@@ -16,7 +16,8 @@ Require-safe files today: `core.js` (loaded first — math / weather / boss / tu
 - ➕ Tests exercise real code; no mirror drift.
 - ➕ Extracting data / logic into require-safe files **shrinks the THREE-coupled god files** (`globals.js`, `entities.js`).
 - ➖ Requires discipline to keep these files pure.
-- **Remaining mirror / scrape debt:** `reqSatisfied` (ui-tech.js, mirrored in `tests/ground-war.test.js`) and the `entities.js` airframe-flag scrape (`tests/npc-airframes.test.js` et al.) — candidates for the same treatment.
+- **Remaining scrape debt:** the `entities.js` airframe-flag scrape (`tests/npc-airframes.test.js` et al.) — a candidate for the same treatment.
 
 ### History
 - The `JETS` roster + `aceShapePool` / `jetNameForShape` were extracted into `roster.js` (2026-06-17), removing the last roster mirror (`ace-pool.test.js`) and a source scrape (`has-special.test.js`) — both now import the real roster.
+- `reqSatisfied` (tech-tree prerequisite predicate) moved from `ui-tech.js` into `core.js` (2026-06-17), removing the `tests/ground-war.test.js` mirror — it now imports the real impl.

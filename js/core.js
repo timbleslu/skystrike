@@ -463,6 +463,23 @@ function specialSlotReady(slot) {
 const DRAFT_OFFER_N = 3;        // how many frontier nodes are offered per visit
 const DRAFT_PITY_THRESHOLD = 3; // a frontier node skipped this many visits is force-included next offer
 
+// reqSatisfied(node, ownsFn, byId, groundOn) — pure tech-tree prerequisite predicate (moved from ui-tech.js).
+// OR-gate over node.req (string|array), AND-gate over node.reqAll, with hidden ground-node bypass when groundOn=false.
+// All inputs are injected (ownsFn callback + byId lookup) so this stays require-safe; tests/ground-war.test.js imports it.
+function reqSatisfied(node, ownsFn, byId, groundOn) {
+  // a single prerequisite is met if it's owned — or if it's a hidden ground node,
+  // in which case we look through it to its own prerequisites instead
+  const met = (id) => {
+    const rn = byId[id];
+    if (!groundOn && rn && rn.ground) return reqSatisfied(rn, ownsFn, byId, groundOn);   // bypass hidden ground nodes
+    return ownsFn(id);
+  };
+  if (node.reqAll && !node.reqAll.every(met)) return false;        // AND-gate: every listed node required
+  const req = node.req;
+  if (!req) return true;
+  return Array.isArray(req) ? req.some(met) : met(req);            // OR-gate: any one parent unlocks
+}
+
 // frontierEligible(nodes, {owns, reqSatisfied, applicable}) → [ids]
 // The FRONTIER = nodes whose prerequisites are satisfied, that the player does not yet own
 // (repeatables are still offerable even when already taken), and that apply to this map
@@ -766,6 +783,7 @@ function grantLevelRewards(index, isBoss, alreadyCleared, farmable) {
    =================================================================== */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    reqSatisfied,
     TWO_PI, DEG, clamp, lerp, rand, randInt, damp,
     NIGHT_RADAR_MUL, WEATHER, resolveWeather, turbSample, rollWeather,
     BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase,

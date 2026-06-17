@@ -1,5 +1,6 @@
 'use strict';
 const assert = require('assert');
+const { reqSatisfied } = require('../js/core.js');   // real tech-tree prereq predicate — no mirror
 
 // ---- mirrors of js/main.js ground-war pure helpers ----
 function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
@@ -18,20 +19,7 @@ assert.strictEqual(isStrikeWave(10, false), false, 'toggle off = no strike waves
 
 console.log('ok - ground spawn gating and strike cadence');
 
-// mirror of js/ui.js reqSatisfied — OR-gate req arrays, reqAll AND-gates, ground-node bypass
-function reqSatisfied(node, ownsFn, byId, groundOn) {
-  // a single prerequisite is met if it's owned — or if it's a hidden ground node,
-  // in which case we look through it to its own prerequisites instead
-  const met = (id) => {
-    const rn = byId[id];
-    if (!groundOn && rn && rn.ground) return reqSatisfied(rn, ownsFn, byId, groundOn);   // bypass hidden ground nodes
-    return ownsFn(id);
-  };
-  if (node.reqAll && !node.reqAll.every(met)) return false;        // AND-gate: every listed node required
-  const req = node.req;
-  if (!req) return true;
-  return Array.isArray(req) ? req.some(met) : met(req);            // OR-gate: any one parent unlocks
-}
+// reqSatisfied is imported from js/core.js (top of file) — the REAL impl, not a mirror.
 const byId = {
   core: { id: 'core' },
   agm1: { id: 'agm1', req: 'core', ground: true },
