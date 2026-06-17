@@ -209,6 +209,18 @@ canvas{display:block}
 
 #banner{position:absolute;top:34%;left:0;right:0;text-align:center;font-family:var(--disp);font-weight:900;font-size:40px;letter-spacing:10px;color:var(--primary);text-shadow:0 0 30px rgba(var(--primary-rgb),.7);opacity:0;transition:opacity var(--dur-base);transform:scale(1)}
 #banner.show{opacity:1;animation:bpop var(--dur-slow) var(--ease-out)}
+/* §2 mission intro card — center-screen at mission start. Base is non-blocking (repeat encounters,
+   auto-dismiss 5s); .interactive (first encounter) captures input + dims so the tap dismisses it. */
+#missionCard{position:absolute;inset:0;z-index:42;display:none;align-items:center;justify-content:center;pointer-events:none}
+#missionCard.show{display:flex}
+#missionCard.interactive{pointer-events:auto;background:rgba(2,6,12,0.62);cursor:pointer}
+#missionCard .mcard{max-width:min(560px,82vw);padding:26px 30px;text-align:center;background:rgba(6,11,20,0.82);border:var(--bd);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);box-shadow:0 0 40px rgba(var(--primary-rgb),.25);animation:mcardIn var(--dur-base) var(--ease-out)}
+#missionCard .mcard-type{font-family:var(--disp);font-weight:900;font-size:30px;letter-spacing:6px;color:var(--primary);text-shadow:0 0 22px rgba(var(--primary-rgb),.6)}
+#missionCard .mcard-desc{margin-top:10px;font-size:15px;line-height:1.5;color:#d6e6f2;opacity:.92}
+#missionCard .mcard-blurb{margin-top:14px;font-size:13px;line-height:1.55;font-style:italic;color:var(--primary);opacity:.85;border-top:1px solid rgba(var(--primary-rgb),.25);padding-top:12px}
+#missionCard .mcard-hint{margin-top:18px;font-family:var(--disp);font-size:11px;letter-spacing:3px;color:var(--primary);opacity:.7;animation:mhintPulse 1.3s ease-in-out infinite}
+@keyframes mcardIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes mhintPulse{0%,100%{opacity:.35}50%{opacity:.9}}
 @keyframes bpop{0%{transform:scale(1.4);letter-spacing:24px;opacity:0}100%{transform:scale(1);opacity:1}}
 
 /* keybind ribbon is reference chrome — it lives in the manual, NOT the live HUD (UX-05) */
@@ -636,8 +648,8 @@ canvas{display:block}
 #opmap #opLaunch:disabled{opacity:.45;cursor:not-allowed}
 
 /* ---- Operations campaign (linear revamp): ops-select / level-map / briefing overlays ---- */
-#opsSelect,#levelMap,#briefing{position:fixed;inset:0;z-index:73;display:none;background:rgba(2,6,10,.93);backdrop-filter:blur(6px)}
-#opsSelect.show,#levelMap.show,#briefing.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
+#opsSelect,#levelMap,#briefing,#opLore{position:fixed;inset:0;z-index:73;display:none;background:rgba(2,6,10,.93);backdrop-filter:blur(6px)}
+#opsSelect.show,#levelMap.show,#briefing.show,#opLore.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
 .cmp-box,.brief-box{width:min(900px,94vw);max-height:88vh;overflow:auto;border:var(--bd);border-radius:var(--r-lg);background:var(--surface-2);padding:var(--sp-6)}
 .cmp-title,.brief-title{font-family:var(--disp);font-weight:800;letter-spacing:5px;color:var(--ink-hi);font-size:20px;text-align:center}
 .cmp-sub{font-family:var(--mono);text-align:center;color:var(--ink-dim);letter-spacing:2px;font-size:10px;margin:6px 0 18px}

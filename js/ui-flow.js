@@ -240,8 +240,24 @@ function renderOperationsSelect() {
   }).join('');
   wrap.querySelectorAll('.op-card:not(.locked)').forEach(c => c.addEventListener('click', () => {
     g('opsSelect').classList.remove('show');
-    openLevelMap(c.getAttribute('data-op'));
+    openOperationLore(c.getAttribute('data-op'));
   }));
+}
+
+// op-lore panel (§5): tapping an operation surfaces its multi-paragraph backstory BEFORE the level
+// map. "Enter" proceeds into the operation's level map; "Back" returns to the operations list.
+function openOperationLore(opId) {
+  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
+  g('opsSelect') && g('opsSelect').classList.remove('show');
+  const ov = g('opLore'); if (!ov) { openLevelMap(opId); return; }   // graceful fallback if markup is absent
+  setTxt('opLoreTitle', t(op.nameKey));
+  setTxt('opLoreH', t('campaign.background'));
+  setTxt('opLoreBody', t(op.loreKey));
+  ov.classList.add('show');
+  const go = g('opLoreGo'); if (go) { go.textContent = '▶ ' + t('campaign.enter'); go.onclick = () => { ov.classList.remove('show'); openLevelMap(opId); }; }
+  const back = g('opLoreBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); openOperationsSelect(); }; }
+  if (audio.on) audio.ui();
 }
 
 // the linear level map for one operation (paused overlay; player persists if mid-operation)

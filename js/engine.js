@@ -142,6 +142,7 @@ class AudioEngine {
   ui()       { this.blip(560, 0.05, 'square', 0.09, 880); }
   flare()    { this.burst(0.3, 0.18, 'highpass', 900, 2200); }
   power()    { this.blip(280, 0.35, 'sawtooth', 0.16, 920); }
+  ping()     { this.blip(1046, 0.09, 'sine', 0.12, 1568); }   // F1: short rising chime — waypoint checkoff one-shot
   hurt()     { this.burst(0.25, 0.3, 'lowpass', 700, 120); }
 }
 const audio = new AudioEngine();

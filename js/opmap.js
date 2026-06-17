@@ -87,6 +87,14 @@ function levelPlan(lvl) {
   if (lvl.setpiece) return setpiecePlan(lvl.setpiece, plan);
   return plan;
 }
+// i18n key for a level's in-flight mission-card blurb (§2 objective card). Derived from the regular
+// nameKey ('op.<id>.l<N>.name' -> '.blurb') so every level exposes one without 25 duplicate fields;
+// an explicit lvl.missionBlurbKey overrides. Pure.
+function levelBlurbKey(lvl) {
+  if (!lvl) return null;
+  if (lvl.missionBlurbKey) return lvl.missionBlurbKey;
+  return lvl.nameKey ? lvl.nameKey.replace(/\.name$/, '.blurb') : null;
+}
 // sector type -> mission type for the typed-mission layer (missions.js). Pure + deterministic.
 // ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
 function sectorMission(type) {
@@ -171,5 +179,5 @@ function setpieceOutcome(id, won) {
 
 /* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { OPERATIONS, levelPlan, sectorMission, sectorPlan, SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome };
+  module.exports = { OPERATIONS, levelPlan, levelBlurbKey, sectorMission, sectorPlan, SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome };
 }

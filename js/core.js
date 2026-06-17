@@ -763,6 +763,24 @@ function instrumentState(kt, altFt, throttle) {
   };
 }
 
+/* Display-unit conversion for the HUD speedometer + altimeter (pure). The sim carries speed in KNOTS
+   and altitude in FEET; the player picks a unit system in Settings. 'metric' => kph + metres; anything
+   else (default 'imperial') => mph + ft (knots are retired from the readout per spec). Returns
+   {value:rounded int, unit:'mph'|'kph'|'ft'|'m'} so the HUD writes the number + picks the label. */
+const KT_TO_MPH = 1.15078, KT_TO_KPH = 1.852, FT_TO_M = 0.3048;
+function speedDisplay(kt, system) {
+  kt = Math.max(0, +kt || 0);
+  return system === 'metric'
+    ? { value: Math.round(kt * KT_TO_KPH), unit: 'kph' }
+    : { value: Math.round(kt * KT_TO_MPH), unit: 'mph' };
+}
+function altDisplay(ft, system) {
+  ft = Math.max(0, +ft || 0);
+  return system === 'metric'
+    ? { value: Math.round(ft * FT_TO_M), unit: 'm' }
+    : { value: Math.round(ft), unit: 'ft' };
+}
+
 /* ---------------- campaign / operations cores (Operations Map revamp) ----------------
    PURE progression + bounded-level wave scaling + checkpoint snapshot/rollback for the linear
    multi-operation campaign. `campaign` is the meta.campaign progress map
@@ -897,6 +915,15 @@ function nextObjectivePhase(idx, total) {
   return (idx + 1 < total) ? idx + 1 : -1;
 }
 
+// A ground "destroy-site" objective resolves when EITHER an endless strike-wave is active OR the
+// active typed-mission is a strike. Multi-phase Operations levels run a STRIKE objective phase while
+// their top-level spawn.ground is false, so the level-wide strikeWaveActive flag (set from
+// plan.ground in main.js) is never set during that phase — gating site-completion on the flag alone
+// hangs the level. Drive it off the live mission instead. missionType = active mission.type (or null).
+function strikeSiteResolves(strikeWaveActive, missionType) {
+  return !!strikeWaveActive || missionType === 'strike';
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -927,10 +954,10 @@ if (typeof module !== 'undefined' && module.exports) {
     ARCHETYPES, pickArchetype, shouldJink, pincerSign,
     equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
     DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
-    instrumentState,
+    instrumentState, speedDisplay, altDisplay, KT_TO_MPH, KT_TO_KPH, FT_TO_M,
     LEVEL_WAVE_MIN, LEVEL_WAVE_CAP, campaignWaveCount, levelCleared,
     isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
     captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
-    objectiveTypes, nextObjectivePhase,
+    objectiveTypes, nextObjectivePhase, strikeSiteResolves,
   };
 }

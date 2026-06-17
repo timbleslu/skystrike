@@ -125,7 +125,7 @@ function drawStarObjectives(ctx, cx) {
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = (11 * k) + 'px ' + HUDFONT;
-  let y = 40;
+  let y = 72;   // F2: below the objective line (y=44) + detection bar, clear of the pause button
   for (let i = 0; i < items.length; i++) {
     const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
     const w = ctx.measureText(label).width;
@@ -190,7 +190,7 @@ function drawHUD() {
     ctx.font = 'bold ' + (15 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     let line = objectiveText(mission);
     if (mission.type === 'intercept') line += '   ⏱ ' + fmtClock(Math.max(0, mission.timer));
-    ctx.fillText(line, cx, 14);
+    ctx.fillText(line, cx, 44);   // F2: shifted below the top-centre pause button (was y=14, overlapped #btnPause)
     ctx.textBaseline = 'middle';
     // recon/stealth: point the objective marker at the next waypoint + (stealth) draw the detection bar
     if (mission.type === 'recon' || mission.type === 'stealth') drawMissionWaypoint(ctx, cx, cy, k, reduce);
@@ -364,6 +364,9 @@ function drawWingman(ctx, w, cx, cy) {
 function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
   const wp = nextWaypoint(mission.params.waypoints || []);
   if (!wp) return;
+  const dist = Math.round(Math.hypot(wp.x - player.group.position.x, wp.y - player.group.position.y, wp.z - player.group.position.z));
+  const arrive = (mission.params && mission.params.hitRadius) || 320;
+  const wpScale = lerp(0.6, 2.0, clamp((4500 - dist) / (4500 - arrive), 0, 1));   // F1: marker grows toward arrival (2.0x), shrinks with distance (0.6x at ~4500u)
   const p = projectPoint(wp);
   const col = HUD.waypoint;   // dedicated waypoint orange — distinct from every other HUD marker
   const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
@@ -372,7 +375,7 @@ function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
   ctx.save();
   ctx.strokeStyle = 'rgba(' + col + ',' + pulse.toFixed(3) + ')'; ctx.lineWidth = 2 * k;
   if (onScreen) {
-    const h = 15 * k, x = p.x, y = p.y, t2 = 6 * k;   // box reticle (fly-to gate) — distinct from the crate diamond
+    const h = 15 * k * wpScale, x = p.x, y = p.y, t2 = 6 * k * wpScale;   // F1: box reticle scales with distance (wpScale)
     ctx.beginPath();   // hollow box outline
     ctx.moveTo(x - h, y - h); ctx.lineTo(x + h, y - h); ctx.lineTo(x + h, y + h); ctx.lineTo(x - h, y + h); ctx.closePath();
     ctx.stroke();
@@ -383,8 +386,7 @@ function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
     ctx.moveTo(x + h, y + h - t2); ctx.lineTo(x + h + t2, y + h - t2); ctx.lineTo(x + h + t2, y + h + t2); ctx.lineTo(x + h - t2, y + h + t2);
     ctx.stroke();
     ctx.fillStyle = 'rgba(' + col + ',0.6)';
-    ctx.beginPath(); ctx.arc(x, y, 2.4 * k, 0, TWO_PI); ctx.fill();
-    const dist = Math.round(Math.hypot(wp.x - player.group.position.x, wp.y - player.group.position.y, wp.z - player.group.position.z));
+    ctx.beginPath(); ctx.arc(x, y, 2.4 * k * wpScale, 0, TWO_PI); ctx.fill();
     const label = mission.type === 'stealth' ? t('hud.extraction') : t('hud.waypoint');
     ctx.fillStyle = 'rgba(' + col + ',0.85)'; ctx.font = (9 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
     ctx.fillText(label + ' ' + dist, x, y - h - 7 * k);
@@ -402,7 +404,7 @@ function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
 // only the SPOTTED flash is motion-gated. Colour ramps ok→reward→warn→danger as the alarm climbs.
 function drawDetectionBar(ctx, cx, k) {
   const det = clamp(mission.params.detect || 0, 0, 1);
-  const bw = 150 * k, bh = 6 * k, bx = cx - bw / 2, by = 36 * k;
+  const bw = 150 * k, bh = 6 * k, bx = cx - bw / 2, by = 44 + 22 * k;   // F2: sits just under the shifted objective line
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(bx, by, bw, bh);
   const col = det < 0.4 ? HUD.ok : det < 0.7 ? HUD.reward : det < 0.9 ? HUD.warn : HUD.danger;

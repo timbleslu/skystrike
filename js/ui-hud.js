@@ -223,6 +223,42 @@ function advanceTutorial(event) {
 
 let bannerT = 0;
 function showBanner(txt) { el.banner.textContent = txt; el.banner.classList.remove('show'); void el.banner.offsetWidth; el.banner.classList.add('show'); bannerT = 2.0; }
+// Mission intro CARD (§2): center-screen at sector/mission start — mission-type name + mechanical
+// description + the per-level lore blurb. FIRST time a type is seen (seenMissionType_<verb> in storage)
+// the card is interactive and persists until the player taps/clicks/keys to dismiss; REPEAT encounters
+// auto-dismiss after 5s (ticked in updateDom) but still show the blurb so context isn't lost.
+let missionCardT = 0;   // >0 = repeat auto-dismiss countdown (s); 0 = idle or persistent (first-time)
+function showMissionCard(verb, blurbKey) {
+  const card = g('missionCard');
+  if (!card || !verb) return;
+  const nameStr = t('mission.name.' + verb), descStr = t('mission.desc.' + verb);
+  const ti = g('missionCardTitle'); if (ti) ti.textContent = (nameStr !== 'mission.name.' + verb) ? nameStr : verb;
+  const de = g('missionCardDesc'); if (de) de.textContent = (descStr !== 'mission.desc.' + verb) ? descStr : '';
+  const blurb = blurbKey ? t(blurbKey) : '';
+  const be = g('missionCardBlurb');
+  if (be) { const has = !!blurb && blurb !== blurbKey; be.textContent = has ? blurb : ''; be.style.display = has ? '' : 'none'; }
+  let firstTime = false;
+  const seenKey = 'skystrike_seenMissionType_' + verb;
+  try { firstTime = !store.get(seenKey); } catch (e) {}
+  const hi = g('missionCardHint'); if (hi) { hi.textContent = t('card.tapContinue'); hi.style.display = firstTime ? '' : 'none'; }
+  card.classList.add('show');
+  if (firstTime) {
+    try { store.set(seenKey, '1'); } catch (e) {}
+    missionCardT = 0;                     // persistent — dismiss on the next user input
+    card.classList.add('interactive');    // capture pointer events so the tap dismisses instead of flying the jet
+    const onInput = () => { dismissMissionCard(); window.removeEventListener('pointerdown', onInput, true); window.removeEventListener('keydown', onInput, true); };
+    window.addEventListener('pointerdown', onInput, true);
+    window.addEventListener('keydown', onInput, true);
+  } else {
+    card.classList.remove('interactive'); // non-blocking reminder; flying continues underneath
+    missionCardT = 5;                     // repeat encounter: auto-dismiss after 5s
+  }
+}
+function dismissMissionCard() {
+  const card = g('missionCard');
+  if (card) { card.classList.remove('show'); card.classList.remove('interactive'); }
+  missionCardT = 0;
+}
 
 function updateWingmanSidebar() {
   if (!el.sidebar) return;
@@ -278,16 +314,17 @@ function updateDom(dt) {
   el.abIndicator.style.display = (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none';
   const kt = Math.round(player.speed * 2.3);
   const altFt = Math.round(Math.max(0, player.group.position.y) * 3.28);
-  el.spd.textContent = kt;
-  el.alt.textContent = altFt;
+  const sd = speedDisplay(kt, unitSystem), ad = altDisplay(altFt, unitSystem);   // imperial(mph+ft) / metric(kph+m); labels via applyUnitLabels
+  el.spd.textContent = sd.value;
+  el.alt.textContent = ad.value;
   // INSTRUMENT SEAM: publish normalized flight state so per-skin CSS gauges (analog needles,
   // blueprint dials, flat arcs) render the same numbers the bl-panel readouts show. CSS derives
   // sweep angles from the *-frac via calc(); altimeter hands need real periodic angles, so we
   // hand those over precomputed. Set on the #hud root so it cascades to every instrument widget.
   if (el.hudRoot) {
     const s = el.hudRoot.style, m = instrumentState(kt, altFt, player.throttle);
-    s.setProperty('--spd-kt', m.spdKt);
-    s.setProperty('--alt-ft', m.altFt);
+    s.setProperty('--spd-kt', sd.value);   // legacy prop name; now carries the displayed speed in the active unit
+    s.setProperty('--alt-ft', ad.value);   // legacy prop name; displayed altitude in the active unit
     s.setProperty('--spd-frac', m.spdFrac.toFixed(4));
     s.setProperty('--alt-frac', m.altFrac.toFixed(4));
     s.setProperty('--thr-frac', m.thrFrac.toFixed(4));
@@ -350,6 +387,7 @@ function updateDom(dt) {
   else el.bossbar.classList.remove('show');
 
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) el.banner.classList.remove('show'); }
+  if (missionCardT > 0) { missionCardT -= dt; if (missionCardT <= 0) dismissMissionCard(); }   // §2 repeat-encounter card auto-dismiss
 
   const gforce = clamp((Math.abs(player.pitchRate) + Math.abs(player.rollRate) * 0.4) / (player.stats.turnRate * 2.1), 0, 1);
   let vig = gforce * 0.7; if (player.highG) vig = Math.max(vig, 0.92);
