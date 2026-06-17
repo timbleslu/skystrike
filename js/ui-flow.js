@@ -61,7 +61,7 @@ function startGame(i, daily, rush) {
   bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
   selectedJet = i; audio.init();
   closeManual();
-  if (previewJet) { scene.remove(previewJet); previewJet = null; }
+  if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }   // C2: preview lives in the ISOLATED previewScene now, not the shared scene
   if (platform) { scene.remove(platform); platform = null; }
   g('hangar').classList.add('hide');
   
@@ -84,6 +84,7 @@ function startGame(i, daily, rush) {
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
   weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
@@ -259,15 +260,33 @@ function renderLevelMap(opId) {
   const title = g('levelMapTitle'); if (title) title.textContent = t(op.nameKey);
   const rd = g('levelMapTech'); if (rd) rd.style.display = (campaignPlayerOpId === opId && player) ? '' : 'none';   // R&D only mid-operation
   const wrap = g('levelNodes'); if (!wrap) return;
-  wrap.innerHTML = op.levels.map((lvl, i) => {
+  // GEOGRAPHIC MAP: a per-op tactical SVG backdrop (CSS background-image — works from file://,
+  // unlike fetch) with one absolutely-positioned mission dot per level at its lvl.coords %.
+  // Progression logic is BYTE-FOR-BYTE the old behaviour: campaignLevelState → locked/unlocked/cleared,
+  // boss adds a class, cleared shows star pips; locked dots get NO click listener, unlocked/cleared
+  // dots → openBriefing(opId, idx). A faint route line traces the levels in order behind the dots.
+  const route = op.levels.map((lvl, i) => (i ? 'L' : 'M') + lvl.coords.x + ' ' + lvl.coords.y).join(' ');
+  const dots = op.levels.map((lvl, i) => {
     const st = campaignLevelState(opId, i);   // 'locked' | 'unlocked' | 'cleared'
     const rec = meta && meta.campaign && meta.campaign[opId] && meta.campaign[opId].levels[lvl.id];
     const stars = (rec && rec.bestStars) || 0;
-    const pips = st === 'cleared' ? '<div class="level-stars">' + '★'.repeat(stars) + '☆'.repeat(3 - stars) + '</div>' : '';
-    return '<div class="level-node ' + st + (lvl.isBoss ? ' boss' : '') + '" data-idx="' + i + '">' +
-      '<div class="level-node-n">' + (i + 1) + '</div><div class="level-node-name">' + t(lvl.nameKey) + '</div>' + pips + '</div>';
+    const pips = st === 'cleared' ? '<span class="opmap-stars">' + '★'.repeat(stars) + '☆'.repeat(3 - stars) + '</span>' : '';
+    return '<button class="opmap-dot ' + st + (lvl.isBoss ? ' boss' : '') + '" data-idx="' + i + '"' +
+      (st === 'locked' ? ' disabled' : '') +
+      ' style="left:' + lvl.coords.x + '%;top:' + lvl.coords.y + '%">' +
+      '<span class="opmap-pin"></span>' +
+      '<span class="opmap-tag"><span class="opmap-n">' + (i + 1) + '</span>' +
+      '<span class="opmap-name">' + t(lvl.nameKey) + '</span>' + pips + '</span></button>';
   }).join('');
-  wrap.querySelectorAll('.level-node.unlocked, .level-node.cleared').forEach(n =>
+  wrap.innerHTML =
+    '<div class="opmap-canvas" data-op="' + opId + '" style="background-image:url(\'assets/maps/' + opId + '.svg\')">' +
+      '<svg class="opmap-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
+        '<path d="' + route + '" fill="none" stroke="rgba(120,200,230,0.30)" stroke-width="0.5" stroke-dasharray="1.6 1.8" vector-effect="non-scaling-stroke"/>' +
+      '</svg>' + dots +
+    '</div>';
+  // unlocked/cleared dots are clickable → briefing (IDENTICAL to the old list); locked dots are
+  // disabled buttons with no listener.
+  wrap.querySelectorAll('.opmap-dot.unlocked, .opmap-dot.cleared').forEach(n =>
     n.addEventListener('click', () => openBriefing(opId, +n.getAttribute('data-idx'))));
 }
 
@@ -319,6 +338,7 @@ function enterOperationRun(opId) {
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;
   if (typeof applyWeather === 'function') applyWeather('clear');
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed
   resetDraftState();
   awacsUses = { strike: 0, resupply: 0, jam: 0 };
   awacsLast = { strike: 0, resupply: 0, jam: 0 };

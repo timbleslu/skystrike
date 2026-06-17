@@ -41,7 +41,7 @@ function loadSettings() {
     if (typeof s.haptics === 'boolean') haptics = s.haptics;
     if (typeof s.buttonOpacity === 'number') buttonOpacity = clamp(s.buttonOpacity, 0.4, 1.0);
     if (s.buttonLayout === 'right' || s.buttonLayout === 'left' || s.buttonLayout === 'compact') buttonLayout = s.buttonLayout;
-    if (s.gfxQuality === 'auto' || s.gfxQuality === 'low' || s.gfxQuality === 'high') gfxQuality = s.gfxQuality;
+    if (s.gfxQuality === 'auto' || s.gfxQuality === 'low' || s.gfxQuality === 'medium' || s.gfxQuality === 'high') gfxQuality = s.gfxQuality;
     if (typeof refreshGfxTier === 'function') { refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }   // F11: re-resolve tier from the persisted setting + resize the shadow map
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
@@ -174,7 +174,7 @@ function applyLang() {
   segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
   segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
   segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');
-  segTxt('#gfxQualityTog [data-gq="auto"]', 'set.gfxAuto'); segTxt('#gfxQualityTog [data-gq="low"]', 'set.gfxLow'); segTxt('#gfxQualityTog [data-gq="high"]', 'set.gfxHigh');
+  segTxt('#gfxQualityTog [data-gq="auto"]', 'set.gfxAuto'); segTxt('#gfxQualityTog [data-gq="low"]', 'set.gfxLow'); segTxt('#gfxQualityTog [data-gq="medium"]', 'set.gfxMedium'); segTxt('#gfxQualityTog [data-gq="high"]', 'set.gfxHigh');
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
   // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
@@ -305,6 +305,7 @@ function clearArena() {
   for (let i = 0; i < particles.length; i++) scene.remove(particles[i].mesh);
   for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
   clearWingmen();
+  if (typeof clearGroundObjects === 'function') clearGroundObjects();   // Track B: free per-arena InstancedMesh ground scatter (shared templates spared)
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0;
   BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
@@ -330,6 +331,7 @@ function returnToHangar() {
   g('gameover').classList.remove('show');
   g('touchControls').classList.remove('show');
   makePlatform();
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: re-scatter ground objects for the hangar view (tier-gated)
   camMode = 0;
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
   state = 'hangar'; paused = false;

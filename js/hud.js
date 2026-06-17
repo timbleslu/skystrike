@@ -333,12 +333,22 @@ function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
   ctx.save();
   ctx.strokeStyle = 'rgba(' + col + ',' + pulse.toFixed(3) + ')'; ctx.lineWidth = 2 * k;
   if (onScreen) {
-    const s = 13 * k, x = p.x, y = p.y;
-    ctx.beginPath();   // hollow diamond on the waypoint
-    ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath();
+    const h = 15 * k, x = p.x, y = p.y, t2 = 6 * k;   // box reticle (fly-to gate) — distinct from the crate diamond
+    ctx.beginPath();   // hollow box outline
+    ctx.moveTo(x - h, y - h); ctx.lineTo(x + h, y - h); ctx.lineTo(x + h, y + h); ctx.lineTo(x - h, y + h); ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();   // corner brackets reading as a targeting gate
+    ctx.moveTo(x - h, y - h + t2); ctx.lineTo(x - h - t2, y - h + t2); ctx.lineTo(x - h - t2, y - h - t2); ctx.lineTo(x - h + t2, y - h - t2);
+    ctx.moveTo(x + h, y - h + t2); ctx.lineTo(x + h + t2, y - h + t2); ctx.lineTo(x + h + t2, y - h - t2); ctx.lineTo(x + h - t2, y - h - t2);
+    ctx.moveTo(x - h, y + h - t2); ctx.lineTo(x - h - t2, y + h - t2); ctx.lineTo(x - h - t2, y + h + t2); ctx.lineTo(x - h + t2, y + h + t2);
+    ctx.moveTo(x + h, y + h - t2); ctx.lineTo(x + h + t2, y + h - t2); ctx.lineTo(x + h + t2, y + h + t2); ctx.lineTo(x + h - t2, y + h + t2);
     ctx.stroke();
     ctx.fillStyle = 'rgba(' + col + ',0.6)';
     ctx.beginPath(); ctx.arc(x, y, 2.4 * k, 0, TWO_PI); ctx.fill();
+    const dist = Math.round(Math.hypot(wp.x - player.group.position.x, wp.y - player.group.position.y, wp.z - player.group.position.z));
+    const label = mission.type === 'stealth' ? t('hud.extraction') : t('hud.waypoint');
+    ctx.fillStyle = 'rgba(' + col + ',0.85)'; ctx.font = (9 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center';
+    ctx.fillText(label + ' ' + dist, x, y - h - 7 * k);
   } else {
     const ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
     const ex = cx + Math.cos(ang) * (W / 2 - 48), ey = cy + Math.sin(ang) * (H / 2 - 48);
