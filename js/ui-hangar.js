@@ -23,7 +23,7 @@ function buildHangar() {
   g('jetNext').addEventListener('click', () => cycleJet(1));
   g('jetCard').addEventListener('dblclick', () => startGame(selectedJet));
 
-  g('launch').addEventListener('click', () => startGame(selectedJet));
+  g('launch').addEventListener('click', () => openModeChoice());
   g('manualBtn').addEventListener('click', openManual);
   g('manualClose').addEventListener('click', closeManual);
   g('manualAbort').addEventListener('click', abortMission);
@@ -40,12 +40,17 @@ function buildHangar() {
     const endPan = () => { panning = false; };
     tg.addEventListener('pointerup', endPan); tg.addEventListener('pointerleave', endPan); tg.addEventListener('pointercancel', endPan);
   }
+  // Difficulty/environment now live on the #endlessSetup screen; their .dbtn/.tbtn ids are unchanged so this global wiring still applies.
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.addEventListener('click', () => setDifficulty(+b.dataset.d)));
   setDifficulty(difficulty);
   document.querySelectorAll('.tbtn').forEach(b => b.addEventListener('click', () => setTimeOfDay(+b.dataset.t)));
   setTimeOfDay(timeOfDay);
-  document.querySelectorAll('.mbtn').forEach(b => b.addEventListener('click', () => setOpMode(+b.dataset.m)));
-  setOpMode(opMode ? 1 : 0);
+  // mode (Endless/Operation) is now chosen on the #modeChoice screen, not a hangar toggle.
+  g('modeEndless').addEventListener('click', () => { opMode = false; saveSettings(); openEndlessSetup(); });
+  g('modeOperation').addEventListener('click', () => { opMode = true; saveSettings(); g('modeChoice').classList.remove('show'); openOperationsSelect(); });
+  g('modeBack').addEventListener('click', () => { g('modeChoice').classList.remove('show'); if (audio.on) audio.ui(); });
+  g('endlessBack').addEventListener('click', () => { g('endlessSetup').classList.remove('show'); openModeChoice(); });
+  g('endlessStart').addEventListener('click', () => { opMode = false; g('endlessSetup').classList.remove('show'); startGame(selectedJet); });
   const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
   const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
@@ -311,13 +316,25 @@ function renderSpecial2Picker(i) {
   const sel = g('special2Sel');
   if (sel) sel.addEventListener('change', e => setSpecial2(e.target.value));
 }
-// §5c: LAUNCH carries the current loadout as a subtitle line (difficulty · env · mode)
+// Pre-launch reflow: the hangar CTA now reads "SELECT <jet>" and opens the mode-choice screen.
+// Difficulty/env/mode moved off the hangar, so the old diff·tod·mode subtitle is retired (kept blank).
 function refreshLaunchSub() {
-  const sub = g('launchSub'); if (!sub) return;
-  const diffKey = ['diff.ROOKIE', 'diff.VETERAN', 'diff.ACE'][difficulty] || 'diff.VETERAN';
-  const todKey = ['tod.DAY', 'tod.DUSK', 'tod.NIGHT'][typeof timeOfDay === 'number' ? timeOfDay : 0] || 'tod.DAY';
-  const modeKey = opMode ? 'hangar.operation' : 'hangar.endless';
-  sub.textContent = t(diffKey) + ' · ' + t(todKey) + ' · ' + t(modeKey);
+  const lb = g('launch'); if (lb) { const sub = g('launchSub'); lb.textContent = tf('hangar.selectJet', { n: jetText(JETS[selectedJet], 'name') }); if (sub) { sub.textContent = ''; lb.appendChild(sub); } }
+}
+// hangar "SELECT <jet>" → mode-choice screen (Endless / Operation). state stays 'hangar' (no player built yet).
+function openModeChoice() {
+  if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first
+  const ov = g('modeChoice'); if (!ov) return;
+  g('endlessSetup') && g('endlessSetup').classList.remove('show');
+  ov.classList.add('show');
+  if (audio.on) audio.ui();
+}
+// Endless branch: difficulty + environment + an explicit START.
+function openEndlessSetup() {
+  const ov = g('endlessSetup'); if (!ov) return;
+  g('modeChoice') && g('modeChoice').classList.remove('show');
+  ov.classList.add('show');
+  if (audio.on) audio.ui();
 }
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
@@ -334,13 +351,8 @@ function setTimeOfDay(t) {
   if (audio.on) audio.ui();
   saveSettings();
 }
-function setOpMode(m) {
-  opMode = !!m;
-  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('on', (+b.dataset.m === 1) === opMode));
-  refreshLaunchSub();
-  if (audio.on) audio.ui();
-  saveSettings();
-}
+// (setOpMode + the hangar #modesel toggle were retired in the pre-launch reflow; opMode is now
+//  set directly by the #modeChoice buttons — Endless sets it false, Operation sets it true.)
 function showManualTab(name) {
   document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
   document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
@@ -473,6 +485,7 @@ function selectJet(i) {
   previewJet.position.set(0, 0, 0);      // C2: centred at origin in the PREVIEW scene (no world gutter)
   previewJet.rotation.set(previewPitch, previewYaw, 0);
   if (previewScene) previewScene.add(previewJet);   // → isolated preview scene, NEVER the shared game scene
+  refreshLaunchSub();   // CTA reads "SELECT <jet>" — keep it in sync with the selected airframe name
   audio.init(); audio.ui();
   saveSettings();
 }

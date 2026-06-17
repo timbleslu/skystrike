@@ -72,13 +72,17 @@ function applyLang() {
   setTxt('obContinue', t('onboard.continue'));
   // hangar
   setTxt('hangarSub', t('hangar.sub')); setTxt('hangarBestLbl', t('hangar.best'));
-  setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment')); setTxt('lblMode', t('hangar.mode'));
-  setTxt('mbtnEndless', t('hangar.endless')); setTxt('mbtnOperation', t('hangar.operation'));
+  setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment'));
   setTxt('rbTitle', t('hangar.rivalBoard'));
-  // launch label lives in the leading text node so the #launchSub subtitle span survives re-localization
-  const launchBtn = g('launch');
-  if (launchBtn) { if (launchBtn.firstChild && launchBtn.firstChild.nodeType === 3) launchBtn.firstChild.nodeValue = t('hangar.launch'); else launchBtn.insertBefore(document.createTextNode(t('hangar.launch')), launchBtn.firstChild); }
-  refreshLaunchSub();
+  // mode-choice + endless-setup screens (pre-launch reflow)
+  setTxt('modeTitle', t('mode.title'));
+  setTxt('modeEndlessName', t('mode.endless')); setTxt('modeEndlessDesc', t('mode.endlessDesc'));
+  setTxt('modeOperationName', t('mode.operation')); setTxt('modeOperationDesc', t('mode.operationDesc'));
+  setTxt('modeBack', '◀ ' + t('common.back'));
+  setTxt('endlessTitle', t('mode.endless'));
+  setTxt('endlessBack', '◀ ' + t('common.back'));
+  setTxt('endlessStart', '▶ ' + t('mode.start'));
+  refreshLaunchSub();   // the hangar CTA now reads "SELECT <jet>" (label fully owned by refreshLaunchSub)
   setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
@@ -337,7 +341,7 @@ function returnToHangar() {
   clearArena();
   // Operations campaign: tear down any active operation run + hide its navigation overlays
   campaignMode = false; campaignPlayerOpId = null; campaignOpId = null; campaignLevelIdx = -1; opSector = null;
-  ['opsSelect', 'levelMap', 'briefing'].forEach(id => { const e = g(id); if (e) e.classList.remove('show'); });
+  ['modeChoice', 'endlessSetup', 'opsSelect', 'levelMap', 'briefing'].forEach(id => { const e = g(id); if (e) e.classList.remove('show'); });
   g('gameover').classList.remove('show');
   g('touchControls').classList.remove('show');
   makePlatform();
