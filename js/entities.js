@@ -952,11 +952,11 @@ const BURN_OVERRIDE = {
   FA18:   { dz: -1.2 },                    // a touch too far aft
   F47:    { xw: 2.0, dy: 1.4 },           // wider + raised
   J36:    { xw: 0.95, dy: 1.6 },          // trijet: widen splay back a bit + raise more
-  J50:    { dy: 1.0, dz: -1.5 },          // was too low + too far aft
+  J50:    { dy: 1.3, dz: -1.5 },          // raised a touch more
 };
-/* shapes whose glb is geometry-only (no baked textures) → render flat grey, so recolour them in-code
-   via the SKINS paint (applyPaint). The other airframes ship textures and must NOT be repainted. */
-const TEXTURELESS_SHAPES = { F47: 1, J20: 1, J36: 1, J50: 1, STD: 1 };
+/* shapes that render colourless in-game (geometry-only OR flat-albedo exports) → recolour them in-code
+   via the SKINS paint (applyPaint). The other airframes carry real baked liveries and must NOT be repainted. */
+const TEXTURELESS_SHAPES = { F47: 1, J20: 1, J36: 1, J50: 1, STD: 1, EFT: 1, FA18: 1 };
 function loadJetModels() {
   if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader !== 'function') return;
   if (typeof gfxTier !== 'undefined' && gfxTier === 'low') return;   // low/mobile tier = procedural only; skip the model memory entirely

@@ -138,6 +138,8 @@ const SKINS = {
   'J-20': [{ id: 'default', color: 0x2d3138, accent: 0xffd24a }, { id: 'shadow', color: 0x15181d, accent: 0xffe06a }, { id: 'blaze', color: 0x5a2530, accent: 0xff5a4a }],
   'J-36': [{ id: 'default', color: 0x4a525c, accent: 0xff5a3a }, { id: 'shadow', color: 0x282d34, accent: 0xff8a4a }, { id: 'blaze', color: 0x2a3a5a, accent: 0x60ffd0 }],
   'J-50': [{ id: 'default', color: 0xc2c8ce, accent: 0x5aa8ff }, { id: 'shadow', color: 0x6a7178, accent: 0x8fd0ff }, { id: 'blaze', color: 0xd0c0a0, accent: 0xff9a40 }],
+  'EFT':  [{ id: 'default', color: 0x5f6a72, accent: 0xff8a3a }, { id: 'shadow', color: 0x2c3137, accent: 0x8fd0ff }, { id: 'blaze', color: 0x6a2f33, accent: 0xffd24a }],
+  'FA18': [{ id: 'default', color: 0x6b7782, accent: 0xffd24a }, { id: 'shadow', color: 0x2a3138, accent: 0x60c0ff }, { id: 'blaze', color: 0x5a2a30, accent: 0xff7a3a }],
 };
 
 /* ---------------- achievements ----------------
