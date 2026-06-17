@@ -66,6 +66,8 @@ function buildHangar() {
   bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
   // F11 graphics quality (auto/low/high) — re-resolve the render tier + resize the shadow map on change (visual-only)
   bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => { gfxQuality = v; if (typeof refreshGfxTier === 'function') refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }, () => { if (audio.on) audio.ui(); });
+  // F3 HUD units (imperial mph+ft / metric kph+m) — readout reads unitSystem live; refresh the speed/alt labels on change
+  bindSeg('unitsTog', 'un', () => unitSystem, (v) => { unitSystem = v; if (typeof applyUnitLabels === 'function') applyUnitLabels(); }, () => { if (audio.on) audio.ui(); });
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
   const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
   const shs = g('setHudScale');
@@ -105,7 +107,8 @@ function buildHangar() {
   const mc = g('metaClose'); if (mc) mc.addEventListener('click', closeMetaScreen);
   const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
   const mg = g('metaGrid'); if (mg) mg.addEventListener('click', onMetaGridClick);
-  const js = g('jetStage'); if (js) js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
+  const js = g('jetStage'); if (js) { js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
+    js.addEventListener('mouseover', onJetMetaHover); js.addEventListener('focusin', onJetMetaHover); }   // F3: surface livery name on hover/focus (delegated)
   renderPilotPanel();
 }
 /* ---------------- pilot callsign + emblem (F13) ---------------- */
@@ -230,7 +233,12 @@ function setSpecial2(id) {
 function renderJetCard(i) {
   const j = JETS[i];
   g('jetCard').innerHTML =
-    '<div id="jetPreview3D" class="jetpreview3d"></div>' +   // C1: 3D preview HERO at the TOP of the card (the persistent isolated canvas is reparented in here)
+    '<div id="jetPreview3D" class="jetpreview3d">' +   // C1: 3D preview HERO at the TOP of the card (the persistent isolated canvas is reparented in here)
+      '<div class="jpzoom">' +   // F2: side-mounted zoom slider (dollies previewCamera; reset to 1.0 on jet switch)
+        '<span class="jpzoomlbl">' + t('hangar.zoom') + '</span>' +
+        '<input id="jetZoom" class="jpzoomrange" type="range" min="0.8" max="2.5" step="0.05" value="1" aria-label="' + t('hangar.zoom') + '">' +
+      '</div>' +
+    '</div>' +
     '<div class="cbgrid">' +
       '<div class="cbhead">' +
         '<div><div class="cname">' + jetText(j, 'name') + '</div><div class="crole">' + jetText(j, 'role') + '</div></div>' +
@@ -258,6 +266,7 @@ function renderJetCard(i) {
       '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
   mountPreviewCanvas();   // C2: reparent the persistent isolated preview canvas into this card's #jetPreview3D host
+  wireZoomSlider();       // F2: sync the zoom slider to previewZoom + bind its input
   renderSpecial2Picker(i);
   renderJetMeta(i);
 }
@@ -383,10 +392,10 @@ function ensurePreviewRenderer() {
   previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
   previewRenderer.toneMappingExposure = 1.0;
   previewRenderer.setPixelRatio(window.devicePixelRatio);            // kill retina blur (main caps at 2; preview is small → full DPR is cheap)
-  previewRenderer.setSize(300, 220, false);                          // resized by the RO to the real host box
+  previewRenderer.setSize(380, 320, false);                          // larger base box (F1); resized by the RO to the real host box
 
   previewScene = new THREE.Scene();                                 // transparent bg (alpha:true) → the hangar backdrop shows behind the card already
-  previewCamera = new THREE.PerspectiveCamera(PREVIEW_FOV, 300 / 220, 1, 4000);
+  previewCamera = new THREE.PerspectiveCamera(PREVIEW_FOV, 380 / 320, 1, 4000);
   previewCamera.position.set(0, PREVIEW_CAM_Y, PREVIEW_CAM_Z);
   previewCamera.lookAt(0, 0, 0);
 
@@ -418,11 +427,20 @@ function mountPreviewCanvas() {
   if (host && previewCanvas && previewCanvas.parentNode !== host) host.appendChild(previewCanvas);
   resizePreview();
 }
+/* F2: sync the zoom slider UI to previewZoom and bind it — previewLoop reads previewZoom each frame.
+   Called after each card rebuild; previewZoom is reset to 1.0 in selectJet on a real jet switch. */
+function wireZoomSlider() {
+  const z = g('jetZoom'); if (!z) return;
+  z.value = previewZoom;
+  z.addEventListener('input', () => { previewZoom = parseFloat(z.value) || 1.0; });
+}
 /* dedicated rAF — auto-rotate + drag orientation; idles cheaply (no render) when not in the hangar. */
 function previewLoop() {
   requestAnimationFrame(previewLoop);
   if (typeof state !== 'undefined' && state !== 'hangar') return;   // off-hangar: keep the loop alive but skip the draw
   if (!previewRenderer || !previewScene || !previewCamera) return;
+  const z = 1 / (previewZoom || 1);                                          // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
+  previewCamera.position.set(0, PREVIEW_CAM_Y * z, PREVIEW_CAM_Z * z);
   if (previewJet) {
     const pn = performance.now();
     if (!previewDragging && pn > previewSpinResumeAt) previewYaw += 0.012;   // auto-rotate (resumes ~3s after release via previewSpinResumeAt)
@@ -441,7 +459,7 @@ function refreshLaunchGate() {
 }
 let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts previewSkin + resets drag orientation
 function selectJet(i) {
-  if (i !== _previewJetIdx) { previewSkin = null; previewYaw = 0; previewPitch = 0; previewSpinResumeAt = 0; _previewJetIdx = i; }   // jet switch → revert preview, reset orientation
+  if (i !== _previewJetIdx) { previewSkin = null; previewYaw = 0; previewPitch = 0; previewZoom = 1.0; previewSpinResumeAt = 0; _previewJetIdx = i; }   // jet switch → revert preview, reset orientation + zoom (F2)
   selectedJet = i;
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
@@ -479,6 +497,9 @@ function renderJetMeta(i) {
                 (owned ? '' : '<span class="jmsklk">' + skinCost(j.id, sk.id) + '</span>') + '</button>';
       }
       html += '</div>';
+      // F3: livery NAME readout — shows the hovered/focused/selected paint name prominently (any skin id, via metaText)
+      const curId = previewSkin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? previewSkin : selectedSkin(j.id);
+      html += '<div id="jetSkinName" class="jmskinname">' + metaText({ id: 'skin.' + curId }, 'name') + '</div>';
       // buy-to-preview: while previewing an UNOWNED skin, surface an inline BUY · cost right at the preview
       if (pvUnowned) html += '<button id="jetMetaBuy" class="jmpvbuy" data-buyskin="' + pvUnowned + '" data-jet="' + j.id + '">' + tf('meta.buyPaint', { c: skinCost(j.id, pvUnowned) }) + '</button>';
     }
@@ -506,6 +527,12 @@ function onJetMetaClick(e) {
     selectJet(selectedJet);                    // rebuild preview with previewPaint (+ refreshes chips + gate)
     audio.ui();
   }
+}
+// F3: hover/focus a paint chip → show its livery NAME (any skin id, resolved generically via metaText).
+// Mouse leaving the chips restores the equipped/previewed name (re-rendered by renderJetMeta otherwise).
+function onJetMetaHover(e) {
+  const sk = e.target.closest('.jmskin'); if (!sk) return;
+  const lbl = g('jetSkinName'); if (lbl) lbl.textContent = metaText({ id: 'skin.' + sk.dataset.skin }, 'name');
 }
 
 /* ---- Visual-style picker: 6-card gallery, each card a mini-HUD preview rendered in its OWN skin.

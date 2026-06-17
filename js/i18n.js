@@ -437,6 +437,7 @@ const I18N = {
     'hangar.environment': 'ENVIRONMENT',
     'hangar.mode': 'MODE',
     'hangar.endless': 'ENDLESS', 'hangar.operation': 'OPERATION',
+    'hangar.zoom': 'ZOOM',
     'hangar.rivalBoard': 'RIVAL KILL BOARD',
     'hangar.noRivals': 'NO RIVALS DOWNED',
     'hangar.launch': '▶ LAUNCH MISSION',
@@ -641,6 +642,10 @@ const I18N = {
       'skin.swarmlord':   { name: 'SWARMLORD' },    'skin.mightydragon': { name: 'MIGHTY DRAGON' },
       'skin.dunestalker': { name: 'DUNE STALKER' }, 'skin.nightreaper':  { name: 'NIGHT REAPER' },
       'skin.tigermeet':   { name: 'TIGER MEET' },   'skin.blueangel':    { name: 'BLUE ANGEL' },
+      // authentic real-world livery re-theme (skins 2 & 3, Jun 17)
+      'skin.eagle':        { name: 'EAGLE GREY' },    'skin.havglass':    { name: 'HAVE GLASS' },
+      'skin.silverdragon': { name: 'SILVER DRAGON' }, 'skin.desertghost': { name: 'DESERT GHOST' },
+      'skin.nightfall':    { name: 'NIGHTFALL' },     'skin.nightjar':    { name: 'NIGHTJAR' },
     },
   },
 
@@ -1042,6 +1047,7 @@ const I18N = {
     'hangar.environment': '环境',
     'hangar.mode': '模式',
     'hangar.endless': '无尽', 'hangar.operation': '战役',
+    'hangar.zoom': '缩放',
     'hangar.rivalBoard': '宿敌击杀榜',
     'hangar.noRivals': '尚无宿敌被击落',
     'hangar.launch': '▶ 出击执行任务',
@@ -1396,6 +1402,10 @@ const I18N = {
       'skin.swarmlord':   { name: '蜂群领主' }, 'skin.mightydragon': { name: '威龙' },
       'skin.dunestalker': { name: '沙丘猎手' }, 'skin.nightreaper':  { name: '暗夜死神' },
       'skin.tigermeet':   { name: '北约虎会' }, 'skin.blueangel':    { name: '蓝天使' },
+      // authentic real-world livery re-theme (skins 2 & 3, Jun 17)
+      'skin.eagle':        { name: '鹰灰' },     'skin.havglass':    { name: '暗钛涂层' },
+      'skin.silverdragon': { name: '银龙' },     'skin.desertghost': { name: '沙漠幽灵' },
+      'skin.nightfall':    { name: '夜幕' },     'skin.nightjar':    { name: '夜鹰' },
     },
   },
 };
