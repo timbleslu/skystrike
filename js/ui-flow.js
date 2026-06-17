@@ -169,7 +169,8 @@ function endRun(title, win) {
     const cs = (meta && meta.callsign) || '';
     const emId = (meta && meta.emblem) || 'wings';
     const glyph = (typeof EMBLEM_GLYPHS !== 'undefined' && EMBLEM_GLYPHS[emId]) || '';
-    goPilot.textContent = cs ? (glyph ? glyph + ' ' + cs : cs) : '';
+    // always show the emblem on the debrief; append the callsign only when set (graceful empty)
+    goPilot.textContent = (glyph ? glyph + (cs ? ' ' + cs : '') : cs);
   }
   updateBest();
   g('touchControls').classList.remove('show');
