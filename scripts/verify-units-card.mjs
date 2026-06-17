@@ -45,6 +45,16 @@ const R = await page.evaluate(() => {
   unitSystem = 'metric'; applyUnitLabels();
   ok('metric -> #lblSpd = kph', g('lblSpd') && g('lblSpd').textContent === 'kph');
   ok('metric -> #lblAlt = m', g('lblAlt') && g('lblAlt').textContent === 'm');
+  unitSystem = 'imperial'; applyUnitLabels();
+
+  // F3 REGRESSION: the segmented control must be WIRED (bindSeg('unitsTog')) — clicking a button flips unitSystem.
+  // (Previously this control had markup + labels but NO bindSeg call, so clicks did nothing.)
+  unitSystem = 'imperial';
+  const mBtn = document.querySelector('#unitsTog [data-un="metric"]'); if (mBtn) mBtn.click();
+  ok('click Metric -> unitSystem = metric', unitSystem === 'metric');
+  ok('click Metric -> metric button gets .on', !!(mBtn && mBtn.classList.contains('on')));
+  const iBtn = document.querySelector('#unitsTog [data-un="imperial"]'); if (iBtn) iBtn.click();
+  ok('click Imperial -> unitSystem = imperial', unitSystem === 'imperial');
   unitSystem = 'imperial'; applyUnitLabels();   // restore default
 
   // ===== F2 mission card: DOM, content, first-time vs repeat =====

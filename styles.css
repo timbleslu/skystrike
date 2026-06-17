@@ -310,10 +310,14 @@ canvas{display:block}
 .card.cardbig:hover{transform:none;border-color:var(--cy);box-shadow:0 0 30px rgba(var(--primary-rgb),.2)}
 /* C1: 3D jet-preview HERO at the top of the info card — the isolated WebGL canvas fills this box.
    A subtle inset frame + floor gradient grounds the model; the canvas itself is transparent (alpha). */
-.jetpreview3d{position:relative;width:100%;height:clamp(200px,32vw,280px);margin-bottom:12px;
+.jetpreview3d{position:relative;width:100%;height:clamp(280px,44vw,400px);margin-bottom:12px;
   border:1px solid rgba(var(--hairline-rgb),.28);border-radius:var(--r-sm);overflow:hidden;
   background:radial-gradient(120% 80% at 50% 18%,rgba(var(--primary-rgb),.10),transparent 60%),linear-gradient(180deg,rgba(8,16,24,.35),rgba(4,9,14,.6))}
 .jetpreview3d canvas{display:block;width:100%;height:100%}
+/* F2: side-mounted ZOOM slider — vertical (rotated range), pinned to the right edge, clear of the model */
+.jpzoom{position:absolute;top:0;right:0;bottom:0;width:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;pointer-events:none;z-index:2}
+.jpzoomlbl{font-family:var(--disp);font-size:9px;letter-spacing:2px;color:var(--dim);writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);opacity:.8}
+.jpzoomrange{pointer-events:auto;writing-mode:vertical-lr;direction:rtl;width:8px;height:120px;cursor:pointer;accent-color:var(--cy);background:transparent}
 .cardbig .cbgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 28px;align-items:start}
 .cardbig .cbhead{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid rgba(var(--hairline-rgb),.28);padding-bottom:9px;margin-bottom:6px;text-align:left}
 .cardbig .cname{font-size:23px;margin:0;line-height:1.05}
@@ -877,6 +881,8 @@ canvas{display:block}
 .jmskin.on{border-color:var(--cy);box-shadow:0 0 10px rgba(var(--primary-rgb),.6)}
 .jmskin.locked{opacity:.7}
 .jmsklk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:#fff;background:rgba(0,0,0,.45);border-radius:50%}
+/* F3: livery NAME readout under the paint chips — updated on chip hover/focus/select */
+.jmskinname{margin-top:7px;font-family:var(--disp);font-size:12px;letter-spacing:2px;color:var(--cy);text-transform:uppercase;min-height:1em}
 /* ===== PREVIEW-BEFORE-BUY — chip states + inline buy + launch gate =====
    Chip states: .on (equipped) / plain (owned) / .locked (unowned) / .locked.preview (previewing an unowned
    paint live on the 3D jet). Orange = --warn ("armed, not yours"); gold badge = --reward (its SP cost). */

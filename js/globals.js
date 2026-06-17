@@ -75,6 +75,7 @@ let previewDragging = false;          // pointer is dragging the preview jet (ra
 let previewSpinResumeAt = 0;          // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
 let previewYaw = 0, previewPitch = 0; // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
 const PREVIEW_PITCH_MAX = Math.PI / 3;   // ±60° pitch clamp
+let previewZoom = 1.0;                 // hangar preview zoom (F2): dollies previewCamera toward origin; 0.8×–2.5×, reset to 1.0 on jet switch
 let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
 let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
 
