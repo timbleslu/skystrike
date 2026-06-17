@@ -272,11 +272,15 @@ function steerCommand(scheme, intent, currentBank, t) {
 /* ---------------- aim-assist core ---------------- */
 // AIM ASSIST tunables (combat.js reads these; the THREE geometry/quaternion glue lives there).
 //   range   : world units — beyond this the assist is inert.
-//   cone    : radians — only assist when the nose is already within this angle of the lead point
-//             (a larger error is the player deliberately pointing elsewhere; leave it alone).
-//   gain    : proportional pull (per second per radian of error).
-//   maxRate : radians/second — hard cap so the assist nudges, never snaps.
-// 5 strength presets, weakest -> strongest. gain/maxRate/cone scale up; level 5 is the "forcing" tier.
+//   cone    : radians — the DETECTION RADIUS: the angular field where pulling begins. Outside it the
+//             player flies free (a wider error is the player deliberately pointing elsewhere). The
+//             aimStrength slider scales this field up; range scales with it.
+//   gain    : legacy proportional coefficient — kept for back-compat (monotonic w/ strength). NOT used
+//             by the magnet curve below; the pull shape is now driven by maxRate (the max force).
+//   maxRate : radians/second — the MAX pull force, reached at angErr≈0. Scales PROPORTIONALLY with the
+//             field/radius (bigger field = stronger snap), and is still the hard per-frame rate cap.
+// 5 strength presets, weakest -> strongest. cone (field) + maxRate (max force) scale together;
+// level 5 is the "forcing" tier.
 const AIM_ASSIST_LEVELS = [
   { range: 2400, cone: 0.45, gain: 1.2, maxRate: 0.6 },  // 1 — barely a nudge
   { range: 2500, cone: 0.52, gain: 2.0, maxRate: 1.0 },  // 2
@@ -285,6 +289,11 @@ const AIM_ASSIST_LEVELS = [
   { range: 3000, cone: 1.20, gain: 9.0, maxRate: 7.0 },  // 5 — strongest / forcing
 ];
 const AIM_ASSIST = AIM_ASSIST_LEVELS[2];   // back-compat alias (the original default)
+// Magnet curve constant (rad^-2): pullForce = maxForce / (1 + AIM_MAGNET_K * angErr^2).
+// Tuned so the pull collapses fast off the lead pip. Force vs. angular distance to the lead:
+//   0°  -> 100%   15° -> 44.8%   30° -> 16.8%   45° -> 8.3%   (of maxForce)
+// i.e. ~half force at ~15°, well below half by 30°, negligible past that.
+const AIM_MAGNET_K = 18;
 // PURE — clamp a 1..5 level to its config. manualOverride (player actively steering) makes the strongest
 // tier yield to the player: it drops to the weakest preset so the assist only "forces" when hands-off.
 function aimAssistCfg(level, manualOverride) {
@@ -292,17 +301,21 @@ function aimAssistCfg(level, manualOverride) {
   if (manualOverride && i >= 4) return AIM_ASSIST_LEVELS[0];   // top tier releases to barely-a-nudge
   return AIM_ASSIST_LEVELS[i];
 }
-// PURE — radians to rotate the nose toward the gun lead point THIS frame.
+// PURE — radians to rotate the nose toward the gun lead point THIS frame (MAGNET curve).
 // angErr = angle between boresight and the lead direction (rad); dist = range to the lead point.
-// Returns 0 outside the cone or beyond range (player flies free); otherwise a proportional step that
-// eases out with distance, is capped at maxRate*dt, and never overshoots the remaining error.
+// Returns 0 outside the cone (detection radius) or beyond range (player flies free). Inside the field
+// the pull is an inverse-square MAGNET: max force at angErr≈0, dropping rapidly as the reticle drifts
+// off the lead pip — pullForce = maxForce / (1 + AIM_MAGNET_K*angErr^2), where maxForce (cfg.maxRate)
+// scales with the field/radius. Still eased out with distance, capped at maxRate*dt, and clamped to
+// angErr so even at max force it can never spin past the lead.
 function aimAssistStep(angErr, dist, dt, cfg) {
   cfg = cfg || AIM_ASSIST;
   if (!(dt > 0) || !(dist > 0) || dist > cfg.range) return 0;
   if (!(angErr > 1e-4) || angErr > cfg.cone) return 0;
-  const falloff = 1 - dist / cfg.range;            // stronger up close, fades to 0 at max range
-  const step = angErr * cfg.gain * falloff * dt;   // proportional pull toward the lead point
-  return Math.min(step, cfg.maxRate * dt, angErr); // rate-capped; never past the lead
+  const falloff = 1 - dist / cfg.range;                      // stronger up close, fades to 0 at max range
+  const pullForce = cfg.maxRate / (1 + AIM_MAGNET_K * angErr * angErr);  // inverse-square magnet toward the lead
+  const step = pullForce * falloff * dt;
+  return Math.min(step, cfg.maxRate * dt, angErr);           // rate-capped; never past the lead
 }
 
 /* ---------------- graphics-quality core (F11) ---------------- */
@@ -765,7 +778,7 @@ if (typeof module !== 'undefined' && module.exports) {
     BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
-    AIM_ASSIST, AIM_ASSIST_LEVELS, aimAssistCfg, aimAssistStep,
+    AIM_ASSIST, AIM_ASSIST_LEVELS, AIM_MAGNET_K, aimAssistCfg, aimAssistStep,
     GFX_TIERS, resolveQuality,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,
