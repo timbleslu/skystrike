@@ -357,7 +357,7 @@ function selectJet(i) {
   const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
   if (previewJet) scene.remove(previewJet);
   const paint = jetPaint(JETS[i]);     // honour the chosen skin (falls back to stock paint)
-  previewJet = buildJet(paint.color, paint.accent, SHAPES[JETS[i].shape], true);
+  previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true);
   previewJet.position.set(0, 2.5, 0);
   scene.add(previewJet);
   audio.init(); audio.ui();

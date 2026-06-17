@@ -367,7 +367,7 @@ function spawnWingman(temp, explicit) {
     target: null, retargetCd: 0, fireCd: rand(0.2, 0.8), missileCd: rand(2, 5),
     rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: !!temp, expire: temp ? 15 : 0, cca: !!temp,
     shape: wShape, jetName: jetNameForShape(wShape), flares: 3, sprintT: 0, priorityCd: 0, flareCd: 0,
-    forced: null, defend: 0,
+    forced: null, defend: 0, specialCd: rand(25, 40),
   });
   if (!temp) { showBanner(tf('banner.onStation', { name: wingmen[wingmen.length - 1].name })); audio.ui(); }
 }
@@ -601,6 +601,10 @@ function updateWingman(w, dt) {
     }
   }
 
+  // special ability on cooldown
+  w.specialCd -= dt;
+  if (w.specialCd <= 0 && engaging && w.target && w.target.alive) wingmanSpecial(w);
+
   // auto-flares: pop when enemy missile closes within 1000u
   w.flareCd -= dt;
   if (w.flares > 0 && w.flareCd <= 0) {
@@ -645,6 +649,92 @@ function wingmanDeployFlares(w) {
   }
   audio.flare();
 }
+function wingmanSpecial(w) {
+  if (!w.target || !w.target.alive) return;
+  const pos = w.group.position;
+  const jet = JETS.find(function(j) { return j.shape === w.shape; });
+  const id = jet ? jet.id : null;
+
+  // fire N hard-homing missiles spread across nearest enemies
+  function burstMissiles(count) {
+    const tgts = enemies.filter(function(e) { return e.alive; }).sort(function(a, b) {
+      return pos.distanceToSquared(a.group.position) - pos.distanceToSquared(b.group.position);
+    });
+    if (!tgts.length) return;
+    for (let k = 0; k < count; k++) {
+      const tgt = tgts[k % tgts.length];
+      const dir = fwdQ(w.logicQuat, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.4, 0.4));
+      dir.y += rand(-0.08, 0.15); dir.normalize();
+      const m = spawnMissile(pos, dir, tgt, false, 0.9 * wingDmgMul);
+      if (m) { m.ai = true; m.hardHome = true; m.trailColor = WING_TEAL; if (m.halo) m.halo.material.color.setHex(WING_TEAL); }
+    }
+  }
+
+  if (id === 'SU-57') {
+    // COBRA: area shockwave + AOE damage
+    spawnShockwave(pos.clone()); explode(pos.clone(), true);
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (e.alive && e.type !== 'boss' && pos.distanceToSquared(e.group.position) < 340 * 340)
+        damageEnemy(e, 90, e.group.position);
+    }
+    // shred nearby inbound missiles
+    for (let i = 0; i < missiles.length; i++) {
+      const m = missiles[i];
+      if (m.enemy && pos.distanceToSquared(m.mesh.position) < 420 * 420) { m.decoyed = true; if (Math.random() < 0.7) m.life = 0.05; }
+    }
+  } else if (id === 'J-20') {
+    // EMP: detonate nearby enemy missiles
+    empFlash = Math.max(empFlash || 0, 0.55);
+    for (let i = 0; i < missiles.length; i++) {
+      const m = missiles[i];
+      if (m.enemy && !m.decoyed && pos.distanceToSquared(m.mesh.position) < 650 * 650) {
+        explode(m.mesh.position.clone(), false); m.life = 0;
+      }
+    }
+    burstMissiles(2);
+  } else if (id === 'F-35') {
+    // STEALTH: shed missiles tracking this wingman, then fire
+    for (let i = 0; i < missiles.length; i++) {
+      const m = missiles[i];
+      if (m.enemy && m.target === w.group) m.decoyed = true;
+    }
+    burstMissiles(3);
+  } else if (id === 'EFT') {
+    burstMissiles(4);
+  } else if (id === 'RAFALE') {
+    // SPECTRA: jam nearby missiles + burst
+    for (let i = 0; i < missiles.length; i++) {
+      const m = missiles[i];
+      if (m.enemy && !m.decoyed && pos.distanceToSquared(m.mesh.position) < 550 * 550) m.decoyed = true;
+    }
+    burstMissiles(3);
+  } else if (id === 'TEJAS') {
+    if (typeof spawnDecoys === 'function') spawnDecoys(2);
+    burstMissiles(1);
+  } else if (id === 'J-36') {
+    burstMissiles(6);
+  } else if (id === 'F-47') {
+    // CCA SWARM: spawn a drone ahead
+    const pt = pos.clone().addScaledVector(fwdQ(w.logicQuat, t1.clone()), 200);
+    spawnCCA(pt);
+    burstMissiles(2);
+  } else if (id === 'J-50') {
+    // VECTOR SURGE: shed tracking missiles + burst
+    for (let i = 0; i < missiles.length; i++) {
+      const m = missiles[i];
+      if (m.enemy && m.target === w.group) m.decoyed = true;
+    }
+    burstMissiles(3);
+  } else {
+    // F-22, FA18, STD, and anything else: missile burst
+    burstMissiles(id === 'F-22' ? 3 : 2);
+  }
+
+  audio.power && audio.power();
+  w.specialCd = rand(30, 45);
+}
+
 function clearWingmen() {
   for (let i = 0; i < wingmen.length; i++) if (wingmen[i].group) scene.remove(wingmen[i].group);
   wingmen.length = 0;

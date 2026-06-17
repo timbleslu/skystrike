@@ -1063,6 +1063,14 @@ function updatePlayer(dt) {
     }
   }
 
+  // glTF hero control surfaces: deflect ailerons/elevators/rudders from the integrated turn rates
+  // (normalized by the airframe turn-rate scale tb), so they read the SAME stick the flight model flew.
+  // No-op for procedural jets (no userData.surfaces). NPC bosses/aces stay procedural for now.
+  if (typeof updateControlSurfaces === 'function' && player.group.userData.surfaces) {
+    const inv = 1 / Math.max(tb, 1e-4);
+    updateControlSurfaces(player.group, player.pitchRate * inv, player.rollRate * inv, player.yawRate * inv, performance.now() / 1000);
+  }
+
   let tT = player.throttle;
   if (thr) tT += dt * (0.35 + st.accel * 0.22);
   if (brake) tT -= dt * (0.5 + st.accel * 0.3);

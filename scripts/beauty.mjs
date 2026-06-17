@@ -23,6 +23,8 @@ const port = server.address().port;
 const prefix = process.argv[2] || 'beauty';
 const jetIdx = +(process.argv[3] || 1);
 const tod = +(process.argv[4] || 0);
+const zoom = +(process.argv[5] || 1);   // <1 = closer dolly for judging fine detail (default 1 = standard framing)
+const thr = process.argv[6] != null ? +process.argv[6] : 0.95;   // engine throttle for the shot (low = small plume, judge the model)
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -30,14 +32,15 @@ page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForTimeout(1200);
+await page.waitForFunction(() => typeof jetGLTF !== 'undefined' && jetGLTF.F22, { timeout: 7000 }).catch(() => {});
 
 await page.addStyleTag({ content: 'body > *:not(canvas){display:none!important}' });
-await page.evaluate(({ j, t }) => {
+await page.evaluate(({ j, t, thr }) => {
   applyTimeOfDay(t);
   selectJet(j);
   previewJet.rotation.set(0, 0, 0);
-  animEngines(previewJet, 0.95);
-}, { j: jetIdx, t: tod });
+  animEngines(previewJet, thr);
+}, { j: jetIdx, t: tod, thr });
 
 const frames = [
   ['front', { px: -18, py: 10, pz: -26 }],
@@ -45,11 +48,11 @@ const frames = [
   ['rear', { px: 12, py: 8, pz: 29 }],
 ];
 for (const [name, c] of frames) {
-  await page.evaluate(({ c }) => {
-    animEngines(previewJet, 0.95);
-    camera.position.set(c.px, c.py, c.pz);
+  await page.evaluate(({ c, zoom, thr }) => {
+    animEngines(previewJet, thr);
+    camera.position.set(c.px * zoom, c.py * zoom, c.pz * zoom);
     camera.lookAt(0, 2.5, 0);
-  }, { c });
+  }, { c, zoom, thr });
   await page.waitForTimeout(150);
   await page.screenshot({ path: `${prefix}-jet-${name}.png` });
 }

@@ -918,6 +918,137 @@ function buildJet(color, accent, cfg, hero) {
   markShadowCasters(g);
   return g;
 }
+
+/* ---- glTF hero models (High tier): real modeled jets in place of the procedural builder ----
+   Loaded once, oriented (length → -Z) / centered / scaled to the procedural footprint, then cloned
+   per spawn. Geometry + materials are tagged userData.shared so disposeGroup never frees the shared
+   template. Falls back to buildJet on Low tier or until the model finishes loading. */
+function loadJetModels() {
+  if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader !== 'function') return;
+  new THREE.GLTFLoader().load('assets/jets/f22.glb', (gl) => {
+    const obj = gl.scene;
+    const box = new THREE.Box3().setFromObject(obj);
+    obj.position.sub(box.getCenter(new THREE.Vector3()));     // centre model at its own origin
+    const wrap = new THREE.Group(); wrap.add(obj);
+    wrap.rotation.y = -Math.PI / 2;                           // model length runs along X → nose to game forward (-Z)
+    const size = box.getSize(new THREE.Vector3());
+    wrap.scale.setScalar(26 / Math.max(size.x, size.y, size.z));   // match the procedural F-22 footprint
+    wrap.traverse(o => {                                      // shared template — disposeGroup must never free it
+      if (o.isMesh) {
+        if (o.geometry) o.geometry.userData.shared = true;
+        const m = o.material; (Array.isArray(m) ? m : [m]).forEach(mm => { if (mm) mm.userData.shared = true; });
+        if (!o.material || !o.material.transparent) o.castShadow = true;
+      }
+    });
+    jetGLTF.F22 = wrap;
+    if (typeof previewJet !== 'undefined' && previewJet && typeof JETS !== 'undefined' && JETS[selectedJet] && JETS[selectedJet].shape === 'F22' && typeof selectJet === 'function') selectJet(selectedJet);
+  }, undefined, (err) => { try { console.warn('jet glTF load failed:', (err && err.message) || err); } catch (e) {} });
+}
+
+/* per-frame control-surface deflection for the glTF hero: pivots hinge about their leading edge.
+   pitch/roll/yaw are -1..1 command intents (the same the flight model integrates); t = seconds.
+   ailerons ∝ roll (anti-symmetric L/R via sign), elevators ∝ pitch (symmetric), rudders ∝ yaw,
+   plus a faint idle flutter so the surfaces never look frozen. No-op for procedural jets. */
+function updateControlSurfaces(group, pitch, roll, yaw, t) {
+  const surf = group && group.userData && group.userData.surfaces; if (!surf) return;
+  const MAX = 0.4;                                  // hard deflection clamp (~23°)
+  for (let i = 0; i < surf.length; i++) {
+    const s = surf[i];
+    let d;
+    if (s.role === 'aileron')      d = roll  * 0.9 * s.sign;   // bank: ailerons split opposite L/R
+    else if (s.role === 'elevator') d = pitch * 0.9;           // pitch: stabilators move together
+    else                            d = yaw   * 0.9;           // rudder: yaw
+    d = clamp(d, -MAX, MAX) + 0.03 * Math.sin(t * 6 + (s.phase || 0));   // + idle flutter
+    s.pivot.rotation[s.axis] = d;
+  }
+}
+
+/* F-22 afterburner + control-surface overlay, attached to the OUTER game-space group (so coords are
+   un-scaled). Anchors measured off the real glTF (nose +Z, tail -Z, span X, up Y):
+   nozzles X=±1.0 Y=-0.9 Z=-8.8; wing outboard TE Z≈-6.8 @ |X|7; canted fins top Y≈3.1 @ |X|4 Z≈-7.5;
+   horizontal stabs TE Z≈-9 @ |X|2.6. Meshes are PER-INSTANCE (never userData.shared) so disposeGroup frees them. */
+function addF22Burner(g, accent) {
+  const engines = [];
+  const acc = (typeof accent === 'number') ? accent : 0xff7a2a;
+  const heatMat = new THREE.MeshBasicMaterial({ color: 0xffcaa0, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  for (const ex of [-1.0, 1.0]) {                     // twin engine centrelines
+    const ny = -0.9, nz = -8.8;                       // nozzle exit (game space)
+    // additive glow puff right at the nozzle lip
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 10), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    glow.position.set(ex, ny, nz - 0.3); glow.scale.set(1, 1, 1.8); g.add(glow);
+    // afterburner flame cone — apex at the nozzle, tail streaming aft (-Z)
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.62, 6.0, 16), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    flame.rotation.x = -Math.PI / 2;                  // cone +Y -> -Z (point the base downstream)
+    flame.position.set(ex, ny, nz - 2.6); g.add(flame);
+    // white-hot inner tongue
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.34, 4.0, 14), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    core.rotation.x = -Math.PI / 2; core.position.set(ex, ny, nz - 1.9); g.add(core);
+    // shock-diamond ladder (fades in at burner via animEngines)
+    const diaMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    const dia = new THREE.Group();
+    for (let d = 0; d < 4; d++) {
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.3 - d * 0.045, 1), diaMat);
+      m.scale.z = 1.6; m.position.z = -(0.9 + d * 1.05); dia.add(m);   // march downstream (-Z)
+    }
+    dia.position.set(ex, ny, nz - 1.0); dia.visible = false; g.add(dia);
+    engines.push({ glow, flame, core, dia, diaMat });
+  }
+  g.userData.engines = engines;
+  g.userData.heatMat = heatMat;   // no nozzle-interior mesh on the fused model; harmless emissive sink
+}
+
+function addF22Surfaces(g) {
+  const surfMat = new THREE.MeshStandardMaterial({ color: 0x605f5f, roughness: 0.78, metalness: 0.1 });   // matches the model's "Grey"
+  const surf = [];
+  // helper: pivot at the hinge line; thin panel parented to it, offset aft so the TE swings.
+  // w=span(X) chord(Z) thick(Y); hingePos at the LEADING edge; panel centre offset -chord/2 in Z.
+  function panel(role, sign, axis, hx, hy, hz, w, chord, thick, dihedral) {
+    const pivot = new THREE.Group(); pivot.position.set(hx, hy, hz);
+    if (dihedral) pivot.rotation.z = dihedral;          // cant for the rudders
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, thick, chord), surfMat);
+    m.position.set(0, 0, -chord / 2 - 0.05);            // panel hangs aft of the hinge (-Z = toward tail)
+    pivot.add(m); g.add(pivot);
+    surf.push({ pivot, role, sign, axis, phase: surf.length * 1.7 });
+  }
+  // AILERONS — outboard main-wing TE, hinge about X (spanwise). TE at Z≈-6.8, wing Y≈-1.0, outboard X≈±6.6.
+  panel('aileron', +1, 'x',  6.6, -1.0, -6.4, 3.0, 1.5, 0.16, 0);
+  panel('aileron', -1, 'x', -6.6, -1.0, -6.4, 3.0, 1.5, 0.16, 0);
+  // ELEVATORS / stabilators — horizontal-tail TE, hinge about X. TE Z≈-9.0, Y≈-1.0, X≈±2.6.
+  panel('elevator', +1, 'x',  2.6, -1.0, -8.4, 2.4, 1.5, 0.16, 0);
+  panel('elevator', -1, 'x', -2.6, -1.0, -8.4, 2.4, 1.5, 0.16, 0);
+  // RUDDERS — canted vertical fins, hinge about Y. Fin TE Z≈-8.3, mid-height Y≈0.9, X≈±4 (cant outward).
+  panel('rudder', +1, 'y',  4.0, 0.9, -7.9, 0.16, 1.6, 2.2, -0.42);
+  panel('rudder', -1, 'y', -4.0, 0.9, -7.9, 0.16, 1.6, 2.2,  0.42);
+  markShadowCasters(g);
+  g.userData.surfaces = surf;
+}
+
+/* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
+   is nested in a NEW outer game-space group so the afterburner + control-surface overlays attach in
+   un-scaled game coords. */
+function cloneJetGLTF(id, accent) {
+  const inner = jetGLTF[id].clone(true);
+  const g = new THREE.Group();
+  g.add(inner);
+  // The overlay rig (burner + surfaces) was authored for the model's raw (+Z-nose) orientation.
+  // The model is now flipped to nose -Z (game forward), so carry the rig in a 180° group so the
+  // afterburner + control surfaces stay on the tail and stream/deflect the right way.
+  const fx = new THREE.Group(); fx.rotation.y = Math.PI;
+  addF22Burner(fx, accent);      // afterburner -> fx.userData.engines (+ heatMat); animEngines drives it
+  addF22Surfaces(fx);            // control surfaces -> fx.userData.surfaces; updateControlSurfaces drives them
+  g.add(fx);
+  g.userData.engines = fx.userData.engines;
+  g.userData.heatMat = fx.userData.heatMat;
+  g.userData.surfaces = fx.userData.surfaces;
+  g.userData.gltf = true;
+  return g;
+}
+
+/* hero jets use the glTF model on High tier once loaded; everything else uses the procedural builder */
+function buildJetOrGLTF(color, accent, cfg, hero) {
+  if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low')) return cloneJetGLTF(cfg.id, accent);
+  return buildJet(color, accent, cfg, hero);
+}
 function buildBoss() {
   const g = buildJet(0xb348d6, 0xff39c8, SHAPES.BOSS, true);
   g.scale.setScalar(3.4);
@@ -992,7 +1123,7 @@ function buildDrone() {
 function createPlayer(idx) {
   const j = JETS[idx], st = jetStats(j);
   const paint = (typeof jetPaint === 'function') ? jetPaint(j) : { color: j.color, accent: j.accent };
-  const mesh = buildJet(paint.color, paint.accent, SHAPES[j.shape], true); scene.add(mesh);
+  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true); scene.add(mesh);
   // muzzle flash: one persistent sprite at the nose, blinked on by fireGun
   const muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd76a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
   muzzle.position.set(0, 0, -14); muzzle.scale.setScalar(14); muzzle.visible = false; mesh.add(muzzle);

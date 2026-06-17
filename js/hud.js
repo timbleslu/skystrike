@@ -172,6 +172,7 @@ function drawHUD() {
   }
 
   drawThreatReticle(ctx, cx, cy, k, reduce);   // §4b: warn bracket when an enemy is currently aiming at YOU
+  drawMissileWarning(ctx, cx, cy, k, reduce);  // RWR spikes pointing toward each active inbound missile
 
   let near = null, nd = Infinity;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; const d = player.group.position.distanceToSquared(e.group.position); if (d < nd) { nd = d; near = e; } }
@@ -506,6 +507,66 @@ function drawThreatReticle(ctx, cx, cy, k, reduce) {
   ctx.fillStyle = 'rgba(' + HUD.warn + ',0.95)';
   ctx.font = 'bold ' + (11 * k) + 'px ' + HUDFONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('⚠ ' + t('hud.threat') + (count > 1 ? ' ×' + count : ''), cx, cy + r + 16 * k);
+  ctx.restore();
+}
+
+// RWR-style inbound missile warning: spikes point toward each active inbound missile,
+// pulse rate scales with proximity. Only shown for undecoyed enemy missiles.
+function drawMissileWarning(ctx, cx, cy, k, reduce) {
+  let count = 0, nearest = null, nearestDist = Infinity;
+  for (let i = 0; i < missiles.length; i++) {
+    const m = missiles[i];
+    if (!m.enemy || m.decoyed) continue;
+    count++;
+    const d = player.group.position.distanceTo(m.mesh.position);
+    if (d < nearestDist) { nearestDist = d; nearest = m; }
+  }
+  if (!count) return;
+
+  const fast = nearestDist < 380;
+  const pulse = reduce ? 0.9 : 0.65 + 0.35 * Math.abs(Math.sin(performance.now() / (fast ? 90 : 210)));
+  const r = 46 * k;
+  ctx.save();
+
+  // thin danger ring
+  ctx.strokeStyle = 'rgba(' + HUD.danger + ',' + (pulse * 0.38).toFixed(3) + ')';
+  ctx.lineWidth = 1 * k;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI); ctx.stroke();
+
+  // one spike per inbound missile (cap at 8 for readability)
+  ctx.lineWidth = 1.8 * k;
+  let drawn = 0;
+  for (let i = 0; i < missiles.length && drawn < 8; i++) {
+    const m = missiles[i];
+    if (!m.enemy || m.decoyed) continue;
+    drawn++;
+    const mp = projectPoint(m.mesh.position);
+    let dx = mp.x - cx, dy = mp.y - cy;
+    if (mp.behind) { dx = -dx; dy = -dy; }
+    const mlen = Math.hypot(dx, dy); if (mlen < 1) continue;
+    dx /= mlen; dy /= mlen;
+    const spikeLen = 11 * k;
+    ctx.strokeStyle = 'rgba(' + HUD.danger + ',' + pulse.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * r, cy + dy * r);
+    ctx.lineTo(cx + dx * (r + spikeLen), cy + dy * (r + spikeLen));
+    ctx.stroke();
+    // arrowhead
+    const ax = -dy, ay = dx, hw = 3.5 * k, hl = 5.5 * k;
+    ctx.fillStyle = 'rgba(' + HUD.danger + ',' + pulse.toFixed(3) + ')';
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * (r + spikeLen + hl), cy + dy * (r + spikeLen + hl));
+    ctx.lineTo(cx + dx * (r + spikeLen) + ax * hw, cy + dy * (r + spikeLen) + ay * hw);
+    ctx.lineTo(cx + dx * (r + spikeLen) - ax * hw, cy + dy * (r + spikeLen) - ay * hw);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // label: MSL ×N  dist
+  ctx.fillStyle = 'rgba(' + HUD.danger + ',' + pulse.toFixed(3) + ')';
+  ctx.font = 'bold ' + (10 * k) + 'px ' + HUDFONT;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const distLabel = Math.round(nearestDist);
+  ctx.fillText('◆ MSL' + (count > 1 ? ' \xD7' + count : '') + '  ' + distLabel, cx, cy + r + 14 * k);
   ctx.restore();
 }
 

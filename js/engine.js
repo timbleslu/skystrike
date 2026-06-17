@@ -710,6 +710,7 @@ function buildAssets() {
   ASSET.crateEdgeGeo = new THREE.EdgesGeometry(ASSET.crateBoxGeo);
   ASSET.crateRingGeo = new THREE.TorusGeometry(15, 1.1, 8, 24);
   ASSET.crateBeamGeo = new THREE.CylinderGeometry(3, 3, 900, 6, 1, true);
+  if (typeof loadJetModels === 'function') loadJetModels();   // preload glTF hero models (async; swaps in when ready)
 }
 
 /* assemble a flight-ready missile from the shared assets: hull + emissive trim +
