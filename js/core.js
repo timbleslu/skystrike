@@ -880,6 +880,23 @@ function grantLevelRewards(index, isBoss, alreadyCleared, farmable) {
   return { rp: 40 + 20 * index + (isBoss ? 150 : 0), score: 1000 + 500 * index + (isBoss ? 5000 : 0) };
 }
 
+/* Operations objective SEQUENCE (multi-phase levels, 2026-06). A previously-repetitive navigation
+   level carries an ordered `objectives` array of phase descriptors — each a string sector type
+   ('RECON'/'STRIKE'/…) OR an object { type, wp?, spawn? }. The runtime glue (missions.js) walks the
+   queue: it starts phase 0 at sector launch and, when the current objective resolves 'won', advances
+   to the next phase, completing the level only after the LAST phase wins. These PURE helpers own the
+   queue arithmetic + descriptor normalization; the glue owns spawning/banners/callouts. */
+// type list for a sequence (normalizes string OR {type,…} descriptors). [] for null/empty.
+function objectiveTypes(objectives) {
+  if (!Array.isArray(objectives)) return [];
+  return objectives.map(function (o) { return (o && typeof o === 'object') ? o.type : o; });
+}
+// next phase index after a 'won' resolve, or -1 when the sequence is exhausted (level complete).
+// Monotonic + bounds-safe (any index at/over the last phase -> done).
+function nextObjectivePhase(idx, total) {
+  return (idx + 1 < total) ? idx + 1 : -1;
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -914,5 +931,6 @@ if (typeof module !== 'undefined' && module.exports) {
     LEVEL_WAVE_MIN, LEVEL_WAVE_CAP, campaignWaveCount, levelCleared,
     isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
     captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
+    objectiveTypes, nextObjectivePhase,
   };
 }

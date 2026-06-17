@@ -4,6 +4,9 @@ const { MISSIONS, MISSION_TYPES, missionForSector, startMission, missionKill, ti
 
 // ===== sector -> mission mapping (deterministic) =====
 assert.strictEqual(missionForSector('FURBALL'), 'sweep');
+assert.strictEqual(missionForSector('SWEEP'), 'sweep');   // multi-phase dogfight phase type maps explicitly
+assert.strictEqual(missionForSector('RECON'), 'recon');
+assert.strictEqual(missionForSector('STEALTH'), 'stealth');
 assert.strictEqual(missionForSector('INTERCEPT'), 'intercept');
 assert.strictEqual(missionForSector('STRIKE'), 'strike');
 assert.strictEqual(missionForSector('ESCORT'), 'escort');

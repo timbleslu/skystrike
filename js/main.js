@@ -30,16 +30,20 @@ function nextWave() {
     startSectorMission(plan, wave);
     const sectorLine = plan.boss ? t('banner.finalTarget') : t(lvl.nameKey);
     const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);
-    for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
-    for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
-    for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
+    // multi-phase objective levels (plan.objectives) own ALL their spawns per phase (startMissionPhase
+    // in missions.js); skip the level's base air/ground budget so phase 1 (a nav leg) starts clean.
+    if (!plan.objectives) {
+      for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
+      for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
+      for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
+    }
     if (plan.boss) {
       campaignBossPhases = (lvl.boss && lvl.boss.phases) || null;   // hand authored phase knobs to spawnBoss → e._phaseCfg
       if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss);
     }
-    if (plan.ground) queueStrikeSite(wave);
+    if (plan.ground && !plan.objectives) queueStrikeSite(wave);
     const aceKey = campaignOpId + ':' + campaignLevelIdx;
-    if (plan.hostileAce && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
+    if (plan.hostileAce && !plan.objectives && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
     return;
   }
   applyWeather(rollWeather(weatherSeed + wave));

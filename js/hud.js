@@ -8,8 +8,46 @@ const HUD = {
   danger: '255,59,59',    warn: '255,122,31',
   ok: '77,255,160',       reward: '255,225,77',
   velvec: '90,255,180',   ink: '207,230,214',  dim: '111,145,128',
-  rival: '255,90,42',     boss: '255,80,220'
+  rival: '255,90,42',     boss: '255,80,220',   waypoint: '255,138,28'
 };
+
+/* Req D — OBJECTIVE CALLOUT: a large centre flash issued on EVERY objective transition (sector start
+   + each multi-phase advance), fired by missions.js `fireObjectiveCallout`. It holds for 3s then
+   fades out; the persistent top-centre readout (below) keeps the current objective up until it
+   changes. Wall-clock timed, so it needs no per-frame dt plumbing. */
+let objectiveCallout = { text: '', phase: 0, total: 1, t0: -1e9 };
+const OBJ_CALLOUT_DUR = 3.0, OBJ_CALLOUT_FADE = 0.6;   // seconds: total hold, trailing fade
+function fireObjectiveCallout(text, phase, total) {
+  objectiveCallout = { text: text || '', phase: phase || 0, total: total || 1, t0: (typeof performance !== 'undefined' ? performance.now() : 0) };
+}
+function drawObjectiveCallout(ctx, cx, cy, k) {
+  if (!objectiveCallout.text) return;
+  const now = (typeof performance !== 'undefined' ? performance.now() : 0);
+  const el = (now - objectiveCallout.t0) / 1000;
+  if (el < 0 || el > OBJ_CALLOUT_DUR) return;
+  const a = el > OBJ_CALLOUT_DUR - OBJ_CALLOUT_FADE ? Math.max(0, (OBJ_CALLOUT_DUR - el) / OBJ_CALLOUT_FADE) : 1;
+  const yc = cy - 96 * k;
+  let head = t('objective.new');
+  if (objectiveCallout.total > 1) head += '   ' + objectiveCallout.phase + '/' + objectiveCallout.total;
+  ctx.save();
+  ctx.textAlign = 'center';
+  // size a centered backing plate to the wider of the two lines so the callout reads over busy terrain
+  ctx.font = 'bold ' + (36 * k) + 'px ' + HUDFONT;
+  const lineW = ctx.measureText(objectiveCallout.text).width;
+  ctx.font = 'bold ' + (18 * k) + 'px ' + HUDFONT;
+  const headW = ctx.measureText(head).width;
+  const bw = Math.max(lineW, headW) + 56 * k, bh = 74 * k;
+  ctx.fillStyle = 'rgba(8,14,12,' + (0.62 * a) + ')';
+  ctx.fillRect(cx - bw / 2, yc - 6 * k, bw, bh);
+  ctx.fillStyle = 'rgba(' + HUD.waypoint + ',' + a + ')';   // accent bar + header in the waypoint orange = "new objective"
+  ctx.fillRect(cx - bw / 2, yc - 6 * k, bw, 3 * k);
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(head, cx, yc + 16 * k);
+  ctx.fillStyle = 'rgba(' + HUD.primaryBright + ',' + (0.98 * a) + ')';   // objective line: large + bright
+  ctx.font = 'bold ' + (36 * k) + 'px ' + HUDFONT; ctx.textBaseline = 'top';
+  ctx.fillText(objectiveCallout.text, cx, yc + 24 * k);
+  ctx.restore();
+}
 function drawGunPipper(ctx, e) {
   if (!e) { player._gunSol = false; return; }
   const k = hudK();
@@ -158,6 +196,7 @@ function drawHUD() {
     if (mission.type === 'recon' || mission.type === 'stealth') drawMissionWaypoint(ctx, cx, cy, k, reduce);
     if (mission.type === 'stealth') drawDetectionBar(ctx, cx, k);
   }
+  drawObjectiveCallout(ctx, cx, cy, k);   // Req D: 3s big centre flash on objective issue / phase change
 
   drawStarObjectives(ctx, cx);   // small secondary-objective (star) checklist, top-centre
   drawWeatherChip(ctx);   // active condition (storm / fog / night) top-left
@@ -326,7 +365,7 @@ function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
   const wp = nextWaypoint(mission.params.waypoints || []);
   if (!wp) return;
   const p = projectPoint(wp);
-  const col = mission.type === 'stealth' ? HUD.primaryBright : HUD.velvec;   // distinct from danger/lock red
+  const col = HUD.waypoint;   // dedicated waypoint orange — distinct from every other HUD marker
   const onScreen = !p.behind && p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H;
   // gentle pulse (steady under reduced-motion — the marker itself always shows)
   const pulse = reduce ? 0.85 : 0.55 + 0.35 * Math.abs(Math.sin(performance.now() / 320));
@@ -353,7 +392,7 @@ function drawMissionWaypoint(ctx, cx, cy, k, reduce) {
     const ang = p.behind ? Math.atan2(-(p.y - cy), -(p.x - cx)) : Math.atan2(p.y - cy, p.x - cx);
     const ex = cx + Math.cos(ang) * (W / 2 - 48), ey = cy + Math.sin(ang) * (H / 2 - 48);
     ctx.translate(ex, ey); ctx.rotate(ang);
-    ctx.beginPath(); ctx.moveTo(13 * k, 0); ctx.lineTo(-9 * k, -7 * k); ctx.lineTo(-9 * k, 7 * k); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(24 * k, 0); ctx.lineTo(-16 * k, -13 * k); ctx.lineTo(-16 * k, 13 * k); ctx.closePath(); ctx.stroke();
   }
   ctx.restore();
   ctx.lineWidth = 2;

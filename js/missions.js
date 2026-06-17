@@ -13,7 +13,7 @@ const MISSION_TYPES = ['sweep', 'intercept', 'escort', 'defend', 'strike', 'reco
 // ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
 // RECON/STEALTH are non-combat objective sectors (no kills required).
 function missionForSector(type) {
-  if (type === 'FURBALL') return 'sweep';
+  if (type === 'FURBALL' || type === 'SWEEP') return 'sweep';   // SWEEP = the multi-phase dogfight verb (objectives queue)
   if (type === 'INTERCEPT') return 'intercept';
   if (type === 'STRIKE') return 'strike';
   if (type === 'ESCORT') return 'escort';
@@ -184,16 +184,58 @@ function missionName(type) { return t('mission.name.' + type) !== 'mission.name.
    'none' (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
 function startSectorMission(plan, wave) {
   setpieceActive = plan.setpiece || null;   // F14: tag the resolution path when this node is an authored set-piece
+  // Operations objective SEQUENCE (multi-phase level): walk the authored `objectives` queue. The
+  // first phase starts here; onMissionResolved advances to the next on each 'won' (see below).
+  missionPhases = (Array.isArray(plan.objectives) && plan.objectives.length) ? plan.objectives.slice() : null;
+  missionPhaseIdx = 0;
+  if (missionPhases) { startMissionPhase(0, wave, true); return; }
   const type = plan.mission;
   if (type === 'none' || type === 'boss' || !MISSIONS[type]) { mission = null; return; }
   mission = startMission(type, wave, Math.random);
-  if (type === 'escort') spawnEscortConvoy(mission, wave);
-  if (type === 'defend') spawnDefendAsset(mission, wave);
-  if (type === 'recon') spawnReconWaypoints(mission, wave);
-  if (type === 'stealth') spawnStealthExtraction(mission, wave);
+  spawnMissionProps(type, mission, wave);
   // F14: a set-piece leads with its own authored intro line instead of the generic objective header
   if (setpieceActive && SETPIECES[setpieceActive]) showBanner(t(SETPIECES[setpieceActive].intro));
   else showBanner(tf('banner.missionStart', { name: missionName(type) }));
+  if (typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), 1, 1);   // Req D: big center flash on objective issue
+  showBanner(objectiveText(mission));
+}
+
+// spawn the objective-specific PROPS for a mission verb (recon waypoints / stealth extraction /
+// escort convoy / defend asset). Shared by the single-objective path and the multi-phase walker.
+function spawnMissionProps(verb, m, wave) {
+  if (verb === 'escort') spawnEscortConvoy(m, wave);
+  else if (verb === 'defend') spawnDefendAsset(m, wave);
+  else if (verb === 'recon') spawnReconWaypoints(m, wave);
+  else if (verb === 'stealth') spawnStealthExtraction(m, wave);
+}
+
+/* ---------------- multi-phase objective walker ----------------
+   A flagged level's `objectives` queue (opmap.js) is walked phase-by-phase. The PURE arithmetic
+   (nextObjectivePhase) lives in core.js; this glue owns the per-phase spawns + banners + callout. */
+let missionPhases = null;   // ordered objective queue for the active multi-phase level (or null)
+let missionPhaseIdx = 0;    // index of the active phase within missionPhases
+
+function startMissionPhase(idx, wave, isFirst) {
+  const desc = missionPhases[idx];
+  const sectorType = (desc && typeof desc === 'object') ? desc.type : desc;   // 'RECON'/'STRIKE'/'SWEEP'/…
+  const verb = missionForSector(sectorType);
+  mission = startMission(verb, wave, Math.random);
+  const wp = (desc && typeof desc === 'object') ? desc.wp : undefined;
+  if (wp != null && mission.params) { mission.params.count = wp; mission.target = wp; }   // trim the nav leg (RECON opener -> 2 waypoints)
+  const spawn = (desc && typeof desc === 'object') ? desc.spawn : null;
+  // make the objective winnable with EXACTLY the phase's authored enemy budget (so a sweep/intercept
+  // phase can't stall waiting on kills that were never spawned).
+  if (verb === 'sweep' && spawn && spawn.fighters) { mission.target = spawn.fighters; if (mission.params) mission.params.spawn = spawn.fighters; }
+  if (verb === 'intercept' && spawn && spawn.bombers) { mission.target = spawn.bombers; if (mission.params) mission.params.bombers = spawn.bombers; }
+  spawnMissionProps(verb, mission, wave);
+  if (verb === 'strike' && typeof queueStrikeSite === 'function') queueStrikeSite(wave);   // ground target this phase
+  if (spawn) {   // per-phase combat budget (designer hints): air targets for sweep/intercept; air threat for escort/defend
+    for (let i = 0; i < (spawn.fighters || 0); i++) pendingSpawns.push(spawnFighter);
+    for (let i = 0; i < (spawn.bombers || 0); i++) pendingSpawns.push(verb === 'intercept' ? spawnInterceptTarget : spawnBomber);
+  }
+  // Req D: issue the big center objective callout (3s) on EVERY phase transition, then the persistent banner.
+  if (typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), idx + 1, missionPhases.length);
+  if (isFirst) showBanner(tf('banner.missionStart', { name: missionName(verb) }));
   showBanner(objectiveText(mission));
 }
 
@@ -305,10 +347,22 @@ function missionSiteDown() { if (mission && mission.type === 'strike') mission.p
 
 function onMissionResolved(won) {
   if (won) {
-    if (typeof run !== 'undefined' && run) run.missions = (run.missions || 0) + 1;   // feeds spAward / achievement at run end
+    // multi-phase level: advance to the NEXT objective instead of ending the sector. Only the final
+    // phase falls through to the sector-complete path below (nextObjectivePhase -> -1 = done).
+    if (missionPhases) {
+      const next = nextObjectivePhase(missionPhaseIdx, missionPhases.length);
+      if (next >= 0) {
+        showBanner(t('banner.objectiveComplete')); audio.power(); empFlash = Math.max(empFlash, 0.3);
+        clearMissionLeftovers();        // sweep leftover air + props so the next phase starts on a clean field
+        missionPhaseIdx = next;
+        startMissionPhase(next, wave, false);   // sets `mission` active again -> handleWaves stays blocked
+        return;
+      }
+    }
+    if (typeof run !== 'undefined' && run) run.missions = (run.missions || 0) + 1;   // feeds spAward / achievement at run end (once per level)
     // F14: an authored set-piece shows its own outro line; procedural objectives use the generic one
     showBanner(setpieceActive ? t(setpieceOutcome(setpieceActive, true)) : t('banner.missionComplete'));
-    setpieceActive = null;
+    setpieceActive = null; missionPhases = null; missionPhaseIdx = 0;
     audio.power(); empFlash = Math.max(empFlash, 0.35);
     // pay a small RP/score bonus for completing the objective (meta SP follows from run stats at run end)
     const bonus = Math.round((40 + wave * 4) * (player.rpMul || 1));
@@ -318,7 +372,7 @@ function onMissionResolved(won) {
     if (mission.type !== 'sweep') clearMissionLeftovers();
   } else {
     showBanner(t('banner.missionFailedObj'));
-    setpieceActive = null;
+    setpieceActive = null; missionPhases = null; missionPhaseIdx = 0;   // any phase fail = level fail
     audio.warn();
     if (typeof gameOver === 'function') { gameOver(); }
   }
