@@ -887,16 +887,8 @@ function animate() {
   updateClouds(dt);
 
   if (state === 'hangar') {
-    if (previewJet) {
-      const pn = performance.now();
-      // idle spin + bob — PAUSED while dragging and for ~3s after release; the dragged orientation persists.
-      if (!previewDragging && pn > previewSpinResumeAt) {
-        previewYaw += dt * 0.5;
-        previewJet.rotation.set(previewPitch, previewYaw, 0);   // own the FULL orientation (yaw spins, dragged pitch held) — stays in sync with previewYaw/previewPitch so layoutPreviewJet never snaps
-        const by = (previewJet.userData && previewJet.userData.baseY != null) ? previewJet.userData.baseY : 2.5;
-        previewJet.position.y = by + Math.sin(pn * 0.0012) * 0.6;
-      }
-    }
+    // C2: the jet preview now spins/renders in its OWN isolated loop (ui-hangar.js previewLoop) on a
+    // dedicated canvas inside the card — previewJet is NOT in the shared scene, so nothing to do here.
     if (platform) platform.children[1].rotation.z += dt * 0.6;
   } else if (state === 'playing') {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
@@ -925,39 +917,36 @@ function animate() {
 }
 
 /* ---------------- hangar 3D-preview drag-to-rotate (touch + mouse) ----------------
-   Listens at the window so it works wherever the pointer lands (the #hangar veil overlays the shared #gl
-   canvas). A drag only STARTS when the pointer is on the preview jet (raycast hit) and NOT on UI chrome
-   (buttons / card / dots) — so the carousel, chips and scroll keep working. Horizontal = yaw, vertical =
-   pitch (clamped ±60°). Pointer Events cover touch + mouse in one path. */
+   TRACK C2: the preview renders to its OWN isolated canvas (previewCanvas) inside the jet card, so a
+   pointerdown ON that canvas is unambiguously a drag — no raycast denylist needed. A drag STARTS only
+   when the pointerdown lands on previewCanvas; pointermove/up stay on the window so a drag that leaves
+   the canvas still tracks. Horizontal = yaw, vertical = pitch (clamped ±PREVIEW_PITCH_MAX). */
 function initPreviewDrag() {
   if (initPreviewDrag._bound) return; initPreviewDrag._bound = true;
-  const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2();
   let lastX = 0, lastY = 0;
-  const onJet = (cx, cy) => {
-    if (state !== 'hangar' || !previewJet || !renderer) return false;
-    const el = renderer.domElement, r = el.getBoundingClientRect();
-    ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
-    ray.setFromCamera(ndc, camera);
-    return ray.intersectObject(previewJet, true).length > 0;
-  };
   addEventListener('pointerdown', (e) => {
-    if (state !== 'hangar' || !previewJet || previewDragging) return;
-    if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea, .card, #jetDots')) return;   // real UI → don't hijack (denylist: add any NEW clickable element placed in the preview gutter here)
-    if (!onJet(e.clientX, e.clientY)) return;          // pointer not on the jet → let UI / scroll work
-    previewDragging = true; lastX = e.clientX; lastY = e.clientY; e.preventDefault();
+    if (state !== 'hangar' || previewDragging) return;
+    if (typeof previewCanvas === 'undefined' || !previewCanvas) return;
+    if (e.target !== previewCanvas) return;            // only the preview canvas starts a drag — UI/scroll elsewhere untouched
+    previewDragging = true; lastX = e.clientX; lastY = e.clientY;
+    previewCanvas.style.cursor = 'grabbing'; e.preventDefault();
   });
   addEventListener('pointermove', (e) => {
-    if (!previewDragging || !previewJet) return;
+    if (!previewDragging) return;
     const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
     previewYaw += dx * 0.01;
     previewPitch = clamp(previewPitch + dy * 0.01, -PREVIEW_PITCH_MAX, PREVIEW_PITCH_MAX);
-    previewJet.rotation.set(previewPitch, previewYaw, 0);
+    if (previewJet) previewJet.rotation.set(previewPitch, previewYaw, 0);
     e.preventDefault();
   });
-  const endDrag = () => { if (previewDragging) { previewDragging = false; previewSpinResumeAt = performance.now() + 3000; } };
+  const endDrag = () => {
+    if (!previewDragging) return;
+    previewDragging = false; previewSpinResumeAt = performance.now() + 3000;   // auto-rotate resumes ~3s after release
+    if (typeof previewCanvas !== 'undefined' && previewCanvas) previewCanvas.style.cursor = 'grab';
+  };
   addEventListener('pointerup', endDrag);
   addEventListener('pointercancel', endDrag);
-  addEventListener('resize', () => { if (state === 'hangar' && typeof layoutPreviewJet === 'function') layoutPreviewJet(); });   // re-place the preview when the gutter breakpoint changes
+  addEventListener('resize', () => { if (typeof resizePreview === 'function') resizePreview(); });   // keep the preview canvas matched to its host box
 }
 
 /* ---------------- boot ---------------- */

@@ -230,6 +230,7 @@ function setSpecial2(id) {
 function renderJetCard(i) {
   const j = JETS[i];
   g('jetCard').innerHTML =
+    '<div id="jetPreview3D" class="jetpreview3d"></div>' +   // C1: 3D preview HERO at the TOP of the card (the persistent isolated canvas is reparented in here)
     '<div class="cbgrid">' +
       '<div class="cbhead">' +
         '<div><div class="cname">' + jetText(j, 'name') + '</div><div class="crole">' + jetText(j, 'role') + '</div></div>' +
@@ -256,6 +257,7 @@ function renderJetCard(i) {
       '<div id="special2Row" class="special2row"></div>' +
       '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
+  mountPreviewCanvas();   // C2: reparent the persistent isolated preview canvas into this card's #jetPreview3D host
   renderSpecial2Picker(i);
   renderJetMeta(i);
 }
@@ -356,16 +358,78 @@ function previewPaint(jet) {
   if (previewSkin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkinPaint === 'function') return resolveSkinPaint(jet, previewSkin);
   return jetPaint(jet);
 }
-/* place the preview jet in the cleared region beside (wide) / above (narrow) the jet card so the draggable
-   model reads + has a grabbable canvas area; re-apply the persisted drag orientation. */
-function layoutPreviewJet() {
-  if (!previewJet) return;
-  const wide = (typeof window !== 'undefined' ? window.innerWidth : 1280) >= 900;
-  const bx = wide ? -24 : 0, by = wide ? 2.5 : 9;
-  previewJet.position.set(bx, by, 0);
-  previewJet.userData.baseX = bx; previewJet.userData.baseY = by;
-  previewJet.rotation.set(previewPitch, previewYaw, 0);
-  if (typeof platform !== 'undefined' && platform) platform.position.x = bx;   // keep the pedestal under the offset jet
+/* TRACK C2: the preview no longer lives in a cleared world gutter — it renders to its OWN isolated
+   WebGLRenderer/canvas hosted INSIDE the jet card (ensurePreviewRenderer below). This stub keeps the
+   one historical call-site safe (selectJet) while the model just sits at origin in the preview scene. */
+function layoutPreviewJet() { /* no-op — preview model is centred at origin in previewScene */ }
+
+/* ---------------- TRACK C2: isolated hangar-preview renderer ----------------
+   One singleton WebGLRenderer bound to a dedicated <canvas> that is REPARENTED into the live jet card's
+   #jetPreview3D host on each card rebuild (the canvas persists; the card innerHTML is rebuilt per
+   selection, so we MOVE the canvas in rather than recreate a WebGL context). Separate Scene + Camera +
+   lights; matches the main renderer's colour pipeline (sRGB + ACES, exposure 1.0) so liveries read true.
+   Own rAF loop, idle-cheap off the hangar. NO game entities / HUD ever enter this scene. */
+let previewRenderer = null, previewScene = null, previewCamera = null, previewCanvas = null, previewRO = null;
+const PREVIEW_CAM_Z = 62, PREVIEW_CAM_Y = 6, PREVIEW_FOV = 38;   // frames a len≈26 fighter (BOMBER 44) nicely
+
+function ensurePreviewRenderer() {
+  if (previewRenderer || typeof THREE === 'undefined') return previewRenderer;
+  previewCanvas = document.createElement('canvas');
+  previewCanvas.id = 'jetPreviewCanvas';
+  previewCanvas.style.cssText = 'width:100%;height:100%;display:block;touch-action:none;cursor:grab';
+
+  previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: true, alpha: true });
+  previewRenderer.outputColorSpace = THREE.SRGBColorSpace;            // match engine.js initThree pipeline
+  previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  previewRenderer.toneMappingExposure = 1.0;
+  previewRenderer.setPixelRatio(window.devicePixelRatio);            // kill retina blur (main caps at 2; preview is small → full DPR is cheap)
+  previewRenderer.setSize(300, 220, false);                          // resized by the RO to the real host box
+
+  previewScene = new THREE.Scene();                                 // transparent bg (alpha:true) → the hangar backdrop shows behind the card already
+  previewCamera = new THREE.PerspectiveCamera(PREVIEW_FOV, 300 / 220, 1, 4000);
+  previewCamera.position.set(0, PREVIEW_CAM_Y, PREVIEW_CAM_Z);
+  previewCamera.lookAt(0, 0, 0);
+
+  // own lighting (do NOT couple to the game's envmap) — read the liveries clearly: fill + hemi + key + rim.
+  previewScene.add(new THREE.AmbientLight(0x5a6e88, 0.9));
+  previewScene.add(new THREE.HemisphereLight(0x9fc0ff, 0x21303f, 0.7));
+  const key = new THREE.DirectionalLight(0xfff0d6, 1.35); key.position.set(40, 60, 50); previewScene.add(key);
+  const rim = new THREE.DirectionalLight(0x88a8ff, 0.6); rim.position.set(-50, 20, -40); previewScene.add(rim);
+
+  // track the host box (card-relative) so the canvas always matches its container, sharp on resize.
+  previewRO = new ResizeObserver(resizePreview);
+  previewRO.observe(previewCanvas);
+
+  requestAnimationFrame(previewLoop);
+  return previewRenderer;
+}
+function resizePreview() {
+  if (!previewRenderer || !previewCanvas) return;
+  const w = previewCanvas.clientWidth || 300, h = previewCanvas.clientHeight || 220;
+  if (w === 0 || h === 0) return;
+  previewRenderer.setSize(w, h, false);
+  previewCamera.aspect = w / h; previewCamera.updateProjectionMatrix();
+}
+/* host the persistent preview canvas inside the CURRENT card's #jetPreview3D block (called from renderJetCard,
+   which has just rebuilt the card innerHTML and destroyed the previous host). */
+function mountPreviewCanvas() {
+  ensurePreviewRenderer();
+  const host = g('jetPreview3D');
+  if (host && previewCanvas && previewCanvas.parentNode !== host) host.appendChild(previewCanvas);
+  resizePreview();
+}
+/* dedicated rAF — auto-rotate + drag orientation; idles cheaply (no render) when not in the hangar. */
+function previewLoop() {
+  requestAnimationFrame(previewLoop);
+  if (typeof state !== 'undefined' && state !== 'hangar') return;   // off-hangar: keep the loop alive but skip the draw
+  if (!previewRenderer || !previewScene || !previewCamera) return;
+  if (previewJet) {
+    const pn = performance.now();
+    if (!previewDragging && pn > previewSpinResumeAt) previewYaw += 0.012;   // auto-rotate (resumes ~3s after release via previewSpinResumeAt)
+    previewJet.rotation.set(previewPitch, previewYaw, 0);                    // own the full orientation (yaw spins, dragged pitch held)
+    previewJet.position.y = Math.sin(pn * 0.0012) * 0.6;                     // gentle bob (optional)
+  }
+  previewRenderer.render(previewScene, previewCamera);
 }
 /* launch is BLOCKED while previewing an UNOWNED skin (must buy it first). */
 function launchBlocked() {
@@ -382,11 +446,13 @@ function selectJet(i) {
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
   const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
-  if (previewJet) { scene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); }   // free the prev preview's per-instance painted/burner clones (shared geo/mats spared)
+  ensurePreviewRenderer();               // C2: build the isolated renderer/scene/camera once (mountPreviewCanvas in renderJetCard reparents the canvas into this card)
+  if (previewJet) { if (previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); }   // free the prev preview's per-instance painted/burner clones (shared geo/mats spared)
   const paint = previewPaint(JETS[i]);   // previewing skin (owned OR not) → live look; gameplay still uses jetPaint
   previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true, { skin: paint });
-  layoutPreviewJet();                    // place in the cleared preview gutter + apply persisted drag orientation
-  scene.add(previewJet);
+  previewJet.position.set(0, 0, 0);      // C2: centred at origin in the PREVIEW scene (no world gutter)
+  previewJet.rotation.set(previewPitch, previewYaw, 0);
+  if (previewScene) previewScene.add(previewJet);   // → isolated preview scene, NEVER the shared game scene
   audio.init(); audio.ui();
   saveSettings();
 }
