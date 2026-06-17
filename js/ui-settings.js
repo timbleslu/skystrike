@@ -335,6 +335,7 @@ function returnToHangar() {
   state = 'hangar'; paused = false;
   if (clock) clock.getDelta();
   g('hangar').classList.remove('hide');
+  previewSkin = null; previewYaw = 0; previewPitch = 0; previewSpinResumeAt = 0; _previewJetIdx = -1;   // enter hangar fresh: no lingering unowned preview, reset drag orientation
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();

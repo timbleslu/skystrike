@@ -815,6 +815,33 @@ canvas{display:block}
 .jmskin.on{border-color:var(--cy);box-shadow:0 0 10px rgba(var(--primary-rgb),.6)}
 .jmskin.locked{opacity:.7}
 .jmsklk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:#fff;background:rgba(0,0,0,.45);border-radius:50%}
+/* ===== PREVIEW-BEFORE-BUY — chip states + inline buy + launch gate =====
+   Chip states: .on (equipped) / plain (owned) / .locked (unowned) / .locked.preview (previewing an unowned
+   paint live on the 3D jet). Orange = --warn ("armed, not yours"); gold badge = --reward (its SP cost). */
+.jmskin.locked.preview{opacity:1;border-style:dashed;border-color:var(--warn);box-shadow:0 0 12px rgba(var(--warn-rgb),.7),inset 0 0 0 1px rgba(var(--warn-rgb),.4);animation:skinPreviewPulse 1.3s var(--ease-in-out) infinite}
+@keyframes skinPreviewPulse{0%,100%{box-shadow:0 0 10px rgba(var(--warn-rgb),.5),inset 0 0 0 1px rgba(var(--warn-rgb),.3)}50%{box-shadow:0 0 18px rgba(var(--warn-rgb),.95),inset 0 0 0 1px rgba(var(--warn-rgb),.55)}}
+.jmskin.locked.preview .jmsklk{color:var(--reward);background:rgba(0,0,0,.62);font-weight:700}
+@media (prefers-reduced-motion:reduce){.jmskin.locked.preview{animation:none}}
+/* inline BUY · cost CTA, shown under the PAINT chips while previewing an unowned skin (reads as "buy THIS paint") */
+.jmpvbuy{display:inline-flex;align-items:center;gap:7px;margin-top:8px;font-family:var(--disp);font-weight:800;font-size:12px;letter-spacing:2px;color:var(--ink-on-primary);padding:8px 16px;border:none;cursor:pointer;background:linear-gradient(100deg,var(--reward),#e9b21f);clip-path:polygon(7px 0,100% 0,calc(100% - 7px) 100%,0 100%);box-shadow:0 0 16px rgba(var(--reward-rgb),.5);transition:var(--dur-fast) var(--ease-out);animation:jmpvbuyPulse 1.8s var(--ease-in-out) infinite}
+.jmpvbuy:hover{box-shadow:0 0 30px rgba(var(--reward-rgb),.85);transform:translateY(-1px) scale(1.03)}
+.jmpvbuy:active{transform:scale(.98);box-shadow:none}
+@keyframes jmpvbuyPulse{0%,100%{box-shadow:0 0 14px rgba(var(--reward-rgb),.45)}50%{box-shadow:0 0 24px rgba(var(--reward-rgb),.78)}}
+@media (prefers-reduced-motion:reduce){.jmpvbuy{animation:none}}
+/* LAUNCH blocked while previewing an unowned skin: dimmed, not-allowed, lock affordance, no idle breathe */
+#launch.gated{background:var(--locked);color:var(--ink-dim);box-shadow:none;cursor:not-allowed;animation:none;opacity:.72}
+#launch.gated:hover,#launch.gated:active{box-shadow:none;transform:none;background:var(--locked)}
+#launch.gated::before{content:"🔒 ";font-size:.82em;opacity:.85}
+/* ===== HANGAR PREVIEW FRAMING — clear a grabbable region for the draggable 3D jet (it renders to #gl BEHIND
+   the #hangar veil; the opaque jet card otherwise sits dead-centre over it). WIDE: right-align the whole
+   hangar column so the LEFT HALF is a clear canvas band (model offset to world x≈-24 in layoutPreviewJet).
+   NARROW: stack — push the column down so the model floats in the TOP band (model at world y≈9). */
+@media (min-width:900px){
+  .hwrap{width:min(620px,52vw);margin-left:auto;margin-right:clamp(20px,4vw,80px)}
+}
+@media (max-width:899px){
+  .hwrap{margin-top:38vh}
+}
 /* ---- pilot callsign + emblem panel (F13) ---- */
 #pilotPanel{margin:8px 0 4px;border:1px solid rgba(var(--hairline-rgb),.25);background:rgba(10,22,30,.4);padding:10px 14px;display:flex;flex-direction:column;gap:8px}
 .pilotRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}

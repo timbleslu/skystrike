@@ -350,15 +350,42 @@ function statBar(lbl, v) {
   for (let k = 1; k <= 10; k++) s += '<i class="' + (k <= v ? 'on' : '') + '"></i>';
   return s + '</div></div>';
 }
+/* hangar-preview paint: show the TRANSIENT previewSkin (owned OR not) on the live jet; fall back to the
+   owned/equipped paint. UI-ONLY — never reaches createPlayer/gameplay (which uses jetPaint = owned only). */
+function previewPaint(jet) {
+  if (previewSkin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkinPaint === 'function') return resolveSkinPaint(jet, previewSkin);
+  return jetPaint(jet);
+}
+/* place the preview jet in the cleared region beside (wide) / above (narrow) the jet card so the draggable
+   model reads + has a grabbable canvas area; re-apply the persisted drag orientation. */
+function layoutPreviewJet() {
+  if (!previewJet) return;
+  const wide = (typeof window !== 'undefined' ? window.innerWidth : 1280) >= 900;
+  const bx = wide ? -24 : 0, by = wide ? 2.5 : 9;
+  previewJet.position.set(bx, by, 0);
+  previewJet.userData.baseX = bx; previewJet.userData.baseY = by;
+  previewJet.rotation.set(previewPitch, previewYaw, 0);
+  if (typeof platform !== 'undefined' && platform) platform.position.x = bx;   // keep the pedestal under the offset jet
+}
+/* launch is BLOCKED while previewing an UNOWNED skin (must buy it first). */
+function launchBlocked() {
+  return !!(previewSkin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, previewSkin));
+}
+/* reflect the gate on the LAUNCH control (disabled + dimmed .gated). */
+function refreshLaunchGate() {
+  const lb = g('launch'); if (lb) { const b = launchBlocked(); lb.classList.toggle('gated', b); lb.disabled = b; }
+}
+let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts previewSkin + resets drag orientation
 function selectJet(i) {
+  if (i !== _previewJetIdx) { previewSkin = null; previewYaw = 0; previewPitch = 0; previewSpinResumeAt = 0; _previewJetIdx = i; }   // jet switch → revert preview, reset orientation
   selectedJet = i;
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
   const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
-  if (previewJet) scene.remove(previewJet);
-  const paint = jetPaint(JETS[i]);     // honour the chosen skin (falls back to stock paint)
-  previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true);
-  previewJet.position.set(0, 2.5, 0);
+  if (previewJet) { scene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); }   // free the prev preview's per-instance painted/burner clones (shared geo/mats spared)
+  const paint = previewPaint(JETS[i]);   // previewing skin (owned OR not) → live look; gameplay still uses jetPaint
+  previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true, { skin: paint });
+  layoutPreviewJet();                    // place in the cleared preview gutter + apply persisted drag orientation
   scene.add(previewJet);
   audio.init(); audio.ui();
   saveSettings();
@@ -374,29 +401,44 @@ function renderJetMeta(i) {
   } else {
     const skins = SKINS[j.id];
     if (skins && skins.length > 1) {
+      // the skin currently being PREVIEWED but NOT owned (the only state that gates launch + shows the BUY CTA)
+      const pvUnowned = (previewSkin && JETS[selectedJet] && j.id === JETS[selectedJet].id && !skinOwned(j.id, previewSkin)) ? previewSkin : null;
       html += '<div class="jmskins"><span class="jmskinlbl">' + t('meta.skins') + '</span>';
       for (let s = 0; s < skins.length; s++) {
         const sk = skins[s], owned = skinOwned(j.id, sk.id), sel = selectedSkin(j.id) === sk.id;
+        const previewing = sk.id === pvUnowned;   // previewing-but-unowned: distinct chip state
         const sw = (sk.color != null ? sk.color : j.color);
-        html += '<button class="jmskin' + (sel ? ' on' : '') + (owned ? '' : ' locked') + '" data-skin="' + sk.id + '" data-jet="' + j.id +
+        html += '<button class="jmskin' + (sel && !pvUnowned ? ' on' : '') + (owned ? '' : ' locked') + (previewing ? ' preview' : '') + '" data-skin="' + sk.id + '" data-jet="' + j.id +
                 '" style="--sw:#' + ('000000' + (sw >>> 0).toString(16)).slice(-6) + '" title="' + metaText({ id: 'skin.' + sk.id }, 'name') + '">' +
                 (owned ? '' : '<span class="jmsklk">' + skinCost(j.id, sk.id) + '</span>') + '</button>';
       }
       html += '</div>';
+      // buy-to-preview: while previewing an UNOWNED skin, surface an inline BUY · cost right at the preview
+      if (pvUnowned) html += '<button id="jetMetaBuy" class="jmpvbuy" data-buyskin="' + pvUnowned + '" data-jet="' + j.id + '">' + tf('meta.buyPaint', { c: skinCost(j.id, pvUnowned) }) + '</button>';
     }
   }
   wrap.innerHTML = html;
+  refreshLaunchGate();   // chips changed → keep the LAUNCH gate in sync
 }
 // delegated buy/select handlers for the jet-card meta overlay
 function onJetMetaClick(e) {
   const buy = e.target.closest('[data-buyjet]');
   if (buy) { if (buyJet(buy.dataset.buyjet)) { updateSpHud(); selectJet(selectedJet); audio.ui(); } else showBanner(t('meta.needSp')); return; }
+  // inline BUY · cost — purchase the previewed (unowned) skin, equip it, clear the launch block
+  const buySk = e.target.closest('[data-buyskin]');
+  if (buySk) {
+    const jet = buySk.dataset.jet, id = buySk.dataset.buyskin;
+    if (buySkin(jet, id)) { setSkin(jet, id); previewSkin = id; updateSpHud(); selectJet(selectedJet); audio.ui(); }
+    else showBanner(t('meta.needSp'));
+    return;
+  }
   const sk = e.target.closest('.jmskin');
   if (sk) {
     const jet = sk.dataset.jet, id = sk.dataset.skin;
-    if (skinOwned(jet, id)) { setSkin(jet, id); selectJet(selectedJet); audio.ui(); }
-    else if (buySkin(jet, id)) { setSkin(jet, id); updateSpHud(); selectJet(selectedJet); audio.ui(); }
-    else showBanner(t('meta.needSp'));
+    previewSkin = id;                          // preview ANY chip (owned or not) on the live model — UI only
+    if (skinOwned(jet, id)) setSkin(jet, id);  // owned → also equip (persist); unowned → preview only, NO meta/store write
+    selectJet(selectedJet);                    // rebuild preview with previewPaint (+ refreshes chips + gate)
+    audio.ui();
   }
 }
 

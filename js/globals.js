@@ -139,6 +139,14 @@ let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;   // default to the FT-1 trainer (roster index 0) — the only jet unlocked at a fresh start; a saved skystrike_settings.selectedJet overrides
+// Hangar 3D-preview interaction. previewSkin is a TRANSIENT, UI-only skin being shown on the preview jet
+// (owned OR not) — it is NEVER persisted and NEVER read by gameplay (createPlayer uses jetPaint = owned only),
+// so an unowned preview can't reach a launched jet. Cleared on jet switch / leaving the hangar.
+let previewSkin = null;
+let previewDragging = false;          // pointer is dragging the preview jet (raycast-gated on pointerdown)
+let previewSpinResumeAt = 0;          // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
+let previewYaw = 0, previewPitch = 0; // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
+const PREVIEW_PITCH_MAX = Math.PI / 3;   // ±60° pitch clamp
 let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
 let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
 

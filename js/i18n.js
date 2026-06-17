@@ -539,6 +539,8 @@ const I18N = {
     'meta.jetLocked': 'AIRCRAFT LOCKED — UNLOCK FOR {c} SP',
     'meta.skins': 'PAINT',
     'meta.needSp': 'NOT ENOUGH STRATEGIC POINTS',
+    'meta.buyPaint': 'BUY · {c} SP',
+    'meta.buyNeeded': 'BUY THIS PAINT TO LAUNCH WITH IT',
     'meta.level': 'LVL {l} / {m}',
     'meta.maxed': 'MAX LEVEL',
     'meta.requires': 'REQUIRES {r}',
@@ -589,6 +591,11 @@ const I18N = {
       'skin.splinter': { name: 'SPLINTER' }, 'skin.raptor': { name: 'PREDATOR' },
       'skin.felon':    { name: 'FELON' }, 'skin.aurora': { name: 'AURORA' },
       'skin.shadow':   { name: 'SHADOW' }, 'skin.blaze': { name: 'BLAZE' },
+      // designed per-jet liveries (skins 2 & 3)
+      'skin.desert':   { name: 'DESERT' }, 'skin.ghost':  { name: 'GHOST' },
+      'skin.viper':    { name: 'VIPER' },  'skin.dragon': { name: 'DRAGON' },
+      'skin.panel':    { name: 'PANEL' },  'skin.tiger':  { name: 'TIGER' },
+      'skin.navy':     { name: 'NAVY' },
     },
   },
 
@@ -1243,6 +1250,8 @@ const I18N = {
     'meta.jetLocked': '机型已锁定 — 花费 {c} 战略点数解锁',
     'meta.skins': '涂装',
     'meta.needSp': '战略点数不足',
+    'meta.buyPaint': '购买 · {c} 点',
+    'meta.buyNeeded': '购买此涂装后方可使用其出击',
     'meta.level': '等级 {l} / {m}',
     'meta.maxed': '已满级',
     'meta.requires': '需要 {r}',
@@ -1292,6 +1301,11 @@ const I18N = {
       'skin.splinter': { name: '碎裂迷彩' }, 'skin.raptor': { name: '猛禽' },
       'skin.felon':    { name: '重罪' }, 'skin.aurora': { name: '极光' },
       'skin.shadow':   { name: '暗影' }, 'skin.blaze': { name: '烈焰' },
+      // designed per-jet liveries (skins 2 & 3)
+      'skin.desert':   { name: '沙漠迷彩' }, 'skin.ghost':  { name: '幽灵' },
+      'skin.viper':    { name: '毒蛇' },     'skin.dragon': { name: '巨龙' },
+      'skin.panel':    { name: '面板双色' }, 'skin.tiger':  { name: '虎纹' },
+      'skin.navy':     { name: '海军灰' },
     },
   },
 };

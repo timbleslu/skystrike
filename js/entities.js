@@ -1056,13 +1056,22 @@ function applyFoeTint(obj) {
     o.material = Array.isArray(o.material) ? o.material.map(tintOne) : tintOne(o.material);
   });
 }
-/* solid in-code paint for the texture-less jets (geometry-only glTF exports render flat grey).
-   Clones materials PER INSTANCE (templates are userData.shared — never mutate them) and sets the base
-   colour; tag the clone shared:false so disposeGroup frees it. */
-function applyPaint(obj, color) {
+/* in-code paint for the texture-less jets. `paint` is EITHER a plain colour NUMBER (enemy-red / legacy) OR a
+   skin descriptor {color, zones?}: `zones` maps material.name → colour so distinct hull sections paint
+   differently (splinter / two-tone / tiger — no texture/UVs needed), `color` is the fallback for any material
+   not named in zones. Clones materials PER INSTANCE (templates are userData.shared — never mutate them) and
+   tags the clone shared:false so disposeGroup frees it. No textures allocated → no per-spawn texture cost. */
+function applyPaint(obj, paint) {
+  if (typeof paint === 'number') paint = { color: paint };
+  const base = paint.color, zones = paint.zones || null;
   obj.traverse(o => {
     if (!o.isMesh || !o.material) return;
-    const paintOne = (m) => { const c = m.clone(); c.userData = { shared: false }; if (c.color) c.color = new THREE.Color(color); return c; };
+    const paintOne = (m) => {
+      const c = m.clone(); c.userData = { shared: false };
+      const col = (zones && m.name && zones[m.name] != null) ? zones[m.name] : base;
+      if (c.color && col != null) c.color = new THREE.Color(col);
+      return c;
+    };
     o.material = Array.isArray(o.material) ? o.material.map(paintOne) : paintOne(o.material);
   });
 }
@@ -1074,7 +1083,7 @@ function cloneJetGLTF(id, color, accent, opts) {
   const inner = jetGLTF[id].clone(true);
   const g = new THREE.Group();
   g.add(inner);
-  if (jetGLTF[id].userData.textureless && typeof color === 'number') applyPaint(inner, color);   // skin paint (player) / enemy-red (foe)
+  if (jetGLTF[id].userData.textureless && (opts.skin || typeof color === 'number')) applyPaint(inner, opts.skin || color);   // skin descriptor (player, may carry zones) / enemy-red number (foe)
   else if (opts.enemy) applyFoeTint(inner);            // textured enemy: per-instance red sheen for foe readability
   const burn = jetGLTF[id].userData.burn;
   if (burn) addBurner(g, burn, accent);                // afterburner per jet (player: animEngines drives it; enemies: static cruise plume)
@@ -1086,7 +1095,7 @@ function cloneJetGLTF(id, color, accent, opts) {
 function buildJetOrGLTF(color, accent, cfg, hero, opts) {
   opts = opts || {};
   if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low'))
-    return cloneJetGLTF(cfg.id, color, accent, { enemy: !!opts.enemy });
+    return cloneJetGLTF(cfg.id, color, accent, { enemy: !!opts.enemy, skin: opts.skin });
   return buildJet(color, accent, cfg, hero);
 }
 function buildBoss() {
@@ -1163,7 +1172,7 @@ function buildDrone() {
 function createPlayer(idx) {
   const j = JETS[idx], st = jetStats(j);
   const paint = (typeof jetPaint === 'function') ? jetPaint(j) : { color: j.color, accent: j.accent };
-  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true); scene.add(mesh);
+  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true, { skin: paint }); scene.add(mesh);   // OWNED skin only (jetPaint never reads previewSkin) → unowned preview can't reach gameplay
   // muzzle flash: one persistent sprite at the nose, blinked on by fireGun
   const muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd76a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
   muzzle.position.set(0, 0, -14); muzzle.scale.setScalar(14); muzzle.visible = false; mesh.add(muzzle);

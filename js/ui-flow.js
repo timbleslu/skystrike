@@ -49,6 +49,8 @@ function onMetaGridClick(e) {
 function startGame(i, daily, rush) {
   if (state !== 'hangar') return;
   if (!daily && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
+  if (!daily && !rush && typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first
+  previewSkin = null;   // committing to launch → drop any transient preview (gameplay always uses the OWNED skin)
   if (opMode && !daily && !rush) { selectedJet = i; openOperationsSelect(); return; }   // Operations: enter campaign navigation (player built per-operation in launchLevel), not a direct run
   const _ptag = g('pilotTag');
   if (_ptag) {
@@ -326,6 +328,8 @@ function enterOperationRun(opId) {
 function launchLevel(opId, idx) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
   const lvl = op.levels[idx]; if (!lvl) return;
+  if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // campaign launch respects the same unowned-skin gate
+  previewSkin = null;   // committing to a level → drop any transient preview (op player uses the OWNED skin)
   g('briefing') && g('briefing').classList.remove('show');
   g('opsSelect') && g('opsSelect').classList.remove('show');
   g('levelMap') && g('levelMap').classList.remove('show');
