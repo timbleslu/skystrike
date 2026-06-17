@@ -43,6 +43,7 @@ function loadSettings() {
     if (s.buttonLayout === 'right' || s.buttonLayout === 'left' || s.buttonLayout === 'compact') buttonLayout = s.buttonLayout;
     if (s.gfxQuality === 'auto' || s.gfxQuality === 'low' || s.gfxQuality === 'medium' || s.gfxQuality === 'high') gfxQuality = s.gfxQuality;
     if (typeof refreshGfxTier === 'function') { refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }   // F11: re-resolve tier from the persisted setting + resize the shadow map
+    if (s.unitSystem === 'imperial' || s.unitSystem === 'metric') unitSystem = s.unitSystem;   // HUD units (mph+ft / kph+m)
     if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
     if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
     if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
@@ -51,6 +52,13 @@ function loadSettings() {
 }
 // retranslate all static DOM text + re-render dynamic panels for the current LANG
 function setTxt(id, str) { const e = g(id); if (e) e.textContent = str; }
+// HUD speed/altitude unit labels reflect the chosen unit system. Called from applyLang (lang change /
+// load) and from the Units toggle's onChange so labels flip live. Numeric readouts convert in ui-hud.js
+// updateDom; the unit abbreviations (MPH/KPH/FT/M) are intentionally latin in both languages.
+function applyUnitLabels() {
+  setTxt('lblSpd', t(unitSystem === 'metric' ? 'hud.kph' : 'hud.mph'));
+  setTxt('lblAlt', t(unitSystem === 'metric' ? 'hud.metres' : 'hud.ft'));
+}
 function applyLang() {
   // language-select / onboarding screens
   setTxt('langTagline', t('lang.tagline')); setTxt('langBegin', t('lang.begin'));
@@ -118,7 +126,7 @@ function applyLang() {
   setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
   if (el.abIndicator) el.abIndicator.textContent = t('hud.ab');
   setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); setTxt('lblWave', t('hud.wave')); setTxt('lblCombo', t('hud.combo'));
-  setTxt('lblSpd', t('hud.knots')); setTxt('lblAlt', t('hud.ft'));
+  applyUnitLabels();
   setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));
   // manual
   setTxt('manTitle', t('manual.title')); setTxt('manSub', t('manual.sub'));
@@ -175,6 +183,7 @@ function applyLang() {
   segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
   segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');
   segTxt('#gfxQualityTog [data-gq="auto"]', 'set.gfxAuto'); segTxt('#gfxQualityTog [data-gq="low"]', 'set.gfxLow'); segTxt('#gfxQualityTog [data-gq="medium"]', 'set.gfxMedium'); segTxt('#gfxQualityTog [data-gq="high"]', 'set.gfxHigh');
+  segTxt('#unitsTog [data-un="imperial"]', 'set.unitsImperial'); segTxt('#unitsTog [data-un="metric"]', 'set.unitsMetric'); setTxt('lblUnits', t('set.units'));
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
   // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
@@ -229,6 +238,7 @@ function syncControlSettingsUI() {
   mark('aggressionTog', 'ag', motionAggression);
   mark('btnLayoutTog', 'bl', buttonLayout);
   mark('gfxQualityTog', 'gq', gfxQuality);
+  mark('unitsTog', 'un', unitSystem);
   const sh = g('setHaptics'); if (sh) sh.checked = haptics;
   const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
   const smf = g('setMouseFlight');   // F7: desktop mouse-pointer flight toggle (bound once)
@@ -292,7 +302,7 @@ function saveSettings() {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, devUnlockAll, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, controlScheme,
-      mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality
+      mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality, unitSystem
     }));
   } catch (e) {}
 }

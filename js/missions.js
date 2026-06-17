@@ -182,6 +182,11 @@ function missionName(type) { return t('mission.name.' + type) !== 'mission.name.
    Called from nextWave() (main.js) for op-mode sectors. `plan.mission` is the descriptor
    from sectorPlan() — escort/defend are first-class sectors now (no roll).
    'none' (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
+// §2 mission-card lore-blurb key for the level currently being flown (campaign only; null elsewhere).
+function missionCardBlurbKey() {
+  if (typeof currentCampaignLevel !== 'function' || typeof levelBlurbKey !== 'function') return null;
+  return levelBlurbKey(currentCampaignLevel());
+}
 function startSectorMission(plan, wave) {
   setpieceActive = plan.setpiece || null;   // F14: tag the resolution path when this node is an authored set-piece
   // Operations objective SEQUENCE (multi-phase level): walk the authored `objectives` queue. The
@@ -198,6 +203,7 @@ function startSectorMission(plan, wave) {
   else showBanner(tf('banner.missionStart', { name: missionName(type) }));
   if (typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), 1, 1);   // Req D: big center flash on objective issue
   showBanner(objectiveText(mission));
+  if (typeof showMissionCard === 'function') showMissionCard(type, missionCardBlurbKey());   // §2: mission intro card (type name + mechanical desc + lore blurb)
 }
 
 // spawn the objective-specific PROPS for a mission verb (recon waypoints / stealth extraction /
@@ -235,7 +241,7 @@ function startMissionPhase(idx, wave, isFirst) {
   }
   // Req D: issue the big center objective callout (3s) on EVERY phase transition, then the persistent banner.
   if (typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), idx + 1, missionPhases.length);
-  if (isFirst) showBanner(tf('banner.missionStart', { name: missionName(verb) }));
+  if (isFirst) { showBanner(tf('banner.missionStart', { name: missionName(verb) })); if (typeof showMissionCard === 'function') showMissionCard(verb, missionCardBlurbKey()); }   // §2: intro card on the level's first phase
   showBanner(objectiveText(mission));
 }
 
@@ -325,6 +331,7 @@ function updateMission(dt) {
   } else if (mission.type === 'recon') {
     // pure hit-test against the player position; progress mirrors the waypoint hit-count
     const r = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
+    if (r.hitCount > mission.progress && typeof audio !== 'undefined' && audio.ping) audio.ping();   // F1: one-shot chime the frame a waypoint checks off
     mission.progress = r.hitCount;
   } else if (mission.type === 'stealth') {
     // detection: rises while firing weapons OR while any enemy is aiming at you, decays otherwise.
@@ -335,7 +342,9 @@ function updateMission(dt) {
     const d = detectionDelta({ firing: firing, beingAimed: beingAimed, dt: dt, riseRate: mission.params.riseRate, decayRate: mission.params.decayRate });
     mission.params.detect = clamp((mission.params.detect || 0) + d, 0, 1);
     // reach the extraction waypoint (pure hit-test); win/fail resolved by the pure stealth predicates
-    reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
+    const rs = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
+    if (rs.hitCount > (mission._wpHit || 0) && typeof audio !== 'undefined' && audio.ping) audio.ping();   // F1: chime when extraction point reached
+    mission._wpHit = rs.hitCount;
   }
   tickMission(mission, dt);
   if (mission.status === 'won') onMissionResolved(true);

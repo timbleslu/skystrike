@@ -629,7 +629,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner(tf('banner.rivalDown', { rp: pay })); run.kills++; }
   else if (e.type === 'ground') {
     run.ground++;
-    if (strikeWaveActive) {
+    if (strikeSiteResolves(strikeWaveActive, mission ? mission.type : null)) {
       if (e.gkind === 'radar') showBanner(t('banner.radarDown'));
       if (!enemies.some(o => o.alive && o.type === 'ground' && !o.escortUnit && !o.defendAsset)) {   // last site element down → payout
         const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));

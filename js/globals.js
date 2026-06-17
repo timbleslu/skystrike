@@ -446,6 +446,7 @@ let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
 // draw-distance .visible cull on distant enemy meshes; enemies are NEVER despawned, so locks/markers survive).
 // Persisted via the settings seam (saveSettings/loadSettings in ui.js). engine.js owns applyGfxQuality().
 let gfxQuality = 'auto';
+let unitSystem = 'imperial';   // HUD units: 'imperial' (mph + ft, default) | 'metric' (kph + m). Persisted; drives the speedometer/altimeter readout + labels.
 // gfx-quality core (GFX_TIERS + pure resolveQuality) → core.js. refreshGfxTier (below) is the impure call site.
 // live resolved tier ('low'|'high'); recomputed from gfxQuality whenever the setting changes (engine.js applyGfxQuality
 // reads it). Default 'high' so desktop is untouched until refreshGfxTier() runs at boot/settings-load.
