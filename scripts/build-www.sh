@@ -6,4 +6,6 @@ rm -rf www
 mkdir -p www
 cp index.html styles.css www/
 cp -R js vendor www/
+# Runtime asset dirs (e.g. assets/maps/*.svg used by the geographic ops map as a CSS background).
+[ -d assets ] && cp -R assets www/
 echo "www/ ready"
