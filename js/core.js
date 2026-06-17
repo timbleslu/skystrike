@@ -19,10 +19,15 @@ const damp = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
 
 /* ---------------- weather core (feature #4) ---------------- */
 const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
+// fogMul values DRAMATICALLY raised (Track B §5): storm 1.6→5.7, fog 3.0→11.4 so active weather
+// guts the draw distance (storm ~6km, fog ~3km visible, vs the old ~21/~11km that read as barely-there).
+// The actual scene.fog.density is computed by fogDensityFor(tier, type) below (clear scales by tier,
+// storm/fog hit a fixed effective density); fogMul stays the descriptive gameplay-facing field and is
+// what visuals/tests key off. radar/lock fields unchanged — only fog distance changes.
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 3.0 },
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 1.6 },
+  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 11.4 },
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 5.7 },
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
 // factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
@@ -51,6 +56,18 @@ function rollWeather(seed) {
   x = (x ^ (x >>> 16)) >>> 0;
   const r = x / 4294967296;
   return r < 0.6 ? 'clear' : r < 0.8 ? 'fog' : 'storm';
+}
+// PURE — FogExp2 density per (tier, weather) (Track B §5). CLEAR scales by tier so richer tiers draw
+// farther (Low ~28km tighter to save mobile fill, Medium ~34km = current FOG_BASE, High ~38km open to
+// show the new relief/objects). STORM/FOG hit a FIXED effective density regardless of tier so active
+// weather visibly slams the sightline at every tier (storm ~6km, fog ~3km — visible distance for
+// FogExp2 at 2% transmittance is d = 1.978/density). Camera far (40km) never needs touching: fog is
+// near-opaque well before it. Used by engine.js applyWeather as scene.fog.density.
+const FOG_CLEAR_DENSITY = { low: 0.0000706, medium: 0.000058, high: 0.0000520 };  // ~28 / ~34 / ~38 km
+const FOG_ACTIVE_DENSITY = { storm: 0.000330, fog: 0.000659 };                     // ~6 km / ~3 km, all tiers
+function fogDensityFor(tier, weatherType) {
+  if (weatherType === 'storm' || weatherType === 'fog') return FOG_ACTIVE_DENSITY[weatherType];
+  return FOG_CLEAR_DENSITY[tier] || FOG_CLEAR_DENSITY.medium;   // clear / unknown weather → tier baseline
 }
 
 /* ---------------- boss phase core (F4) ---------------- */
@@ -319,14 +336,100 @@ function aimAssistStep(angErr, dist, dt, cfg) {
 }
 
 /* ---------------- graphics-quality core (F11) ---------------- */
-const GFX_TIERS = ['auto', 'low', 'high'];
-// PURE — resolve the effective render tier ('low'|'high') from the gfxQuality setting plus a cheap
-// device heuristic. Explicit 'low'/'high' pass through; 'auto' (and any unknown value) picks 'low'
-// for touch devices on a non-flagship pixel ratio (dpr <= 2), else 'high'. The fps sample (which
-// headless cannot measure) is layered on at the impure call site (refreshGfxTier in globals.js).
+const GFX_TIERS = ['auto', 'low', 'medium', 'high'];
+// PURE — resolve the effective render tier ('low'|'medium'|'high') from the gfxQuality setting plus a
+// cheap device heuristic. Explicit 'low'/'medium'/'high' pass through; 'auto' (and any unknown value)
+// picks 'medium' for ANY touch device (Track B target: mobile → MEDIUM, a behaviour change from the old
+// touch→low), else 'high' for desktop/non-touch. A user who wants the cheapest path selects 'low'
+// manually. The fps sample (which headless cannot measure) may layer an auto→low downgrade on at the
+// impure call site (refreshGfxTier in globals.js).
 function resolveQuality(setting, dpr, isTouch) {
-  if (setting === 'low' || setting === 'high') return setting;
-  return (isTouch && dpr <= 2) ? 'low' : 'high';
+  if (setting === 'low' || setting === 'medium' || setting === 'high') return setting;
+  return isTouch ? 'medium' : 'high';   // auto/unknown: touch → medium, desktop → high
+}
+
+/* ---------------- environment tier config (Track B terrain/sea/fog/ground tiers) ---------------- */
+// PURE per-tier knobs. SIZE stays constant; SEG drives (SEG+1)^2 verts / 2*SEG^2 tris. LOW is the
+// current shipping geometry (byte-for-byte: terrain SEG 220 no detail, sea SEG 200). These tables are
+// the single source of truth read by engine.js buildTerrain / buildScenery, and unit-tested here.
+const TERRAIN_TIER = {
+  low:    { seg: 220, detailAmp: 0,  detailOct: 0 },   // current look — no visual detail layer
+  medium: { seg: 300, detailAmp: 28, detailOct: 2 },
+  high:   { seg: 400, detailAmp: 60, detailOct: 3 },
+};
+const SEA_TIER = {
+  low:    { seg: 200, waveOct: 3, normOct: 0, foam: 0, reflect: 0 },   // current shader
+  medium: { seg: 220, waveOct: 4, normOct: 1, foam: 0, reflect: 0 },
+  high:   { seg: 256, waveOct: 5, normOct: 2, foam: 1, reflect: 1 },
+};
+// PURE — tier-only VISUAL terrain displacement, layered on top of terrainH (which is NEVER scaled per
+// tier — gameplay/shadow/ground-object-Y read terrainH unchanged). Higher-frequency fbm-ish rock/ridge
+// break-up. Amplitude is the tier knob (cfg.detailAmp); cfg.detailOct octaves. Returns 0 on LOW (or any
+// tier with detailAmp<=0). Deterministic (no RNG) so the build is reproducible. Bounded by detailAmp so
+// objects placed from the unmodified terrainH never visibly float more than ~detailAmp units.
+function terrainDetailH(x, z, cfg) {
+  if (!cfg || !(cfg.detailAmp > 0) || !(cfg.detailOct > 0)) return 0;
+  let h = 0, amp = 1, ampSum = 0, fx = 0.0034, fz = 0.0029;
+  for (let o = 0; o < cfg.detailOct; o++) {
+    h += amp * Math.sin(x * fx + o * 1.7) * Math.cos(z * fz + o * 0.9);
+    ampSum += amp;
+    amp *= 0.5; fx *= 2.13; fz *= 2.07;
+  }
+  return (h / ampSum) * cfg.detailAmp;   // normalized to [-detailAmp, +detailAmp]
+}
+
+/* ---------------- ground objects (Track B §4, NET-NEW) ---------------- */
+// Per-tier SPAWN CAPS (hard ceilings the planner never exceeds, even with placement retries). LOW
+// spawns nothing. MEDIUM: sparse rocks + occasional trees. HIGH: forests/buildings/roads/rocks.
+const GROUNDOBJ_TIER = {
+  low:    { rocks: 0,    trees: 0,    buildings: 0,   roads: 0 },
+  medium: { rocks: 600,  trees: 250,  buildings: 0,   roads: 0 },
+  high:   { rocks: 1400, trees: 1200, buildings: 350, roads: 8 },
+};
+const GROUNDOBJ_RADIUS = 12000;     // placement horizon (objects beyond the fog/cull horizon are wasted)
+const GROUNDOBJ_WATER_MARGIN = 4;   // trees/buildings reject terrainH < this (sea ≈ 0); rocks reject < 0
+const GROUNDOBJ_PLATFORM_CLEAR = 600;   // reject within this of the spawn platform (origin)
+const GROUNDOBJ_BUILD_MAX_SLOPE = 0.35; // reject buildings on faces steeper than this (central-diff slope)
+// PURE — deterministic ground-object placement plan from a seed + tier. `terrainHFn(x,z)` is INJECTED
+// (core.js stays THREE/engine-free) so Y comes from the gameplay surface (assumption A1), NOT the visual
+// detail layer. Returns an array of { type:'rock'|'tree'|'building'|'road', x, z, rot, scale } with EXACT
+// per-type counts capped at GROUNDOBJ_TIER[tier]. Rules (§4.3): water rejection, building slope rejection,
+// radial density falloff (denser near origin), platform exclusion. Same seed+tier+terrainHFn → same plan
+// (test-reproducible). Bounded retry budget per object so a hostile heightfield can't loop forever (the
+// per-type result may fall short of the cap if placement keeps failing — caps are ceilings, not quotas).
+function planGroundObjects(seed, tier, terrainHFn) {
+  const caps = GROUNDOBJ_TIER[tier] || GROUNDOBJ_TIER.low;
+  const out = [];
+  if (typeof terrainHFn !== 'function') return out;
+  const rng = makeRng(seed);
+  const R = GROUNDOBJ_RADIUS, platSq = GROUNDOBJ_PLATFORM_CLEAR * GROUNDOBJ_PLATFORM_CLEAR, E = 14;
+  // radial-falloff sampler: bias toward origin, accept by p = 1 - clamp(r/R)*0.6 (§4.3).
+  function place(type, count, minH, slopeCap) {
+    let made = 0, tries = 0, budget = count * 12 + 64;
+    while (made < count && tries < budget) {
+      tries++;
+      // sqrt() radius would be uniform-in-area; bias toward center by NOT sqrt-ing (denser near origin)
+      const ang = rng() * TWO_PI, rad = rng() * R;
+      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+      if (x * x + z * z < platSq) continue;                 // platform / runway exclusion
+      const h = terrainHFn(x, z);
+      if (h < minH) continue;                               // water margin
+      if (1 - clamp(rad / R, 0, 1) * 0.6 < rng()) continue; // radial density falloff
+      if (slopeCap != null) {                               // building slope rejection (central diff)
+        const dhx = (terrainHFn(x + E, z) - terrainHFn(x - E, z)) / (2 * E);
+        const dhz = (terrainHFn(x, z + E) - terrainHFn(x, z - E)) / (2 * E);
+        if (Math.hypot(dhx, dhz) > slopeCap) continue;
+      }
+      out.push({ type: type, x: x, z: z, rot: rng() * TWO_PI, scale: 0.7 + rng() * 0.9 });
+      made++;
+    }
+  }
+  place('rock', caps.rocks, 0, null);                                  // beach rocks allowed down to h>=0
+  place('tree', caps.trees, GROUNDOBJ_WATER_MARGIN, null);
+  place('building', caps.buildings, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_BUILD_MAX_SLOPE);
+  // roads: short straight ribbons; one record per road, the builder lays its strip. Reuse same gates.
+  place('road', caps.roads, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_BUILD_MAX_SLOPE);
+  return out;
 }
 
 /* ---------------- pure input shaping (controls.js seam) ---------------- */
@@ -798,6 +901,9 @@ if (typeof module !== 'undefined' && module.exports) {
     STEER, steerCommand,
     AIM_ASSIST, AIM_ASSIST_LEVELS, AIM_MAGNET_K, aimAssistCfg, aimAssistStep,
     GFX_TIERS, resolveQuality,
+    TERRAIN_TIER, SEA_TIER, terrainDetailH,
+    FOG_CLEAR_DENSITY, FOG_ACTIVE_DENSITY, fogDensityFor,
+    GROUNDOBJ_TIER, GROUNDOBJ_RADIUS, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_PLATFORM_CLEAR, GROUNDOBJ_BUILD_MAX_SLOPE, planGroundObjects,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
     enemyIsAimingPlayer,
     reconProgress, nextWaypoint, detectionDelta, reconWon, stealthWon, stealthFailed,

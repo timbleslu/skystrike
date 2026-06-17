@@ -198,6 +198,7 @@ function initThree() {
   applyTimeOfDay(timeOfDay);
 
   makePlatform();
+  buildGroundObjects();   // Track B: tier-gated InstancedMesh ground scatter (Low → no-op)
 
   h2d = document.getElementById('h2d').getContext('2d');
   document.getElementById('h2d').width = W; document.getElementById('h2d').height = H;
@@ -215,17 +216,37 @@ function onResize() {
 }
 
 // F11 mobile perf — apply the resolved gfxTier to the sun shadow (resolution + frustum depth). VISUAL-ONLY:
-// no light direction, scene contents, or gameplay change — just a cheaper shadow pass on the low tier. Idempotent
+// no light direction, scene contents, or gameplay change — just a cheaper shadow pass on lower tiers. Idempotent
 // (safe to call on every settings change). Disposing the existing shadow.map forces Three to reallocate it at the
 // new mapSize on the next render; the far plane shrink also tightens depth precision for the closer mid-range view.
+// Track B §6.1: 3-branch lookup — shadow map low 1024 / med 2048 / high 2048; far low 3000 / med 4500 / high 6000.
+const GFX_SHADOW = {
+  low:    { map: 1024, far: 3000 },
+  medium: { map: 2048, far: 4500 },
+  high:   { map: 2048, far: 6000 },
+};
 function applyGfxQuality() {
   if (!sun) return;
-  const low = gfxTier === 'low';
-  const res = low ? 1024 : 2048;
-  sun.shadow.mapSize.set(res, res);
+  const s = GFX_SHADOW[gfxTier] || GFX_SHADOW.high;
+  sun.shadow.mapSize.set(s.map, s.map);
   if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }   // force realloc at the new resolution
-  sun.shadow.camera.far = low ? 3000 : 6000;
+  sun.shadow.camera.far = s.far;
   sun.shadow.camera.updateProjectionMatrix();
+  applyEnvTier();   // drive the rest of the per-tier environment (terrain detail, sea variant, ground objects, fog baseline)
+}
+
+// Track B — the per-tier ENVIRONMENT orchestrator. Idempotent; safe to call repeatedly (boot + every
+// settings change). Rebuilds the terrain visual displacement, swaps the sea shader to the tier variant,
+// (re)builds/tears down ground objects, and re-applies the weather so the fog tier baseline updates. A
+// tier change mid-session may show a one-frame hitch during rebuild (acceptable, matches the shadow-map
+// realloc hitch). Guarded so it's a no-op until the scene exists (initThree calls applyGfxQuality before
+// the meshes are built — buildTerrain/buildScenery handle the first build with the live tier themselves).
+function applyEnvTier() {
+  if (!scene || !terrainMesh || !seaMesh) return;   // first boot: meshes not built yet (no-op; built tier-aware)
+  retuneTerrain();
+  retuneSea();
+  buildGroundObjects();
+  if (typeof weather !== 'undefined' && weather) applyWeather(weather.type);   // refresh fog tier baseline
 }
 
 function buildSky() {
@@ -264,26 +285,39 @@ function buildSky() {
 }
 
 let terrainMesh;
-function buildTerrain() {
-  // smooth-shaded indexed grid: analytic normals from the terrainH gradient,
-  // per-vertex height/slope colouring, shader-level fbm albedo detail
-  const SIZE = 26000, SEG = 220;
-  const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
+const TERRAIN_SIZE = 26000;
+// Build the displaced+coloured terrain geometry for a tier cfg (Track B §2). terrainH is the SOLE
+// gameplay/shadow base and is NEVER scaled per tier; cfg.detailAmp adds a tier-only VISUAL displacement
+// (terrainDetailH) on top, and the analytic normal folds in its gradient so lighting matches the relief.
+// LOW (detailAmp 0) is byte-for-byte the current look. Returns a fresh BufferGeometry.
+function buildTerrainGeo(cfg) {
+  const SEG = cfg.seg;
+  const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, SEG, SEG);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const cLow = new THREE.Color(0x16343a), cMid = new THREE.Color(0x26523a), cHigh = new THREE.Color(0x55626e), cSnow = new THREE.Color(0xdde9f2);
   const cRock = new THREE.Color(0x3a444c), cSand = new THREE.Color(0x6e6450);
   const colors = new Float32Array(pos.count * 3), normals = new Float32Array(pos.count * 3);
   const c = new THREE.Color(), E = 14;
+  const detail = cfg.detailAmp > 0;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i), h = terrainH(x, z);
+    const x = pos.getX(i), z = pos.getZ(i);
+    const baseH = terrainH(x, z);
+    const h = baseH + (detail ? terrainDetailH(x, z, cfg) : 0);   // visual relief layered on the gameplay base
     pos.setY(i, h);
-    // analytic normal via central differences
-    const dhx = (terrainH(x + E, z) - terrainH(x - E, z)) / (2 * E);
-    const dhz = (terrainH(x, z + E) - terrainH(x, z - E)) / (2 * E);
+    // analytic normal via central differences — include the detail gradient on Med/High so lighting
+    // matches the visible relief (4 extra terrainDetailH samples per vertex, one-time build cost).
+    let dhx, dhz;
+    if (detail) {
+      dhx = (terrainH(x + E, z) + terrainDetailH(x + E, z, cfg) - terrainH(x - E, z) - terrainDetailH(x - E, z, cfg)) / (2 * E);
+      dhz = (terrainH(x, z + E) + terrainDetailH(x, z + E, cfg) - terrainH(x, z - E) - terrainDetailH(x, z - E, cfg)) / (2 * E);
+    } else {
+      dhx = (terrainH(x + E, z) - terrainH(x - E, z)) / (2 * E);
+      dhz = (terrainH(x, z + E) - terrainH(x, z - E)) / (2 * E);
+    }
     const inv = 1 / Math.hypot(dhx, 1, dhz);
     normals[i * 3] = -dhx * inv; normals[i * 3 + 1] = inv; normals[i * 3 + 2] = -dhz * inv;
-    // height bands
+    // height bands (read the displaced h so colour bands track the visible surface)
     const t = clamp((h + 220) / 760, 0, 1);
     if (t < 0.45) c.copy(cLow).lerp(cMid, t / 0.45);
     else if (t < 0.82) c.copy(cMid).lerp(cHigh, (t - 0.45) / 0.37);
@@ -297,6 +331,15 @@ function buildTerrain() {
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  return geo;
+}
+let terrainTierBuilt = null;   // which tier the live terrain geometry was built for (idempotency guard)
+function buildTerrain() {
+  // smooth-shaded indexed grid: analytic normals from the terrainH gradient,
+  // per-vertex height/slope colouring, shader-level fbm albedo detail
+  const cfg = (typeof TERRAIN_TIER !== 'undefined' && TERRAIN_TIER[gfxTier]) ? TERRAIN_TIER[gfxTier] : { seg: 220, detailAmp: 0, detailOct: 0 };
+  const geo = buildTerrainGeo(cfg);
+  terrainTierBuilt = gfxTier;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.95 });
   // two-scale world-space noise breaks up the per-vertex colour bands into ground texture
   mat.onBeforeCompile = (sh) => {
@@ -328,6 +371,18 @@ function buildTerrain() {
   terrainMesh.receiveShadow = true;
   terrainMesh.castShadow = true;   // ridgelines throw real shadows into the valleys
   scene.add(terrainMesh);
+}
+// Track B — rebuild the terrain geometry for the current tier (SEG + visual detail). Idempotent: no-op
+// if the live geometry already matches gfxTier. Keeps the same mesh + material (only the geometry swaps),
+// disposing the replaced geometry. Called from applyEnvTier on tier change.
+function retuneTerrain() {
+  if (!terrainMesh) return;
+  if (terrainTierBuilt === gfxTier) return;
+  const cfg = (typeof TERRAIN_TIER !== 'undefined' && TERRAIN_TIER[gfxTier]) ? TERRAIN_TIER[gfxTier] : { seg: 220, detailAmp: 0, detailOct: 0 };
+  const old = terrainMesh.geometry;
+  terrainMesh.geometry = buildTerrainGeo(cfg);
+  if (old && old.dispose) old.dispose();
+  terrainTierBuilt = gfxTier;
 }
 
 /* fbm-eroded puff texture — soft radial falloff with noisy edges, baked once */
@@ -413,59 +468,115 @@ function inCloud(pos) {
   return false;
 }
 
-let seaMesh, seaMat;
+let seaMesh, seaMat, seaTierBuilt = null;
+const SEA_SIZE = 70000, SEA_LEVEL_Y = -10;   // sea plane size + its world Y (foam mask references this)
+// Track B — precomputed coastline/foam mask (High only): a low-res texture, 1 where the gameplay ground
+// height terrainH is within ~[-8,+18] of sea level (the surf band), 0 in open water / inland. Sampled in
+// the sea fragment shader (no per-frame CPU). Built ONCE and cached, tagged userData.shared so disposeGroup
+// (and tier swaps) never free it. Covers the sea extent in XZ.
+let FOAMMASK = null;
+function foamMaskTex() {
+  if (FOAMMASK) return FOAMMASK;
+  const S = 128, half = SEA_SIZE / 2;
+  const cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const x = cv.getContext('2d'), img = x.createImageData(S, S);
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    const wx = (i / (S - 1) - 0.5) * SEA_SIZE, wz = (j / (S - 1) - 0.5) * SEA_SIZE;
+    const h = terrainH(wx, wz) + SEA_LEVEL_Y;   // height relative to sea surface
+    // surf band: full foam right at the waterline, fading out by +18 (beach) and -8 (just submerged)
+    let f = 0;
+    if (h > -8 && h < 18) f = Math.min((h + 8) / 10, (18 - h) / 12, 1);
+    const k = (j * S + i) * 4, v = Math.max(0, Math.min(1, f)) * 255;
+    img.data[k] = img.data[k + 1] = img.data[k + 2] = v; img.data[k + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  FOAMMASK = new THREE.CanvasTexture(cv);
+  FOAMMASK.userData.shared = true;
+  return FOAMMASK;
+}
+// Track B — build the sea ShaderMaterial for a tier cfg (Track B §3). Feature richness is baked into the
+// GLSL at build time (one program per tier, still ONE draw call): wave octaves (vertex swell), fragment
+// normal-perturb octaves, an analytic reflectance term, and shoreline foam from the precomputed mask. The
+// time-of-day uniform writes (applyTimeOfDay) target the SAME uniform names across all variants. EVERY
+// variant MUST end with #include <tonemapping_fragment> then #include <colorspace_fragment> (invariant #2).
+function buildSeaMat(cfg) {
+  const waveOct = cfg.waveOct, normOct = cfg.normOct, foam = cfg.foam, reflect = cfg.reflect;
+  // vertex swell: 3 base octaves (current) + tier extras (cross/diagonal waves) summed into wave().
+  const waveBody = [
+    '  float w = sin(p.x*0.0015 + time*0.8)*4.2 + sin(p.y*0.0021 - time*0.6)*3.2 + sin((p.x+p.y)*0.0034 + time*1.4)*1.9;',
+  ];
+  if (waveOct >= 4) waveBody.push('  w += sin((p.x-p.y)*0.0026 + time*1.0)*1.4;');                 // +1 cross-wave (medium)
+  if (waveOct >= 5) waveBody.push('  w += sin(p.x*0.0052 - time*1.7)*0.8 + sin(p.y*0.0061 + time*1.9)*0.7;'); // +2 (high)
+  const vert = [
+    'uniform float time;',
+    'varying vec3 vPos; varying vec3 vNrm;',
+    'float wave(vec2 p){',
+    waveBody.join('\n'),
+    '  return w;',
+    '}',
+    'void main(){',
+    '  vec3 p = position;',
+    '  p.y += wave(p.xz);',
+    '  float e = 90.0;',
+    '  float hx = wave(p.xz + vec2(e,0.)) - wave(p.xz - vec2(e,0.));',
+    '  float hz = wave(p.xz + vec2(0.,e)) - wave(p.xz - vec2(0.,e));',
+    '  vNrm = normalize(vec3(-hx/(2.0*e)*60.0, 1.0, -hz/(2.0*e)*60.0));',
+    '  vPos = (modelMatrix * vec4(p, 1.0)).xyz;',
+    '  gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);',
+    '}',
+  ].join('\n');
+  const frag = [
+    'uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 deepCol; uniform vec3 horCol; uniform vec3 fogCol;',
+    'uniform float time;',
+    (foam ? 'uniform sampler2D foamMask; uniform float seaSize;' : ''),
+    'varying vec3 vPos; varying vec3 vNrm;',
+    'void main(){',
+    '  vec3 V = normalize(cameraPosition - vPos);',
+    '  vec3 N = normalize(vNrm);',
+    // fragment normal-perturb octaves: cheap animated sin ripple, arithmetic only (no texture fetch)
+    (normOct >= 1 ? '  N.xz += vec2(sin(vPos.x*0.06 + time*1.8), cos(vPos.z*0.06 - time*1.6)) * 0.020;' : ''),
+    (normOct >= 2 ? '  N.xz += vec2(sin(vPos.x*0.18 - time*2.6), cos(vPos.z*0.17 + time*2.9)) * 0.012;' : ''),
+    (normOct >= 1 ? '  N = normalize(N);' : ''),
+    '  float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);',
+    '  vec3 col = mix(deepCol, horCol * 0.85, fres * 0.75);',
+    '  vec3 R = reflect(-sunDir, N);',
+    '  float rv = max(dot(R, V), 0.0);',
+    // reflectance (high): boosted horizon-grazing specular + a sky-tint approximation from horCol (no probe)
+    (reflect ? '  col += horCol * fres * 0.35;' : ''),
+    (reflect ? '  col += sunCol * (pow(rv, 320.0) * 2.0 + pow(rv, 24.0) * 0.20);'
+             : '  col += sunCol * (pow(rv, 260.0) * 1.5 + pow(rv, 16.0) * 0.16);'),
+    // shoreline foam (high): animated smoothstep band from the precomputed coastline mask
+    (foam ? '  vec2 fuv = vPos.xz / seaSize + 0.5;' : ''),
+    (foam ? '  float fm = texture2D(foamMask, fuv).r;' : ''),
+    (foam ? '  float foamA = fm * (0.6 + 0.4*sin(time*2.0 + vPos.x*0.01 + vPos.z*0.01));' : ''),
+    (foam ? '  col = mix(col, vec3(0.92,0.96,1.0), clamp(foamA, 0.0, 0.85));' : ''),
+    '  float d = length(cameraPosition - vPos);',
+    '  col = mix(col, fogCol, 1.0 - exp(-d * 0.000048));',
+    '  gl_FragColor = vec4(col, 0.94);',
+    '  #include <tonemapping_fragment>',
+    '  #include <colorspace_fragment>',
+    '}',
+  ].filter(function (l) { return l !== ''; }).join('\n');
+  const uniforms = {
+    time: { value: 0 },
+    sunDir: { value: new THREE.Vector3(0.5, 1.0, 0.35).normalize() },
+    sunCol: { value: new THREE.Color(0xfff3d0) },
+    deepCol: { value: new THREE.Color(0x0c2c3e) },
+    horCol: { value: new THREE.Color(0x2a6a7a) },
+    fogCol: { value: new THREE.Color(0x0a1424) },
+  };
+  if (foam) { uniforms.foamMask = { value: foamMaskTex() }; uniforms.seaSize = { value: SEA_SIZE }; }
+  return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: uniforms, vertexShader: vert, fragmentShader: frag });
+}
 function buildScenery() {
   // animated open water: GPU swell + fresnel + sun glint, fading into the fog with distance
-  const seaGeo = new THREE.PlaneGeometry(70000, 70000, 200, 200);
+  const cfg = (typeof SEA_TIER !== 'undefined' && SEA_TIER[gfxTier]) ? SEA_TIER[gfxTier] : { seg: 200, waveOct: 3, normOct: 0, foam: 0, reflect: 0 };
+  const seaGeo = new THREE.PlaneGeometry(SEA_SIZE, SEA_SIZE, cfg.seg, cfg.seg);
   seaGeo.rotateX(-Math.PI / 2);
-  seaMat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false,
-    uniforms: {
-      time: { value: 0 },
-      sunDir: { value: new THREE.Vector3(0.5, 1.0, 0.35).normalize() },
-      sunCol: { value: new THREE.Color(0xfff3d0) },
-      deepCol: { value: new THREE.Color(0x0c2c3e) },
-      horCol: { value: new THREE.Color(0x2a6a7a) },
-      fogCol: { value: new THREE.Color(0x0a1424) },
-    },
-    vertexShader: [
-      'uniform float time;',
-      'varying vec3 vPos; varying vec3 vNrm;',
-      'float wave(vec2 p){',
-      '  return sin(p.x*0.0015 + time*0.8)*4.2 + sin(p.y*0.0021 - time*0.6)*3.2 + sin((p.x+p.y)*0.0034 + time*1.4)*1.9;',
-      '}',
-      'void main(){',
-      '  vec3 p = position;',
-      '  p.y += wave(p.xz);',
-      '  float e = 90.0;',
-      '  float hx = wave(p.xz + vec2(e,0.)) - wave(p.xz - vec2(e,0.));',
-      '  float hz = wave(p.xz + vec2(0.,e)) - wave(p.xz - vec2(0.,e));',
-      '  vNrm = normalize(vec3(-hx/(2.0*e)*60.0, 1.0, -hz/(2.0*e)*60.0));',
-      '  vPos = (modelMatrix * vec4(p, 1.0)).xyz;',
-      '  gl_Position = projectionMatrix * viewMatrix * vec4(vPos, 1.0);',
-      '}',
-    ].join('\n'),
-    fragmentShader: [
-      'uniform vec3 sunDir; uniform vec3 sunCol; uniform vec3 deepCol; uniform vec3 horCol; uniform vec3 fogCol;',
-      'varying vec3 vPos; varying vec3 vNrm;',
-      'void main(){',
-      '  vec3 V = normalize(cameraPosition - vPos);',
-      '  vec3 N = normalize(vNrm);',
-      '  float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);',
-      '  vec3 col = mix(deepCol, horCol * 0.85, fres * 0.75);',
-      '  vec3 R = reflect(-sunDir, N);',
-      '  float rv = max(dot(R, V), 0.0);',
-      '  col += sunCol * (pow(rv, 260.0) * 1.5 + pow(rv, 16.0) * 0.16);',
-      '  float d = length(cameraPosition - vPos);',
-      '  col = mix(col, fogCol, 1.0 - exp(-d * 0.000048));',
-      '  gl_FragColor = vec4(col, 0.94);',
-      '  #include <tonemapping_fragment>',
-      '  #include <colorspace_fragment>',
-      '}',
-    ].join('\n'),
-  });
+  seaMat = buildSeaMat(cfg);
+  seaTierBuilt = gfxTier;
   seaMesh = new THREE.Mesh(seaGeo, seaMat);
-  seaMesh.position.y = -10; scene.add(seaMesh);
+  seaMesh.position.y = SEA_LEVEL_Y; scene.add(seaMesh);
 
   const sv = [];
   for (let i = 0; i < 700; i++) { const d = new THREE.Vector3(rand(-1, 1), rand(0.06, 1), rand(-1, 1)).normalize().multiplyScalar(19000); sv.push(d.x, d.y, d.z); }
@@ -477,6 +588,24 @@ function buildScenery() {
   halo.scale.setScalar(5200); halo.position.copy(sun.position).setLength(17000); scene.add(halo); haloA = halo;
   const halo2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffe6a0, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.32, depthWrite: false, depthTest: false }));
   halo2.scale.setScalar(9000); halo2.position.copy(halo.position); scene.add(halo2); haloB = halo2;
+}
+// Track B — rebuild the sea geometry + shader for the current tier (SEG + wave/normal/reflect/foam
+// features). Idempotent: no-op if already built for gfxTier. Disposes the replaced (non-shared) geo +
+// material; the foam-mask texture is userData.shared so it survives. Re-applies TOD so the fresh material
+// picks up the live sun/fog uniforms. Called from applyEnvTier on tier change.
+function retuneSea() {
+  if (!seaMesh) return;
+  if (seaTierBuilt === gfxTier) return;
+  const cfg = (typeof SEA_TIER !== 'undefined' && SEA_TIER[gfxTier]) ? SEA_TIER[gfxTier] : { seg: 200, waveOct: 3, normOct: 0, foam: 0, reflect: 0 };
+  const oldGeo = seaMesh.geometry, oldMat = seaMesh.material;
+  const g = new THREE.PlaneGeometry(SEA_SIZE, SEA_SIZE, cfg.seg, cfg.seg); g.rotateX(-Math.PI / 2);
+  seaMat = buildSeaMat(cfg);
+  seaMesh.geometry = g;
+  seaMesh.material = seaMat;
+  if (oldGeo && oldGeo.dispose) oldGeo.dispose();
+  if (oldMat && oldMat.dispose) oldMat.dispose();   // replaced program (foam mask is shared, spared)
+  seaTierBuilt = gfxTier;
+  applyTimeOfDay(timeOfDay);   // re-push live sun/fog/TOD uniforms onto the fresh material
 }
 function applyTimeOfDay(tod) {
   timeOfDay = clamp(tod, 0, 2);
@@ -525,7 +654,12 @@ function applyWeather(type) {
   const T = TODS[timeOfDay];
   const storm = weather.type === 'storm';
   if (scene && scene.fog) {
-    scene.fog.density = FOG_BASE * weather.fogMul;
+    // Track B §5: fog density is now tier-aware — clear scales by tier (Low ~28 / Med ~34 / High ~38 km),
+    // storm/fog hit a fixed dramatic effective density (~6 km / ~3 km) so active weather guts the sightline
+    // at every tier. fogDensityFor (core.js) owns the table; guarded for load order. weather.fogMul stays
+    // the descriptive field. (Storm/fog COLOUR handling below is unchanged.)
+    const tier = (typeof gfxTier !== 'undefined') ? gfxTier : 'medium';
+    scene.fog.density = (typeof fogDensityFor === 'function') ? fogDensityFor(tier, weather.type) : FOG_BASE * weather.fogMul;
     const fc = new THREE.Color(T.fog);
     if (storm) fc.lerp(new THREE.Color(0x23262c), 0.55);   // desaturated slate overcast
     scene.fog.color.copy(fc);
@@ -551,6 +685,100 @@ function updateWeather(dt) {
     _lightT -= dt;
     if (_lightT <= 0) { empFlash = Math.max(empFlash, 0.22); _lightT = 3.5 + Math.random() * 6.5; }
   }
+}
+
+/* ---------------- ground objects (Track B §4, NET-NEW) ---------------- */
+// InstancedMesh ground scatter: rocks / trees / buildings / roads. Each TYPE = one InstancedMesh = one
+// draw call regardless of instance count. Templates (geo + mat) are built ONCE, cached + tagged
+// userData.shared so disposeGroup (and arena teardown) spare them; only the per-arena groundObjGroup
+// (the InstancedMesh wrappers + instance buffers) is freed. Low → nothing. Placement is deterministic
+// from weatherSeed via the pure planGroundObjects (core.js); Y comes from terrainH (gameplay surface).
+let groundObjGroup = null;
+const GOBJ_TPL = {};   // cached shared templates: { rockGeo, rockMat, trunkGeo, trunkMat, canopyGeo, canopyMat, bldGeo, bldMat, roadGeo, roadMat }
+function groundObjTemplates() {
+  if (GOBJ_TPL.rockGeo) return GOBJ_TPL;
+  const shared = (o) => { o.userData.shared = true; return o; };
+  // rock: low-poly icosa blob, lightly displaced, grey standard mat (~120 tris after subdiv → icosa detail 1 = 80; bump to detail 1 + noise)
+  const rg = new THREE.IcosahedronGeometry(8, 1);
+  { const p = rg.attributes.position; for (let i = 0; i < p.count; i++) { const s = 0.8 + 0.4 * Math.abs(Math.sin(p.getX(i) * 1.7 + p.getY(i) * 2.3 + p.getZ(i) * 1.1)); p.setXYZ(i, p.getX(i) * s, p.getY(i) * s * 0.85, p.getZ(i) * s); } rg.computeVertexNormals(); }
+  GOBJ_TPL.rockGeo = shared(rg);
+  GOBJ_TPL.rockMat = shared(new THREE.MeshStandardMaterial({ color: 0x6b6f73, roughness: 0.95, metalness: 0, flatShading: true }));
+  // tree: trunk cylinder (6-side) + cone canopy — TWO instanced sets (trunk, canopy)
+  const tg = new THREE.CylinderGeometry(1.1, 1.6, 14, 6); tg.translate(0, 7, 0);
+  GOBJ_TPL.trunkGeo = shared(tg);
+  GOBJ_TPL.trunkMat = shared(new THREE.MeshStandardMaterial({ color: 0x5b4630, roughness: 1, metalness: 0, flatShading: true }));
+  const cg = new THREE.ConeGeometry(7, 20, 7); cg.translate(0, 22, 0);
+  GOBJ_TPL.canopyGeo = shared(cg);
+  GOBJ_TPL.canopyMat = shared(new THREE.MeshStandardMaterial({ color: 0x2f5a32, roughness: 0.9, metalness: 0, flatShading: true }));
+  // building: extruded box + roof prism, flat-shaded, vertex-colour facade (single merged geo)
+  const bw = 22, bd = 22, bh = 40;
+  const box = new THREE.BoxGeometry(bw, bh, bd); box.translate(0, bh / 2, 0);
+  const roof = new THREE.ConeGeometry(bw * 0.78, 12, 4); roof.rotateY(Math.PI / 4); roof.translate(0, bh + 6, 0);
+  let bldGeo;
+  try { bldGeo = mergeGeos([box, roof]); } catch (e) { bldGeo = box; }   // fall back to body if merge unavailable
+  GOBJ_TPL.bldGeo = shared(bldGeo);
+  GOBJ_TPL.bldMat = shared(new THREE.MeshStandardMaterial({ color: 0x8a8f98, roughness: 0.8, metalness: 0.05, flatShading: true }));
+  // road: flat ribbon segment (laid near terrain), dark with a faint emissive lane hint
+  const road = new THREE.PlaneGeometry(60, 600); road.rotateX(-Math.PI / 2);
+  GOBJ_TPL.roadGeo = shared(road);
+  GOBJ_TPL.roadMat = shared(new THREE.MeshStandardMaterial({ color: 0x1c1f24, roughness: 0.95, metalness: 0, emissive: 0x14202a, emissiveIntensity: 0.25 }));
+  return GOBJ_TPL;
+}
+// helper: write one InstancedMesh of `count` for a (geo,mat) from a list of placements; Y from terrainH.
+const _gobjM4 = new THREE.Matrix4(), _gobjQ = new THREE.Quaternion(), _gobjP = new THREE.Vector3(), _gobjS = new THREE.Vector3();
+function makeInstanced(geo, mat, list, yOff, baseScale, cast) {
+  const im = new THREE.InstancedMesh(geo, mat, list.length);
+  for (let i = 0; i < list.length; i++) {
+    const o = list[i];
+    _gobjP.set(o.x, terrainH(o.x, o.z) + yOff, o.z);
+    _gobjQ.setFromAxisAngle(UPV, o.rot);
+    const sc = baseScale * o.scale;
+    _gobjS.set(sc, sc, sc);
+    _gobjM4.compose(_gobjP, _gobjQ, _gobjS);
+    im.setMatrixAt(i, _gobjM4);
+  }
+  im.instanceMatrix.needsUpdate = true;
+  im.castShadow = !!cast; im.receiveShadow = true;
+  im.frustumCulled = true;
+  return im;
+}
+// (Re)build the per-arena ground objects for the current tier. Idempotent — clears any existing group
+// first. Low → leaves the scene empty. High casts shadows; Medium receives but does not cast (keeps the
+// shadow pass cheap, §6.1). Safe to call repeatedly (applyEnvTier + arena start).
+function buildGroundObjects() {
+  clearGroundObjects();
+  if (!scene || gfxTier === 'low') return;
+  if (typeof planGroundObjects !== 'function') return;
+  const seed = (typeof weatherSeed === 'number' && weatherSeed) ? weatherSeed : 1;
+  const plan = planGroundObjects(seed, gfxTier, terrainH);
+  if (!plan.length) return;
+  const tpl = groundObjTemplates();
+  const cast = gfxTier === 'high';   // §6.1: ground objects cast shadows only on High
+  const rocks = plan.filter(o => o.type === 'rock');
+  const trees = plan.filter(o => o.type === 'tree');
+  const blds  = plan.filter(o => o.type === 'building');
+  const roads = plan.filter(o => o.type === 'road');
+  groundObjGroup = new THREE.Group();
+  if (rocks.length) groundObjGroup.add(makeInstanced(tpl.rockGeo, tpl.rockMat, rocks, 0, 1, cast));
+  if (trees.length) {
+    groundObjGroup.add(makeInstanced(tpl.trunkGeo, tpl.trunkMat, trees, 0, 1, cast));
+    groundObjGroup.add(makeInstanced(tpl.canopyGeo, tpl.canopyMat, trees, 0, 1, cast));
+  }
+  if (blds.length)  groundObjGroup.add(makeInstanced(tpl.bldGeo, tpl.bldMat, blds, 0, 1, cast));
+  if (roads.length) groundObjGroup.add(makeInstanced(tpl.roadGeo, tpl.roadMat, roads, 0.5, 1, false));   // roads never cast
+  scene.add(groundObjGroup);
+}
+// Tear down the per-arena ground objects. disposeGroup spares the userData.shared templates (geo+mats),
+// so only the InstancedMesh wrappers + instance buffers are freed — the shared geometry/material count
+// stays stable across repeated arena start/teardown cycles (§4.5). Idempotent.
+function clearGroundObjects() {
+  if (!groundObjGroup) return;
+  if (scene) scene.remove(groundObjGroup);
+  // free the per-instance buffers (InstancedMesh.dispose) — the shared geo/mat are spared by disposeGroup
+  // (userData.shared), so InstancedMesh.dispose only releases the instanceMatrix buffer, not the templates.
+  groundObjGroup.traverse(o => { if (o.isInstancedMesh && o.dispose) o.dispose(); });
+  if (typeof disposeGroup === 'function') disposeGroup(groundObjGroup);
+  groundObjGroup = null;
 }
 
 /* Keep the sun rig centred on the action each frame: the shadow frustum tracks the
