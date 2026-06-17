@@ -32,6 +32,8 @@ await page.waitForTimeout(1200);
 // drive past the first-run language gate (langSelect → onboard → hangar) so we reach
 // the real hangar instead of the language screen. Falls through harmlessly for returning players.
 await page.evaluate(() => {
+  const dd = document.getElementById('langDropdown');
+  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
   const en = document.querySelector('.ob-lang[data-lang="EN"]');
   if (en) en.click();
 });
