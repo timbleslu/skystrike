@@ -47,7 +47,7 @@
   <div id="wingSidebar"></div>
   <div id="pilotTag" class="pilot-tag" style="display:none"><span id="pilotEmblemIcon"></span><span id="pilotCallsignTxt"></span></div>
 
-  <div id="btnPause" onclick="toggleManual()">|| PAUSE</div>
+  <div id="btnPause" onclick="toggleManual()">&#9881; PAUSE &middot; SETTINGS</div>
   
   <!-- T1 SURVIVAL warnings: big, centred, interrupt everything -->
   <div id="warns-survival">
@@ -100,6 +100,10 @@
 
 <div id="hangar">
   <div id="versionTag" class="version-tag">Version 1.0</div>
+  <!-- F7/F3: prominent, lingering top-right entry to Controls & Manual (houses the Settings tab). Fixed to the
+       hangar viewport corner so it stays put while the hangar scrolls; lives inside #hangar so it auto-hides
+       in gameplay / mode-choice / endless-setup. -->
+  <button id="manualBtn" class="ghostbtn manual-cta manual-fixed">&#9881; CONTROLS &amp; MANUAL</button>
   <div class="hwrap">
     <h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1>
     <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
@@ -136,8 +140,7 @@
       </div>
     </div>
 
-    <!-- §5c: CONTROLS & MANUAL promoted to its own prominent CTA above the secondary ghost row -->
-    <button id="manualBtn" class="ghostbtn manual-cta">&#128214; CONTROLS &amp; MANUAL &middot; HOW TO PLAY</button>
+    <!-- F7: CONTROLS & MANUAL moved out to a lingering fixed top-right button (see #manualBtn under #versionTag). -->
     <div class="hbtns hbtns-secondary">
       <button id="metaBtn" class="ghostbtn">&#9650; COMMAND &amp; PROGRESSION</button>
       <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>

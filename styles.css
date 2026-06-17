@@ -416,6 +416,10 @@ canvas{display:block}
 /* CONTROLS & MANUAL — promoted standalone CTA above the ghost row so new players find it */
 .manual-cta{display:block;margin:var(--sp-6) auto 0;color:var(--ink-hi);border:1px solid var(--primary);background:rgba(var(--primary-rgb),.12);box-shadow:0 0 16px rgba(var(--primary-rgb),.28);letter-spacing:.14em}
 .manual-cta:hover{color:var(--ink-hi);border-color:var(--primary);background:rgba(var(--primary-rgb),.2);box-shadow:var(--glow-primary)}
+/* F7/F3: lingering top-right Controls & Manual button. Fixed to the hangar viewport corner (stays put on scroll),
+   above hangar content (#hangar is z-index 60); scoped inside #hangar so it never shows during gameplay. Clear of
+   #versionTag (bottom-right) and #wingSidebar (right-middle, HUD-only). */
+.manual-fixed{position:fixed;top:12px;right:12px;margin:0;z-index:62;white-space:nowrap}
 /* MODAL FRAME (§3k) — unified backdrop + token header for full-screen overlays */
 #manual{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.88),rgba(2,5,10,.97));backdrop-filter:blur(4px);overflow:auto;padding:40px 24px}
 #manual.show{display:block}
