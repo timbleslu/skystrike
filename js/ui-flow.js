@@ -84,6 +84,7 @@ function startGame(i, daily, rush) {
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
   weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
   if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
@@ -337,6 +338,7 @@ function enterOperationRun(opId) {
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;
   if (typeof applyWeather === 'function') applyWeather('clear');
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed
   resetDraftState();
   awacsUses = { strike: 0, resupply: 0, jam: 0 };
   awacsLast = { strike: 0, resupply: 0, jam: 0 };
