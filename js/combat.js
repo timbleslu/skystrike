@@ -112,12 +112,12 @@ function spawnMissile(pos, dir, target, enemy, dmgMul) {
   const mesh = buildMissileMesh(enemy);
   mesh.position.copy(pos).addScaledVector(dir, 11);
   scene.add(mesh);
-  const glowColor = enemy ? 0xff6a2e : 0x38d6ff;
+  const smokeColor = enemy ? 0xd9d2cc : 0xdfe2e6;   // thin warm-grey (foe) / cool-grey (yours) contrail — no neon
   const obj = {
     mesh, halo: mesh.userData.halo, exhaust: mesh.userData.exhaust,
     vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
     maxSpeed: enemy ? 880 : 1050, target, enemy, life: 7, dmg: (enemy ? 16 : 34) * (dmgMul || 1),
-    armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: glowColor, hardHome: false, ambush: false,
+    armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: smokeColor, hardHome: false, ambush: false,
   };
   missiles.push(obj);
   return obj;
@@ -163,9 +163,8 @@ function updateMissiles(dt, ts) {
     m.mesh.position.addScaledVector(m.vel, sdt);
     dirToQuat(cur, m.mesh.quaternion);
 
-    if (m.halo) m.halo.material.opacity = 0.7 + 0.3 * Math.sin(now * 0.02);
-    if (m.exhaust) m.exhaust.scale.setScalar(11 + 7 * (m.speed / m.maxSpeed) + rand(-1.6, 1.6));   // motor flare grows & flickers with burn
-    m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor || (m.enemy ? 0xff6a2e : 0x38d6ff)); m.smokeT = 0.02; }
+    if (m.exhaust) m.exhaust.scale.setScalar(5.5 + 1.6 * (m.speed / m.maxSpeed) + rand(-0.5, 0.5));   // small rear flame, gentle flicker
+    m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor || (m.enemy ? 0xd9d2cc : 0xdfe2e6)); m.smokeT = 0.02; }
 
     let hit = false;
     if (m.enemy) {

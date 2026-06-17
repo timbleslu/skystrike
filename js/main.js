@@ -632,9 +632,8 @@ function wingmanFireGun(w) {
 }
 function wingmanFireMissile(w) {
   const dir = fwdQ(w.logicQuat, t1);
-  const col = w.cca ? 0x49b6ff : WING_TEAL;
   const m = spawnMissile(w.group.position, dir, (w.target && w.target.alive) ? w.target : null, false, 0.9 * wingDmgMul);
-  if (m) { m.ai = true; m.byCCA = !!w.cca; m.trailColor = col; if (m.halo) m.halo.material.color.setHex(col); }
+  if (m) { m.ai = true; m.byCCA = !!w.cca; m.trailColor = 0xdfe2e6; }   // thin cool-grey contrail (allied), no neon team tint
   audio.blip(320, 0.4, 'sawtooth', 0.06, 80);
 }
 function wingmanDeployFlares(w) {
@@ -666,7 +665,7 @@ function wingmanSpecial(w) {
       const dir = fwdQ(w.logicQuat, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.4, 0.4));
       dir.y += rand(-0.08, 0.15); dir.normalize();
       const m = spawnMissile(pos, dir, tgt, false, 0.9 * wingDmgMul);
-      if (m) { m.ai = true; m.hardHome = true; m.trailColor = WING_TEAL; if (m.halo) m.halo.material.color.setHex(WING_TEAL); }
+      if (m) { m.ai = true; m.hardHome = true; m.trailColor = 0xdfe2e6; }   // thin cool-grey contrail (allied), no neon team tint
     }
   }
 
