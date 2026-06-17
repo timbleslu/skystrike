@@ -131,15 +131,10 @@ function applyMetaPerks(player) {
    FT-1(STD), F-47(F47), J-20(J20), J-36(J36), J-50(J50), EFT, FA18. cloneJetGLTF→applyPaint recolours
    their bare materials. Each jet gets exactly 3 skins:
      - `default` — PLAIN solid colour (always free/owned), the neutral stock look. Fast path: {color, accent}.
-     - skin 2 — COLOUR-BLOCK livery: per-material `zones` (material.name → colour) so distinct hull sections paint
-       differently with NO texture/UV needed (the textureless exports have no usable UVs — confirmed). `color` is the
-       fallback for any material not named in `zones`. `accent` drives the afterburner flame (addBurner).
-     - skin 3 — ELEVATED signature livery: the same `zones` base PLUS an optional procedural `decal`
-       {pattern,colors,place,…} (a spec-cached CanvasTexture on a generated UV'd decal sheet) and optional `geo`
-       [{kit,color,…}] accent meshes (spine/ring/chevrons/flashes/teeth) — both built by entities.js
-       decalTexture/addSkinDecal/addSkinGeo. decal/geo render ONLY for the player's owned skin + the hangar preview
-       (≤2 instances, non-low tier); textures are spec-cached so there is no per-spawn cost. Reads visibly busier
-       than skin 2. `resolveSkinPaint` forwards decal/geo (null for default + colour-block skin 2).
+     - skins 2 & 3 — COLOUR-BLOCK liveries: per-material `zones` (material.name → colour) so distinct hull sections
+       paint differently with NO texture/UV needed (the textureless exports have no usable UVs — confirmed). `color`
+       is the fallback for any material not named in `zones`. `accent` drives the afterburner flame (addBurner). The
+       two designed skins are independent colourways (e.g. cool splinter vs warm signature) — distinct at a glance.
    Material names below were read from each .glb via scripts/gltf-inspect.mjs. The other airframes ship baked
    liveries and are intentionally absent here (no chips). */
 const SKINS = {
@@ -147,43 +142,43 @@ const SKINS = {
   'FT-1': [
     { id: 'default', color: 0x9aa3ad, accent: 0xffd23f },
     { id: 'splinter', accent: 0x4fd1ff, color: 0x394d74, zones: { 'Grey': 0x394d74, 'Material': 0x394d74, 'LightGrey': 0x5b73a4, 'Material.002': 0x5b73a4, 'Black': 0x141b29, 'Green': 0x222d44, 'Yellow': 0x4fd1ff, 'Material.001': 0x4fd1ff } },
-    { id: 'valedictor', accent: 0xffcf33, color: 0x2b3340, zones: { 'Grey': 0x2b3340, 'Material': 0x2b3340, 'LightGrey': 0x3c4658, 'Material.002': 0x3c4658, 'Black': 0x11161f, 'Green': 0x202632, 'Yellow': 0xffcf33, 'Material.001': 0xffcf33 }, decal: { pattern: 'chevron', colors: [0xffcf33, 0x11161f], place: 'dorsal' }, geo: [ { kit: 'spine', color: 0xffcf33 }, { kit: 'ring', color: 0xffcf33 } ] },
+    { id: 'valedictor', accent: 0xffcf33, color: 0x2b3340, zones: { 'Grey': 0x2b3340, 'Material': 0x2b3340, 'LightGrey': 0x3c4658, 'Material.002': 0x3c4658, 'Black': 0x11161f, 'Green': 0x202632, 'Yellow': 0xffcf33, 'Material.001': 0xffcf33 } },
   ],
   // F-47 (F47) — 2 materials only: body (DoNothingMaterialClone) + 1 atlas decal → bold 2-tone ceiling
   'F-47': [
     { id: 'default', color: 0x3c4a58, accent: 0x36e0ff },
     { id: 'ghost', accent: 0xb070ff, color: 0x3a3f4a, zones: { 'DoNothingMaterialClone': 0x3a3f4a, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0xa64dff } },
-    { id: 'swarmlord', accent: 0x1fe0ff, color: 0x10182b, zones: { 'DoNothingMaterialClone': 0x10182b, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0x1fe0ff }, decal: { pattern: 'hex', colors: [0x1fe0ff, 0x3a6cff], place: 'dorsal', glow: true }, geo: [ { kit: 'spine', color: 0x1fe0ff, tall: true }, { kit: 'flashes', color: 0x1fe0ff, on: 'wingtip' } ] },
+    { id: 'swarmlord', accent: 0x1fe0ff, color: 0x2a63cc, zones: { 'DoNothingMaterialClone': 0x2a63cc, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0x1fe0ff } },
   ],
   // J-20 (J20) — 12 materials, rich multi-panel fuselage
   'J-20': [
     { id: 'default', color: 0x2d3138, accent: 0xff5a3c },
     { id: 'splinter', accent: 0x7dff3c, color: 0x2e8a2e, zones: { 'grey': 0x2e8a2e, 'material_0': 0x2e8a2e, 'Material.007': 0x51b951, 'Material.005': 0x51b951, 'Material.009': 0x51b951, 'Material.003': 0x1c541c, 'Material.099': 0x1c541c, 'Material.002': 0x1c541c, 'Material.001': 0x123612, 'Material.026': 0x123612, 'Facade_Glass': 0x051a05, 'Basic_Glass.001': 0x051a05 } },
-    { id: 'mightydragon', accent: 0xff7a1e, color: 0xb21f1f, zones: { 'grey': 0xb21f1f, 'material_0': 0xb21f1f, 'Material.007': 0xd4452e, 'Material.005': 0xd4452e, 'Material.009': 0xd4452e, 'Material.003': 0x7a1414, 'Material.099': 0x7a1414, 'Material.002': 0x7a1414, 'Material.001': 0x4d0d0d, 'Material.026': 0x4d0d0d, 'Facade_Glass': 0x2a0606, 'Basic_Glass.001': 0x2a0606 }, decal: { pattern: 'dragonScale', colors: [0xffc233, 0xb21f1f], place: 'nose' }, geo: [ { kit: 'flashes', color: 0xffc233, on: 'canard' }, { kit: 'flashes', color: 0xffc233, on: 'tail' } ] },
+    { id: 'mightydragon', accent: 0xff7a1e, color: 0xb21f1f, zones: { 'grey': 0xb21f1f, 'material_0': 0xb21f1f, 'Material.007': 0xd4452e, 'Material.005': 0xd4452e, 'Material.009': 0xd4452e, 'Material.003': 0x7a1414, 'Material.099': 0x7a1414, 'Material.002': 0x7a1414, 'Material.001': 0x4d0d0d, 'Material.026': 0x4d0d0d, 'Facade_Glass': 0x2a0606, 'Basic_Glass.001': 0x2a0606 } },
   ],
   // J-36 (J36) — 4 materials: body(22) + panel/cockpit cluster(15) + 2 accents
   'J-36': [
     { id: 'default', color: 0x4a525c, accent: 0xffd23f },
     { id: 'panel', accent: 0x36e0ff, color: 0x2a7584, zones: { 'PartMaterialClone': 0x2a7584, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0x47a5b8, 'DoNothingMaterialClone': 0x36e0ff, 'PartTransparentZWriteClone': 0x041316 } },
-    { id: 'dunestalker', accent: 0xff9500, color: 0xc9a45e, zones: { 'PartMaterialClone': 0xc9a45e, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0xe0c891, 'DoNothingMaterialClone': 0xff7a00, 'PartTransparentZWriteClone': 0x4a3617 }, decal: { pattern: 'tiger', colors: [0x4a3617, 0xc9a45e], place: 'fuselage' }, geo: [ { kit: 'chevrons', color: 0xff7a00 } ] },
+    { id: 'dunestalker', accent: 0xff9500, color: 0xc9a45e, zones: { 'PartMaterialClone': 0xc9a45e, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0xe0c891, 'DoNothingMaterialClone': 0xff7a00, 'PartTransparentZWriteClone': 0x4a3617 } },
   ],
   // J-50 (J50) — body = PartMaterialClone(15); other mats are HUD atlases (left at fallback)
   'J-50': [
     { id: 'default', color: 0xc2c8ce, accent: 0x36e0ff },
     { id: 'arctic', accent: 0x6bd6ff, color: 0xd3d7d9, zones: { 'PartMaterialClone': 0xd3d7d9, 'PartTransparentClone': 0x949ea8, 'PartTransparentZWriteClone': 0x949ea8, 'DoNothingMaterialClone': 0x6bd6ff } },
-    { id: 'nightreaper', accent: 0xff2a5a, color: 0x1a1b1f, zones: { 'PartMaterialClone': 0x1a1b1f, 'PartTransparentClone': 0x0e0f12, 'PartTransparentZWriteClone': 0x0e0f12, 'DoNothingMaterialClone': 0xff3060 }, decal: { pattern: 'sharkmouth', colors: [0xff3060, 0xe8eef2], place: 'nose', glow: true }, geo: [ { kit: 'teeth', color: 0xe8eef2 }, { kit: 'flashes', color: 0xff3060, on: 'tail' } ] },
+    { id: 'nightreaper', accent: 0xff2a5a, color: 0x1a1b1f, zones: { 'PartMaterialClone': 0x1a1b1f, 'PartTransparentClone': 0x0e0f12, 'PartTransparentZWriteClone': 0x0e0f12, 'DoNothingMaterialClone': 0xff3060 } },
   ],
   // EFT — 23 named materials, richest surface
   'EFT': [
     { id: 'default', color: 0x5f6a72, accent: 0xff5a3c },
     { id: 'aurora', accent: 0xff5ad6, color: 0xb8479c, zones: { 'white': 0xb8479c, 'Whitish_grey.001': 0xc988b9, 'Whitish_grey.002': 0xc988b9, 'Material.001': 0x843370, 'Material.002': 0x843370, 'Not_so_dark': 0x843370, 'Darker_paint': 0x672857, 'Darker_paint.001': 0x672857, 'darkness': 0x672857, 'darkenss': 0x672857, 'darkenss.001': 0x672857, 'Darkness.001': 0x672857, 'Nato_black': 0x541243, 'Eurofighter_RT': 0xb8479c, 'Eurofighter_RT.001': 0xb8479c, 'Eurofighter_LT': 0xb8479c, 'Glowing_green.001': 0xff5ad6 } },
-    { id: 'tigermeet', accent: 0xff8a1e, color: 0xe07b1e, zones: { 'white': 0xe07b1e, 'Whitish_grey.001': 0xf0a04b, 'Whitish_grey.002': 0xf0a04b, 'Material.001': 0xa8500f, 'Material.002': 0xa8500f, 'Not_so_dark': 0xa8500f, 'Darker_paint': 0x6e3408, 'Darker_paint.001': 0x6e3408, 'darkness': 0x6e3408, 'darkenss': 0x6e3408, 'darkenss.001': 0x6e3408, 'Darkness.001': 0x6e3408, 'Nato_black': 0x140d07, 'Eurofighter_RT': 0xe07b1e, 'Eurofighter_RT.001': 0xe07b1e, 'Eurofighter_LT': 0xe07b1e, 'Glowing_green.001': 0xffcf33 }, decal: { pattern: 'tiger', colors: [0x140d07, 0xe07b1e], place: 'fuselage', scale: 1.3 }, geo: [ { kit: 'spine', color: 0xe07b1e }, { kit: 'flashes', color: 0xffcf33, on: 'tail' }, { kit: 'flashes', color: 0xe07b1e, on: 'canard' } ] },
+    { id: 'tigermeet', accent: 0xff8a1e, color: 0xe07b1e, zones: { 'white': 0xe07b1e, 'Whitish_grey.001': 0xf0a04b, 'Whitish_grey.002': 0xf0a04b, 'Material.001': 0xa8500f, 'Material.002': 0xa8500f, 'Not_so_dark': 0xa8500f, 'Darker_paint': 0x6e3408, 'Darker_paint.001': 0x6e3408, 'darkness': 0x6e3408, 'darkenss': 0x6e3408, 'darkenss.001': 0x6e3408, 'Darkness.001': 0x6e3408, 'Nato_black': 0x140d07, 'Eurofighter_RT': 0xe07b1e, 'Eurofighter_RT.001': 0xe07b1e, 'Eurofighter_LT': 0xe07b1e, 'Glowing_green.001': 0xffcf33 } },
   ],
   // FA18 — 31 named materials, richest surface
   'FA18': [
     { id: 'default', color: 0x6b7782, accent: 0x36e0ff },
     { id: 'aggressor', accent: 0x36e0ff, color: 0x5b6670, zones: { 'Base_paint': 0x5b6670, 'Base_paint_2': 0x5b6670, 'side_color': 0x838f99, 'Whitish_grey.001': 0x838f99, 'Whitish_grey.002': 0x838f99, 'Not_so_dark.001': 0x3c454d, 'Darker_paint': 0x3c454d, 'Fa18_L': 0x3c454d, 'Fa18_R': 0x3c454d, 'Darkness.001': 0x262c31, 'darkenss': 0x262c31, 'darkenss.001': 0x262c31, 'Nato_black': 0x262c31, 'Fa18_engine': 0x1b1f23, 'engine_color': 0x1b1f23, 'Glowing_green.001': 0x36e0ff } },
-    { id: 'blueangel', accent: 0xffd23f, color: 0x11367a, zones: { 'Base_paint': 0x11367a, 'Base_paint_2': 0x11367a, 'side_color': 0x2a57b0, 'Whitish_grey.001': 0x2a57b0, 'Whitish_grey.002': 0x2a57b0, 'Not_so_dark.001': 0x0b2456, 'Darker_paint': 0x0b2456, 'Fa18_L': 0x0b2456, 'Fa18_R': 0x0b2456, 'Darkness.001': 0x061634, 'darkenss': 0x061634, 'darkenss.001': 0x061634, 'Nato_black': 0x061634, 'Fa18_engine': 0x040d1f, 'engine_color': 0x040d1f, 'Glowing_green.001': 0xffcf33 }, decal: { pattern: 'speedline', colors: [0xffcf33, 0xeef3f8], place: 'fuselage' }, geo: [ { kit: 'spine', color: 0xffcf33 }, { kit: 'flashes', color: 0xffcf33, on: 'wingtip' }, { kit: 'flashes', color: 0xffcf33, on: 'tail' } ] },
+    { id: 'blueangel', accent: 0xffd23f, color: 0x1c4fbf, zones: { 'Base_paint': 0x1c4fbf, 'Base_paint_2': 0x1c4fbf, 'side_color': 0x3f74e0, 'Whitish_grey.001': 0x3f74e0, 'Whitish_grey.002': 0x3f74e0, 'Not_so_dark.001': 0x143a96, 'Darker_paint': 0x143a96, 'Fa18_L': 0x143a96, 'Fa18_R': 0x143a96, 'Darkness.001': 0x0d2a72, 'darkenss': 0x0d2a72, 'darkenss.001': 0x0d2a72, 'Nato_black': 0x0d2a72, 'Fa18_engine': 0x0a1f55, 'engine_color': 0x0a1f55, 'Glowing_green.001': 0xffcf33 } },
   ],
 };
 
@@ -364,7 +359,7 @@ function setSkin(key, id) {
   saveMeta();
   return true;
 }
-/* resolve a skin id → paint descriptor {color, accent, zones, decal, geo} for a jet (ownership-AGNOSTIC). Plain skins
+/* resolve a skin id → paint descriptor {color, accent, zones} for a jet (ownership-AGNOSTIC). Plain skins
    carry just colour+accent; designed skins also carry `zones` (material.name → colour) that entities.js
    applyPaint interprets for multi-zone liveries. Falls back to the jet's stock paint. */
 function resolveSkinPaint(jet, id) {
@@ -372,10 +367,10 @@ function resolveSkinPaint(jet, id) {
   if (list) {
     for (var i = 0; i < list.length; i++) {
       const sk = list[i];
-      if (sk.id === id) return { color: sk.color != null ? sk.color : jet.color, accent: sk.accent != null ? sk.accent : jet.accent, zones: sk.zones || null, decal: sk.decal || null, geo: sk.geo || null };
+      if (sk.id === id) return { color: sk.color != null ? sk.color : jet.color, accent: sk.accent != null ? sk.accent : jet.accent, zones: sk.zones || null };
     }
   }
-  return { color: jet.color, accent: jet.accent, zones: null, decal: null, geo: null };
+  return { color: jet.color, accent: jet.accent, zones: null };
 }
 /* a jet's OWNED paint (honours the persisted skin choice). Used by gameplay (createPlayer) — NEVER reads the
    transient hangar previewSkin, so an unowned preview can never leak into a launched jet. */
