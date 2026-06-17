@@ -599,6 +599,11 @@ const I18N = {
       'skin.viper':    { name: 'VIPER' },  'skin.dragon': { name: 'DRAGON' },
       'skin.panel':    { name: 'PANEL' },  'skin.tiger':  { name: 'TIGER' },
       'skin.navy':     { name: 'NAVY' },
+      // textureless-jet livery redesign — skin 2 (aggressor) + elevated skin 3 (decal + geo)
+      'skin.aggressor':   { name: 'AGGRESSOR' },    'skin.valedictor':   { name: 'VALEDICTOR' },
+      'skin.swarmlord':   { name: 'SWARMLORD' },    'skin.mightydragon': { name: 'MIGHTY DRAGON' },
+      'skin.dunestalker': { name: 'DUNE STALKER' }, 'skin.nightreaper':  { name: 'NIGHT REAPER' },
+      'skin.tigermeet':   { name: 'TIGER MEET' },   'skin.blueangel':    { name: 'BLUE ANGEL' },
     },
   },
 
@@ -1312,6 +1317,11 @@ const I18N = {
       'skin.viper':    { name: '毒蛇' },     'skin.dragon': { name: '巨龙' },
       'skin.panel':    { name: '面板双色' }, 'skin.tiger':  { name: '虎纹' },
       'skin.navy':     { name: '海军灰' },
+      // textureless-jet livery redesign — skin 2 (aggressor) + elevated skin 3 (decal + geo)
+      'skin.aggressor':   { name: '假想敌' },   'skin.valedictor':   { name: '毕业之星' },
+      'skin.swarmlord':   { name: '蜂群领主' }, 'skin.mightydragon': { name: '威龙' },
+      'skin.dunestalker': { name: '沙丘猎手' }, 'skin.nightreaper':  { name: '暗夜死神' },
+      'skin.tigermeet':   { name: '北约虎会' }, 'skin.blueangel':    { name: '蓝天使' },
     },
   },
 };

@@ -67,4 +67,25 @@ assert.strictEqual(selectedSkin('FT-1'), 'default', 'selectedSkin stays default 
 assert.strictEqual(jetPaint(jetObj).zones, null, 'jetPaint (gameplay) stays the plain default — no unowned leak');
 console.log('ok - jetPaint is owned-only: unowned skin cannot persist into gameplay paint');
 
+// ---- skin 3 = ELEVATED livery (decal + procedural geo); skin 2 stays pure colour-block ----
+for (const id of TEXTURELESS) {
+  const s2 = SKINS[id][1], s3 = SKINS[id][2];
+  assert.ok(!s2.decal && !s2.geo, id + ' skin 2 is pure colour-block (no decal/geo)');
+  assert.ok(s3.decal && typeof s3.decal === 'object' && typeof s3.decal.pattern === 'string' &&
+    Array.isArray(s3.decal.colors) && s3.decal.colors.length >= 1, id + ' skin 3 carries a procedural decal {pattern,colors}');
+  assert.ok(Array.isArray(s3.geo) && s3.geo.length >= 1 &&
+    s3.geo.every(g => g && typeof g.kit === 'string' && typeof g.color === 'number'), id + ' skin 3 carries >=1 geo accent {kit,color}');
+}
+console.log('ok - skin 3 is elevated (decal + geo), visibly busier than colour-block skin 2');
+
+// ---- resolveSkinPaint forwards decal/geo so applyPaint can build them (null for plain + colour-block) ----
+const s3paint = resolveSkinPaint({ id: 'EFT', color: 0x111111, accent: 0x222222 }, SKINS['EFT'][2].id);
+assert.ok(s3paint.decal && s3paint.decal.pattern, 'resolveSkinPaint forwards the skin-3 decal');
+assert.ok(Array.isArray(s3paint.geo) && s3paint.geo.length, 'resolveSkinPaint forwards the skin-3 geo');
+const s2paint = resolveSkinPaint({ id: 'EFT', color: 0x1, accent: 0x2 }, SKINS['EFT'][1].id);
+assert.strictEqual(s2paint.decal, null, 'colour-block skin 2 resolves null decal');
+assert.strictEqual(s2paint.geo, null, 'colour-block skin 2 resolves null geo');
+assert.strictEqual(resolveSkinPaint({ id: 'EFT', color: 0x1, accent: 0x2 }, 'default').decal, null, 'default resolves null decal');
+console.log('ok - resolveSkinPaint forwards skin-3 decal/geo, null for colour-block + default');
+
 console.log('ALL SKIN TESTS PASS');

@@ -933,11 +933,215 @@ function applyFoeTint(obj) {
     o.material = Array.isArray(o.material) ? o.material.map(tintOne) : tintOne(o.material);
   });
 }
+
+/* ---------------- skin-3 decal + procedural-geo accents (texture-less jets only) ----------------
+   The textureless glTF hulls have NO usable UVs (several models ship no TEXCOORD_0 at all; where one
+   exists it is degenerate — confirmed), so a CanvasTexture assigned to a HULL material.map samples a
+   single texel and renders flat. Instead we mount the decal as a GENERATED, properly-UV'd sheet mesh
+   placed over a bbox-relative hull region, and the geo accents as small SOLID generated meshes. One
+   added-geometry system covers both requested mechanisms. All meshes ride as children of `inner` so
+   they follow the jet; all are PER-INSTANCE (userData.shared:false) so disposeGroup frees them. Only
+   the CanvasTextures are cached + reused (disposeGroup never frees textures), so spawns/previews cost
+   ZERO new texture allocation. Decal/geo only ever run for the player's owned skin + the hangar
+   preview (≤2 instances live), and only on non-low gfx tiers (textureless models don't load on low).
+   MOBILE/iOS NOTE: each unique decal spec rasterises one offscreen <canvas> (256² default) → a GPU
+   texture upload; cached by spec key so it happens once per distinct pattern, never per spawn. */
+
+/* module-level CanvasTexture cache. Key = pattern + colours + size + params. Tagged so it survives
+   per-instance disposal (disposeGroup skips textures anyway; the cache just avoids re-rasterising). */
+const DECAL_TEX_CACHE = new Map();
+function _hex(c) { return '#' + ('000000' + (c >>> 0).toString(16)).slice(-6); }
+function decalTexture(spec) {
+  const colors = spec.colors || [0xffffff];
+  const size = spec.size || 256;
+  const key = spec.pattern + '|' + size + '|' + colors.join(',') + '|' + (spec.scale || 1) + '|' + (spec.angle || 0);
+  let tex = DECAL_TEX_CACHE.get(key);
+  if (tex) return tex;
+  // headless guard: no document/canvas (Node test) → skip; the decal mesh simply won't be built.
+  if (typeof document === 'undefined' || !document.createElement) return null;
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const x = cv.getContext('2d');
+  x.clearRect(0, 0, size, size);                 // start fully transparent → pattern paints the alpha
+  const S = size, c0 = _hex(colors[0]), c1 = _hex(colors[1] != null ? colors[1] : colors[0]);
+  const sc = spec.scale || 1;
+  if (spec.pattern === 'chevron') {
+    x.lineWidth = S * 0.07 * sc; x.lineCap = 'butt';
+    const n = Math.max(2, Math.round(5 / sc));
+    for (let i = -n; i < n * 2; i++) {
+      x.strokeStyle = (i & 1) ? c1 : c0;
+      const y = (i / n) * S;
+      x.beginPath(); x.moveTo(0, y); x.lineTo(S * 0.5, y + S * 0.28); x.lineTo(S, y); x.stroke();
+    }
+  } else if (spec.pattern === 'hex') {
+    const r = S * 0.11 * sc, h = r * Math.sqrt(3);
+    x.lineWidth = Math.max(2, S * 0.012); x.strokeStyle = c1;
+    for (let row = -1, ry = 0; ry < S + h; row++, ry = row * h * 0.5) {
+      const off = (row & 1) ? r * 1.5 : 0;
+      for (let cx = off - r; cx < S + r; cx += r * 3) {
+        x.fillStyle = ((row + Math.round(cx / (r * 3))) & 1) ? c0 : c1;
+        x.beginPath();
+        for (let k = 0; k < 6; k++) { const a = Math.PI / 3 * k + Math.PI / 6; const px = cx + r * Math.cos(a), py = ry + r * Math.sin(a); k ? x.lineTo(px, py) : x.moveTo(px, py); }
+        x.closePath(); x.globalAlpha = 0.85; x.fill(); x.globalAlpha = 1; x.stroke();
+      }
+    }
+  } else if (spec.pattern === 'dragonScale') {
+    const r = S * 0.1 * sc;
+    for (let row = 0, ry = 0; ry < S + r; row++, ry += r * 0.62) {
+      const off = (row & 1) ? r : 0;
+      for (let cx = off; cx < S + r; cx += r * 2) {
+        const g = x.createRadialGradient(cx, ry - r * 0.3, r * 0.1, cx, ry, r);
+        g.addColorStop(0, c1); g.addColorStop(1, c0);
+        x.fillStyle = g; x.beginPath(); x.arc(cx, ry, r, Math.PI, 0); x.fill();
+        x.strokeStyle = c1; x.lineWidth = Math.max(1, S * 0.006); x.stroke();
+      }
+    }
+  } else if (spec.pattern === 'tiger') {
+    x.fillStyle = c0; x.fillRect(0, 0, S, S);     // tiger is an opaque base + dark stripes
+    x.strokeStyle = c1; x.lineCap = 'round';
+    const n = Math.round(7 * sc);
+    for (let i = 0; i < n; i++) {
+      const y = (i + 0.5) / n * S; x.lineWidth = S * (0.02 + 0.03 * Math.abs(Math.sin(i * 1.7)));
+      x.beginPath(); x.moveTo(-5, y);
+      for (let px = 0; px <= S; px += S / 8) x.lineTo(px, y + Math.sin(px * 0.05 + i) * S * 0.06);
+      x.stroke();
+    }
+  } else if (spec.pattern === 'sharkmouth') {
+    // toothy maw — bright fill so it glows on an additive decal at the nose
+    x.fillStyle = c0; x.beginPath();
+    x.moveTo(S * 0.05, S * 0.32); x.quadraticCurveTo(S * 0.5, S * 0.02, S * 0.95, S * 0.32);
+    x.quadraticCurveTo(S * 0.5, S * 0.62, S * 0.05, S * 0.32); x.fill();
+    x.fillStyle = c1;                              // teeth
+    const teeth = 9;
+    for (let i = 0; i < teeth; i++) {
+      const tx = S * 0.1 + (i / (teeth - 1)) * S * 0.8, tw = S * 0.035;
+      x.beginPath(); x.moveTo(tx - tw, S * 0.33); x.lineTo(tx + tw, S * 0.33); x.lineTo(tx, S * 0.46); x.fill();
+    }
+    x.fillStyle = '#0a0a0a'; x.beginPath(); x.ellipse(S * 0.7, S * 0.24, S * 0.05, S * 0.07, 0, 0, 7); x.fill();  // eye
+  } else { // 'speedline' (default) — directional motion streaks
+    x.strokeStyle = c0; x.lineCap = 'round';
+    const n = Math.round(14 * sc);
+    for (let i = 0; i < n; i++) {
+      const y = (i + 0.5) / n * S; x.globalAlpha = 0.35 + 0.5 * ((i * 7) % 5) / 5;
+      x.lineWidth = S * 0.012 * (0.6 + ((i * 3) % 4) / 4);
+      x.beginPath(); x.moveTo(S * (0.1 + ((i * 5) % 5) / 12), y); x.lineTo(S, y); x.stroke();
+    }
+    x.globalAlpha = 1;
+  }
+  tex = new THREE.CanvasTexture(cv);
+  if (spec.angle) tex.rotation = spec.angle;
+  tex.center && tex.center.set(0.5, 0.5);
+  tex.anisotropy = 4;
+  tex.userData = { shared: true };               // cached: never freed per-instance
+  DECAL_TEX_CACHE.set(key, tex);
+  return tex;
+}
+
+/* place a child mesh in a bbox-relative region of the oriented model (nose −Z / tail +Z / up +Y).
+   `place` picks the region; returns {pos, rot, w, h} sized so accents read at hangar-preview distance. */
+function _decalFrame(place, bb) {
+  const c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+  const L = s.z, W = s.x, H = s.y, top = bb.max.y, nose = bb.min.z;
+  if (place === 'nose')  return { pos: new THREE.Vector3(c.x, c.y, nose + L * 0.04), rot: new THREE.Euler(0, 0, 0),            w: W * 0.42, h: H * 0.6,  face: 'z' };
+  if (place === 'wing')  return { pos: new THREE.Vector3(c.x, c.y + H * 0.18, c.z),     rot: new THREE.Euler(-Math.PI / 2, 0, 0), w: W * 0.7,  h: L * 0.34, face: 'y' };
+  if (place === 'fuselage') return { pos: new THREE.Vector3(c.x + W * 0.18, c.y, c.z), rot: new THREE.Euler(0, Math.PI / 2, 0), w: L * 0.5,  h: H * 0.5,  face: 'x' };
+  /* 'dorsal' (default) — flat sheet laid on the upper-fuselage spine band (NOT bbox-top = vertical-tail height), facing up */
+  return { pos: new THREE.Vector3(c.x, c.y + H * 0.30, c.z - L * 0.05), rot: new THREE.Euler(-Math.PI / 2, 0, 0), w: W * 0.5, h: L * 0.55, face: 'y' };
+}
+
+/* build the textured decal sheet(s) and add to `inner`. Neon patterns (sharkmouth/hex) glow via
+   additive blending; paint-like patterns use normal alpha. bbox is the oriented model's Box3. */
+function addSkinDecal(inner, decalSpec, bb) {
+  if (!decalSpec || !decalSpec.pattern) return;
+  const tex = decalTexture(decalSpec);
+  if (!tex) return;                                // headless / no canvas → skip silently
+  const neon = decalSpec.glow != null ? decalSpec.glow : (decalSpec.pattern === 'sharkmouth' || decalSpec.pattern === 'hex');
+  const fr = _decalFrame(decalSpec.place || 'dorsal', bb);
+  const geo = new THREE.PlaneGeometry(fr.w, fr.h);
+  geo.userData = { shared: false };
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
+    blending: neon ? THREE.AdditiveBlending : THREE.NormalBlending,
+    opacity: decalSpec.opacity != null ? decalSpec.opacity : (neon ? 0.9 : 1),
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  });
+  mat.userData = { shared: false };
+  const m = new THREE.Mesh(geo, mat);
+  m.position.copy(fr.pos); m.rotation.copy(fr.rot);
+  m.renderOrder = 4; m.userData = { shared: false };
+  inner.add(m);
+}
+
+/* parametric solid-geo accent kit. `geoSpec` is an ARRAY of {kit, color, ...params}. All meshes are
+   per-instance (shared:false). bbox is the oriented model's Box3. Kits: spine/ring/chevrons/flashes/teeth. */
+function addSkinGeo(inner, geoSpec, bb) {
+  if (!Array.isArray(geoSpec)) return;
+  const c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+  const L = s.z, W = s.x, H = s.y, top = bb.max.y, nose = bb.min.z, tail = bb.max.z;
+  const bandY = c.y + H * 0.30;                     // upper-fuselage band — keeps the spine/chevrons on the back, not at vertical-tail-tip height
+  const mk = (geo, col, emissive) => {
+    geo.userData = { shared: false };
+    const mat = new THREE.MeshStandardMaterial({ color: col, metalness: 0.3, roughness: 0.55, emissive: emissive ? new THREE.Color(col) : 0x000000, emissiveIntensity: emissive ? 0.5 : 0 });
+    mat.userData = { shared: false };
+    const m = new THREE.Mesh(geo, mat); m.userData = { shared: false }; m.castShadow = true;
+    return m;
+  };
+  for (const g of geoSpec) {
+    if (!g || !g.kit) continue;
+    const col = g.color != null ? g.color : 0xffffff;
+    if (g.kit === 'spine') {
+      // raised dorsal stripe nose→tail; `tall` = F-47 data-fin (a real blade)
+      const tall = !!g.tall, len = L * (g.len || 0.7), hgt = tall ? H * 0.5 : H * 0.06, wid = tall ? W * 0.012 : W * 0.04;
+      const m = mk(new THREE.BoxGeometry(wid, hgt, len), col, tall);
+      m.position.set(c.x, bandY + hgt * 0.5, c.z - L * 0.03);
+      inner.add(m);
+    } else if (g.kit === 'ring') {
+      // nose collar band
+      const rad = Math.max(W, H) * 0.5 * (g.rad || 0.55);
+      const m = mk(new THREE.TorusGeometry(rad, rad * 0.12, 8, 24), col, !!g.glow);
+      m.position.set(c.x, c.y, nose + L * (g.at || 0.14)); // ring faces along Z by default
+      inner.add(m);
+    } else if (g.kit === 'chevrons') {
+      // forward-pointing strakes on the upper surface
+      const n = g.count || 3;
+      for (let i = 0; i < n; i++) {
+        const tw = W * 0.18, m = mk(new THREE.ConeGeometry(tw, L * 0.1, 3), col, !!g.glow);
+        m.rotation.x = -Math.PI / 2;               // cone tip → forward (−Z)
+        m.position.set(c.x, bandY + 0.04, c.z - L * 0.05 + i * L * 0.1);
+        m.scale.set(1, 0.18, 1);                    // flatten into a strake
+        inner.add(m);
+      }
+    } else if (g.kit === 'flashes') {
+      // thin blades along an edge: 'tail' (default) | 'wingtip' | 'canard'
+      const on = g.on || 'tail';
+      const blade = (px, pz, ang) => { const m = mk(new THREE.BoxGeometry(W * 0.01, H * 0.22, L * 0.16), col, true); m.position.set(px, c.y + H * 0.05, pz); m.rotation.y = ang || 0; inner.add(m); };
+      if (on === 'wingtip') { blade(bb.min.x + W * 0.04, c.z, 0); blade(bb.max.x - W * 0.04, c.z, 0); }
+      else if (on === 'canard') { blade(bb.min.x + W * 0.18, nose + L * 0.28, 0.3); blade(bb.max.x - W * 0.18, nose + L * 0.28, -0.3); }
+      else { blade(c.x, tail - L * 0.06, 0); }       // tail fin flash
+    } else if (g.kit === 'teeth') {
+      // ring of small triangles at the nose lip = shark teeth
+      const n = g.count || 10, rad = Math.max(W, H) * 0.32;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const m = mk(new THREE.ConeGeometry(rad * 0.12, rad * 0.4, 4), col, !!g.glow);
+        m.position.set(c.x + Math.cos(a) * rad, c.y + Math.sin(a) * rad, nose + L * 0.05);
+        m.rotation.x = -Math.PI / 2; m.rotation.z = -a;  // teeth point forward, fanned round the lip
+        inner.add(m);
+      }
+    }
+  }
+}
+
 /* in-code paint for the texture-less jets. `paint` is EITHER a plain colour NUMBER (enemy-red / legacy) OR a
-   skin descriptor {color, zones?}: `zones` maps material.name → colour so distinct hull sections paint
-   differently (splinter / two-tone / tiger — no texture/UVs needed), `color` is the fallback for any material
-   not named in zones. Clones materials PER INSTANCE (templates are userData.shared — never mutate them) and
-   tags the clone shared:false so disposeGroup frees it. No textures allocated → no per-spawn texture cost. */
+   skin descriptor {color, zones?, decal?, geo?}: `zones` maps material.name → colour so distinct hull sections
+   paint differently (splinter / two-tone / tiger — no texture/UVs needed), `color` is the fallback for any
+   material not named in zones. Clones materials PER INSTANCE (templates are userData.shared — never mutate
+   them) and tags the clone shared:false so disposeGroup frees it.
+   SKIN-3 ACCENTS (player owned-skin + hangar preview only — ≤2 instances, never enemies): an optional
+   `decal` {pattern,colors[],place,…} mounts a generated UV'd CanvasTexture sheet over a hull region (the
+   hulls have no usable UVs, so the decal is added geometry, not a hull-material .map), and an optional
+   `geo` [{kit,color,…}] adds parametric solid accent meshes (spine/ring/chevrons/flashes/teeth). Both run
+   ONLY when present, so the number / zones-only paths stay byte-identical. Added meshes are per-instance
+   (shared:false → disposeGroup frees them); only the CanvasTextures are cached (no per-spawn texture cost). */
 function applyPaint(obj, paint) {
   if (typeof paint === 'number') paint = { color: paint };
   const base = paint.color, zones = paint.zones || null;
@@ -951,6 +1155,12 @@ function applyPaint(obj, paint) {
     };
     o.material = Array.isArray(o.material) ? o.material.map(paintOne) : paintOne(o.material);
   });
+  if (paint.decal || paint.geo) {                  // skin-3 only. bb is in GAME space (obj already sits scaled +
+    const bb = new THREE.Box3().setFromObject(obj); // nose→−Z rotated under its outer group). Attach accents to that
+    const host = obj.parent || obj;                 // OUTER group, NOT the model wrap — adding to the wrap re-applies
+    if (paint.decal) addSkinDecal(host, paint.decal, bb);   // its scale (flings them out) + Y-rotation (swings z-offsets
+    if (paint.geo) addSkinGeo(host, paint.geo, bb);         // sideways), which floats the whole livery off the hull.
+  }
 }
 
 /* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
