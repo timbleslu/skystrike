@@ -181,11 +181,13 @@ function onEmblemClick(id) {
 }
 // first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
 function initOnboarding() {
-  document.querySelectorAll('.ob-lang').forEach(b => b.addEventListener('click', () => {
-    LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui();
+  const langDd = g('langDropdown');
+  if (langDd) langDd.addEventListener('change', () => {
+    if (!langDd.value) return;
+    LANG = langDd.value; saveSettings(); applyLang(); if (audio.on) audio.ui();
     g('langSelect').classList.remove('show');
     g('onboard').classList.add('show');
-  }));
+  });
   const oc = g('obContinue');
   if (oc) oc.addEventListener('click', () => {
     g('onboard').classList.remove('show');
