@@ -930,11 +930,11 @@ function buildJet(color, accent, cfg, hero) {
 const JET_MODELS = {
   F22:    { file: 'f22.glb',    rotY: -Math.PI / 2, len: 26 },
   SU57:   { file: 'su57.glb',   rotY:  Math.PI / 2, len: 26 },
-  RAFALE: { file: 'rafale.glb', rotY:  Math.PI,     len: 26 },
+  RAFALE: { file: 'rafale.glb', rotY: -Math.PI / 2, len: 26 },
   EFT:    { file: 'eft.glb',    rotY:  Math.PI / 2, len: 26 },
   FA18:   { file: 'fa18.glb',   rotY:  Math.PI / 2, len: 26 },
   J20:    { file: 'j20.glb',    rotY:  Math.PI / 2, len: 26 },
-  J36:    { file: 'j36.glb',    rotY:  Math.PI / 2, len: 28 },
+  J36:    { file: 'j36.glb',    rotY:  Math.PI,     len: 28 },
   F35:    { file: 'f35.glb',    rotY:  Math.PI,     len: 26 },
   F47:    { file: 'f47.glb',    rotY:  Math.PI,     len: 26 },
   J50:    { file: 'j50.glb',    rotY:  Math.PI,     len: 26 },
@@ -968,6 +968,18 @@ function loadJetModels() {
           if (!o.material || !o.material.transparent) o.castShadow = true;
         }
       });
+      // afterburner anchors derived from the oriented template: nozzles at the tail (+Z), spread by engine count
+      const bb = new THREE.Box3().setFromObject(wrap);
+      const bs = bb.getSize(new THREE.Vector3()), bc = bb.getCenter(new THREE.Vector3());
+      const cnt = (typeof SHAPES !== 'undefined' && SHAPES[id] && SHAPES[id].engines) || 2;
+      const buried = !!(typeof SHAPES !== 'undefined' && SHAPES[id] && (SHAPES[id].buriedExhaust || SHAPES[id].flyingWing));
+      const xw = 1.1;                                            // half the twin-nozzle spacing (≈ the F-22's ±1.0)
+      wrap.userData.burn = {
+        z: bb.max.z - 0.5,                                       // just inside the tail
+        y: bc.y - bs.y * 0.12,                                   // slightly below the centreline
+        xs: cnt === 1 ? [0] : cnt === 3 ? [-2 * xw, 0, 2 * xw] : [-xw, xw],
+        rad: buried ? 0.5 : 1,                                   // stealth flying-wing exhaust is subtle
+      };
       jetGLTF[id] = wrap;
       // if the hangar is previewing this exact shape, re-run selectJet so the model swaps in once loaded
       if (typeof previewJet !== 'undefined' && previewJet && typeof JETS !== 'undefined' && JETS[selectedJet] && JETS[selectedJet].shape === id && typeof selectJet === 'function') selectJet(selectedJet);
@@ -975,43 +987,42 @@ function loadJetModels() {
   });
 }
 
-/* F-22 afterburner + control-surface overlay, attached to the OUTER game-space group (so coords are
-   un-scaled). Anchors measured off the real glTF (nose +Z, tail -Z, span X, up Y):
-   nozzles X=±1.0 Y=-0.9 Z=-8.8; wing outboard TE Z≈-6.8 @ |X|7; canted fins top Y≈3.1 @ |X|4 Z≈-7.5;
-   horizontal stabs TE Z≈-9 @ |X|2.6. Meshes are PER-INSTANCE (never userData.shared) so disposeGroup frees them. */
-function addF22Burner(g, accent) {
+/* afterburner plume attached directly to the game-space clone group at the jet's tail nozzle(s).
+   burn = { z (tail, +Z aft), y, xs[] (per-engine X centre), rad (size scale) } — computed per template
+   in loadJetModels from its oriented bbox + SHAPES.engines. Builds the userData.engines contract that
+   animEngines drives (player/wingmen modulate by throttle; enemies keep this cruise level). Meshes are
+   PER-INSTANCE (never userData.shared) so disposeGroup frees them. */
+function addBurner(g, burn, accent) {
   const engines = [];
   const acc = (typeof accent === 'number') ? accent : 0xff7a2a;
+  const r = burn.rad || 1;
   const heatMat = new THREE.MeshBasicMaterial({ color: 0xffcaa0, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-  for (const ex of [-1.0, 1.0]) {                     // twin engine centrelines
-    const ny = -0.9, nz = -8.8;                       // nozzle exit (game space)
+  for (const ex of burn.xs) {
+    const ny = burn.y, nz = burn.z;                   // nozzle exit (game space; aft = +Z)
     // additive glow puff right at the nozzle lip
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 10), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    glow.position.set(ex, ny, nz - 0.3); glow.scale.set(1, 1, 1.8); g.add(glow);
-    // afterburner flame cone — apex at the nozzle, tail streaming aft (-Z)
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.62, 6.0, 16), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    flame.rotation.x = -Math.PI / 2;                  // cone +Y -> -Z (point the base downstream)
-    flame.position.set(ex, ny, nz - 2.6); g.add(flame);
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.9 * r, 12, 10), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    glow.position.set(ex, ny, nz + 0.3); glow.scale.set(1, 1, 1.8); g.add(glow);
+    // afterburner flame cone — apex at the nozzle, plume streaming aft (+Z)
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.62 * r, 6.0 * r, 16), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    flame.rotation.x = Math.PI / 2;                   // cone +Y -> +Z (point the base downstream)
+    flame.position.set(ex, ny, nz + 2.6 * r); g.add(flame);
     // white-hot inner tongue
-    const core = new THREE.Mesh(new THREE.ConeGeometry(0.34, 4.0, 14), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    core.rotation.x = -Math.PI / 2; core.position.set(ex, ny, nz - 1.9); g.add(core);
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.34 * r, 4.0 * r, 14), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    core.rotation.x = Math.PI / 2; core.position.set(ex, ny, nz + 1.9 * r); g.add(core);
     // shock-diamond ladder (fades in at burner via animEngines)
     const diaMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     const dia = new THREE.Group();
     for (let d = 0; d < 4; d++) {
-      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.3 - d * 0.045, 1), diaMat);
-      m.scale.z = 1.6; m.position.z = -(0.9 + d * 1.05); dia.add(m);   // march downstream (-Z)
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry((0.3 - d * 0.045) * r, 1), diaMat);
+      m.scale.z = 1.6; m.position.z = (0.9 + d * 1.05) * r; dia.add(m);   // march downstream (+Z)
     }
-    dia.position.set(ex, ny, nz - 1.0); dia.visible = false; g.add(dia);
+    dia.position.set(ex, ny, nz + 1.0 * r); dia.visible = false; g.add(dia);
     engines.push({ glow, flame, core, dia, diaMat });
   }
   g.userData.engines = engines;
-  g.userData.heatMat = heatMat;   // no nozzle-interior mesh on the fused model; harmless emissive sink
+  g.userData.heatMat = heatMat;   // harmless emissive sink (no nozzle-interior mesh on the fused models)
 }
 
-/* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
-   is nested in a NEW outer game-space group so the afterburner + control-surface overlays attach in
-   un-scaled game coords. */
 /* enemy glTF clones can't take the game's red enemy paint (textures are baked), so friend/foe is
    unreadable in a furball. Give each enemy INSTANCE a red emissive sheen. The template's materials
    are userData.shared and must never be mutated, so clone the material per mesh and tag the clone
@@ -1028,21 +1039,16 @@ function applyFoeTint(obj) {
     o.material = Array.isArray(o.material) ? o.material.map(tintOne) : tintOne(o.material);
   });
 }
+/* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
+   nests in a NEW outer game-space group; the afterburner attaches there in un-scaled game coords. */
 function cloneJetGLTF(id, accent, opts) {
   opts = opts || {};
   const inner = jetGLTF[id].clone(true);
   const g = new THREE.Group();
   g.add(inner);
-  if (opts.enemy) applyFoeTint(inner);   // per-instance red sheen for foe readability
-  if (opts.rig) {
-    // The afterburner rig was authored for the F-22 model's raw (+Z-nose) orientation. The model is
-    // flipped to nose -Z (game forward), so carry the rig in a 180° group so the plume stays on the tail.
-    const fx = new THREE.Group(); fx.rotation.y = Math.PI;
-    addF22Burner(fx, accent);      // afterburner -> fx.userData.engines (+ heatMat); animEngines drives it
-    g.add(fx);
-    g.userData.engines = fx.userData.engines;
-    g.userData.heatMat = fx.userData.heatMat;
-  }
+  if (opts.enemy) applyFoeTint(inner);                 // per-instance red sheen for foe readability
+  const burn = jetGLTF[id].userData.burn;
+  if (burn) addBurner(g, burn, accent);                // afterburner per jet (player: animEngines drives it; enemies: static cruise plume)
   g.userData.gltf = true;
   return g;
 }
@@ -1051,7 +1057,7 @@ function cloneJetGLTF(id, accent, opts) {
 function buildJetOrGLTF(color, accent, cfg, hero, opts) {
   opts = opts || {};
   if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low'))
-    return cloneJetGLTF(cfg.id, accent, { enemy: !!opts.enemy, rig: (cfg.id === 'F22' && !opts.enemy) });   // burner+surface rig: player F-22 only
+    return cloneJetGLTF(cfg.id, accent, { enemy: !!opts.enemy });
   return buildJet(color, accent, cfg, hero);
 }
 function buildBoss() {

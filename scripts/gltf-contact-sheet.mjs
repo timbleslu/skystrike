@@ -20,9 +20,9 @@ const out = process.argv[2] || '.scratch/jet-visual-overhaul/contact.png';
 const view = process.argv[3] || 'top';
 
 // derived rotateY (deg) per glb to point nose -> -Z (game forward); see gltf-inspect-all output
-const ROT = { 'f22.glb': -90, 'bomber.glb': -90,
-  'su57.glb': 90, 'eft.glb': 90, 'fa18.glb': 90, 'j20.glb': 90, 'j36.glb': 90, 'std.glb': 90,
-  'rafale.glb': 180, 'f35.glb': 180, 'f47.glb': 180, 'j50.glb': 180, 'tejas.glb': 180 };
+const ROT = { 'f22.glb': -90, 'bomber.glb': -90, 'rafale.glb': -90,
+  'su57.glb': 90, 'eft.glb': 90, 'fa18.glb': 90, 'j20.glb': 90, 'std.glb': 90,
+  'f35.glb': 180, 'f47.glb': 180, 'j50.glb': 180, 'tejas.glb': 180, 'j36.glb': 180 };
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 1100 } });
