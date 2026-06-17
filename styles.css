@@ -651,6 +651,19 @@ canvas{display:block}
 #opmap #opLaunch{display:block;margin:18px auto 0}
 #opmap #opLaunch:disabled{opacity:.45;cursor:not-allowed}
 
+/* ---- Pre-launch reflow: mode-choice + endless-setup overlays (share the campaign overlay shell) ---- */
+#modeChoice,#endlessSetup{position:fixed;inset:0;z-index:73;display:none;background:rgba(2,6,10,.93);backdrop-filter:blur(6px)}
+#modeChoice.show,#endlessSetup.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
+/* mode-choice: two side-by-side deployment cards */
+.mode-grid{display:flex;flex-wrap:wrap;gap:var(--sp-4);justify-content:center;max-width:620px;margin:0 auto var(--sp-5)}
+.mode-card{flex:1 1 240px;text-align:left;border:1px solid var(--primary);border-radius:var(--r-md);background:var(--surface-1);padding:var(--sp-5);cursor:pointer;transition:var(--dur-fast) var(--ease-out)}
+.mode-card:hover{background:var(--surface-3);box-shadow:var(--glow-primary);transform:translateY(-1px)}
+.mode-card-name{font-family:var(--disp);font-weight:800;letter-spacing:3px;color:var(--ink-hi);font-size:18px}
+.mode-card-sub{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--ink-dim);margin-top:var(--sp-2);line-height:1.5}
+/* endless-setup: difficulty + environment, centred */
+.endless-cfg{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:var(--sp-5) var(--sp-6);margin:0 auto var(--sp-4);max-width:620px}
+.endless-cfg>div{display:flex;flex-direction:column;align-items:center}
+#modeChoice .cmp-back,#endlessSetup .cmp-back{display:block;margin:0 auto}
 /* ---- Operations campaign (linear revamp): ops-select / level-map / briefing overlays ---- */
 #opsSelect,#levelMap,#briefing,#opLore{position:fixed;inset:0;z-index:73;display:none;background:rgba(2,6,10,.93);backdrop-filter:blur(6px)}
 #opsSelect.show,#levelMap.show,#briefing.show,#opLore.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}

@@ -116,35 +116,12 @@
       <div id="jetDots"></div>
     </div>
 
-    <!-- THE primary action: one dominant LAUNCH directly under the jet, carrying the loadout summary -->
-    <button id="launch">&#9654; LAUNCH MISSION<span id="launchSub" class="btn-sub"></span></button>
+    <!-- THE primary action: one dominant SELECT-JET CTA directly under the jet; opens the mode-choice screen -->
+    <button id="launch">SELECT<span id="launchSub" class="btn-sub"></span></button>
 
-    <!-- LOADOUT STRIP (§5c): collapsed, subordinate row of selectors below LAUNCH -->
+    <!-- LOADOUT STRIP (§5c): collapsed, subordinate row below the CTA. Difficulty/environment/mode moved to the
+         mode-choice → endless-setup flow (feature: pre-launch reflow); only the pilot panel remains here. -->
     <div class="loadout">
-      <div id="diffsel">
-        <span id="lblDiff" class="dlab">DIFFICULTY</span>
-        <div class="dbtns">
-          <button class="dbtn" data-d="0" id="dbtn0">ROOKIE</button>
-          <button class="dbtn" data-d="1" id="dbtn1">VETERAN</button>
-          <button class="dbtn" data-d="2" id="dbtn2">ACE</button>
-        </div>
-        <div id="diffdesc" class="ddesc"></div>
-      </div>
-      <div id="todsel">
-        <span id="lblEnv" class="dlab">ENVIRONMENT</span>
-        <div class="dbtns">
-          <button class="dbtn tbtn" data-t="0" id="tbtn0">DAY</button>
-          <button class="dbtn tbtn" data-t="1" id="tbtn1">DUSK</button>
-          <button class="dbtn tbtn" data-t="2" id="tbtn2">NIGHT</button>
-        </div>
-      </div>
-      <div id="modesel">
-        <span id="lblMode" class="dlab">MODE</span>
-        <div class="dbtns">
-          <button class="dbtn mbtn" data-m="0" id="mbtnEndless">ENDLESS</button>
-          <button class="dbtn mbtn" data-m="1" id="mbtnOperation">OPERATION</button>
-        </div>
-      </div>
       <div id="pilotPanel">
         <div class="pilotRow">
           <span id="lblCallsign" class="dlab">CALLSIGN</span>
@@ -247,6 +224,54 @@
     </div>
     <div id="opStages" class="op-stages"></div>
     <button id="opLaunch" class="btn-primary" disabled>&#9654; LAUNCH</button>
+  </div>
+</div>
+
+<!-- Pre-launch reflow: SELECT <jet> -> mode-choice -> (Endless -> endless-setup -> START) | (Operation -> operations-select) -->
+<div id="modeChoice">
+  <div class="cmp-box">
+    <div class="cmp-title" id="modeTitle">SELECT MODE</div>
+    <div class="cmp-sub">// CHOOSE DEPLOYMENT //</div>
+    <div class="mode-grid">
+      <button id="modeEndless" class="mode-card">
+        <div class="mode-card-name" id="modeEndlessName">ENDLESS</div>
+        <div class="mode-card-sub" id="modeEndlessDesc">Survive escalating waves for the high score.</div>
+      </button>
+      <button id="modeOperation" class="mode-card">
+        <div class="mode-card-name" id="modeOperationName">OPERATION</div>
+        <div class="mode-card-sub" id="modeOperationDesc">Run a linear campaign of bounded missions.</div>
+      </button>
+    </div>
+    <button id="modeBack" class="cmp-btn cmp-back">&#9664; BACK</button>
+  </div>
+</div>
+<div id="endlessSetup">
+  <div class="cmp-box">
+    <div class="cmp-title" id="endlessTitle">ENDLESS</div>
+    <div class="cmp-sub">// CONFIGURE SORTIE //</div>
+    <div class="endless-cfg">
+      <div id="diffsel">
+        <span id="lblDiff" class="dlab">DIFFICULTY</span>
+        <div class="dbtns">
+          <button class="dbtn" data-d="0" id="dbtn0">ROOKIE</button>
+          <button class="dbtn" data-d="1" id="dbtn1">VETERAN</button>
+          <button class="dbtn" data-d="2" id="dbtn2">ACE</button>
+        </div>
+        <div id="diffdesc" class="ddesc"></div>
+      </div>
+      <div id="todsel">
+        <span id="lblEnv" class="dlab">ENVIRONMENT</span>
+        <div class="dbtns">
+          <button class="dbtn tbtn" data-t="0" id="tbtn0">DAY</button>
+          <button class="dbtn tbtn" data-t="1" id="tbtn1">DUSK</button>
+          <button class="dbtn tbtn" data-t="2" id="tbtn2">NIGHT</button>
+        </div>
+      </div>
+    </div>
+    <div class="cmp-actions">
+      <button id="endlessBack" class="cmp-btn cmp-back">&#9664; BACK</button>
+      <button id="endlessStart" class="cmp-btn cmp-play">&#9654; START</button>
+    </div>
   </div>
 </div>
 
