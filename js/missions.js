@@ -197,6 +197,12 @@ function startSectorMission(plan, wave) {
   const type = plan.mission;
   if (type === 'none' || type === 'boss' || !MISSIONS[type]) { mission = null; return; }
   mission = startMission(type, wave, Math.random);
+  // BOUNDED campaign: every wave spawns the SAME authored air budget, so clamp a kill-type's clear
+  // target to the kill-targets actually spawned this wave (else a later wave's wave-scaled procedural
+  // target can exceed them and the wave never clears). PURE core.js owns the min; null = non-kill verb
+  // (escort/defend/recon/stealth) -> leave the target startMission set. Endless mode never reaches here.
+  const clamped = (typeof campaignClearTarget === 'function') ? campaignClearTarget(type, wave, plan) : null;
+  if (clamped !== null) mission.target = clamped;
   spawnMissionProps(type, mission, wave);
   // F14: a set-piece leads with its own authored intro line instead of the generic objective header
   if (setpieceActive && SETPIECES[setpieceActive]) showBanner(t(SETPIECES[setpieceActive].intro));

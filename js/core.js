@@ -924,6 +924,42 @@ function strikeSiteResolves(strikeWaveActive, missionType) {
   return !!strikeWaveActive || missionType === 'strike';
 }
 
+/* Bounded-campaign clear target (2026-06). In a BOUNDED Operations level every wave spawns the
+   SAME authored air budget (main.js nextWave: plan.fighters/aces/bombers), but the single-phase
+   mission's PROCEDURAL setup target grows with the wave (sweep min(4+(wave>>1),10); intercept
+   wave>=8?4:3). On later waves the procedural target could EXCEED the kill-targets actually spawned
+   that wave -> the wave never clears (e.g. openSkies sweep wave 2 wanted 5 kills but only 4 fighters
+   spawn). The spawn budget is the source of truth: this PURE helper clamps the kill-type clear target
+   to the spawned kill-count so a bounded wave is always winnable with exactly its authored budget.
+   Endless mode is untouched (it never calls this — it keeps the procedural target). Non-kill verbs
+   (escort/defend/recon/stealth/none/boss) carry no kill target; they pass through unchanged (null).
+   Kill-count per verb mirrors what missionKill credits in the single-phase path: sweep counts EVERY
+   air kill (onKill++ unconditional) so fighters+aces; intercept counts only _missionTarget bombers;
+   strike is the one ground site (target 1). */
+function campaignSpawnedKillCount(verb, spawn) {
+  const s = spawn || {};
+  if (verb === 'sweep') return (s.fighters || 0) + (s.aces || 0);
+  if (verb === 'intercept') return (s.bombers || 0);
+  if (verb === 'strike') return 1;   // a single strike site
+  return null;                       // not a kill objective
+}
+// the raw per-wave procedural target the endless MISSIONS[verb].setup would assign (kept in sync
+// with missions.js so core stays the single source of truth without depending on missions.js).
+function campaignProceduralTarget(verb, wave) {
+  if (verb === 'sweep') return Math.min(4 + (wave >> 1), 10);
+  if (verb === 'intercept') return wave >= 8 ? 4 : 3;
+  if (verb === 'strike') return 1;
+  return null;
+}
+// bounded clear target for (verb, wave, authored spawn budget). For kill verbs returns
+// min(procedural, spawned) — GUARANTEED <= the kill-targets that wave spawns. For non-kill verbs
+// returns null (caller leaves mission.target as startMission set it).
+function campaignClearTarget(verb, wave, spawn) {
+  const killable = campaignSpawnedKillCount(verb, spawn);
+  if (killable === null) return null;
+  return Math.min(campaignProceduralTarget(verb, wave), killable);
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -959,5 +995,6 @@ if (typeof module !== 'undefined' && module.exports) {
     isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
     captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
     objectiveTypes, nextObjectivePhase, strikeSiteResolves,
+    campaignSpawnedKillCount, campaignProceduralTarget, campaignClearTarget,
   };
 }
