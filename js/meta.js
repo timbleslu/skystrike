@@ -141,44 +141,44 @@ const SKINS = {
   // FT-1 (STD) — trainer, 8 clean semantic materials
   'FT-1': [
     { id: 'default', color: 0x9aa3ad, accent: 0xffd23f },
-    { id: 'splinter', accent: 0x4fd1ff, color: 0x2e3b4a, zones: { 'Grey': 0x2e3b4a, 'LightGrey': 0x5b6b7d, 'Black': 0x161a1f, 'Material': 0x39434f, 'Material.002': 0x6f8195, 'Green': 0x223040, 'Yellow': 0x4fd1ff, 'Material.001': 0x4fd1ff } },
-    { id: 'desert', accent: 0xff8a3c, color: 0xb8a06a, zones: { 'Grey': 0x8c7a4e, 'LightGrey': 0xcdb985, 'Black': 0x3a3322, 'Material': 0xa89058, 'Material.002': 0xd8c79a, 'Green': 0x6f6336, 'Yellow': 0xe8a33c, 'Material.001': 0xc98a3c } },
+    { id: 'splinter', accent: 0x4fd1ff, color: 0x394d74, zones: { 'Grey': 0x394d74, 'Material': 0x394d74, 'LightGrey': 0x5b73a4, 'Material.002': 0x5b73a4, 'Black': 0x141b29, 'Green': 0x222d44, 'Yellow': 0x4fd1ff, 'Material.001': 0x4fd1ff } },
+    { id: 'desert', accent: 0xff8a3c, color: 0xba9745, zones: { 'Grey': 0xba9745, 'Material': 0xba9745, 'LightGrey': 0xcab686, 'Material.002': 0xcab686, 'Black': 0x685527, 'Green': 0x866d32, 'Yellow': 0xff8a3c, 'Material.001': 0xff8a3c } },
   ],
   // F-47 (F47) — 2 materials only: body (DoNothingMaterialClone) + 1 atlas decal → bold 2-tone ceiling
   'F-47': [
     { id: 'default', color: 0x3c4a58, accent: 0x36e0ff },
-    { id: 'ghost', accent: 0xb070ff, color: 0x20262e, zones: { 'DoNothingMaterialClone': 0x20262e, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0x8a6bff } },
-    { id: 'viper', accent: 0xffd23f, color: 0x5a1f24, zones: { 'DoNothingMaterialClone': 0x5a1f24, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0xffd23f } },
+    { id: 'ghost', accent: 0xb070ff, color: 0x733795, zones: { 'DoNothingMaterialClone': 0x733795, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0xb070ff } },
+    { id: 'viper', accent: 0xffd23f, color: 0x841f30, zones: { 'DoNothingMaterialClone': 0x841f30, 'AngkatanBersenjata-2OD4o_Atlas_Material_Instance': 0xffd23f } },
   ],
   // J-20 (J20) — 12 materials, rich multi-panel fuselage
   'J-20': [
     { id: 'default', color: 0x2d3138, accent: 0xff5a3c },
-    { id: 'splinter', accent: 0x36e0ff, color: 0x222a33, zones: { 'grey': 0x2a3340, 'Material.007': 0x4a5a6e, 'Material.001': 0x1b2129, 'Material.009': 0x6f8499, 'Material.005': 0x8fa6bd, 'Material.003': 0x394655, 'Material.099': 0x55677c, 'Material.002': 0x55677c, 'Facade_Glass': 0x0a1420, 'Basic_Glass.001': 0x05080c, 'Material.026': 0x0d1117, 'material_0': 0x4a5a6e } },
-    { id: 'dragon', accent: 0xff3a1e, color: 0x1a1416, zones: { 'grey': 0x241a1c, 'Material.007': 0x4a1f22, 'Material.001': 0x140f10, 'Material.009': 0x6e2a2a, 'Material.005': 0x9a3a2a, 'Material.003': 0x33201f, 'Material.099': 0x7a2f28, 'Material.002': 0x7a2f28, 'Facade_Glass': 0x1a0c0a, 'Basic_Glass.001': 0x070302, 'Material.026': 0x0f0808, 'material_0': 0x4a1f22 } },
+    { id: 'splinter', accent: 0x7dff3c, color: 0x2e8a2e, zones: { 'grey': 0x2e8a2e, 'material_0': 0x2e8a2e, 'Material.007': 0x51b951, 'Material.005': 0x51b951, 'Material.009': 0x51b951, 'Material.003': 0x1c541c, 'Material.099': 0x1c541c, 'Material.002': 0x1c541c, 'Material.001': 0x123612, 'Material.026': 0x123612, 'Facade_Glass': 0x051a05, 'Basic_Glass.001': 0x051a05 } },
+    { id: 'dragon', accent: 0xff5a1e, color: 0xc5402b, zones: { 'grey': 0xc5402b, 'material_0': 0xc5402b, 'Material.007': 0xd47b6d, 'Material.005': 0xd47b6d, 'Material.009': 0xd47b6d, 'Material.003': 0x8a2d1e, 'Material.099': 0x8a2d1e, 'Material.002': 0x8a2d1e, 'Material.001': 0x692217, 'Material.026': 0x692217, 'Facade_Glass': 0x501107, 'Basic_Glass.001': 0x501107 } },
   ],
   // J-36 (J36) — 4 materials: body(22) + panel/cockpit cluster(15) + 2 accents
   'J-36': [
     { id: 'default', color: 0x4a525c, accent: 0xffd23f },
-    { id: 'panel', accent: 0x4fd1ff, color: 0x33424f, zones: { 'PartMaterialClone': 0x33424f, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0x5d7488, 'DoNothingMaterialClone': 0x4fd1ff, 'PartTransparentZWriteClone': 0x10181f } },
-    { id: 'desert', accent: 0xff8a3c, color: 0x9a8458, zones: { 'PartMaterialClone': 0x9a8458, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0xc7b184, 'DoNothingMaterialClone': 0xe8742c, 'PartTransparentZWriteClone': 0x2a2316 } },
+    { id: 'panel', accent: 0x36e0ff, color: 0x2a7584, zones: { 'PartMaterialClone': 0x2a7584, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0x47a5b8, 'DoNothingMaterialClone': 0x36e0ff, 'PartTransparentZWriteClone': 0x041316 } },
+    { id: 'sand', accent: 0xffb000, color: 0x74aaa4, zones: { 'PartMaterialClone': 0x74aaa4, 'DSEG14Classic-Regular_Atlas_Material_Instance': 0xa9c6c3, 'DoNothingMaterialClone': 0xffb000, 'PartTransparentZWriteClone': 0x255f5a } },
   ],
   // J-50 (J50) — body = PartMaterialClone(15); other mats are HUD atlases (left at fallback)
   'J-50': [
     { id: 'default', color: 0xc2c8ce, accent: 0x36e0ff },
-    { id: 'arctic', accent: 0x6bd6ff, color: 0xd8dee4, zones: { 'PartMaterialClone': 0xd8dee4, 'PartTransparentClone': 0x9fb4c4, 'PartTransparentZWriteClone': 0x9fb4c4, 'DoNothingMaterialClone': 0x4a6072 } },
-    { id: 'viper', accent: 0xffd23f, color: 0x2a2e33, zones: { 'PartMaterialClone': 0x2a2e33, 'PartTransparentClone': 0x1a1d21, 'PartTransparentZWriteClone': 0x1a1d21, 'DoNothingMaterialClone': 0xffd23f } },
+    { id: 'arctic', accent: 0x6bd6ff, color: 0xd3d7d9, zones: { 'PartMaterialClone': 0xd3d7d9, 'PartTransparentClone': 0x949ea8, 'PartTransparentZWriteClone': 0x949ea8, 'DoNothingMaterialClone': 0x6bd6ff } },
+    { id: 'shadow', accent: 0xff5a3c, color: 0x27282b, zones: { 'PartMaterialClone': 0x27282b, 'PartTransparentClone': 0x17181c, 'PartTransparentZWriteClone': 0x17181c, 'DoNothingMaterialClone': 0xff5a3c } },
   ],
   // EFT — 23 named materials, richest surface
   'EFT': [
     { id: 'default', color: 0x5f6a72, accent: 0xff5a3c },
-    { id: 'splinter', accent: 0x36e0ff, color: 0x3a4650, zones: { 'white': 0x6f8495, 'Whitish_grey.001': 0x5a6b7a, 'Whitish_grey.002': 0x5a6b7a, 'Material.001': 0x33424f, 'Material.002': 0x33424f, 'darkness': 0x1a2128, 'darkenss': 0x1a2128, 'darkenss.001': 0x1a2128, 'Darkness.001': 0x1a2128, 'Not_so_dark': 0x2a3540, 'Darker_paint': 0x222c34, 'Darker_paint.001': 0x222c34, 'Nato_black': 0x10161b, 'Eurofighter_RT': 0x44556a, 'Eurofighter_RT.001': 0x44556a, 'Eurofighter_LT': 0x44556a, 'Glowing_green.001': 0x36e0ff } },
-    { id: 'tiger', accent: 0xffb000, color: 0x2a2418, zones: { 'white': 0xe8b53c, 'Whitish_grey.001': 0xd1a234, 'Whitish_grey.002': 0xd1a234, 'Material.001': 0x3a2e16, 'Material.002': 0x3a2e16, 'darkness': 0x120d05, 'darkenss': 0x120d05, 'darkenss.001': 0x120d05, 'Darkness.001': 0x120d05, 'Not_so_dark': 0x4a3a14, 'Darker_paint': 0x2e2410, 'Darker_paint.001': 0x2e2410, 'Nato_black': 0x0a0703, 'Eurofighter_RT': 0xc89030, 'Eurofighter_RT.001': 0xc89030, 'Eurofighter_LT': 0xc89030, 'Glowing_green.001': 0xffd23f } },
+    { id: 'aurora', accent: 0xff5ad6, color: 0xb8479c, zones: { 'white': 0xb8479c, 'Whitish_grey.001': 0xc988b9, 'Whitish_grey.002': 0xc988b9, 'Material.001': 0x843370, 'Material.002': 0x843370, 'Not_so_dark': 0x843370, 'Darker_paint': 0x672857, 'Darker_paint.001': 0x672857, 'darkness': 0x672857, 'darkenss': 0x672857, 'darkenss.001': 0x672857, 'Darkness.001': 0x672857, 'Nato_black': 0x541243, 'Eurofighter_RT': 0xb8479c, 'Eurofighter_RT.001': 0xb8479c, 'Eurofighter_LT': 0xb8479c, 'Glowing_green.001': 0xff5ad6 } },
+    { id: 'blaze', accent: 0xffd23f, color: 0xab6836, zones: { 'white': 0xab6836, 'Whitish_grey.001': 0xc6936c, 'Whitish_grey.002': 0xc6936c, 'Material.001': 0x744725, 'Material.002': 0x744725, 'Not_so_dark': 0x744725, 'Darker_paint': 0x55341b, 'Darker_paint.001': 0x55341b, 'darkness': 0x55341b, 'darkenss': 0x55341b, 'darkenss.001': 0x55341b, 'Darkness.001': 0x55341b, 'Nato_black': 0x3d200a, 'Eurofighter_RT': 0xab6836, 'Eurofighter_RT.001': 0xab6836, 'Eurofighter_LT': 0xab6836, 'Glowing_green.001': 0xffd23f } },
   ],
   // FA18 — 31 named materials, richest surface
   'FA18': [
     { id: 'default', color: 0x6b7782, accent: 0x36e0ff },
-    { id: 'tiger', accent: 0xffb000, color: 0x241f15, zones: { 'Base_paint': 0xe8b53c, 'Base_paint_2': 0xd1a234, 'side_color': 0xc89030, 'Whitish_grey.001': 0xcdb98a, 'Whitish_grey.002': 0xcdb98a, 'Not_so_dark.001': 0x3a2e16, 'Darker_paint': 0x2e2410, 'Darkness.001': 0x120d05, 'darkenss': 0x120d05, 'darkenss.001': 0x120d05, 'Nato_black': 0x0a0703, 'Fa18_L': 0x4a3a14, 'Fa18_R': 0x4a3a14, 'Fa18_engine': 0x161616, 'engine_color': 0x2a2a2a, 'Glowing_green.001': 0xffd23f } },
-    { id: 'navy', accent: 0xffd23f, color: 0x2c3a4a, zones: { 'Base_paint': 0x2c3a4a, 'Base_paint_2': 0x24303d, 'side_color': 0x3a4d5e, 'Whitish_grey.001': 0x8fa2b3, 'Whitish_grey.002': 0x8fa2b3, 'Not_so_dark.001': 0x1c2630, 'Darker_paint': 0x161e26, 'Darkness.001': 0x0a0f14, 'darkenss': 0x0a0f14, 'darkenss.001': 0x0a0f14, 'Nato_black': 0x05080b, 'Fa18_L': 0x33455a, 'Fa18_R': 0x33455a, 'Fa18_engine': 0x141414, 'engine_color': 0x242424, 'Glowing_green.001': 0xffd23f } },
+    { id: 'tiger', accent: 0xffb000, color: 0xb79834, zones: { 'Base_paint': 0xb79834, 'Base_paint_2': 0xb79834, 'side_color': 0xccb770, 'Whitish_grey.001': 0xccb770, 'Whitish_grey.002': 0xccb770, 'Not_so_dark.001': 0x7f6a24, 'Darker_paint': 0x7f6a24, 'Fa18_L': 0x7f6a24, 'Fa18_R': 0x7f6a24, 'Darkness.001': 0x5f4f1b, 'darkenss': 0x5f4f1b, 'darkenss.001': 0x5f4f1b, 'Nato_black': 0x5f4f1b, 'Fa18_engine': 0x48390a, 'engine_color': 0x48390a, 'Glowing_green.001': 0xffb000 } },
+    { id: 'navy', accent: 0xffd23f, color: 0x3e6598, zones: { 'Base_paint': 0x3e6598, 'Base_paint_2': 0x3e6598, 'side_color': 0x6e8fba, 'Whitish_grey.001': 0x6e8fba, 'Whitish_grey.002': 0x6e8fba, 'Not_so_dark.001': 0x294365, 'Darker_paint': 0x294365, 'Fa18_L': 0x294365, 'Fa18_R': 0x294365, 'Darkness.001': 0x1e3048, 'darkenss': 0x1e3048, 'darkenss.001': 0x1e3048, 'Nato_black': 0x1e3048, 'Fa18_engine': 0x0c1c32, 'engine_color': 0x0c1c32, 'Glowing_green.001': 0xffd23f } },
   ],
 };
 

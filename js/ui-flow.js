@@ -61,7 +61,7 @@ function startGame(i, daily, rush) {
   bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
   selectedJet = i; audio.init();
   closeManual();
-  if (previewJet) { scene.remove(previewJet); previewJet = null; }
+  if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }   // C2: preview lives in the ISOLATED previewScene now, not the shared scene
   if (platform) { scene.remove(platform); platform = null; }
   g('hangar').classList.add('hide');
   
