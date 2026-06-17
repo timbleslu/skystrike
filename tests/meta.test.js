@@ -114,8 +114,9 @@ console.log('ok - perkCost rises with level; buyPerk respects funds, req gate, m
 //  jet unlock gating
 // ============================================================================
 setMeta(freshMeta());
-assert.strictEqual(jetUnlocked('FT-1'), true, 'starter jet unlocked');
-assert.strictEqual(jetUnlocked('F-22'), true, 'starter jet unlocked');
+assert.strictEqual(jetUnlocked('FT-1'), true, 'FT-1 trainer is the sole jet unlocked at a fresh start');
+assert.strictEqual(jetUnlocked('F-22'), false, 'F-22 is LOCKED at a fresh start (SP-purchasable)');
+assert.strictEqual(jetUnlocked('SU-57'), false, 'SU-57 is LOCKED at a fresh start (SP-purchasable)');
 assert.strictEqual(jetUnlocked('J-20'), false, 'non-starter jet locked');
 setMeta(Object.assign(freshMeta(), { sp: 100 }));
 assert.strictEqual(buyJet('J-20'), false, 'cannot buy locked jet when broke');
@@ -125,7 +126,14 @@ assert.strictEqual(buyJet('J-20'), true, 'buy jet with enough sp');
 assert.strictEqual(jetUnlocked('J-20'), true, 'now unlocked');
 assert.strictEqual(getMeta().sp, 300 - 250, 'jet cost deducted');
 assert.strictEqual(buyJet('J-20'), false, 'cannot re-buy an owned jet');
-console.log('ok - jetUnlocked/buyJet: starter free, locked gated by SP, no double-buy');
+// F-22 and SU-57 are now ordinary SP-gated unlocks (same buyJet path as any other roster jet)
+setMeta(Object.assign(freshMeta(), { sp: 300 }));
+assert.strictEqual(buyJet('F-22'), true, 'F-22 unlockable via buyJet with enough sp');
+assert.strictEqual(jetUnlocked('F-22'), true, 'F-22 now unlocked');
+setMeta(Object.assign(freshMeta(), { sp: 300 }));
+assert.strictEqual(buyJet('SU-57'), true, 'SU-57 unlockable via buyJet with enough sp');
+assert.strictEqual(jetUnlocked('SU-57'), true, 'SU-57 now unlocked');
+console.log('ok - jetUnlocked/buyJet: only FT-1 free at start, F-22/SU-57/others gated by SP, no double-buy');
 
 // ============================================================================
 //  skins
@@ -191,11 +199,12 @@ let mRt = getMeta();
 assert.strictEqual(mRt.sp, 777, 'SP persisted across load');
 assert.strictEqual(mRt.perks.hull, 3, 'perk level persisted');
 assert.strictEqual(mRt.jets['J-20'], true, 'unlocked jet persisted');
-// starter jets always re-added even if a save omits one
+// the starter jet (FT-1 only) is always re-added even if a save omits it; non-starters stay absent
 _kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 0, jets: {}, skins: {}, perks: {}, ach: {}, stars: {} });
 loadMeta();
-assert.strictEqual(getMeta().jets['FT-1'], true, 'starter jets re-seeded on load');
-console.log('ok - validMeta rejects malformed blobs; persistence round-trips; starters re-seeded');
+assert.strictEqual(getMeta().jets['FT-1'], true, 'FT-1 (sole starter) re-seeded on load');
+assert.ok(!getMeta().jets['F-22'], 'F-22 stays locked on load (no longer a starter)');
+console.log('ok - validMeta rejects malformed blobs; persistence round-trips; FT-1 re-seeded as the sole starter');
 
 // ============================================================================
 //  sanitizeCallsign — uppercase, charset filter, length clamp, empty ok

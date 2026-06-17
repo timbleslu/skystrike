@@ -11,8 +11,8 @@ const META_KEY = 'skystrike_meta';
 const META_VERSION = 1;
 let meta = null;            // persistent meta-progression state (loaded at boot)
 
-/* jets unlocked for free from the start; the rest are gated behind SP. */
-const STARTER_JETS = ['FT-1', 'F-22', 'SU-57'];
+/* the only jet unlocked for free from the start; the rest (incl. F-22, SU-57) are gated behind SP. */
+const STARTER_JETS = ['FT-1'];
 
 /* ---------------- SP award (PURE — mirrored byte-identical in tests/meta.test.js) ----------------
    Derives the run's SP payout from the existing `run` stats object + player score. Monotonic in
