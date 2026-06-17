@@ -80,7 +80,7 @@ const JETS = [
     passive:'PHANTOM AGILITY \u2014 +15% turn rate, very slippery to missiles, and a standing 10% critical-hit chance. Lighter hull.',
     desc:'A tailless phantom that steers on swivelling wingtips \u2014 nimble and slippery, lightly built.',
     context:'Shenyang / SAC \u00B7 China (demonstrator). A second Chinese sixth-generation design that surfaced in December 2024 \u2014 smaller and more fighter-like than the J-36. It is a tailless, twin-engine, lambda-wing jet that appears to use swivelling wingtips for control in place of vertical tails, and is rumoured to be aimed in part at future carrier operations.' },
-];];
+];
 function jetStats(j) {
   return {
     maxSpeed: 150 + j.speed * 26,
