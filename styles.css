@@ -657,6 +657,50 @@ canvas{display:block}
 .level-node-n{font-family:var(--disp);font-weight:900;font-size:18px;line-height:1}
 .level-node-name{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-align:center;text-transform:uppercase}
 .level-stars{font-size:10px;color:var(--reward);letter-spacing:1px}
+/* ---- A3 GEOGRAPHIC OPERATIONS MAP: tactical SVG backdrop + clickable mission dots ---- */
+/* #levelNodes is now the map mount (the old flex-rail rules above are inert here — .opmap-canvas
+   is positioned absolutely inside it). The SVG loads via CSS background-image (file://-safe — no fetch). */
+#levelNodes{display:block;max-width:none;margin:0}
+.opmap-canvas{position:relative;width:min(860px,92vw);aspect-ratio:16/10;margin:0 auto;
+  background-size:cover;background-position:center;background-repeat:no-repeat;
+  border:1px solid var(--primary);border-radius:var(--r-md);
+  box-shadow:0 0 0 1px rgba(var(--primary-rgb),.25) inset,0 0 36px rgba(var(--primary-rgb),.22);overflow:hidden}
+.opmap-route{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+/* mission dot: a button anchored at left/top % (set inline from lvl.coords), centered on its point */
+.opmap-dot{position:absolute;transform:translate(-50%,-50%);z-index:2;display:flex;flex-direction:column;
+  align-items:center;gap:3px;padding:0;border:0;background:none;font-family:var(--mono);cursor:default;
+  transition:var(--dur-fast) var(--ease-out)}
+.opmap-pin{display:block;width:14px;height:14px;border-radius:50%;border:2px solid var(--locked);
+  background:rgba(10,18,26,.85);box-shadow:0 0 0 4px rgba(2,6,10,.5)}
+.opmap-tag{display:flex;align-items:center;gap:4px;padding:1px 6px;border-radius:var(--r-sm);
+  background:rgba(2,6,10,.72);border:1px solid rgba(var(--primary-rgb),.25);white-space:nowrap;
+  opacity:.92;transition:var(--dur-fast) var(--ease-out)}
+.opmap-n{font-family:var(--disp);font-weight:900;font-size:11px;line-height:1;color:var(--ink-hi)}
+.opmap-name{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-dim);max-width:96px;overflow:hidden;text-overflow:ellipsis}
+.opmap-stars{font-size:8px;color:var(--reward);letter-spacing:.5px;margin-left:2px}
+/* LOCKED: grayed, not clickable */
+.opmap-dot.locked{cursor:not-allowed;opacity:.45;filter:grayscale(.7)}
+.opmap-dot.locked .opmap-pin{border-color:var(--locked);background:rgba(10,14,18,.75)}
+/* UNLOCKED: bright primary, pulsing/glowing — clearly "play here" */
+.opmap-dot.unlocked{cursor:pointer}
+.opmap-dot.unlocked .opmap-pin{border-color:var(--primary);background:rgba(var(--primary-rgb),.85);
+  box-shadow:0 0 0 4px rgba(2,6,10,.5),0 0 14px rgba(var(--primary-rgb),.9);animation:opmapPulse 1.8s var(--ease-out) infinite}
+.opmap-dot.unlocked .opmap-n{color:var(--primary)}
+.opmap-dot.unlocked:hover{transform:translate(-50%,-50%) scale(1.08)}
+.opmap-dot.unlocked:hover .opmap-tag{opacity:1;border-color:var(--primary);box-shadow:var(--glow-primary)}
+/* CLEARED: ok-green */
+.opmap-dot.cleared{cursor:pointer}
+.opmap-dot.cleared .opmap-pin{border-color:var(--ok);background:rgba(var(--ok-rgb),.7)}
+.opmap-dot.cleared .opmap-n{color:var(--ok)}
+.opmap-dot.cleared:hover{transform:translate(-50%,-50%) scale(1.06)}
+.opmap-dot.cleared:hover .opmap-tag{opacity:1;border-color:var(--ok)}
+/* BOSS: magenta, larger pin */
+.opmap-dot.boss .opmap-pin{width:18px;height:18px;border-color:var(--mag)}
+.opmap-dot.boss.unlocked .opmap-pin{background:rgba(255,69,200,.85);box-shadow:0 0 0 4px rgba(2,6,10,.5),0 0 16px rgba(255,69,200,.9);animation:opmapPulse 1.6s var(--ease-out) infinite}
+.opmap-dot.boss.unlocked .opmap-n,.opmap-dot.boss.cleared .opmap-n{color:#ffb0ec}
+.opmap-dot.boss.cleared .opmap-pin{background:rgba(255,69,200,.5)}
+.opmap-dot.boss .opmap-tag{border-color:rgba(255,69,200,.35)}
+@keyframes opmapPulse{0%,100%{box-shadow:0 0 0 4px rgba(2,6,10,.5),0 0 10px rgba(var(--primary-rgb),.6)}50%{box-shadow:0 0 0 4px rgba(2,6,10,.5),0 0 20px rgba(var(--primary-rgb),1)}}
 .cmp-actions,.brief-actions{display:flex;gap:var(--sp-4);justify-content:center;margin-top:var(--sp-6)}
 .cmp-btn{font-family:var(--disp);font-weight:800;font-size:14px;letter-spacing:3px;color:var(--ink-hi);background:var(--surface-1);border:1px solid var(--primary);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-6);cursor:pointer;transition:var(--dur-fast) var(--ease-out)}
 .cmp-btn:hover{background:var(--surface-3);box-shadow:var(--glow-primary)}
