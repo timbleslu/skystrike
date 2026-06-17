@@ -145,6 +145,7 @@ let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;
+let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
 let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
 
 let player = null;
