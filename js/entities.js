@@ -942,6 +942,18 @@ const JET_MODELS = {
   STD:    { file: 'std.glb',    rotY:  Math.PI / 2, len: 26 },
   BOMBER: { file: 'bomber.glb', rotY: -Math.PI / 2, len: 44 },
 };
+/* per-jet afterburner anchor tweaks over the auto-derived defaults (xw = half twin-nozzle spacing,
+   default 1.1; dy = raise(+)/lower(-) the plume; dz = aft(+)/forward(-) the plume). Tuned visually
+   against the model nozzles (scripts/verify-jets.mjs top+rear). */
+const BURN_OVERRIDE = {
+  SU57:   { xw: 1.7, dz: -1.5 },          // nozzles sit wider; pull plume forward
+  EFT:    { dy: -0.8, dz: -1.6 },         // was too high + too far aft
+  RAFALE: { dy: -0.8, dz: -1.6 },
+  FA18:   { dz: -1.2 },                    // a touch too far aft
+  F47:    { xw: 1.7, dy: 0.9 },           // was too close + too low
+  J36:    { xw: 0.75, dy: 1.0 },          // trijet: narrow the splay + raise
+  J50:    { dy: 1.0, dz: -1.5 },          // was too low + too far aft
+};
 function loadJetModels() {
   if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader !== 'function') return;
   if (typeof gfxTier !== 'undefined' && gfxTier === 'low') return;   // low/mobile tier = procedural only; skip the model memory entirely
@@ -973,10 +985,11 @@ function loadJetModels() {
       const bs = bb.getSize(new THREE.Vector3()), bc = bb.getCenter(new THREE.Vector3());
       const cnt = (typeof SHAPES !== 'undefined' && SHAPES[id] && SHAPES[id].engines) || 2;
       const buried = !!(typeof SHAPES !== 'undefined' && SHAPES[id] && (SHAPES[id].buriedExhaust || SHAPES[id].flyingWing));
-      const xw = 1.1;                                            // half the twin-nozzle spacing (≈ the F-22's ±1.0)
+      const tw = BURN_OVERRIDE[id] || {};
+      const xw = tw.xw != null ? tw.xw : 1.1;                    // half the twin-nozzle spacing (≈ the F-22's ±1.0)
       wrap.userData.burn = {
-        z: bb.max.z - 0.5,                                       // just inside the tail
-        y: bc.y - bs.y * 0.12,                                   // slightly below the centreline
+        z: bb.max.z - 0.5 + (tw.dz || 0),                        // just inside the tail (dz: aft+/forward-)
+        y: bc.y - bs.y * 0.12 + (tw.dy || 0),                    // slightly below the centreline (dy: up+/down-)
         xs: cnt === 1 ? [0] : cnt === 3 ? [-2 * xw, 0, 2 * xw] : [-xw, xw],
         rad: buried ? 0.5 : 1,                                   // stealth flying-wing exhaust is subtle
       };
