@@ -10,7 +10,7 @@ Browser-based arcade jet-combat game. Three.js r159 (vendored), single HTML page
 - **Visual check:** `node scripts/shot.mjs <prefix>` — headless boot → hangar/flight/fx/terrain screenshots. Run after any graphics change (it is the runtime gate the Node tests can't cover).
 
 ## How the code is organised (one line)
-All code is browser globals; **availability is defined by `<script>` load order in `index.html`**. Pure, dependency-free logic is lifted into **require-safe files** (`core.js`, `roster.js`, `opmap.js`, `missions.js`, `meta.js`, `rival.js`) that carry a CommonJS export footer, so tests exercise the real implementation instead of a mirror copy. See [ADR-0002](./docs/adr/0002-require-safe-core-seam.md).
+All code is browser globals; **availability is defined by `<script>` load order in `index.html`**. Pure, dependency-free logic and data are lifted into **require-safe files** (`core.js`, `roster.js`, `airframes.js`, `opmap.js`, `missions.js`, `meta.js`, `rival.js`) that carry a CommonJS export footer, so tests exercise the real implementation instead of a mirror copy. See [ADR-0002](./docs/adr/0002-require-safe-core-seam.md).
 
 ## Domain glossary
 - **Sector / wave** — a combat encounter; waves are spawn rounds within a sector.

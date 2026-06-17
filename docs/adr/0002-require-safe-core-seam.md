@@ -10,14 +10,15 @@ Lift pure, dependency-free logic into **require-safe files** that:
 1. define plain globals in the browser (like every other file), AND
 2. carry a CommonJS export footer — `if (typeof module !== 'undefined' && module.exports) module.exports = { … }` — **inert in the browser**, so `tests/*.test.js` `require()` the REAL implementation.
 
-Require-safe files today: `core.js` (loaded first — math / weather / boss / tutorial / daily / aim / steer / campaign cores), `roster.js` (the `JETS` roster + `aceShapePool` / `jetNameForShape`), `opmap.js`, `missions.js`, `meta.js`, `rival.js`. **These files must stay free of `THREE` / `store` / DOM** or they stop being require-safe. New pure logic goes here and is imported by its test — never mirrored. Where a core needs a data table that lives in an impure file, the table is **injected** as a parameter (e.g. campaign progression takes `OPERATIONS`) so the core stays load-order-free.
+Require-safe files today: `core.js` (loaded first — math / weather / boss / tutorial / daily / aim / steer / campaign cores + `reqSatisfied`), `roster.js` (the `JETS` roster + `aceShapePool` / `jetNameForShape`), `airframes.js` (the `SHAPES` airframe spec table + `FIGHTER_SHAPES` / `ACE_SHAPES` pools), `opmap.js`, `missions.js`, `meta.js`, `rival.js`. **These files must stay free of `THREE` / `store` / DOM** or they stop being require-safe. New pure logic goes here and is imported by its test — never mirrored. Where a core needs a data table that lives in an impure file, the table is **injected** as a parameter (e.g. campaign progression takes `OPERATIONS`) so the core stays load-order-free.
 
 ## Consequences
 - ➕ Tests exercise real code; no mirror drift.
 - ➕ Extracting data / logic into require-safe files **shrinks the THREE-coupled god files** (`globals.js`, `entities.js`).
 - ➖ Requires discipline to keep these files pure.
-- **Remaining scrape debt:** the `entities.js` airframe-flag scrape (`tests/npc-airframes.test.js` et al.) — a candidate for the same treatment.
+- **Remaining debt:** essentially none of substance. What's left is intentional or trivial — `tests/storage.test.js` `readFileSync`-asserts the "no localStorage outside storage.js" invariant (the scrape is the point), and a few one-liner mirrors of THREE/DOM-coupled code (`disposeGroup`, `cacheGeo`, `buyNode` routing, `wingShape`) not worth extracting.
 
 ### History
 - The `JETS` roster + `aceShapePool` / `jetNameForShape` were extracted into `roster.js` (2026-06-17), removing the last roster mirror (`ace-pool.test.js`) and a source scrape (`has-special.test.js`) — both now import the real roster.
 - `reqSatisfied` (tech-tree prerequisite predicate) moved from `ui-tech.js` into `core.js` (2026-06-17), removing the `tests/ground-war.test.js` mirror — it now imports the real impl.
+- The `SHAPES` airframe spec table (+ flag-normalization) and `FIGHTER_SHAPES` / `ACE_SHAPES` pools moved from `entities.js` into `airframes.js` (2026-06-17), clearing the last source-scrapes (`tests/plain-shapes.test.js`, `tests/npc-airframes.test.js`) — they now import the real tables.

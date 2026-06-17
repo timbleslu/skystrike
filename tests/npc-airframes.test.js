@@ -1,12 +1,7 @@
 'use strict';
 const assert = require('assert');
-const fs = require('fs');
-const src = fs.readFileSync(__dirname + '/../js/entities.js', 'utf8');
-
-const fp = src.match(/const FIGHTER_SHAPES\s*=\s*(\[[^\]]*\])/);
-assert.ok(fp, 'FIGHTER_SHAPES must be defined');
-const pool = JSON.parse(fp[1].replace(/'/g, '"'));
-assert.deepStrictEqual(pool, ['STD'], 'regular fighters must all fly the plain STD airframe');
+const { FIGHTER_SHAPES } = require('../js/airframes.js');   // real pool — no source scrape
+assert.deepStrictEqual(FIGHTER_SHAPES, ['STD'], 'regular fighters must all fly the plain STD airframe');
 
 // mirror of js/main.js wingShape
 function wingShape(temp, explicit) { return explicit || (temp ? 'CCAJET' : 'STD'); }
