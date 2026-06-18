@@ -35,8 +35,8 @@ function loadSettings() {
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
     else if ('ontouchstart' in window) hudScale = 0.8;
-    if (typeof s.uiScale === 'number') uiScale = Math.max(0.65, Math.min(1.6, s.uiScale));
-    else if ('ontouchstart' in window) uiScale = 0.8;   // menus default smaller on touch so more fits without scrolling
+    if (typeof s.uiScale === 'number') uiScale = Math.max(0.5, Math.min(1.6, s.uiScale));
+    else if ('ontouchstart' in window) uiScale = 0.65;   // menus default dense on touch (one level below desktop) so more fits
     controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
