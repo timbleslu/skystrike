@@ -1956,3 +1956,178 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
   content:"";position:absolute;left:0;right:0;top:0;height:6px;pointer-events:none;z-index:1;
   background:repeating-linear-gradient(90deg,rgba(var(--info-rgb),.55) 0 1px,transparent 1px 30px);
 }
+
+/* ---------------------------------------------------------------------------
+   MANUAL — stamped field-manual: buff paper surface, ruled horizontal lines,
+   square corners, double printed-form border, monospace title with a printed
+   section-rule, and a rotated ink-stamp motif glyph in the corner.
+   (Utilitarian, low-tech — the issued-document look.)
+   --------------------------------------------------------------------------- */
+:root[data-skin="manual"] .cmp-box,
+:root[data-skin="manual"] .brief-box,
+:root[data-skin="manual"] #wingpick .wp-box,
+:root[data-skin="manual"] #manual section{
+  clip-path:none;border-radius:0;
+  font-family:var(--mono);
+  /* buff paper: palette surface washed lighter + faint horizontal ruling */
+  background-color:var(--surface-1);
+  background-image:
+    linear-gradient(rgba(var(--ink-rgb),.06),rgba(var(--ink-rgb),.06)),
+    repeating-linear-gradient(0deg,transparent 0 25px,rgba(var(--ink-dim-rgb),.16) 25px 26px);
+  border:1.5px solid rgba(var(--ink-dim-rgb),.55);
+  /* double printed-form rule (outer line via outline-offset trick) */
+  box-shadow:
+    0 0 0 1px rgba(var(--ink-dim-rgb),.30),
+    inset 0 0 0 4px var(--surface-1),
+    inset 0 0 0 5px rgba(var(--ink-dim-rgb),.45),
+    0 12px 34px -16px rgba(0,0,0,.7);
+  padding:calc(var(--sp-6) + 5px);
+}
+/* rotated ink-stamp motif — bracketed glyph stamped in the corner */
+:root[data-skin="manual"] .cmp-box::after,
+:root[data-skin="manual"] .brief-box::after{
+  content:"\2737";position:absolute;right:16px;top:14px;pointer-events:none;z-index:2;
+  font:700 22px/1 var(--mono);letter-spacing:0;
+  color:rgba(var(--ok-rgb),.85);
+  border:2px solid rgba(var(--ok-rgb),.7);border-radius:3px;
+  padding:3px 7px;transform:rotate(-13deg);
+  box-shadow:inset 0 0 0 1px rgba(var(--ok-rgb),.35);opacity:.9;
+}
+/* printed staple/punch mark top-left */
+:root[data-skin="manual"] .cmp-box::before,
+:root[data-skin="manual"] .brief-box::before{
+  content:"";position:absolute;left:15px;top:15px;width:7px;height:7px;pointer-events:none;
+  border-radius:50%;border:1.5px solid rgba(var(--ink-dim-rgb),.7);
+}
+/* monospace stencil title with a printed section-rule underline */
+:root[data-skin="manual"] .cmp-title,
+:root[data-skin="manual"] .brief-title{
+  font-family:var(--mono);font-weight:700;letter-spacing:5px;
+  color:var(--ink-hi);text-shadow:none;
+  border-bottom:2px solid rgba(var(--ink-dim-rgb),.55);
+  padding-bottom:10px;margin-bottom:6px;
+}
+:root[data-skin="manual"] .cmp-title::before{content:"\00A7 ";color:rgba(var(--ink-dim-rgb),1);opacity:.8}
+:root[data-skin="manual"] .cmp-title::after{content:" \00A7";color:rgba(var(--ink-dim-rgb),1);opacity:.8}
+/* manual settings section headers get the same printed-rule treatment */
+:root[data-skin="manual"] #manual section{padding:16px 18px}
+:root[data-skin="manual"] #manual h3{
+  font-family:var(--mono);letter-spacing:3px;
+  border-bottom:1.5px solid rgba(var(--ink-dim-rgb),.4);padding-bottom:7px;
+}
+/* hangar jet card: data-sheet form with ruling + corner stamp */
+:root[data-skin="manual"] #hangar .card.cardbig{
+  clip-path:none;border-radius:0;
+  background-color:var(--surface-1);
+  background-image:
+    linear-gradient(rgba(var(--ink-rgb),.05),rgba(var(--ink-rgb),.05)),
+    repeating-linear-gradient(0deg,transparent 0 24px,rgba(var(--ink-dim-rgb),.14) 24px 25px);
+  border:1.5px solid rgba(var(--ink-dim-rgb),.5);
+  box-shadow:inset 0 0 0 3px var(--surface-1),inset 0 0 0 4px rgba(var(--ink-dim-rgb),.35);
+}
+:root[data-skin="manual"] #hangar .card.cardbig::after{
+  content:"\2737";position:absolute;right:12px;top:10px;pointer-events:none;z-index:3;
+  font:700 16px/1 var(--mono);color:rgba(var(--ok-rgb),.8);
+  border:1.5px solid rgba(var(--ok-rgb),.6);border-radius:2px;padding:2px 5px;
+  transform:rotate(-12deg);opacity:.85;
+}
+/* opmap canvas: ledger sheet — horizontal ruling only, square frame */
+:root[data-skin="manual"] .opmap-canvas{
+  border-radius:0;border:1.5px solid rgba(var(--ink-dim-rgb),.6);
+  background-image:repeating-linear-gradient(0deg,transparent 0 27px,rgba(var(--ink-dim-rgb),.16) 27px 28px);
+  box-shadow:inset 0 0 0 3px var(--base),inset 0 0 0 4px rgba(var(--ink-dim-rgb),.4),0 12px 34px -16px rgba(0,0,0,.7);
+}
+
+/* ---------------------------------------------------------------------------
+   FLAT — calm modern flat: solid fills, NO borders, big soft-rounded corners,
+   generous quiet padding, a single soft drop shadow (no glow/bezel/grid), and
+   one subtle accent bar for title hierarchy. The anti-skeuomorphic skin.
+   --------------------------------------------------------------------------- */
+:root[data-skin="flat"] .cmp-box,
+:root[data-skin="flat"] .brief-box,
+:root[data-skin="flat"] #wingpick .wp-box,
+:root[data-skin="flat"] #manual section{
+  clip-path:none;border-radius:18px;
+  background:var(--surface-2);
+  border:none;
+  box-shadow:0 18px 50px -22px rgba(0,0,0,.55);
+  padding:calc(var(--sp-6) + 8px);
+}
+/* no decorative pseudo-frames on flat — keep them empty so nothing inherits */
+:root[data-skin="flat"] .cmp-box::before,
+:root[data-skin="flat"] .brief-box::before,
+:root[data-skin="flat"] .cmp-box::after,
+:root[data-skin="flat"] .brief-box::after{content:none}
+/* flat title: clean weight, no glow, a short rounded accent bar above it */
+:root[data-skin="flat"] .cmp-title,
+:root[data-skin="flat"] .brief-title{
+  font-weight:700;letter-spacing:3px;color:var(--ink-hi);text-shadow:none;
+  border:none;position:relative;padding-top:14px;
+}
+:root[data-skin="flat"] .cmp-title::before,
+:root[data-skin="flat"] .brief-title::before{
+  content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);
+  width:40px;height:4px;border-radius:2px;background:var(--primary);opacity:.9;
+}
+/* flat settings sections: soft flat tiles */
+:root[data-skin="flat"] #manual section{padding:18px 20px;border-radius:14px}
+:root[data-skin="flat"] #manual h3{border:none;letter-spacing:2px}
+/* hangar jet card: soft rounded flat tile */
+:root[data-skin="flat"] #hangar .card.cardbig{
+  clip-path:none;border-radius:16px;
+  background:var(--surface-3);border:none;
+  box-shadow:0 14px 40px -20px rgba(0,0,0,.5);
+}
+:root[data-skin="flat"] #hangar .card.cardbig::before{content:none}
+/* opmap canvas: flat rounded block, faint solid wash, no grid */
+:root[data-skin="flat"] .opmap-canvas{
+  border-radius:16px;border:none;
+  background-color:rgba(var(--primary-rgb),.05);
+  box-shadow:0 16px 44px -22px rgba(0,0,0,.5);
+}
+
+/* ---------------------------------------------------------------------------
+   STANDARD — the clean default: crisp tight hairline, near-square corners, ONE
+   clean header underline rule, no texture/glow/bezel. Intentional minimalism —
+   reads as a deliberate "no texture" choice, distinct from the 5 heavier skins.
+   --------------------------------------------------------------------------- */
+:root[data-skin="standard"] .cmp-box,
+:root[data-skin="standard"] .brief-box,
+:root[data-skin="standard"] #wingpick .wp-box,
+:root[data-skin="standard"] #manual section{
+  clip-path:none;border-radius:4px;
+  background:var(--surface-2);
+  border:1px solid rgba(var(--primary-rgb),.22);
+  box-shadow:0 10px 30px -16px rgba(0,0,0,.6);
+  padding:var(--sp-6);
+}
+/* a single crisp top hairline accent (lit edge) — no other frame */
+:root[data-skin="standard"] .cmp-box::before,
+:root[data-skin="standard"] .brief-box::before{
+  content:"";position:absolute;left:0;right:0;top:0;height:2px;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(var(--primary-rgb),.6),transparent);
+}
+:root[data-skin="standard"] .cmp-box::after,
+:root[data-skin="standard"] .brief-box::after{content:none}
+/* clean confident title with one tidy underline rule */
+:root[data-skin="standard"] .cmp-title,
+:root[data-skin="standard"] .brief-title{
+  font-weight:800;letter-spacing:4px;color:var(--ink-hi);text-shadow:none;
+  border-bottom:1px solid rgba(var(--primary-rgb),.30);padding-bottom:9px;
+}
+/* settings sections: same tight hairline, square-ish */
+:root[data-skin="standard"] #manual section{border-radius:4px;border:1px solid rgba(var(--primary-rgb),.22)}
+:root[data-skin="standard"] #manual h3{border-bottom:1px solid rgba(var(--primary-rgb),.25);padding-bottom:6px}
+/* hangar jet card: crisp hairline panel */
+:root[data-skin="standard"] #hangar .card.cardbig{
+  clip-path:none;border-radius:4px;
+  background:var(--surface-2);
+  border:1px solid rgba(var(--primary-rgb),.25);
+  box-shadow:0 10px 30px -18px rgba(0,0,0,.55);
+}
+:root[data-skin="standard"] #hangar .card.cardbig::before{content:none}
+/* opmap canvas: clean framed plate, hairline + thin top accent, no grid/texture */
+:root[data-skin="standard"] .opmap-canvas{
+  border-radius:4px;border:1px solid rgba(var(--primary-rgb),.3);
+  box-shadow:inset 0 2px 0 rgba(var(--primary-rgb),.18),0 12px 34px -18px rgba(0,0,0,.6);
+}
