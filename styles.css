@@ -1748,3 +1748,211 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
 .rating-row span{font-family:var(--disp);font-size:10px;letter-spacing:2px;color:var(--ink-dim);text-transform:uppercase}
 .rating-row b{font-family:var(--disp);font-size:18px;color:var(--reward);text-shadow:var(--glow-reward)}
 .gowrap.reveal .gorating{animation:revealRise var(--dur-base) var(--ease-out) .32s both}
+
+/* ============================================================================
+   MENU SKINS — distinct FORM identities for the shared console skeleton.
+   The existing [data-skin] blocks above own the HUD/gameplay chrome + fonts.
+   This section gives the MENU boxes (.cmp-box / .brief-box / .cmp-title /
+   .card.cardbig / .opmap-canvas) a bold, per-skin FORM. COLOUR comes only from
+   palette tokens (--primary-rgb / --surface-* / --base / --info-rgb), so every
+   skin reads correctly across all five palettes. All decoration is via
+   pseudo-elements — no new text, no i18n needed.
+   Scope: #hangar .card.cardbig, #briefing/#levelMap/#opsSelect/#gameover boxes,
+   #manual settings. Density cores (.ui-dense*) and Stage-1 layout untouched.
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   FUTURISTIC — glassy holographic console: translucent body, angular clip-path
+   notches, thin bright beveled edge, soft glow, a sweeping holo sheen.
+   (futuristic == the :root defaults; here we push the MENU form hard.)
+   --------------------------------------------------------------------------- */
+:root[data-skin="futuristic"] .cmp-box,
+:root[data-skin="futuristic"] .brief-box,
+:root[data-skin="futuristic"] #wingpick .wp-box{
+  /* sharp angular panel: clipped top-left + bottom-right corners (HUD cut) */
+  clip-path:polygon(22px 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%,0 22px);
+  background:
+    linear-gradient(155deg,rgba(var(--primary-rgb),.10),transparent 40%),
+    linear-gradient(180deg,rgba(var(--base-rgb),.62),rgba(var(--base-rgb),.42));
+  -webkit-backdrop-filter:blur(8px) saturate(1.15);backdrop-filter:blur(8px) saturate(1.15);
+  border:1px solid rgba(var(--primary-rgb),.55);
+  box-shadow:
+    0 0 0 1px rgba(var(--primary-rgb),.18),
+    inset 0 0 0 1px rgba(255,255,255,.06),
+    inset 0 1px 0 rgba(var(--primary-rgb),.45),
+    0 24px 70px -26px rgba(0,0,0,.85),
+    0 0 46px -12px rgba(var(--primary-rgb),.35);
+}
+/* bright beveled corner accents (the two clipped corners get a lit edge line) */
+:root[data-skin="futuristic"] .cmp-box::before,
+:root[data-skin="futuristic"] .brief-box::before{
+  content:"";position:absolute;left:0;top:22px;width:2px;height:42px;
+  background:linear-gradient(180deg,var(--primary),transparent);
+  box-shadow:0 0 12px rgba(var(--primary-rgb),.9);
+}
+:root[data-skin="futuristic"] .cmp-box::after,
+:root[data-skin="futuristic"] .brief-box::after{
+  content:"";position:absolute;right:22px;bottom:0;width:42px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--primary));
+  opacity:.85;box-shadow:0 0 12px rgba(var(--primary-rgb),.9);
+}
+/* holographic title: bracketed, wide-tracked, lit */
+:root[data-skin="futuristic"] .cmp-title,
+:root[data-skin="futuristic"] .brief-title{
+  letter-spacing:7px;color:var(--ink-hi);
+  text-shadow:0 0 10px rgba(var(--primary-rgb),.7),0 0 28px rgba(var(--primary-rgb),.4);
+}
+:root[data-skin="futuristic"] .cmp-title::before{content:"◤ ";color:var(--primary);opacity:.8}
+:root[data-skin="futuristic"] .cmp-title::after{content:" ◢";color:var(--primary);opacity:.8}
+/* hangar jet card: same glass + angular cut */
+:root[data-skin="futuristic"] #hangar .card.cardbig{
+  clip-path:polygon(20px 0,100% 0,100% 100%,0 100%,0 20px);
+  background:linear-gradient(160deg,rgba(var(--primary-rgb),.07),transparent 45%),rgba(var(--base-rgb),.5);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  border:1px solid rgba(var(--primary-rgb),.4);
+  box-shadow:inset 0 1px 0 rgba(var(--primary-rgb),.4),0 0 38px -14px rgba(var(--primary-rgb),.4);
+}
+/* opmap canvas: holo grid sheen overlay */
+:root[data-skin="futuristic"] .opmap-canvas{
+  border:1px solid rgba(var(--primary-rgb),.7);
+  box-shadow:0 0 0 1px rgba(var(--primary-rgb),.35) inset,0 0 60px -8px rgba(var(--primary-rgb),.4);
+}
+:root[data-skin="futuristic"] .opmap-canvas::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(var(--primary-rgb),.05) 5px 6px);
+  -webkit-mask:linear-gradient(180deg,#000,transparent 70%);mask:linear-gradient(180deg,#000,transparent 70%);
+}
+
+/* ---------------------------------------------------------------------------
+   ANALOG — mechanical instrument bezel: brushed metal surface, heavy rounded
+   bezel, deep inset/outset depth, corner rivets, engraved title plate.
+   (Inherits the serif font from the existing analog block above.)
+   --------------------------------------------------------------------------- */
+:root[data-skin="analog"] .cmp-box,
+:root[data-skin="analog"] .brief-box,
+:root[data-skin="analog"] #wingpick .wp-box{
+  clip-path:none;border-radius:16px;
+  /* brushed-metal field tinted by palette surface */
+  background:
+    repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),
+    linear-gradient(180deg,var(--surface-3),var(--surface-1));
+  border:2px solid rgba(0,0,0,.55);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.14),
+    inset 0 -3px 8px rgba(0,0,0,.6),
+    inset 0 0 0 4px rgba(var(--primary-rgb),.10),
+    0 10px 26px -8px rgba(0,0,0,.7);
+  padding:calc(var(--sp-6) + 4px);
+}
+/* corner rivets — four screw heads anchoring the bezel */
+:root[data-skin="analog"] .cmp-box::before,
+:root[data-skin="analog"] .brief-box::before{
+  content:"";position:absolute;left:10px;top:10px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#dfe3e6,#8b9196 60%,#3a3d40);
+  box-shadow:0 1px 1px rgba(0,0,0,.6),
+    calc(100% - 0px) 0 0 -0px transparent;
+  /* second rivet via outline trick is messy; use a wide box-shadow grid instead */
+  box-shadow:
+    0 1px 1px rgba(0,0,0,.7),
+    inset 0 1px 1px rgba(255,255,255,.5);
+}
+:root[data-skin="analog"] .cmp-box::after,
+:root[data-skin="analog"] .brief-box::after{
+  content:"";position:absolute;right:10px;top:10px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#dfe3e6,#8b9196 60%,#3a3d40);
+  box-shadow:0 1px 1px rgba(0,0,0,.7),inset 0 1px 1px rgba(255,255,255,.5);
+}
+/* engraved title plate */
+:root[data-skin="analog"] .cmp-title,
+:root[data-skin="analog"] .brief-title{
+  letter-spacing:4px;color:var(--ink-hi);
+  text-shadow:0 1px 0 rgba(0,0,0,.7),0 -1px 0 rgba(255,255,255,.12);
+  border-bottom:2px solid rgba(0,0,0,.4);
+  box-shadow:0 1px 0 rgba(255,255,255,.1);
+  padding-bottom:8px;margin-bottom:10px;
+}
+/* hangar jet card: machined metal panel with rivets */
+:root[data-skin="analog"] #hangar .card.cardbig{
+  clip-path:none;border-radius:14px;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 1px,transparent 1px 3px),linear-gradient(180deg,var(--surface-3),var(--surface-1));
+  border:2px solid rgba(0,0,0,.5);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.12),inset 0 -3px 8px rgba(0,0,0,.55),0 8px 22px -8px rgba(0,0,0,.65);
+}
+:root[data-skin="analog"] #hangar .card.cardbig::before{
+  content:"";position:absolute;left:9px;top:9px;width:8px;height:8px;border-radius:50%;z-index:3;
+  background:radial-gradient(circle at 38% 32%,#dfe3e6,#8b9196 60%,#3a3d40);box-shadow:0 1px 1px rgba(0,0,0,.7);
+}
+:root[data-skin="analog"] .opmap-canvas{
+  border-radius:12px;border:2px solid rgba(0,0,0,.5);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.1),inset 0 -3px 8px rgba(0,0,0,.55),0 0 0 4px rgba(var(--primary-rgb),.08)}
+
+/* ---------------------------------------------------------------------------
+   BLUEPRINT — drafting sheet: grid-paper field, thin line-work, dimension tick
+   marks on the edges, technical corner L-ticks, monospace title-block underline.
+   (Inherits monospace + --info-rgb ink from the existing blueprint block.)
+   --------------------------------------------------------------------------- */
+:root[data-skin="blueprint"] .cmp-box,
+:root[data-skin="blueprint"] .brief-box,
+:root[data-skin="blueprint"] #wingpick .wp-box{
+  clip-path:none;border-radius:0;
+  /* grid paper drawn over the palette base so it tints with the scheme */
+  background-color:var(--base);
+  background-image:
+    linear-gradient(rgba(var(--info-rgb),.10) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(var(--info-rgb),.10) 1px,transparent 1px),
+    linear-gradient(rgba(var(--info-rgb),.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(var(--info-rgb),.04) 1px,transparent 1px);
+  background-size:88px 88px,88px 88px,22px 22px,22px 22px;
+  border:1px solid rgba(var(--info-rgb),.6);
+  box-shadow:inset 0 0 0 4px var(--base),inset 0 0 0 5px rgba(var(--info-rgb),.35),0 14px 40px -18px rgba(0,0,0,.8);
+  color:rgb(var(--info-rgb));
+  padding:calc(var(--sp-6) + 6px);
+}
+/* technical corner ticks — L-brackets at all four corners via two pseudo-els */
+:root[data-skin="blueprint"] .cmp-box::before,
+:root[data-skin="blueprint"] .brief-box::before{
+  content:"";position:absolute;left:7px;top:7px;width:18px;height:18px;pointer-events:none;
+  border-left:1.5px solid rgb(var(--info-rgb));border-top:1.5px solid rgb(var(--info-rgb));
+}
+:root[data-skin="blueprint"] .cmp-box::after,
+:root[data-skin="blueprint"] .brief-box::after{
+  content:"";position:absolute;right:7px;bottom:7px;width:18px;height:18px;pointer-events:none;
+  border-right:1.5px solid rgb(var(--info-rgb));border-bottom:1.5px solid rgb(var(--info-rgb));
+}
+/* monospace title with a dimension-line underline */
+:root[data-skin="blueprint"] .cmp-title,
+:root[data-skin="blueprint"] .brief-title{
+  font-weight:400;letter-spacing:6px;color:rgb(var(--info-rgb));text-shadow:none;
+  border-bottom:1px solid rgba(var(--info-rgb),.6);padding-bottom:10px;
+  /* dimension end-caps */
+  background:
+    linear-gradient(rgb(var(--info-rgb)),rgb(var(--info-rgb))) left bottom/1px 9px no-repeat,
+    linear-gradient(rgb(var(--info-rgb)),rgb(var(--info-rgb))) right bottom/1px 9px no-repeat;
+}
+/* hangar jet card: schematic sheet with corner ticks + a title-block stamp */
+:root[data-skin="blueprint"] #hangar .card.cardbig{
+  clip-path:none;border-radius:0;
+  background-color:var(--base);
+  background-image:
+    linear-gradient(rgba(var(--info-rgb),.08) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(var(--info-rgb),.08) 1px,transparent 1px);
+  background-size:22px 22px;
+  border:1px solid rgba(var(--info-rgb),.55);box-shadow:inset 0 0 0 2px rgba(var(--info-rgb),.08);
+}
+:root[data-skin="blueprint"] #hangar .card.cardbig::before{
+  content:"";position:absolute;left:6px;top:6px;width:16px;height:16px;pointer-events:none;z-index:3;
+  border-left:1.5px solid rgb(var(--info-rgb));border-top:1.5px solid rgb(var(--info-rgb));
+}
+/* opmap canvas: drafting grid + edge dimension ticks */
+:root[data-skin="blueprint"] .opmap-canvas{
+  border-radius:0;border:1px solid rgba(var(--info-rgb),.7);
+  background-image:
+    linear-gradient(rgba(var(--info-rgb),.10) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(var(--info-rgb),.10) 1px,transparent 1px);
+  background-size:30px 30px;
+  box-shadow:inset 0 0 0 1px rgba(var(--info-rgb),.3),0 14px 40px -18px rgba(0,0,0,.8);
+}
+:root[data-skin="blueprint"] .opmap-canvas::after{
+  content:"";position:absolute;left:0;right:0;top:0;height:6px;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(90deg,rgba(var(--info-rgb),.55) 0 1px,transparent 1px 30px);
+}
