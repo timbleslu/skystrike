@@ -1326,3 +1326,17 @@ canvas{display:block}
 .skin-card[data-skin="blueprint"] .pv-spd .pv-needle{transform:rotate(-40deg)}
 .skin-card[data-skin="blueprint"] .pv-thr .pv-needle{transform:rotate(35deg)}
 .skin-card[data-skin="blueprint"] .pv-spd .pv-val,.skin-card[data-skin="blueprint"] .pv-thr .pv-val{display:none}
+
+/* ===== WEATHER FX ===== */
+/* Storm rain + lightning are drawn into the existing #h2d 2D canvas (engine.js drawWeatherOverlay),
+   so NO new DOM is needed — #h2d already sits at z-30 (above the #gl WebGL world, below the #hud DOM
+   at z-40). Lightning reuses the #flash overlay (z-36). Distance/horizon fog is the Three.js scene
+   fog (engine.js applyWeather + core.js fogDensityFor). These rules only document the layering and
+   add a faint storm darken on the body as a cheap CSS backstop; the canvas overlay does the work.
+   prefers-reduced-motion already disables the canvas rain in JS (drawWeatherOverlay guards on it). */
+html[data-weather="storm"]{--storm-darken:rgba(20,24,32,.10);}
+html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm-darken);}
+@media (prefers-reduced-motion:reduce){
+  /* belt-and-suspenders: even if JS were bypassed, no animated weather wash is implied here */
+  html[data-weather="storm"] #vignette{box-shadow:none;}
+}

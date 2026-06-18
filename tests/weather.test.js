@@ -20,6 +20,9 @@ assert.ok(WEATHER.storm.fogMul > WEATHER.clear.fogMul, 'storm density > clear de
 
 // ---- resolveWeather populates the live set + folds the night factor ----
 assert.deepStrictEqual(resolveWeather('storm', 0), { type: 'storm', radarMul: 0.7, lockRangeMul: 0.6, lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 5.7 }, 'storm row (day) copied verbatim (fogMul raised 1.6→5.7 for Track B dramatic fog)');
+// weather-FX detection targets: storm cuts enemy detection ~20% (radar 0.7), fog ~40% (radar 0.6 — raised from 0.8)
+assert.strictEqual(resolveWeather('storm', 0).radarMul, 0.7, 'storm cuts enemy detection ~20%');
+assert.strictEqual(resolveWeather('fog', 0).radarMul, 0.6, 'fog cuts enemy detection ~40% (weather-FX pass)');
 assert.strictEqual(resolveWeather('clear', 0).turbulence, 0, 'clear has no turbulence');
 assert.strictEqual(resolveWeather('nope', 0).type, 'clear', 'unknown type falls back to clear');
 
