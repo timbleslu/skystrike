@@ -210,6 +210,18 @@ const I18N = {
     'stars.obj.kills': 'CLEAR 60% OF FOES',
     'stars.obj.noDamage': 'A FULL WAVE, NO DAMAGE',
     'stars.obj.rescue': 'COMPLETE AN OBJECTIVE',
+    /* per-mission star condition labels (Ops debrief — what each star required) */
+    'stars.cond.kills': 'CLEAR 60% OF FOES',
+    'stars.cond.clean': 'A FULL WAVE, NO DAMAGE',
+    'stars.cond.objective': 'COMPLETE THE OBJECTIVE',
+    'stars.cond.noDamage': 'TAKE NO DAMAGE',
+    'stars.cond.accuracy': '{n}% SHOT ACCURACY',
+    'stars.cond.flawless': 'FLAWLESS — OBJECTIVE, NO DAMAGE',
+    /* ---- endless death rating (stars hidden in endless; this replaces them) ---- */
+    'rating.title': 'PERFORMANCE',
+    'rating.kills': 'ENEMIES KILLED',
+    'rating.acc': 'ACCURACY',
+    'rating.waves': 'WAVES SURVIVED',
 
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
@@ -832,6 +844,18 @@ const I18N = {
     'stars.obj.kills': '消灭 60% 的敌人',
     'stars.obj.noDamage': '一整波无伤通过',
     'stars.obj.rescue': '完成一个任务目标',
+    /* per-mission star condition labels (Ops debrief — what each star required) */
+    'stars.cond.kills': '消灭 60% 的敌人',
+    'stars.cond.clean': '一整波无伤通过',
+    'stars.cond.objective': '完成任务目标',
+    'stars.cond.noDamage': '全程不受伤',
+    'stars.cond.accuracy': '命中率达到 {n}%',
+    'stars.cond.flawless': '完美——完成目标且不受伤',
+    /* ---- endless death rating (stars hidden in endless; this replaces them) ---- */
+    'rating.title': '战绩',
+    'rating.kills': '击落数',
+    'rating.acc': '命中率',
+    'rating.waves': '存活波次',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',

@@ -73,6 +73,38 @@ function evalStars(run, player) {
   if ((run.missions || 0) >= 1) stars++;                    // objectives / pilots rescued
   return stars;
 }
+/* ---------------- per-mission star conditions (Ops/campaign) ----------------
+   The DEFAULT 3 conditions (kills / clean / objective) mirror evalStars exactly. A level row may
+   override them with an authored `stars` array of up to 3 condition descriptors `{ type, n? }`,
+   each mapped to ONE real `run` stat (no invented stats). `starCondMet(cond, run)` is PURE and
+   total over its args; `evalStarsFor(run, player, conds)` sums the met conditions, capped 0..3,
+   and falls back to evalStars when `conds` is missing/empty (so non-annotated levels & Endless
+   are byte-for-byte unchanged). Mirrored in tests/stars.test.js. */
+const STAR_DEFAULT_CONDS = [{ type: 'kills' }, { type: 'clean' }, { type: 'objective' }];
+function starCondMet(cond, run) {
+  if (!cond || !run) return false;
+  var waves = Math.max(1, run.waveReached || 1);
+  var expected = waves * 4;
+  var kills = (run.kills || 0) + (run.ground || 0) + (run.boss || 0);
+  switch (cond.type) {
+    case 'kills':     return kills / expected >= STAR_KILL_FRAC;       // ≥60% kill efficiency
+    case 'clean':     return (run.cleanWaves || 0) >= 1;               // a full no-damage wave
+    case 'objective': return (run.missions || 0) >= 1;                 // completed an objective
+    case 'noDamage':  return (run.damageTaken || 0) === 0;             // untouched the whole level
+    case 'accuracy':  return (run.shots || 0) > 0 &&
+      (run.hits || 0) / run.shots * 100 >= (cond.n || 0);             // shot accuracy ≥ n%
+    case 'flawless':  return (run.missions || 0) >= 1 &&
+      (run.damageTaken || 0) === 0;                                    // objective done, no hits taken
+    default:          return false;
+  }
+}
+function evalStarsFor(run, player, conds) {
+  if (!run) return 0;
+  if (!Array.isArray(conds) || !conds.length) return evalStars(run, player);   // default 3 conditions
+  var stars = 0;
+  for (var i = 0; i < conds.length && i < 3; i++) if (starCondMet(conds[i], run)) stars++;
+  return stars;
+}
 /* Record `stars` as the per-jet best in meta.stars[jetId] (never regresses); returns the new best.
    Lazy-creates the stars map so a meta predating this field still works. PURE over (meta, args). */
 function bestStars(m, jetId, stars) {
@@ -421,7 +453,7 @@ function checkAchievements(run, player) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     // pure/scoring cores
-    spAward, gradeRun, evalStars, bestStars, perkCost,
+    spAward, gradeRun, evalStars, evalStarsFor, starCondMet, STAR_DEFAULT_CONDS, bestStars, perkCost,
     applyMetaPerks, sanitizeCallsign, emblemUnlocked,
     // meta lifecycle
     freshMeta, validMeta, loadMeta, saveMeta,

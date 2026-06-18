@@ -5,7 +5,8 @@ global.store = { get(k) { return k in _kv ? _kv[k] : null; }, set(k, v) { _kv[k]
 
 const assert = require('assert');
 const {
-  evalStars, bestStars, freshMeta, validMeta, loadMeta, saveMeta, META_KEY, META_VERSION,
+  evalStars, evalStarsFor, starCondMet, STAR_DEFAULT_CONDS,
+  bestStars, freshMeta, validMeta, loadMeta, saveMeta, META_KEY, META_VERSION,
 } = require('../js/meta.js');
 
 // loadMeta()/saveMeta() mutate meta.js's internal `meta`, which is not exported.
@@ -43,6 +44,46 @@ for (const r of [{}, { kills: 100, cleanWaves: 9, missions: 9, waveReached: 1 },
   assert.ok(Number.isInteger(s) && s >= 0 && s <= 3, 'evalStars returns an int in [0,3]');
 }
 console.log('ok - evalStars: 0 / partial / all-3 boundaries; ground+boss counted; bounded 0..3 integer');
+
+// ============================================================================
+//  evalStarsFor + starCondMet: per-mission (Ops) star conditions
+// ============================================================================
+// no conds (or empty) falls back BYTE-FOR-BYTE to evalStars — non-annotated levels + Endless unchanged
+for (const r of [perfect, { waveReached: 5, kills: 12 }, { waveReached: 5, missions: 1 }, {}]) {
+  assert.strictEqual(evalStarsFor(r, { score: 0 }, undefined), evalStars(r, { score: 0 }), 'no conds == evalStars');
+  assert.strictEqual(evalStarsFor(r, { score: 0 }, []), evalStars(r, { score: 0 }), 'empty conds == evalStars');
+  assert.strictEqual(evalStarsFor(r, { score: 0 }, STAR_DEFAULT_CONDS), evalStars(r, { score: 0 }), 'default conds == evalStars');
+}
+assert.strictEqual(evalStarsFor(null, null, [{ type: 'noDamage' }]), 0, 'null run -> 0 stars even with conds');
+
+// noDamage: untouched the whole level (run.damageTaken === 0)
+assert.strictEqual(starCondMet({ type: 'noDamage' }, { damageTaken: 0 }), true, 'noDamage met when damageTaken 0');
+assert.strictEqual(starCondMet({ type: 'noDamage' }, { damageTaken: 12 }), false, 'noDamage failed once hit');
+assert.strictEqual(starCondMet({ type: 'noDamage' }, {}), true, 'noDamage met when no damage recorded');
+
+// accuracy: hits/shots*100 >= n
+assert.strictEqual(starCondMet({ type: 'accuracy', n: 50 }, { shots: 10, hits: 6 }), true, '60% clears the 50% bar');
+assert.strictEqual(starCondMet({ type: 'accuracy', n: 70 }, { shots: 10, hits: 6 }), false, '60% misses the 70% bar');
+assert.strictEqual(starCondMet({ type: 'accuracy', n: 50 }, { shots: 0, hits: 0 }), false, 'no shots fired -> accuracy unmet');
+
+// flawless: objective done AND no damage taken
+assert.strictEqual(starCondMet({ type: 'flawless' }, { missions: 1, damageTaken: 0 }), true, 'flawless = objective + untouched');
+assert.strictEqual(starCondMet({ type: 'flawless' }, { missions: 1, damageTaken: 4 }), false, 'flawless fails if hit');
+assert.strictEqual(starCondMet({ type: 'flawless' }, { missions: 0, damageTaken: 0 }), false, 'flawless fails without objective');
+
+// kills/clean/objective descriptors agree with the default evalStars terms
+assert.strictEqual(starCondMet({ type: 'kills' }, { waveReached: 5, kills: 12 }), true, 'kills cond mirrors 60% efficiency');
+assert.strictEqual(starCondMet({ type: 'clean' }, { cleanWaves: 1 }), true, 'clean cond mirrors a no-damage wave');
+assert.strictEqual(starCondMet({ type: 'objective' }, { missions: 1 }), true, 'objective cond mirrors a completed objective');
+assert.strictEqual(starCondMet({ type: 'bogus' }, { kills: 999, waveReached: 1 }), false, 'an unknown cond type is never met');
+
+// a custom 3-condition level: stealth-style (noDamage + objective + accuracy)
+const stealthConds = [{ type: 'noDamage' }, { type: 'objective' }, { type: 'accuracy', n: 50 }];
+assert.strictEqual(evalStarsFor({ waveReached: 1, damageTaken: 0, missions: 1, shots: 10, hits: 8 }, { score: 0 }, stealthConds), 3, 'flawless stealth run earns all 3 authored stars');
+assert.strictEqual(evalStarsFor({ waveReached: 1, damageTaken: 9, missions: 1, shots: 10, hits: 3 }, { score: 0 }, stealthConds), 1, 'hit + low accuracy stealth run earns only the objective star');
+// never exceeds 3 even if the authored array is over-long (capped at 3)
+assert.ok(evalStarsFor({ damageTaken: 0, missions: 1, cleanWaves: 1, kills: 999, waveReached: 1 }, { score: 0 }, [{ type: 'noDamage' }, { type: 'objective' }, { type: 'clean' }, { type: 'kills' }]) <= 3, 'evalStarsFor caps at 3 conds');
+console.log('ok - evalStarsFor/starCondMet: per-mission conds; default fallback == evalStars; bounded 0..3');
 
 // ============================================================================
 //  bestStars: keeps the BEST per jet, never regresses, persists across runs

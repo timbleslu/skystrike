@@ -153,14 +153,45 @@ function endRun(title, win) {
   // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low)
   const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
   if (gw) gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A'));
-  // ---- star objectives: compute this run's stars, fold into the per-jet best, render on #gameover ----
-  const stars = evalStars(run, player);
-  const jetId = (player && player.jet && player.jet.id) || null;
-  const best = bestStars(meta, jetId, stars); saveMeta();   // meta.stars[jet] now holds the lifetime best
+  // ---- star objectives vs endless rating ----
+  // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI and
+  // show a performance rating instead; Operation victory (win) keeps stars. campaignMode is already
+  // off here (gameOver routes campaign deaths to campaignLevelFailed before reaching endRun).
+  const endless = !win && !opMode && !campaignMode;
   const sd = g('go_stars');
-  if (sd) {
-    const pips = sd.querySelector('.stars-pips'); if (pips) pips.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-    const note = sd.querySelector('.stars-note'); if (note) note.textContent = stars + ' / 3  ·  ' + tf('stars.best', { n: best });
+  const rd = g('go_rating');
+  if (endless) {
+    if (sd) sd.classList.add('hide');
+    if (rd) {
+      rd.classList.remove('hide');
+      const rk = g('go_ratKills'); if (rk) rk.textContent = (run.kills + run.ground + run.boss);
+      const ra = g('go_ratAcc');   if (ra) ra.textContent = acc + '%';
+      const rw = g('go_ratWaves'); if (rw) rw.textContent = wave;
+    }
+  } else {
+    if (rd) rd.classList.add('hide');
+    if (sd) sd.classList.remove('hide');
+    // per-mission star conditions in Ops/campaign — read the active level's authored `stars` (if any),
+    // else fall back to the default 3 conditions. evalStarsFor is PURE; conds undefined ⇒ evalStars.
+    const lvl = (typeof currentCampaignLevel === 'function' && currentCampaignLevel()) || null;
+    const conds = (lvl && Array.isArray(lvl.stars) && lvl.stars.length) ? lvl.stars : null;
+    const stars = evalStarsFor(run, player, conds);
+    const jetId = (player && player.jet && player.jet.id) || null;
+    const best = bestStars(meta, jetId, stars); saveMeta();   // meta.stars[jet] now holds the lifetime best
+    if (sd) {
+      const pips = sd.querySelector('.stars-pips'); if (pips) pips.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+      const note = sd.querySelector('.stars-note'); if (note) note.textContent = stars + ' / 3  ·  ' + tf('stars.best', { n: best });
+      // per-mission conditions: list WHAT each star required, marking the ones earned (Ops only)
+      let cl = sd.querySelector('.stars-conds');
+      if (conds) {
+        if (!cl) { cl = document.createElement('span'); cl.className = 'stars-conds'; sd.appendChild(cl); }
+        cl.innerHTML = conds.slice(0, 3).map(c =>
+          '<span class="' + (starCondMet(c, run) ? 'met' : '') + '">' +
+          (starCondMet(c, run) ? '★ ' : '☆ ') + tf('stars.cond.' + c.type, { n: c.n || 0 }) + '</span>'
+        ).join('');
+        cl.classList.remove('hide');
+      } else if (cl) { cl.classList.add('hide'); }
+    }
   }
   if (achRes.unlocked.length) showBanner(tf('banner.achUnlocked', { n: achRes.unlocked.length }));
   // pilot callsign + emblem on debrief
