@@ -117,6 +117,15 @@ canvas{display:block}
   .tnode.avail:hover,.tnode.avail:active{transform:none}
 }
 
+/* ---------- UI size: dense content cores ----------
+   The "UI size" setting publishes --ui-content on :root (see applyUiScale).
+   Wrap the CONTENT inside a fixed-footprint menu box in `.ui-dense` so only the
+   content scales (font, map nodes, jet preview…) while the box keeps its size →
+   more content visible per box. Use `.ui-dense-fill` for blocks that must still
+   span the box width after scaling (width compensates for the zoom). */
+.ui-dense{zoom:var(--ui-content,1)}
+.ui-dense-fill{zoom:var(--ui-content,1);width:calc(100% / var(--ui-content,1))}
+
 /* ---------- HUD ---------- */
 #hud{position:fixed;inset:0;z-index:40;pointer-events:none;text-transform:uppercase;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 /* HUD size — scale corner clusters from their anchored corner (grows inward, never off-screen). #h2d gunsight canvas is outside #hud and intentionally NOT scaled. */
@@ -914,6 +923,174 @@ canvas{display:block}
 @media (prefers-reduced-motion:reduce){
   .cmp-box,.brief-box{animation:none}
   .mode-card-name::after{transition:none}
+}
+
+/* ============================================================================
+   BOLD PER-SCREEN LAYOUT REDESIGN  (2026-06-18)
+   ----------------------------------------------------------------------------
+   Goal A — DENSITY IN FIXED BOXES: each menu BOX keeps a stable footprint; an
+   inner `.ui-dense` core consumes var(--ui-content) so lowering "UI size" packs
+   MORE content into the SAME box (more text lines, smaller map nodes, more specs)
+   instead of shrinking the whole screen.
+   Goal B — BOLD LAYOUT: decisive multi-column structure, a strong header band on
+   every overlay, a big map / big preview, clear hierarchy. Token-only colours so
+   every palette + skin still renders. Shared skeleton across screens.
+   Goal C — MOBILE REFLOW: at phone widths screens REARRANGE (stack columns, fit
+   the map/preview to the viewport) — see the @media blocks at the end.
+   ============================================================================ */
+
+/* ---- SHARED OVERLAY SHELL: a consistent header band + framed console body ---- */
+/* Every campaign/briefing box gets the same identity: a title band with a left
+   accent spine, then the body. The boxes are fixed-footprint (stable width, capped
+   height with internal scroll) so the dense cores can pack content without resizing
+   the box. */
+.cmp-box,.brief-box,#wingpick .wp-box{
+  position:relative;width:min(960px,94vw);
+  border:1px solid rgba(var(--primary-rgb),.45);
+  background:
+    linear-gradient(180deg,rgba(var(--primary-rgb),.05),transparent 120px),
+    var(--surface-2);
+  box-shadow:0 30px 80px -28px rgba(0,0,0,.85),
+             inset 0 1px 0 rgba(var(--primary-rgb),.14),
+             0 0 0 1px rgba(0,0,0,.4);
+}
+/* Header band: title + tactical sub sit on a hairline-ruled band with a corner
+   accent so each screen announces itself identically. */
+.cmp-title,.brief-title{
+  font-family:var(--disp);font-weight:800;letter-spacing:5px;color:var(--ink-hi);
+  font-size:clamp(18px,2.4vw,24px);text-align:center;
+  text-shadow:0 0 24px rgba(var(--primary-rgb),.4);
+}
+.cmp-box::before,.brief-box::before{
+  content:"";position:absolute;left:0;top:0;width:46px;height:3px;
+  background:var(--primary);box-shadow:0 0 14px rgba(var(--primary-rgb),.8);
+}
+.cmp-box::after,.brief-box::after{
+  content:"";position:absolute;right:0;top:0;width:3px;height:46px;
+  background:var(--primary);opacity:.55;
+}
+
+/* ---- LEVEL MAP: keep the MAP big and fixed; densify the NODES via --ui-content ---- */
+/* The opmap-canvas footprint is fixed (min(900px,90vw) @ 16/10). The dots are
+   positioned by % so we never zoom the canvas (that would shrink the map). Instead
+   the dot pins + tags scale off var(--ui-content): lower UI size => smaller pins &
+   labels => MORE of the map reads cleanly + denser nodes. The map stays big. */
+#levelMap .cmp-box{display:flex;flex-direction:column;overflow:hidden}
+.opmap-canvas{width:min(900px,90vw);aspect-ratio:16/10;max-height:56vh;
+  border:1px solid rgba(var(--primary-rgb),.6);
+  box-shadow:0 0 0 1px rgba(var(--primary-rgb),.3) inset,0 0 50px rgba(var(--primary-rgb),.25),0 18px 50px -20px rgba(0,0,0,.8)}
+/* DENSITY: scale pin + tag with --ui-content (clamped so it never vanishes). */
+.opmap-pin{width:calc(14px * var(--ui-content,1));height:calc(14px * var(--ui-content,1))}
+.opmap-dot.boss .opmap-pin{width:calc(18px * var(--ui-content,1));height:calc(18px * var(--ui-content,1))}
+.opmap-tag{transform:scale(var(--ui-content,1));transform-origin:top center}
+/* a corner key-line readout strip under the title so the map screen has hierarchy */
+.opmap-meta{display:flex;justify-content:center;gap:var(--sp-5);margin:0 auto var(--sp-3);
+  font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--ink-dim)}
+.opmap-meta b{color:var(--primary);font-family:var(--disp);font-weight:800}
+
+/* ---- BRIEFING: bold 2-column dossier — dominant SITUATION + stacked intel ---- */
+/* The box is fixed height; each body is a `.ui-dense` core inside a fixed-height
+   scroll section, so at 0.65 the text shrinks and MANY more lines show without the
+   box growing. */
+#briefing .brief-box-2col{display:flex;flex-direction:column;max-height:90vh;overflow:hidden}
+.brief-box-2col .brief-grid{
+  display:grid;grid-template-columns:1.35fr 1fr;gap:var(--sp-4);
+  flex:1 1 auto;min-height:0;margin-top:var(--sp-4)}
+.brief-box-2col .brief-col{display:flex;flex-direction:column;gap:var(--sp-4);min-height:0}
+.brief-box-2col .brief-sec{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.brief-sec-hero{min-height:0}
+.brief-sec-hero .brief-h{font-size:11px}
+.brief-box-2col .brief-col .brief-sec{flex:1 1 0}
+.brief-sec-loadout{flex:0 0 auto !important}
+/* the dense, scrolling body: fixed-height section, scaled content */
+.brief-box-2col .brief-body.ui-dense{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:6px;
+  font-size:12px;line-height:1.62}
+.brief-sec-hero .brief-body.ui-dense{font-size:13px}
+/* opLore single column dense body inside fixed box */
+#opLore .brief-box{max-height:80vh}
+#opLore .brief-body.ui-dense{font-size:13px;line-height:1.7}
+
+/* ---- HANGAR: fixed-footprint card; preview + spec grid densify together ---- */
+/* The card keeps a stable width (#jetStage flex-basis). Lowering UI size scales the
+   preview host (canvas auto-resizes via ResizeObserver) AND the spec grid so MORE
+   spec rows / a tighter model fit in the same card. The preview host keeps a fixed
+   pixel height so the card footprint is stable while the model inside scales. */
+.cardbig .jetpreview3d{height:clamp(240px,40vh,360px);transform:none}
+.cardbig .cbgrid{zoom:var(--ui-content,1)}
+.cardbig .jetpreview3d > #jetPreviewCanvas,
+.cardbig .jetpreview3d > canvas{transform:scale(var(--ui-content,1));transform-origin:center center}
+/* bolder hangar masthead + a cleaner two-zone (preview | data) feel via the card frame */
+.card.cardbig{border:1px solid rgba(var(--primary-rgb),.4);
+  box-shadow:0 24px 70px -26px rgba(0,0,0,.8),inset 0 1px 0 rgba(var(--primary-rgb),.12)}
+
+/* ---- SHARED ACTION BAR: bigger, clearer primary/secondary on every overlay ---- */
+.cmp-actions,.brief-actions{margin-top:var(--sp-5);padding-top:var(--sp-4);
+  border-top:1px solid rgba(var(--primary-rgb),.18)}
+.cmp-btn{font-size:13px;padding:var(--sp-3) var(--sp-6)}
+.cmp-btn.cmp-play{font-size:15px;letter-spacing:4px}
+
+/* ============================================================================
+   MOBILE RESPONSIVE REFLOW — phone (~390x844). Screens REARRANGE, not shrink.
+   ============================================================================ */
+@media (max-width:560px){
+  /* overlays: full-bleed consoles, generous safe-area padding. Extra TOP clearance
+     so the centered title clears the fixed top-right CONTROLS & MANUAL button. */
+  .cmp-box,.brief-box,#wingpick .wp-box{
+    width:100%;max-width:100%;max-height:100vh;height:100vh;border-radius:0;
+    padding:calc(var(--sp-7) + env(safe-area-inset-top)) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom));
+    display:flex;flex-direction:column;justify-content:flex-start}
+  .cmp-box::after,.brief-box::after{display:none}
+  /* shrink the title a touch on phones so a long op name stays on one or two tidy lines */
+  .cmp-title,.brief-title{font-size:clamp(16px,4.6vw,20px);padding:0 var(--sp-3)}
+
+  /* BRIEFING: collapse the 2-col dossier to a single scrolling stack that fills
+     the phone; SITUATION leads, intel stacks below, action bar pins. The whole
+     grid is ONE scroll region — each section sizes to its content (no nested
+     scroll, no overlap). */
+  #briefing .brief-box-2col{overflow:hidden}
+  .brief-box-2col .brief-grid{grid-template-columns:1fr;display:flex;flex-direction:column;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;gap:var(--sp-3);min-height:0}
+  .brief-box-2col .brief-col{display:contents}            /* unwrap the right column so all sections stack */
+  .brief-box-2col .brief-sec,
+  .brief-box-2col .brief-sec-hero,
+  .brief-box-2col .brief-col .brief-sec{flex:0 0 auto;min-height:auto;overflow:visible}
+  .brief-box-2col .brief-body.ui-dense{flex:0 0 auto;overflow:visible;max-height:none;min-height:0}
+  .brief-actions,.cmp-actions{flex:0 0 auto;margin-top:var(--sp-3)}
+
+  /* LEVEL MAP: fit the map to the phone viewport (taller aspect for portrait),
+     full width, pins/labels stay readable. */
+  .opmap-canvas{width:100%;aspect-ratio:4/5;max-height:62vh}
+  .opmap-meta{flex-wrap:wrap;gap:var(--sp-2) var(--sp-4)}
+
+  /* OPS-SELECT: stacked op cards already vertical — just widen to edges */
+  .ops-list{max-width:100%}
+  .op-card{grid-template-columns:auto 1fr;gap:var(--sp-3)}
+  .op-card-sub{grid-column:2;text-align:left;margin-top:2px}
+
+  /* MODE / ENDLESS: stack the two mode cards + config blocks vertically */
+  .mode-grid{flex-direction:column;max-width:100%}
+  .mode-card{flex:1 1 auto}
+  .endless-cfg{flex-direction:column;gap:var(--sp-4);max-width:100%}
+
+  /* action bar: full-width stacked buttons, primary first (DOM order keeps back→play;
+     reverse so the primary LAUNCH sits on top under the thumb) */
+  .brief-actions,.cmp-actions{flex-direction:column-reverse;gap:var(--sp-3)}
+  .cmp-btn{width:100%}
+}
+
+/* HANGAR mobile reflow: the carousel arrows tuck to the card edges, the card fills
+   the width, the preview shrinks to a phone-friendly hero. */
+@media (max-width:560px){
+  /* top padding clears the fixed top-right CONTROLS & MANUAL button so the centered masthead doesn't run under it */
+  .hwrap{width:100%;padding:calc(56px + env(safe-area-inset-top)) var(--sp-3) var(--sp-5)}
+  .hwrap h1{font-size:clamp(30px,11vw,44px)}
+  #carousel{gap:var(--sp-2)}
+  .navarrow{width:42px;height:42px;font-size:18px}
+  #jetStage{flex:1 1 auto;max-width:none}
+  .cardbig .jetpreview3d{height:clamp(180px,32vh,260px)}
+  .cardbig .cbgrid{grid-template-columns:1fr;gap:6px}
+  .cardbig .cbhead{flex-wrap:wrap;gap:8px}
+  .cbtags{flex-direction:row;align-items:center}
 }
 
 /* ---- onboarding screens (language select + controls) ---- */

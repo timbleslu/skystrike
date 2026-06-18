@@ -281,6 +281,8 @@ const I18N = {
     'campaign.levelMap': 'OPERATION MAP',
     'campaign.situation': 'SITUATION',
     'campaign.rd': 'R&D',
+    'campaign.sectors': 'SECTORS',
+    'campaign.clearedLbl': 'CLEARED',
     'banner.launching': 'LAUNCHING…',
 
     /* ---- campaign: boss callsigns + per-phase intel lines ---- */
@@ -916,6 +918,8 @@ const I18N = {
     'campaign.levelMap': '行动地图',
     'campaign.situation': '态势',
     'campaign.rd': '研发',
+    'campaign.sectors': '区域',
+    'campaign.clearedLbl': '已清除',
     'banner.launching': '出击中…',
 
     /* ---- campaign: boss callsigns + per-phase intel lines ---- */

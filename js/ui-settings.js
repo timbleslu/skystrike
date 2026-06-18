@@ -317,12 +317,12 @@ function applyHudScale() {
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
   if (typeof applyButtonStyle === 'function') applyButtonStyle();
 }
-// UI size: zoom every menu/overlay screen so more fits without scrolling (esp. on mobile). Distinct from HUD size.
-const UI_SCALE_SCREENS = ['hangar', 'upgrade', 'gameover', 'wingpick', 'opmap', 'modeChoice', 'endlessSetup', 'opsSelect', 'levelMap', 'briefing', 'opLore', 'manual', 'meta', 'langSelect', 'onboard'];
+// UI size: publishes the --ui-content scale factor (root custom prop). Menu BOXES keep their fixed
+// footprint; only the CONTENT inside (text, map nodes, jet preview…) scales, via CSS that consumes
+// var(--ui-content) on `.ui-dense` cores. Lower = denser = more content visible per same-size box.
+// (NOT whole-screen zoom — that just shrank the box too and showed the same amount of content.)
 function applyUiScale() {
-  UI_SCALE_SCREENS.forEach(id => {
-    const el = g(id); if (el) el.style.zoom = String(uiScale);
-  });
+  document.documentElement.style.setProperty('--ui-content', String(uiScale));
 }
 function saveSettings() {
   try {

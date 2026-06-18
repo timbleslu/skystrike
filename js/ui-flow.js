@@ -326,7 +326,14 @@ function renderLevelMap(opId) {
       '<span class="opmap-tag"><span class="opmap-n">' + (i + 1) + '</span>' +
       '<span class="opmap-name">' + t(lvl.nameKey) + '</span>' + pips + '</span></button>';
   }).join('');
-  wrap.innerHTML =
+  // hierarchy strip: progress readout above the big map (sectors / cleared count)
+  const total = op.levels.length;
+  const clearedN = op.levels.filter((lvl, i) => campaignLevelState(opId, i) === 'cleared').length;
+  const metaStrip = '<div class="opmap-meta">' +
+    '<span>' + t('campaign.sectors') + ' <b>' + total + '</b></span>' +
+    '<span>' + t('campaign.clearedLbl') + ' <b>' + clearedN + ' / ' + total + '</b></span>' +
+    '</div>';
+  wrap.innerHTML = metaStrip +
     '<div class="opmap-canvas" data-op="' + opId + '" style="background-image:url(\'assets/maps/' + opId + '.svg\')">' +
       '<svg class="opmap-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
         '<path d="' + route + '" fill="none" stroke="rgba(120,200,230,0.30)" stroke-width="0.5" stroke-dasharray="1.6 1.8" vector-effect="non-scaling-stroke"/>' +
