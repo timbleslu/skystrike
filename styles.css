@@ -1340,3 +1340,17 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
   /* belt-and-suspenders: even if JS were bypassed, no animated weather wash is implied here */
   html[data-weather="storm"] #vignette{box-shadow:none;}
 }
+/* ===== STARS/RATING ===== */
+/* hidden member of the stars/rating pair (only ONE shows per debrief: stars in Ops/win, rating in Endless death) */
+.gostars.hide,.gorating.hide,.stars-conds.hide{display:none}
+/* per-mission star-condition checklist (Ops debrief): one line per authored condition, earned ones lit */
+.stars-conds{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:4px}
+.stars-conds span{font-family:var(--disp);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-dim)}
+.stars-conds span.met{color:var(--reward);text-shadow:var(--glow-reward)}
+/* endless death rating — sits in the stars' slot, mirrors the debrief stat-stack look */
+.gorating{order:1;display:flex;flex-direction:column;align-items:center;margin:var(--sp-2) 0;gap:4px}
+.rating-title{font-family:var(--disp);font-size:var(--fs-label);letter-spacing:var(--ls-caps);color:var(--ink-dim);text-transform:uppercase}
+.rating-row{display:flex;align-items:baseline;gap:10px}
+.rating-row span{font-family:var(--disp);font-size:10px;letter-spacing:2px;color:var(--ink-dim);text-transform:uppercase}
+.rating-row b{font-family:var(--disp);font-size:18px;color:var(--reward);text-shadow:var(--glow-reward)}
+.gowrap.reveal .gorating{animation:revealRise var(--dur-base) var(--ease-out) .32s both}
