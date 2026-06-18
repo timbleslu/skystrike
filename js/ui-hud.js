@@ -234,9 +234,9 @@ function showMissionCard(verb, blurbKey) {
   const nameStr = t('mission.name.' + verb), descStr = t('mission.desc.' + verb);
   const ti = g('missionCardTitle'); if (ti) ti.textContent = (nameStr !== 'mission.name.' + verb) ? nameStr : verb;
   const de = g('missionCardDesc'); if (de) de.textContent = (descStr !== 'mission.desc.' + verb) ? descStr : '';
-  const blurb = blurbKey ? t(blurbKey) : '';
-  const be = g('missionCardBlurb');
-  if (be) { const has = !!blurb && blurb !== blurbKey; be.textContent = has ? blurb : ''; be.style.display = has ? '' : 'none'; }
+  // §1: the 2-paragraph mission lore now lives on the pre-launch briefing screen; the in-flight card stays a
+  // concise objective + how-to (mission.desc.<verb>) only — drop the lore blurb here. blurbKey kept for back-compat.
+  const be = g('missionCardBlurb'); if (be) { be.textContent = ''; be.style.display = 'none'; }
   let firstTime = false;
   const seenKey = 'skystrike_seenMissionType_' + verb;
   try { firstTime = !store.get(seenKey); } catch (e) {}
