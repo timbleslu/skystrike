@@ -172,6 +172,10 @@ function applyLang() {
   setTxt('ssetTab_controls', t('set.tab.controls'));
   setTxt('ssetTab_audio', t('set.tab.audio'));
   setTxt('ssetTab_game', t('set.tab.game'));
+  // settings-redesign: grouped section sub-headers within each subtab
+  setTxt('ssecAppearance', t('set.sec.appearance')); setTxt('ssecReadout', t('set.sec.readout'));
+  setTxt('ssecSteering', t('set.sec.steering')); setTxt('ssecTouch', t('set.sec.touch')); setTxt('ssecMotion', t('set.sec.motion'));
+  setTxt('ssecMix', t('set.sec.mix')); setTxt('ssecAim', t('set.sec.aim')); setTxt('ssecModes', t('set.sec.modes')); setTxt('ssecDev', t('set.sec.dev'));
   const shs2 = g('setHudScale');
   if (shs2 && shs2.options.length >= 5) {
     shs2.options[0].textContent = t('set.hudXs');
