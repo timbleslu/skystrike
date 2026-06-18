@@ -98,12 +98,14 @@
 <div id="flash" class="overlay"></div>
 <div id="crt" class="overlay"></div>
 
+<!-- GLOBAL persistent Controls & Manual / Settings overlay button. Body-level (NOT inside any screen) so it
+     stays pinned to the viewport top-right across EVERY menu and never scrolls with a scroll container — the old
+     in-#hangar copy was trapped by #hangar's backdrop-filter containing block and scrolled away. Visibility is
+     driven each frame by syncManualBtn() (ui-hangar.js): shown on all menus, hidden in flight/gameover. -->
+<button id="manualBtn" class="ghostbtn manual-cta manual-fixed mb-hide">&#9881; CONTROLS &amp; MANUAL</button>
+
 <div id="hangar">
-  <div id="versionTag" class="version-tag">Version 1.0</div>
-  <!-- F7/F3: prominent, lingering top-right entry to Controls & Manual (houses the Settings tab). Fixed to the
-       hangar viewport corner so it stays put while the hangar scrolls; lives inside #hangar so it auto-hides
-       in gameplay / mode-choice / endless-setup. -->
-  <button id="manualBtn" class="ghostbtn manual-cta manual-fixed">&#9881; CONTROLS &amp; MANUAL</button>
+  <div id="versionTag" class="version-tag">Version 1.1</div>
   <div class="hwrap">
     <h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1>
     <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
@@ -140,7 +142,7 @@
       </div>
     </div>
 
-    <!-- F7: CONTROLS & MANUAL moved out to a lingering fixed top-right button (see #manualBtn under #versionTag). -->
+    <!-- F7: CONTROLS & MANUAL moved out to the body-level global #manualBtn overlay (top of file). -->
     <div class="hbtns hbtns-secondary">
       <button id="metaBtn" class="ghostbtn">&#9650; COMMAND &amp; PROGRESSION</button>
       <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>
