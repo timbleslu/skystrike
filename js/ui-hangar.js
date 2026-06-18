@@ -88,9 +88,15 @@ function buildHangar() {
   applyHudScale();
   const sus = g('setUiScale');
   if (sus) {
+    // On touch (mobile), shift the UI-size options down a level + add a smaller floor — phone menus run dense.
+    // Labels (XS..XL) stay; only the underlying scale VALUES change. Desktop keeps the original set.
+    if ('ontouchstart' in window) {
+      const mobileVals = ['0.5', '0.65', '0.8', '1', '1.15'];
+      for (let i = 0; i < mobileVals.length && i < sus.options.length; i++) sus.options[i].value = mobileVals[i];
+    }
     sus.value = String(uiScale);
     sus.addEventListener('change', () => {
-      uiScale = Math.max(0.65, Math.min(1.6, parseFloat(sus.value) || 1));
+      uiScale = Math.max(0.5, Math.min(1.6, parseFloat(sus.value) || 1));
       applyUiScale();
       if (audio.on) audio.ui();
       saveSettings();
