@@ -144,6 +144,83 @@ class AudioEngine {
   power()    { this.blip(280, 0.35, 'sawtooth', 0.16, 920); }
   ping()     { this.blip(1046, 0.09, 'sine', 0.12, 1568); }   // F1: short rising chime — waypoint checkoff one-shot
   hurt()     { this.burst(0.25, 0.3, 'lowpass', 700, 120); }
+
+  /* ---- weather audio (storm rain bed + thunder). All nodes feed this.master, so the master
+     gain (muted ? 0 : volume) and live setMaster() volume/mute changes apply automatically. ---- */
+  // Lazily build ONE persistent looping rain voice: white noise → lowpass → bandpass → rainGain.
+  // A slow LFO sways the lowpass cutoff so the bed gently breathes instead of reading as flat static.
+  // Built once and kept alive (an ambience like the engine voice) — gated by gain in setRain(), never
+  // re-created, so it can't leak voices over a long session.
+  _ensureRainBed() {
+    if (!this.on || this.rainGain) return;
+    const ctx = this.ctx;
+    this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;   // silent until setRain(true)
+    const n = this.noise();                                          // looping 2s noise buffer source
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';  lp.frequency.value = 1400; lp.Q.value = 0.4;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 0.5;
+    // LFO: ±320 Hz sway on the lowpass cutoff, ~0.13 Hz (≈7.5s period) — slow weather "gusts".
+    const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.13;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 320;
+    lfo.connect(lfoGain); lfoGain.connect(lp.frequency); lfo.start();
+    n.connect(lp); lp.connect(bp); bp.connect(this.rainGain); this.rainGain.connect(this.master);
+    this.rainSrc = n; this.rainLfo = lfo;   // kept for completeness; bed lives for the session
+  }
+  // Duck the rain bed on/off. active=true builds the bed (first storm frame) + ramps it up; false
+  // ramps to silence. setTargetAtTime gives a smooth ~0.5s fade so storm enter/exit isn't a hard cut.
+  setRain(active) {
+    if (!this.on) return;
+    if (active) this._ensureRainBed();
+    if (!this.rainGain) return;
+    const t = this.ctx.currentTime;
+    this.rainGain.gain.setTargetAtTime(active ? 0.06 : 0, t, 0.5);
+  }
+  // Per-frame gate for the rain bed: audible ONLY while actively flying a storm. Paused, menus
+  // (state !== 'playing'), and non-storm weather all duck it to silence. muted/volume are handled
+  // upstream by master, so this only owns the storm/pause/menu condition. Called from updateWeather.
+  tickWeather() {
+    if (!this.on) return;
+    const storm = (typeof weather !== 'undefined' && weather && weather.type === 'storm');
+    const playing = (typeof state === 'undefined' || state === 'playing');
+    const isPaused = (typeof paused !== 'undefined' && paused);
+    this.setRain(storm && playing && !isPaused);
+  }
+  // One-shot thunder on a lightning flash. intensity in [0..1] scales loudness + crack sharpness.
+  // Two voices: a low rumble (lowpass noise + a sub-bass sine drop) and, after a short intensity-
+  // shortened delay (closer strike = sooner + sharper), a brighter crack burst. All nodes self-stop.
+  thunder(intensity) {
+    if (!this.on) return;
+    const ctx = this.ctx, now = ctx.currentTime;
+    const k = Math.max(0, Math.min(1, intensity || 0));
+    // --- low rumble: filtered noise rolling off over ~1.4s ---
+    const rs = this.noise(), rg = ctx.createGain(), rf = ctx.createBiquadFilter();
+    rf.type = 'lowpass'; rf.frequency.setValueAtTime(420, now);
+    rf.frequency.exponentialRampToValueAtTime(90, now + 1.3);
+    rg.gain.setValueAtTime(0.0001, now);
+    rg.gain.linearRampToValueAtTime(0.10 + 0.22 * k, now + 0.05);
+    rg.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
+    rs.connect(rf); rf.connect(rg); rg.connect(this.master);
+    setTimeout(() => { try { rs.stop(); } catch (e) {} }, 1500);
+    // --- sub-bass body: sine dropping 70→30 Hz under the rumble ---
+    const ob = ctx.createOscillator(), gb = ctx.createGain();
+    ob.type = 'sine'; ob.frequency.setValueAtTime(70, now);
+    ob.frequency.exponentialRampToValueAtTime(30, now + 0.9);
+    gb.gain.setValueAtTime(0.0001, now);
+    gb.gain.linearRampToValueAtTime(0.10 + 0.18 * k, now + 0.04);
+    gb.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+    ob.connect(gb); gb.connect(this.master); ob.start(now); ob.stop(now + 1.05);
+    // --- crack: brighter, shorter noise burst, delayed (far strike = later/duller, near = sooner/sharper) ---
+    const delay = 0.12 + (1 - k) * 0.5;            // 0.12s (near) … 0.62s (far)
+    const cStart = now + delay;
+    const cs = this.noise(), cg = ctx.createGain(), cf = ctx.createBiquadFilter();
+    cf.type = 'bandpass'; cf.Q.value = 0.7;
+    cf.frequency.setValueAtTime(1200 + 2200 * k, cStart);   // sharper (higher) when intense
+    cf.frequency.exponentialRampToValueAtTime(400, cStart + 0.35);
+    cg.gain.setValueAtTime(0.0001, cStart);
+    cg.gain.linearRampToValueAtTime(0.06 + 0.26 * k, cStart + 0.006);
+    cg.gain.exponentialRampToValueAtTime(0.0001, cStart + 0.4);
+    cs.connect(cf); cf.connect(cg); cg.connect(this.master);
+    setTimeout(() => { try { cs.stop(); } catch (e) {} }, (delay + 0.5) * 1000);
+  }
 }
 const audio = new AudioEngine();
 
@@ -677,14 +754,77 @@ function applyWeather(type) {
   }
 }
 
+/* ---------------- weather FX overlay (storm rain + lightning) — drawn to the #h2d 2D canvas
+   (z-30: above the WebGL world, below the #hud DOM). Gameplay multipliers live in core.js WEATHER;
+   this block is the screen-space JUICE: an angled rain streak field + randomized lightning. ---------- */
+// AUDIO HOOK (now wired): plays a synthesized thunder crack when a storm lightning flash fires.
+// Argument is the flash intensity in [0..1] — scales thunder loudness + crack sharpness. The audio
+// engine guards itself (no-op until audio.on), and thunder() routes through master so muted/volume
+// apply automatically; a non-storm/paused state simply never fires this (gated at the call site).
+// Search tag for the audio pass: onLightningFlash.
+function onLightningFlash(intensity) {
+  if (typeof audio !== 'undefined' && audio.on) audio.thunder(intensity);
+}
+
+// Rain streak field. Capped particle count (perf-budgeted); halved on the low gfx tier; OFF entirely
+// when the player asked for reduced motion. Coords are normalized [0,1) so a resize needs no rebuild.
+const RAIN_MAX = 240;                 // hard cap (PC); low tier uses RAIN_MAX/2
+let _rain = null;                     // [{x,y,len,spd,a}] lazily built on first storm frame
+const _rainAngle = 0.18;              // slight slant (rad-ish, applied as an x-shear per unit fall)
+function _buildRain(n) {
+  const a = new Array(n);
+  for (let i = 0; i < n; i++) a[i] = { x: Math.random(), y: Math.random(), len: 0.02 + Math.random() * 0.05, spd: 0.9 + Math.random() * 0.9, a: 0.18 + Math.random() * 0.3 };
+  return a;
+}
+// Advance rain + draw it (and a faint storm darken wash) onto the supplied 2D ctx. Called from the
+// game loop AFTER drawHUD's clearRect/world but BEFORE the DOM HUD paints (h2d sits under #hud).
+function drawWeatherOverlay(ctx, dt) {
+  if (!ctx || weather.type !== 'storm') return;
+  if (typeof prefersReducedMotion === 'function' && prefersReducedMotion()) return;   // honor reduced-motion
+  const cap = ((typeof gfxTier !== 'undefined') && gfxTier === 'low') ? (RAIN_MAX >> 1) : RAIN_MAX;
+  if (!_rain || _rain.length !== cap) _rain = _buildRain(cap);
+  ctx.save();
+  ctx.fillStyle = 'rgba(60,66,78,0.10)';   // thin slate wash so the rain reads against bright sky
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(200,215,235,0.55)';
+  ctx.lineWidth = Math.max(1, W / 1280);   // hairline streaks, scaled to resolution
+  ctx.beginPath();
+  for (let i = 0; i < _rain.length; i++) {
+    const p = _rain[i];
+    p.y += p.spd * dt * 1.35;              // fall
+    p.x += p.spd * dt * _rainAngle;        // drift sideways for the slant
+    if (p.y > 1) { p.y -= 1.05; p.x = Math.random(); }
+    if (p.x > 1) p.x -= 1;
+    const sx = p.x * W, sy = p.y * H;
+    ctx.globalAlpha = p.a;
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - _rainAngle * p.len * H, sy + p.len * H);   // streak down + back along the slant
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 let _lightT = 5;   // seconds until the next storm lightning flash
-/* Per-frame weather tick: advance the turbulence phase clock (read by combat.js) and fire the
-   occasional storm lightning flash (reuses the empFlash screen-flash channel). */
+/* Per-frame weather tick: advance the turbulence phase clock (read by combat.js), fade enemy tracers
+   under fog/storm (harder to see), and fire the occasional storm lightning flash with RANDOM intensity
+   (the empFlash screen-flash channel renders it; the AUDIO HOOK lets a later module play thunder). */
 function updateWeather(dt) {
   weatherT += dt;
+  // Projectile visibility: enemy tracers (ASSET.ebulletMat, fog:false so scene fog never touches them)
+  // dim under fog/storm so incoming fire is harder to spot — matches the reduced-visibility gameplay goal.
+  if (typeof ASSET !== 'undefined' && ASSET.ebulletMat) {
+    const dim = weather.type === 'fog' ? 0.5 : weather.type === 'storm' ? 0.65 : 0.98;
+    ASSET.ebulletMat.opacity = dim;
+  }
   if (weather.type === 'storm') {
     _lightT -= dt;
-    if (_lightT <= 0) { empFlash = Math.max(empFlash, 0.22); _lightT = 3.5 + Math.random() * 6.5; }
+    if (_lightT <= 0) {
+      const intensity = 0.18 + Math.random() * 0.62;   // 0.18..0.80 randomized flash strength
+      empFlash = Math.max(empFlash, intensity);
+      // AUDIO HOOK: fire the lightning callback (no-op by default; audio pass overrides it). See onLightningFlash above.
+      if (typeof onLightningFlash === 'function') onLightningFlash(intensity);
+      _lightT = 4 + Math.random() * 11;   // randomized ~4–15s interval
+    }
   }
 }
 

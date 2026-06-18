@@ -888,6 +888,10 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05); lastDt = dt;
   if (seaMat) seaMat.uniforms.time.value = clock.elapsedTime;
   updateSunRig();
+  // AUDIO: gate the synthesized storm rain bed EVERY frame, BEFORE the paused early-return so the
+  // bed ducks to silence while paused / in menus / on weather change (tickWeather reads state+paused
+  // +weather.type itself; muted/volume apply upstream via the master gain). See AudioEngine.tickWeather.
+  if (typeof audio !== 'undefined' && audio.on) audio.tickWeather();
   if (paused) { renderer.render(scene, camera); return; }
   updateClouds(dt);
 
@@ -914,6 +918,7 @@ function animate() {
     updatePlayerShadow();
     audio.setEngineJet(player.jet && player.jet.id, player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
     drawHUD(); drawRadar(); updateDom(dt);
+    if (typeof drawWeatherOverlay === 'function') drawWeatherOverlay(h2d, dt);   // storm rain streaks over the world/HUD canvas, under the DOM HUD (drawHUD cleared h2d first)
   } else if (state === 'dead') {
     updateParticles(dt);
     camera.updateMatrixWorld();

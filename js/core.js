@@ -26,8 +26,8 @@ const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens rad
 // what visuals/tests key off. radar/lock fields unchanged — only fog distance changes.
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.8, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 11.4 },
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 5.7 },
+  fog:   { radarMul: 0.6, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 11.4 },   // radar 0.8→0.6: fog cuts enemy detection ~40% (weather-FX pass)
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 5.7 },     // radar 0.7: storm cuts enemy detection ~20%
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
 // factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
