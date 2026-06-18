@@ -86,6 +86,17 @@ function buildHangar() {
     });
   }
   applyHudScale();
+  const sus = g('setUiScale');
+  if (sus) {
+    sus.value = String(uiScale);
+    sus.addEventListener('change', () => {
+      uiScale = Math.max(0.65, Math.min(1.6, parseFloat(sus.value) || 1));
+      applyUiScale();
+      if (audio.on) audio.ui();
+      saveSettings();
+    });
+  }
+  applyUiScale();
   // Theming: visual language (skin) + color scheme (palette). Apply stored choice at boot, then wire selects.
   const storedSkin = store.get('skystrike_skin') || 'standard';
   const storedPalette = store.get('skystrike_palette') || 'amber';

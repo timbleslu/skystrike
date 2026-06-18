@@ -427,7 +427,7 @@ canvas{display:block}
 .manual-fixed{position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));margin:0;z-index:80;white-space:nowrap}
 .manual-fixed.mb-hide{display:none}
 /* MODAL FRAME (§3k) — unified backdrop + token header for full-screen overlays */
-#manual{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.88),rgba(2,5,10,.97));backdrop-filter:blur(4px);overflow:auto;padding:40px 24px}
+#manual{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px);overflow:auto;padding:40px 24px}
 #manual.show{display:block}
 #manual .mwrap{max-width:1000px;margin:0 auto}
 #manual h2{font-family:var(--disp);font-weight:800;font-size:var(--fs-h2);letter-spacing:6px;color:var(--ink-hi);text-align:center;margin:0;text-shadow:0 0 22px rgba(var(--primary-rgb),.45)}
@@ -699,7 +699,7 @@ canvas{display:block}
   #hint{display:none;}
   .panel{padding: 8px 10px;}
 }
-#wingpick{position:absolute;inset:0;z-index:70;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.88),rgba(2,5,10,.97));backdrop-filter:blur(4px)}
+#wingpick{position:absolute;inset:0;z-index:70;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px)}
 #wingpick.show{display:flex;align-items:center;justify-content:center}
 #wingpick .wp-box{width:min(720px,92vw);max-height:84vh;overflow:auto;border:var(--bd);border-radius:var(--r-lg);background:var(--surface-2);padding:var(--sp-6)}
 #wingpick .wp-title{font-family:var(--disp);font-weight:800;letter-spacing:5px;color:var(--ink-hi);font-size:20px;text-align:center}
@@ -739,7 +739,9 @@ canvas{display:block}
 #opmap #opLaunch:disabled{opacity:.45;cursor:not-allowed}
 
 /* ---- Pre-launch reflow: mode-choice + endless-setup overlays (share the campaign overlay shell) ---- */
-#modeChoice,#endlessSetup{position:fixed;inset:0;z-index:73;display:none;background:rgba(2,6,10,.93);backdrop-filter:blur(6px)}
+/* Unified overlay backdrop: same richer radial scrim as #manual/#meta so every full-screen menu reads as
+   one system (the old flat rgba scrim let the blurred hangar bleed through unevenly). */
+#modeChoice,#endlessSetup{position:fixed;inset:0;z-index:73;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px)}
 #modeChoice.show,#endlessSetup.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
 /* mode-choice: two side-by-side deployment cards */
 .mode-grid{display:flex;flex-wrap:wrap;gap:var(--sp-4);justify-content:center;max-width:620px;margin:0 auto var(--sp-5)}
@@ -752,7 +754,7 @@ canvas{display:block}
 .endless-cfg>div{display:flex;flex-direction:column;align-items:center}
 #modeChoice .cmp-back,#endlessSetup .cmp-back{display:block;margin:0 auto}
 /* ---- Operations campaign (linear revamp): ops-select / level-map / briefing overlays ---- */
-#opsSelect,#levelMap,#briefing,#opLore{position:fixed;inset:0;z-index:73;display:none;background:rgba(2,6,10,.93);backdrop-filter:blur(6px)}
+#opsSelect,#levelMap,#briefing,#opLore{position:fixed;inset:0;z-index:73;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px)}
 #opsSelect.show,#levelMap.show,#briefing.show,#opLore.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
 /* F5 lore panel: expanded operation lore (4-5 paragraphs) can exceed the box height. Make the BODY scroll while
    the title + action buttons stay pinned (the shared .brief-box scrolls as a whole, which would scroll the close
@@ -844,6 +846,75 @@ canvas{display:block}
 .brief-body{font-family:var(--mono);font-size:11px;line-height:1.55;color:var(--ink)}
 .brief-pre{white-space:pre-line}
 @media (max-width:640px){.brief-grid{grid-template-columns:1fr}}
+
+/* ============================================================================
+   MENU AESTHETIC PASS — one cohesive polish layer over the overlay screens.
+   Token-only (palette/skin safe). Improves: panel framing, header identity,
+   spacing rhythm, locked/nav affordance. No ids/data-hooks touched. */
+
+/* PANEL SHELL — campaign + briefing boxes shrink-to-fit and center instead of
+   stretching to 88vh with content floating at the top. A soft inner top-light +
+   lifted shadow makes the panel read as a raised console, not a flat rectangle. */
+.cmp-box,.brief-box,#wingpick .wp-box{
+  height:auto;max-height:88vh;align-self:center;
+  box-shadow:0 24px 60px -20px rgba(0,0,0,.7),inset 0 1px 0 rgba(var(--primary-rgb),.10);
+}
+/* PANEL HEADER IDENTITY — a centered hairline rule under every overlay title so
+   each screen announces itself the same way (title → tactical sub → rule → body). */
+.cmp-sub,.brief-box .brief-title + .cmp-sub,#wingpick .wp-sub{
+  position:relative;padding-bottom:var(--sp-4);margin-bottom:var(--sp-5);
+}
+.cmp-sub::after,#wingpick .wp-sub::after{
+  content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  width:64px;height:1px;background:linear-gradient(90deg,transparent,rgba(var(--primary-rgb),.7),transparent);
+}
+
+/* MODE CARDS — clearer two-option decision: a left accent spine + a "›" go-cue
+   on hover so it reads as "pick one to proceed", and a real focus ring (a11y). */
+.mode-card{position:relative;overflow:hidden;border-color:rgba(var(--primary-rgb),.55)}
+.mode-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--primary);opacity:.5;transition:opacity var(--dur-fast) var(--ease-out)}
+.mode-card:hover::before,.mode-card:focus-visible::before{opacity:1}
+.mode-card:focus-visible{outline:2px solid var(--primary-bright);outline-offset:3px}
+.mode-card-name{display:flex;align-items:center;justify-content:space-between}
+.mode-card-name::after{content:"\203A";color:var(--primary);font-weight:400;
+  opacity:0;transform:translateX(-6px);transition:var(--dur-fast) var(--ease-out)}
+.mode-card:hover .mode-card-name::after,.mode-card:focus-visible .mode-card-name::after{opacity:1;transform:translateX(0)}
+
+/* OP-CARD locked treatment — designed (hatched), not just dimmed-and-blurred, to
+   match the §3l locked language used elsewhere; unlocked rows get a left accent. */
+.op-card{position:relative;overflow:hidden}
+.op-card:not(.locked)::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--primary);opacity:.55;transition:opacity var(--dur-fast) var(--ease-out)}
+.op-card.done:not(.locked)::before{background:var(--ok)}
+.op-card:not(.locked):hover::before,.op-card:not(.locked):focus-visible::before{opacity:1}
+.op-card.locked{filter:none;opacity:1;
+  background:repeating-linear-gradient(45deg,transparent 0 7px,rgba(74,93,107,.10) 7px 9px);
+  border-color:var(--locked)}
+.op-card.locked .op-card-name{color:var(--ink-dim)}
+.op-card:focus-visible{outline:2px solid var(--primary-bright);outline-offset:2px}
+
+/* HANGAR header — tighten the eyebrow rhythm so SKYSTRIKE / sub / SP read as one
+   stacked masthead with even spacing rather than three loose floating lines. */
+.hwrap h1{text-shadow:0 0 32px rgba(var(--primary-rgb),.42)}
+#hangarSub.sub{margin:var(--sp-2) 0 var(--sp-3)}
+#hangarSp{margin:0 auto var(--sp-4);padding:var(--sp-1) var(--sp-4);
+  border:1px solid rgba(var(--primary-rgb),.22);border-radius:999px;display:inline-block}
+
+/* META cards — give perk/achievement nodes a hover lift + clearer affordable cue
+   so the dense grid is scannable (afford = ready to buy, glows on hover). */
+.perknode,.achnode{border-radius:var(--r-sm);transition:border-color var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out)}
+.perknode.afford:hover{transform:translateY(-2px);box-shadow:var(--glow-primary)}
+.perknode.maxed{box-shadow:inset 0 0 0 1px rgba(var(--reward-rgb),.25)}
+
+/* OVERLAY ENTRANCE — panels rise+fade as a unit (the screen scrim already fades);
+   gives every overlay the same calm "deploy" motion. */
+.cmp-box,.brief-box{animation:panelRise var(--dur-base) var(--ease-out)}
+@keyframes panelRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  .cmp-box,.brief-box{animation:none}
+  .mode-card-name::after{transition:none}
+}
 
 /* ---- onboarding screens (language select + controls) ---- */
 #langSelect,#onboard{position:fixed;inset:0;z-index:80;display:none;background:radial-gradient(circle at 50% 30%,rgba(8,22,16,.98),rgba(3,7,5,1));overflow:auto;padding:40px 24px}
@@ -941,7 +1012,7 @@ canvas{display:block}
 .gospbox{font-family:var(--disp);letter-spacing:3px;font-size:13px;margin:var(--sp-3) 0 var(--sp-5);color:var(--ink-dim)}
 .gospbox b{color:var(--reward);font-size:20px;margin:0 6px;text-shadow:var(--glow-reward)}
 .gospsep{opacity:.5;margin:0 6px}
-#meta{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.88),rgba(2,5,10,.97));backdrop-filter:blur(4px);overflow:auto;padding:40px 24px}
+#meta{position:absolute;inset:0;z-index:60;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px);overflow:auto;padding:40px 24px}
 #meta.show{display:block}
 #meta .mwrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column}
 #meta .metahead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}

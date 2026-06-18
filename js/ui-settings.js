@@ -35,6 +35,8 @@ function loadSettings() {
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
     else if ('ontouchstart' in window) hudScale = 0.8;
+    if (typeof s.uiScale === 'number') uiScale = Math.max(0.65, Math.min(1.6, s.uiScale));
+    else if ('ontouchstart' in window) uiScale = 0.8;   // menus default smaller on touch so more fits without scrolling
     controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
     if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
     if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
@@ -168,6 +170,7 @@ function applyLang() {
   const _maw = g('manP_Awacs'); if (_maw) _maw.innerHTML = t('manBody.awacs');
   setTxt('callsignHint', t('pilot.hint'));
   setTxt('lblHudScale', t('set.hudScale'));
+  setTxt('lblUiScale', t('set.uiScale'));
   setTxt('lblSkin', t('set.skin'));
   if (typeof refreshSkinGallery === 'function') refreshSkinGallery(activeSkin);
   setTxt('lblPalette', t('set.palette'));
@@ -186,6 +189,14 @@ function applyLang() {
     shs2.options[2].textContent = t('set.hudNormal');
     shs2.options[3].textContent = t('set.hudLarge');
     shs2.options[4].textContent = t('set.hudXl');
+  }
+  const sus2 = g('setUiScale');
+  if (sus2 && sus2.options.length >= 5) {
+    sus2.options[0].textContent = t('set.hudXs');
+    sus2.options[1].textContent = t('set.hudSmall');
+    sus2.options[2].textContent = t('set.hudNormal');
+    sus2.options[3].textContent = t('set.hudLarge');
+    sus2.options[4].textContent = t('set.hudXl');
   }
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
@@ -301,18 +312,23 @@ function installMotionStatus() {
   };
 }
 function applyHudScale() {
+  // HUD size: in-flight HUD only — DOM panels via the CSS var + canvas HUD via hudK(). Menus are driven by applyUiScale().
   const h = g('hud');
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
-  ['hangar', 'upgrade', 'gameover', 'wingpick', 'opmap', 'meta', 'langSelect', 'onboard'].forEach(id => {
-    const el = g(id); if (el) el.style.zoom = String(hudScale);
-  });
   if (typeof applyButtonStyle === 'function') applyButtonStyle();
+}
+// UI size: zoom every menu/overlay screen so more fits without scrolling (esp. on mobile). Distinct from HUD size.
+const UI_SCALE_SCREENS = ['hangar', 'upgrade', 'gameover', 'wingpick', 'opmap', 'modeChoice', 'endlessSetup', 'opsSelect', 'levelMap', 'briefing', 'opLore', 'manual', 'meta', 'langSelect', 'onboard'];
+function applyUiScale() {
+  UI_SCALE_SCREENS.forEach(id => {
+    const el = g(id); if (el) el.style.zoom = String(uiScale);
+  });
 }
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
       volume, muted, invertY, autoLock, startWingman, devUnlockAll, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
-      lang: LANG, controlSensitivity, hudScale, controlScheme,
+      lang: LANG, controlSensitivity, hudScale, uiScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality, unitSystem
     }));
   } catch (e) {}
