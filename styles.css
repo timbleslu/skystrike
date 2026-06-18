@@ -855,6 +855,7 @@ canvas{display:block}
 .ls-title .ls-sub2{display:block;font-size:.3em;letter-spacing:var(--ls-caps);color:var(--primary);margin-top:var(--sp-2);text-shadow:0 0 18px rgba(var(--primary-rgb),.6)}
 .ls-tagline{font-family:var(--disp);font-weight:700;font-size:clamp(13px,2.4vw,18px);letter-spacing:var(--ls-caps);color:var(--primary);margin:var(--sp-4) 0 0;text-shadow:0 0 14px rgba(var(--primary-rgb),.5)}
 .ls-flags{margin:var(--sp-7) 0 0}
+.ls-version{font-family:var(--disp);font-size:11px;letter-spacing:var(--ls-caps);color:var(--ink-dim);margin:var(--sp-5) 0 0;opacity:.75}
 /* language picker: a single dropdown (placeholder doubles as the "select to begin" prompt) */
 .ls-dropdown{background:rgba(8,22,16,.9);border:1px solid var(--cy);color:var(--cy);font-family:var(--disp);letter-spacing:3px;font-size:16px;padding:var(--sp-3) var(--sp-5);cursor:pointer;clip-path:polygon(0 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%);transition:background .15s}
 .ls-dropdown:hover{background:rgba(var(--primary-rgb),.14)}

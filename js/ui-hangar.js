@@ -187,6 +187,9 @@ function onEmblemClick(id) {
 // first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
 function initOnboarding() {
   const langDd = g('langDropdown');
+  // mirror the version onto the language-select panel as "Version: <n>" — sourced from #versionTag so one literal drives both
+  const lv = g('langVersion'), vt = g('versionTag');
+  if (lv && vt) { const m = vt.textContent.match(/[\d.]+/); lv.textContent = 'Version: ' + (m ? m[0] : ''); }
   if (langDd) langDd.addEventListener('change', () => {
     if (!langDd.value) return;
     LANG = langDd.value; saveSettings(); applyLang(); if (audio.on) audio.ui();
