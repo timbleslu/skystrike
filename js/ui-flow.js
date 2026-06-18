@@ -315,7 +315,13 @@ function openBriefing(opId, idx) {
   g('levelMap') && g('levelMap').classList.remove('show');
   const ov = g('briefing'); if (!ov) return;
   setTxt('briefTitle', t(op.nameKey) + ' — ' + t('campaign.level') + ' ' + (idx + 1) + ': ' + t(lvl.nameKey));
-  setTxt('briefLore', t(lvl.isBoss && lvl.boss && lvl.boss.introKey ? lvl.boss.introKey : lvl.loreKey));
+  // §1: surface the full 2-paragraph mission lore (blurb) here on the pre-launch loadout screen, under the
+  // situational line. (The in-flight card now shows only the concise objective + how-to.)
+  let situation = t(lvl.isBoss && lvl.boss && lvl.boss.introKey ? lvl.boss.introKey : lvl.loreKey);
+  const bk = (typeof levelBlurbKey === 'function') ? levelBlurbKey(lvl) : null;
+  const blurb = bk ? t(bk) : '';
+  if (blurb && blurb !== bk) situation += '\n\n' + blurb;
+  setTxt('briefLore', situation);
   setTxt('briefObjectives', t(lvl.objectivesKey));
   let intel = t(lvl.enemyIntelKey);
   if (lvl.isBoss && lvl.boss && lvl.boss.phases) intel += '\n' + lvl.boss.phases.map(ph => '• ' + t(ph.descKey)).join('\n');

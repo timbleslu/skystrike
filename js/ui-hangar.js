@@ -377,6 +377,9 @@ function syncManualBtn() {
     || (g('onboard') && g('onboard').classList.contains('show'))
     || (g('manual') && g('manual').classList.contains('show'));
   b.classList.toggle('mb-hide', !!blocked);
+  // §2: version tag rides along — shown on the language-select screen + every menu, hidden only in flight/gameover.
+  const v = g('versionTag');
+  if (v) v.classList.toggle('mb-hide', state === 'playing' || state === 'dead');
 }
 function openManual() { g('manual').classList.add('show'); showManualTab('guide'); paused = true; g('touchControls').classList.remove('show'); }
 function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }

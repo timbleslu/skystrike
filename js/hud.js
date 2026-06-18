@@ -145,7 +145,7 @@ function drawWeatherChip(ctx) {
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = 'bold ' + (13 * k) + 'px ' + HUDFONT;
-  const padX = 9 * k, x = 16, y = 86, h = 23 * k, w = ctx.measureText(label).width + padX * 2;
+  const padX = 9 * k, x = 16, y = 136, h = 23 * k, w = ctx.measureText(label).width + padX * 2;   // below HP/SHD/THR bars + the pilot tag (callsign), each row its own space
   ctx.fillStyle = storm ? 'rgba(120,140,200,0.16)' : 'rgba(' + HUD.primary + ',0.10)';
   ctx.fillRect(x, y, w, h);
   ctx.lineWidth = 1; ctx.strokeStyle = storm ? 'rgba(150,170,235,0.7)' : 'rgba(' + HUD.primary + ',0.5)';

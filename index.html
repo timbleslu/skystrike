@@ -103,14 +103,25 @@
      in-#hangar copy was trapped by #hangar's backdrop-filter containing block and scrolled away. Visibility is
      driven each frame by syncManualBtn() (ui-hangar.js): shown on all menus, hidden in flight/gameover. -->
 <button id="manualBtn" class="ghostbtn manual-cta manual-fixed mb-hide">&#9881; CONTROLS &amp; MANUAL</button>
+<!-- Global version tag: body-level so it pins to the viewport bottom-right (rides scroll) on the language-select
+     screen and every menu; visibility toggled with the gear by syncManualBtn(). -->
+<div id="versionTag" class="version-tag mb-hide">Version 1.1</div>
 
 <div id="hangar">
-  <div id="versionTag" class="version-tag">Version 1.1</div>
   <div class="hwrap">
     <h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1>
     <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
     <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
     <div id="hangarSp"><span id="hangarSpLbl">STRATEGIC POINTS</span> <b id="hangarSpVal">0</b></div>
+
+    <!-- Pilot identity: compact strip ABOVE the jet selector (callsign + emblem) — small, subordinate to the jet. -->
+    <div id="pilotPanel">
+      <span id="lblCallsign" class="dlab">CALLSIGN</span>
+      <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+      <span id="lblEmblem" class="dlab">EMBLEM</span>
+      <div id="emblemGrid"></div>
+      <p id="callsignHint" class="techhint"></p>
+    </div>
 
     <!-- HERO ZONE (§5c): the chosen aircraft is the centerpiece -->
     <div id="carousel">
@@ -125,22 +136,6 @@
 
     <!-- THE primary action: one dominant SELECT-JET CTA directly under the jet; opens the mode-choice screen -->
     <button id="launch">SELECT<span id="launchSub" class="btn-sub"></span></button>
-
-    <!-- LOADOUT STRIP (§5c): collapsed, subordinate row below the CTA. Difficulty/environment/mode moved to the
-         mode-choice → endless-setup flow (feature: pre-launch reflow); only the pilot panel remains here. -->
-    <div class="loadout">
-      <div id="pilotPanel">
-        <div class="pilotRow">
-          <span id="lblCallsign" class="dlab">CALLSIGN</span>
-          <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-        </div>
-        <p id="callsignHint" class="techhint"></p>
-        <div class="pilotRow">
-          <span id="lblEmblem" class="dlab">EMBLEM</span>
-          <div id="emblemGrid"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- F7: CONTROLS & MANUAL moved out to the body-level global #manualBtn overlay (top of file). -->
     <div class="hbtns hbtns-secondary">
