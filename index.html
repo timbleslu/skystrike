@@ -298,13 +298,18 @@
   </div>
 </div>
 <div id="briefing">
-  <div class="brief-box">
+  <div class="brief-box brief-box-2col">
     <div class="brief-title" id="briefTitle">MISSION BRIEFING</div>
+    <div class="cmp-sub">// PRE-FLIGHT BRIEFING //</div>
     <div class="brief-grid">
-      <div class="brief-sec"><div class="brief-h" id="briefLoreH">SITUATION</div><div class="brief-body" id="briefLore"></div></div>
-      <div class="brief-sec"><div class="brief-h" id="briefObjH">OBJECTIVES</div><div class="brief-body" id="briefObjectives"></div></div>
-      <div class="brief-sec"><div class="brief-h" id="briefIntelH">ENEMY INTEL</div><div class="brief-body brief-pre" id="briefIntel"></div></div>
-      <div class="brief-sec"><div class="brief-h" id="briefLoadoutH">LOADOUT</div><div class="brief-body" id="briefLoadout"></div></div>
+      <!-- LEFT: dominant situation column -->
+      <div class="brief-sec brief-sec-hero"><div class="brief-h" id="briefLoreH">SITUATION</div><div class="brief-body ui-dense brief-pre" id="briefLore"></div></div>
+      <!-- RIGHT: stacked intel column -->
+      <div class="brief-col">
+        <div class="brief-sec"><div class="brief-h" id="briefObjH">OBJECTIVES</div><div class="brief-body ui-dense" id="briefObjectives"></div></div>
+        <div class="brief-sec"><div class="brief-h" id="briefIntelH">ENEMY INTEL</div><div class="brief-body brief-pre ui-dense" id="briefIntel"></div></div>
+        <div class="brief-sec brief-sec-loadout"><div class="brief-h" id="briefLoadoutH">LOADOUT</div><div class="brief-body ui-dense" id="briefLoadout"></div></div>
+      </div>
     </div>
     <div class="brief-actions">
       <button id="briefBack" class="cmp-btn cmp-back">&#9664; BACK</button>
@@ -315,8 +320,9 @@
 <div id="opLore">
   <div class="brief-box">
     <div class="brief-title" id="opLoreTitle">OPERATION</div>
+    <div class="cmp-sub">// CAMPAIGN DOSSIER //</div>
     <div class="brief-grid">
-      <div class="brief-sec"><div class="brief-h" id="opLoreH">BACKGROUND</div><div class="brief-body" id="opLoreBody"></div></div>
+      <div class="brief-sec"><div class="brief-h" id="opLoreH">BACKGROUND</div><div class="brief-body ui-dense" id="opLoreBody"></div></div>
     </div>
     <div class="brief-actions">
       <button id="opLoreBack" class="cmp-btn cmp-back">&#9664; BACK</button>
