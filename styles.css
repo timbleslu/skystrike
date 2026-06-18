@@ -1030,6 +1030,45 @@ canvas{display:block}
 .cmp-btn.cmp-play{font-size:15px;letter-spacing:4px}
 
 /* ============================================================================
+   DENSITY COVERAGE — remaining menu screens (ops-select / meta / gameover /
+   upgrade / wingpick). Same contract as the campaign/briefing boxes above: the
+   OUTER box keeps a STABLE footprint (fixed width + min-height, internal scroll)
+   so it does NOT shrink-to-fit when the inner `.ui-dense` core consumes
+   --ui-content. Lowering "UI size" packs MORE content into the SAME box.
+   ============================================================================ */
+
+/* OPS-SELECT: .cmp-box is already fixed-width + capped-height + scroll. The
+   `.cmp-core.ui-dense` wrapper scales the stacked op cards; a stable min-height
+   on the core keeps the box from collapsing when the cards shrink. */
+#opsSelect .cmp-core.ui-dense{min-height:min(46vh,420px)}
+
+/* META: the #meta overlay scrolls as a whole, so the .mwrap had no stable height
+   and shrank to fit. Pin a min-height so the console keeps its footprint, and let
+   the perk/achievement grid (`.meta-core.ui-dense-fill`) span full width while it
+   packs (fill = it divides width back out by --ui-content so the grid still fills
+   the box at any UI size). */
+#meta .mwrap{min-height:min(78vh,760px)}
+
+/* GAMEOVER: the .gowrap was an auto-sized centered column — it reflowed with its
+   content. Give it a STABLE width; the `.go-core.ui-dense` keeps the existing
+   flex+order debrief layout (h1 eyebrow → grade hero → stars → SP → stats) intact
+   among its own children while scaling the whole payload. */
+.gowrap{width:min(560px,92vw)}
+.go-core.ui-dense{display:flex;flex-direction:column;align-items:center;width:100%}
+
+/* UPGRADE / R&D: .uwrap is already fixed-width (min(1340px,97vw)) + max-height 94vh
+   with #techgrid as the flex:1 fill, so the box footprint is stable. ONLY the chrome
+   text scales — header band + footer hint are `.ui-dense-fill` (full-width packers);
+   #techgrid is deliberately LEFT ALONE (it is a drag/scroll surface — zooming it would
+   desync the pointer math). */
+.techhead.ui-dense-fill,.techfoot.ui-dense-fill{flex-shrink:0}
+
+/* WINGPICK: .wp-box is fixed-width + capped-height + scroll. The jet grid
+   (`.wp-core.ui-dense-fill`) packs while still spanning the box; a stable min-height
+   keeps the box from collapsing when the cards shrink. */
+.wp-core.ui-dense-fill{min-height:min(40vh,360px)}
+
+/* ============================================================================
    MOBILE RESPONSIVE REFLOW — phone (~390x844). Screens REARRANGE, not shrink.
    ============================================================================ */
 @media (max-width:560px){
@@ -1076,6 +1115,36 @@ canvas{display:block}
      reverse so the primary LAUNCH sits on top under the thumb) */
   .brief-actions,.cmp-actions{flex-direction:column-reverse;gap:var(--sp-3)}
   .cmp-btn{width:100%}
+
+  /* OPS-SELECT / WINGPICK dense cores: drop the desktop min-height so the box
+     fits the phone viewport (the box itself is full-height here) and the cards
+     stack naturally. */
+  #opsSelect .cmp-core.ui-dense,.wp-core.ui-dense-fill{min-height:0}
+  /* WINGPICK: single-column jet grid on phones */
+  #wingpick .wp-grid{grid-template-columns:1fr}
+}
+
+/* META / GAMEOVER / UPGRADE mobile reflow: these overlays scroll the whole screen
+   (not the shared .cmp-box console), so they REARRANGE to full-bleed stacks here. */
+@media (max-width:560px){
+  /* META: full-bleed, stacked header (title above the SP readout), single-column grid,
+     min-height relaxed so it fits the phone. */
+  #meta{padding:calc(var(--sp-6) + env(safe-area-inset-top)) var(--sp-3) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+  #meta .mwrap{min-height:0}
+  #meta .metahead{flex-direction:column;align-items:flex-start;gap:var(--sp-2)}
+  #meta .rpbox{align-items:flex-start}
+  .perkgrid,.achgrid{grid-template-columns:1fr}
+
+  /* GAMEOVER: the debrief column fills the width; the stable desktop width yields
+     to the viewport so the reward payload sits centered with breathing room. */
+  .gowrap{width:100%;padding:calc(var(--sp-6) + env(safe-area-inset-top)) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+
+  /* UPGRADE / R&D: the wrap fills the width; the head + foot wrap, #techgrid keeps
+     its own scroll. The dense-fill chrome stays full-width packers. */
+  .uwrap{width:100%;max-height:100vh;
+    padding:calc(var(--sp-5) + env(safe-area-inset-top)) var(--sp-3) calc(var(--sp-4) + env(safe-area-inset-bottom))}
+  .techhead{flex-direction:column;align-items:flex-start;gap:var(--sp-2)}
+  .rpbox{align-items:flex-start}
 }
 
 /* HANGAR mobile reflow: the carousel arrows tuck to the card edges, the card fills

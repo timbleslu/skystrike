@@ -158,6 +158,7 @@
 
 <div id="gameover">
   <div class="gowrap">
+    <div class="go-core ui-dense">
     <h1>MISSION FAILED</h1>
     <div id="go_pilot" class="gopilot"></div>
     <div class="gostats"><span id="goLblScore">SCORE</span> <b id="go_score">0</b> &middot; <span id="goLblWave">WAVE</span> <b id="go_wave">0</b> &middot; <span id="goLblBest">BEST</span> <b id="go_best">0</b></div>
@@ -172,12 +173,13 @@
     <div id="go_rating" class="gorating"><span class="rating-title" id="goLblRating">PERFORMANCE</span><span class="rating-row"><span id="goLblRatKills">ENEMIES KILLED</span><b id="go_ratKills">0</b></span><span class="rating-row"><span id="goLblRatAcc">ACCURACY</span><b id="go_ratAcc">0%</b></span><span class="rating-row"><span id="goLblRatWaves">WAVES SURVIVED</span><b id="go_ratWaves">0</b></span></div>
     <div class="gospbox"><span id="goLblSp">STRATEGIC POINTS EARNED</span> <b id="go_sp">+0</b> <span class="gospsep">&middot;</span> <span id="goLblSpTotal">BANKED</span> <b id="go_spTotal">0</b></div>
     <button id="redeploy">&#9654; REDEPLOY</button>
+    </div>
   </div>
 </div>
 
 <div id="upgrade">
   <div class="uwrap">
-    <div class="techhead">
+    <div class="techhead ui-dense-fill">
       <div>
         <h2 id="techHeadTitle">R&amp;D TECH TREE</h2>
         <p id="techHeadSub" class="usub">// ONE TREE · PATH DOWN ANY BRANCH · UPGRADES PERSIST FOR THE RUN //</p>
@@ -193,7 +195,7 @@
       <button id="techReroll" class="draft-reroll">&#8635; REROLL</button>
     </div>
     <div id="techgrid"></div>
-    <div class="techfoot">
+    <div class="techfoot ui-dense-fill">
       <div id="techhint" class="techhint">This visit, only the 3 glowing FRONTIER nodes are buyable &mdash; pick ONE to research and deploy, or just DEPLOY to bank RP. PIN a goal node to bias future offers; REROLL once per visit for fresh picks.</div>
       <button id="techDeploy">&#9654; DEPLOY TO NEXT WAVE</button>
     </div>
@@ -204,7 +206,9 @@
   <div class="wp-box">
     <div class="wp-title" id="wpTitle">SELECT WINGMAN AIRFRAME</div>
     <div class="wp-sub" id="wpSub">// CHOOSE THE JET YOUR NEW ESCORT WILL FLY //</div>
+    <div class="wp-core ui-dense-fill">
     <div id="wpGrid" class="wp-grid"></div>
+    </div>
     <button id="wpCancel">CANCEL</button>
   </div>
 </div>
@@ -234,6 +238,7 @@
   <div class="cmp-box">
     <div class="cmp-title" id="modeTitle">SELECT MODE</div>
     <div class="cmp-sub">// CHOOSE DEPLOYMENT //</div>
+    <div class="cmp-core ui-dense">
     <div class="mode-grid">
       <button id="modeEndless" class="mode-card">
         <div class="mode-card-name" id="modeEndlessName">ENDLESS</div>
@@ -244,6 +249,7 @@
         <div class="mode-card-sub" id="modeOperationDesc">Run a linear campaign of bounded missions.</div>
       </button>
     </div>
+    </div>
     <button id="modeBack" class="cmp-btn cmp-back">&#9664; BACK</button>
   </div>
 </div>
@@ -251,6 +257,7 @@
   <div class="cmp-box">
     <div class="cmp-title" id="endlessTitle">ENDLESS</div>
     <div class="cmp-sub">// CONFIGURE SORTIE //</div>
+    <div class="cmp-core ui-dense">
     <div class="endless-cfg">
       <div id="diffsel">
         <span id="lblDiff" class="dlab">DIFFICULTY</span>
@@ -270,6 +277,7 @@
         </div>
       </div>
     </div>
+    </div>
     <div class="cmp-actions">
       <button id="endlessBack" class="cmp-btn cmp-back">&#9664; BACK</button>
       <button id="endlessStart" class="cmp-btn cmp-play">&#9654; START</button>
@@ -282,7 +290,9 @@
   <div class="cmp-box">
     <div class="cmp-title" id="opsTitle">OPERATIONS</div>
     <div class="cmp-sub">// SELECT OPERATION //</div>
+    <div class="cmp-core ui-dense">
     <div id="opsList" class="ops-list"></div>
+    </div>
     <button id="opsBack" class="cmp-btn cmp-back">&#9664; BACK</button>
   </div>
 </div>
@@ -544,7 +554,9 @@
       <button class="mnavbtn on" data-tab="perks" id="metaTab_perks">Upgrades</button>
       <button class="mnavbtn" data-tab="ach" id="metaTab_ach">Achievements</button>
     </div>
+    <div class="meta-core ui-dense-fill">
     <div id="metaGrid"></div>
+    </div>
     <div class="techfoot">
       <div id="metaHint" class="techhint">Spend Strategic Points on persistent upgrades that apply at the start of every sortie. Locked aircraft and paint schemes are bought on each aircraft's card in the hangar.</div>
       <button id="metaClose">&#9654; BACK TO HANGAR</button>
