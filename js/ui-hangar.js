@@ -366,6 +366,18 @@ function showSettingsSubtab(name) {
   document.querySelectorAll('#manual .sset-group').forEach(gp => gp.classList.toggle('show', gp.dataset.sset === name));
   document.querySelectorAll('#manual .ssetbtn').forEach(b => b.classList.toggle('on', b.dataset.sset === name));
 }
+// Global persistent gear button (body-level #manualBtn). Visible on EVERY menu, hidden in flight/gameover and
+// behind the pre-game language/onboard gates and the open manual panel. Called every frame from animate() so all
+// screen transitions are covered without per-call-site hooks. (state === 'hangar' for all menu screens — only
+// launch flips it to 'playing'.)
+function syncManualBtn() {
+  const b = g('manualBtn'); if (!b) return;
+  const blocked = state !== 'hangar'
+    || (g('langSelect') && g('langSelect').classList.contains('show'))
+    || (g('onboard') && g('onboard').classList.contains('show'))
+    || (g('manual') && g('manual').classList.contains('show'));
+  b.classList.toggle('mb-hide', !!blocked);
+}
 function openManual() { g('manual').classList.add('show'); showManualTab('guide'); paused = true; g('touchControls').classList.remove('show'); }
 function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
 function toggleManual() { if (g('manual').classList.contains('show')) closeManual(); else openManual(); }

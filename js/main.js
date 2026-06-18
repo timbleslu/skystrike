@@ -884,6 +884,7 @@ window.addEventListener('touchstart', function firstTouch() {
 /* ---------------- main loop ---------------- */
 function animate() {
   requestAnimationFrame(animate);
+  if (typeof syncManualBtn === 'function') syncManualBtn();   // global gear button visibility (menus vs flight)
   const dt = Math.min(clock.getDelta(), 0.05); lastDt = dt;
   if (seaMat) seaMat.uniforms.time.value = clock.elapsedTime;
   updateSunRig();
