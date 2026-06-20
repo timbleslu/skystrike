@@ -7,7 +7,7 @@ global.devUnlockAll = false;
 
 const assert = require('assert');
 const {
-  SKINS, resolveSkinPaint, jetPaint, selectedSkin, setSkin, skinOwned,
+  SKINS, resolveSkin, resolveSkinPaint, jetPaint, selectedSkin, setSkin, skinOwned,
   freshMeta, loadMeta, saveMeta, META_KEY,
 } = require('../js/meta.js');
 
@@ -83,5 +83,20 @@ assert.ok(s3paint.zones && Object.keys(s3paint.zones).length, 'resolveSkinPaint 
 assert.strictEqual(s3paint.decal, undefined, 'resolveSkinPaint no longer carries a decal field');
 assert.strictEqual(s3paint.geo, undefined, 'resolveSkinPaint no longer carries a geo field');
 console.log('ok - resolveSkinPaint carries zones for designed skins, no decal/geo');
+
+// ---- resolveSkin: THE deep interface — jetPaint is a thin convenience over it, explicit ids resolve directly ----
+assert.strictEqual(typeof resolveSkin, 'function', 'resolveSkin is exported as the single deep entry point');
+assert.strictEqual(typeof selectedSkin, 'function', 'selectedSkin is exported so callers need not go through jetPaint');
+setMeta(freshMeta());
+const rsJet = { id: 'FT-1', color: 0x999999, accent: 0x888888 };
+// jetPaint(jet) === resolveSkin(jet, selectedSkin(jet.id)) for the selected skin
+assert.deepStrictEqual(jetPaint(rsJet), resolveSkin(rsJet, selectedSkin('FT-1')), 'jetPaint equals resolveSkin for the selected skin');
+// resolveSkin resolves an EXPLICIT non-selected skin id directly (no equip needed)
+const otherId = SKINS['FT-1'][1].id;
+assert.notStrictEqual(selectedSkin('FT-1'), otherId, 'the designed skin is not the selected one');
+const explicit = resolveSkin(rsJet, otherId);
+assert.deepStrictEqual(explicit, resolveSkinPaint(rsJet, otherId), 'resolveSkin matches the resolveSkinPaint alias');
+assert.ok(explicit.zones && Object.keys(explicit.zones).length, 'resolveSkin resolves the explicit non-selected designed livery');
+console.log('ok - resolveSkin: deep entry point — jetPaint thin over it, explicit ids resolve directly');
 
 console.log('ALL SKIN TESTS PASS');

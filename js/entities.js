@@ -1237,8 +1237,13 @@ function updateMarker(e) {
 function activeEnemyMissiles() { let n = 0; for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) n++; return n; }
 
 function clearLocks(e) {
-  if (player.lockedTarget === e) player.lockedTarget = null;
-  if (player.lockTarget === e) { player.lockTarget = null; player.lockProgress = 0; }
+  // Enemy death SIGNALS; it does not reach into player lock internals. The pure core
+  // (clearLockIf, core.js) decides the new lock from the dead target's identity, and the
+  // owner (here) applies the plain result back. lockTarget == acquire candidate, lockedTarget == promoted lock.
+  const next = clearLockIf({ target: player.lockedTarget, candidate: player.lockTarget, progress: player.lockProgress }, e);
+  player.lockedTarget = next.target;
+  player.lockTarget = next.candidate;
+  player.lockProgress = next.progress;
 }
 
 function fireRivalSpecial(e) {
@@ -1274,8 +1279,7 @@ function updateRivalFlee(e, dt) {
   updateMarker(e);
   if (dist > 5000) {
     e.alive = false;
-    scene.remove(e.group); disposeGroup(e.group);
-    if (e.marker) scene.remove(e.marker);
+    despawnEnemy(e);
     clearLocks(e);
     rivalEscaped({ missiles: run.pMissiles, gunKills: run.pGunKills, flares: run.pFlares, wingmen: wingmen.length });
     showBanner('☠ ' + e.callsign + ' WITHDRAWS — HE WILL RETURN STRONGER ☠');
@@ -1546,7 +1550,7 @@ function updateBomber(e, dt) {
   for (let k = 0; k < missiles.length; k++) { const m = missiles[k]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { bInc = true; break; } }
   if (bInc) { e.flareCd -= dt; if (e.flareCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e.flareCd = 2.2; } }
   if (e.group.position.distanceToSquared(e.spawnPos) > 144000000) {
-    e.alive = false; scene.remove(e.group); disposeGroup(e.group); if (e.marker) scene.remove(e.marker);
+    e.alive = false; despawnEnemy(e);
     clearLocks(e);
     showBanner('BOMBER ESCAPED');
   }
@@ -1562,7 +1566,7 @@ function updateGround(e, dt) {
     e.group.position.addScaledVector(e.truckDir, dt * (e.convoy ? (e.convoySpeed || 46) : 28));
     e.group.position.y = terrainH(e.group.position.x, e.group.position.z);
     if (e.convoy && d > 7800) {   // convoy truck outruns the radar — gone for good
-      e.alive = false; scene.remove(e.group); disposeGroup(e.group); if (e.marker) scene.remove(e.marker);
+      e.alive = false; despawnEnemy(e);
       clearLocks(e);
       showBanner(t('banner.convoyEscaped'));
       return;

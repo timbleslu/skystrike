@@ -391,22 +391,27 @@ function setSkin(key, id) {
   saveMeta();
   return true;
 }
-/* resolve a skin id → paint descriptor {color, accent, zones} for a jet (ownership-AGNOSTIC). Plain skins
-   carry just colour+accent; designed skins also carry `zones` (material.name → colour) that entities.js
-   applyPaint interprets for multi-zone liveries. Falls back to the jet's stock paint. */
-function resolveSkinPaint(jet, id) {
+/* THE deep skin-resolution interface: given a jet + an EXPLICIT skin id, return its paint descriptor
+   {color, accent, zones} (ownership-AGNOSTIC). Plain skins carry just colour+accent; designed skins also
+   carry `zones` (material.name → colour) that entities.js applyPaint interprets for multi-zone liveries.
+   Falls back to the jet's stock paint for an unknown id. Single entry point — callers wanting a paint for
+   ANY skin (selected, previewed, or arbitrary) go through this; they never re-derive selectedSkin + lookup. */
+function resolveSkin(jet, skinId) {
   const list = SKINS[jet.id];
   if (list) {
     for (var i = 0; i < list.length; i++) {
       const sk = list[i];
-      if (sk.id === id) return { color: sk.color != null ? sk.color : jet.color, accent: sk.accent != null ? sk.accent : jet.accent, zones: sk.zones || null };
+      if (sk.id === skinId) return { color: sk.color != null ? sk.color : jet.color, accent: sk.accent != null ? sk.accent : jet.accent, zones: sk.zones || null };
     }
   }
   return { color: jet.color, accent: jet.accent, zones: null };
 }
-/* a jet's OWNED paint (honours the persisted skin choice). Used by gameplay (createPlayer) — NEVER reads the
-   transient hangar previewSkin, so an unowned preview can never leak into a launched jet. */
-function jetPaint(jet) { return resolveSkinPaint(jet, selectedSkin(jet.id)); }
+/* back-compat alias for the original resolver name (tests + call sites still use it) — same deep interface. */
+function resolveSkinPaint(jet, id) { return resolveSkin(jet, id); }
+/* a jet's OWNED paint (honours the persisted skin choice) — a thin convenience over resolveSkin. Used by
+   gameplay (createPlayer) — NEVER reads the transient hangar previewSkin, so an unowned preview can never
+   leak into a launched jet. */
+function jetPaint(jet) { return resolveSkin(jet, selectedSkin(jet.id)); }
 
 /* ---------------- campaign progress (Operations Map revamp) ----------------
    Thin store-touching wrappers over the PURE cores in core.js (isOpUnlocked / isLevelUnlocked /
@@ -461,7 +466,7 @@ if (typeof module !== 'undefined' && module.exports) {
     perkLevel, perkMaxed, perkUnlocked, buyPerk,
     // jet/skin API
     jetUnlocked, jetCost, buyJet, skinOwned, skinCost, buySkin,
-    selectedSkin, setSkin, jetPaint, resolveSkinPaint,
+    selectedSkin, setSkin, jetPaint, resolveSkin, resolveSkinPaint,
     // second-special-slot unlock (F3)
     slot2Unlocked, buySlot2, SLOT2_COST,
     // achievements

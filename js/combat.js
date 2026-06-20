@@ -7,7 +7,7 @@ function getBullet() {
   b.ai = false; b.oriented = false;
   scene.add(b.mesh); return b;
 }
-function recycleBullet(b) { scene.remove(b.mesh); BPOOL.push(b); }
+function recycleBullet(b) { detachFromScene(b.mesh); BPOOL.push(b); }
 
 // ADRENALINE — bonus damage that scales with how much HP you've lost (1.0 at full HP)
 function berserkMul() { return player.berserk ? 1 + player.berserk * (1 - clamp(player.hp / player.maxHp, 0, 1)) : 1; }
@@ -212,7 +212,7 @@ function updateMissiles(dt, ts) {
     if (!hit && m.holo && m.holo.life > 0 && m.mesh.position.distanceToSquared(m.holo.mesh.position) < 2500) { explode(m.mesh.position, false); m.holo.life -= 1.2; hit = true; }
     if (!hit && m.decoy && m.decoy.life > 0 && m.mesh.position.distanceToSquared(m.decoy.mesh.position) < 1600) { explode(m.mesh.position, false); hit = true; }
     if (!hit && m.mesh.position.y < terrainH(m.mesh.position.x, m.mesh.position.z) + 4) { explode(m.mesh.position, true); hit = true; }
-    if (hit || m.life <= 0) { scene.remove(m.mesh); missiles.splice(i, 1); }
+    if (hit || m.life <= 0) { detachFromScene(m.mesh); missiles.splice(i, 1); }
   }
 }
 
@@ -250,7 +250,7 @@ function updateFlares(dt) {
     if (Math.random() < 0.6) spawnSmoke(f.mesh.position, 0xffcc66, 0.45);
     if (f.life <= 0) {
       if (f.owner === 'player' && player.flakFlares) missileSplash(f.mesh.position, player.flakFlares, 260, null);   // FLAK BLOOM — flares burn out as HE bursts
-      scene.remove(f.mesh); flares.splice(i, 1);
+      detachFromScene(f.mesh); flares.splice(i, 1);
     }
   }
 }
@@ -258,7 +258,7 @@ function updateFlares(dt) {
 /* ---------------- holographic decoys (Tejas) ---------------- */
 function buildDecoy() {
   const g = buildJet(0x39e6ff, 0x9af6ff, SHAPES[player.jet.shape]);
-  g.traverse(o => { if (o.isMesh && o.material) { const m = o.material; m.transparent = true; m.opacity = 0.42; if (m.emissive) { m.emissive = new THREE.Color(0x1bd6ff); m.emissiveIntensity = 0.9; } m.depthWrite = false; } });
+  holoTint(g);   // render layer owns the holographic material mutation
   return g;
 }
 function spawnDecoys(n) {
@@ -283,7 +283,7 @@ function updateDecoys(dt) {
     d.mesh.rotation.z += d.spin * dt;
     const op = 0.42 * Math.min(1, d.life / 1.0) * (0.72 + 0.28 * Math.sin(now * 0.02 + i));
     d.mesh.traverse(o => { if (o.isMesh && o.material) o.material.opacity = op; });
-    if (d.life <= 0) { scene.remove(d.mesh); decoys.splice(i, 1); }
+    if (d.life <= 0) { detachFromScene(d.mesh); decoys.splice(i, 1); }
   }
 }
 
@@ -364,9 +364,9 @@ function updateLoot(dt) {
     }
     const rr = l.radius || 70;
     if (l.mesh.position.distanceToSquared(player.group.position) < rr * rr) {
-      collectLoot(l); scene.remove(l.mesh); loots.splice(i, 1); continue;
+      collectLoot(l); detachFromScene(l.mesh); loots.splice(i, 1); continue;
     }
-    if (l.life <= 0) { scene.remove(l.mesh); loots.splice(i, 1); }
+    if (l.life <= 0) { detachFromScene(l.mesh); loots.splice(i, 1); }
   }
 }
 
@@ -462,7 +462,7 @@ function updateParticles(dt) {
     }
     else { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.5; if (p.vel) p.vel.multiplyScalar(1 - 1.5 * dt); }
     
-    if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+    if (p.life <= 0) { detachFromScene(p.mesh); particles.splice(i, 1); }
   }
 }
 
@@ -521,21 +521,27 @@ let lastCrit = false;   // set per-hit by damageEnemy so the cannon can spawn an
 function damageEnemy(e, amt, wp, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   lastCrit = false;
-  if (byPlayer) {
-    if (player.alphaMul > 1 && e.hp >= e.maxHp - 0.5) amt *= player.alphaMul;            // MARKSMAN — alpha strike on a healthy target
-    if (player.comboDmg) amt *= 1 + Math.min(0.3, player.combo * player.comboDmg);       // RHYTHM OF WAR — combo feeds damage, capped at +30%
-    if (player.critChance && Math.random() < player.critChance) { amt *= player.critMul; lastCrit = true; }   // CRITICAL OPTICS
-  }
-  e.hp -= amt; e.hitFlash = 0.12;
+  // Pure arithmetic/decision (core.js resolveDamage): multipliers, hp, RP, EXECUTE + death.
+  // The crit roll is injected (Math.random()) so the core stays pure; we APPLY the result below.
+  const dr = resolveDamage(
+    { hp: e.hp, maxHp: e.maxHp, type: e.type, playerDmg: e.playerDmg },
+    { amt: amt, byPlayer: byPlayer, rand: Math.random(),
+      alphaMul: player.alphaMul, comboDmg: player.comboDmg, combo: player.combo,
+      critChance: player.critChance, critMul: player.critMul,
+      execThresh: player.execThresh, rpMul: player.rpMul, tpDmg: TP.dmg }
+  );
+  amt = dr.amt; lastCrit = dr.crit;
+  e.hp = dr.hp; e.hitFlash = 0.12;
   spawnDamageNumber(wp || e.group.position, Math.round(amt), lastCrit);
-  player.combo++; player.comboTimer = 2.2;
-  player.score += Math.round(amt * (1 + player.combo * 0.05) * (player.scoreMul || 1));
-  if (byPlayer) { e.playerDmg = (e.playerDmg || 0) + amt; player.tp += amt * TP.dmg * (player.rpMul || 1); }   // RP from damage YOU deal
+  // Pure hit-reward (core.js awardHit): combo bump + timer reset + combo-scaled hit score.
+  const hr = awardHit({ combo: player.combo }, { amt: amt, scoreMul: player.scoreMul || 1 });
+  player.combo = hr.combo; player.comboTimer = hr.comboTimer; player.score += hr.score;
+  if (byPlayer) { e.playerDmg = dr.playerDmg; player.tp += dr.rp; }   // RP from damage YOU deal
   audio.hit();
   if (lastCrit) audio.blip(1700, 0.05, 'sine', 0.09, 1250);
   // EXECUTIONER — finish a wounded non-boss outright
-  if (byPlayer && player.execThresh && e.type !== 'boss' && e.hp > 0 && e.hp <= e.maxHp * player.execThresh) {
-    e.hp = 0; spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
+  if (dr.executed) {
+    spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
     if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
   }
   if (e.type === 'boss' && e.hp > 0) {
@@ -597,11 +603,16 @@ function killEnemy(e, byPlayer, byCCA) {
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
   if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); if (typeof killFlash !== 'undefined') killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
-  player.score += Math.round(pts * (1 + player.combo * 0.1) * (player.scoreMul || 1));
-  const tpBase = tpBaseFor(e), rpm = (player.rpMul || 1);
-  if (byPlayer) { player.tp += (tpBase + (player.rpPerKill || 0)) * rpm; if (e._lastPlayerWp === 'gun') run.pGunKills++; }
-  else if (byCCA) { player.tp += tpBase * 0.5 * rpm; run.escortKills++; }
-  else if ((e.playerDmg || 0) > 0.5) player.tp += tpBase * TP.assistFrac * rpm;
+  // Pure kill-reward (core.js awardKill): kill score (combo-scaled) + RP by source + killstreak.
+  const kr = awardKill(
+    { combo: player.combo, killStreak: player.killStreak },
+    { pts: pts, scoreMul: player.scoreMul || 1, byPlayer: byPlayer, byCCA: byCCA,
+      tpBase: tpBaseFor(e), rpPerKill: player.rpPerKill || 0, rpMul: player.rpMul || 1,
+      assistFrac: TP.assistFrac, playerDmg: e.playerDmg || 0 }
+  );
+  player.score += kr.score; player.tp += kr.rp;
+  if (byPlayer) { if (e._lastPlayerWp === 'gun') run.pGunKills++; }
+  else if (byCCA) { run.escortKills++; }
   // field-upgrade payoffs
   const shieldCap = player.maxShield + (player.overshieldCap || 0);          // JUGGERNAUT lets shields bank past their normal ceiling
   if (player.lifesteal) {
@@ -643,13 +654,11 @@ function killEnemy(e, byPlayer, byCCA) {
   else run.kills++;
   if (e.type === 'drone') { if (Math.random() < 0.12) spawnLoot(e.group.position); }
   else if (e.type !== 'fighter' || e.elite || Math.random() < 0.5) spawnLoot(e.group.position);
-  scene.remove(e.group);
-  disposeGroup(e.group);
-  if (e.marker) scene.remove(e.marker);   // marker geometry/material may be shared — do not dispose it here
+  despawnEnemy(e);
   clearLocks(e);
 
-  player.killStreak++;
-  if (player.killStreak > 0 && player.killStreak % 5 === 0) killStreakReward();
+  player.killStreak = kr.killStreak;             // killstreak count from awardKill (core.js)
+  if (kr.streakReward) killStreakReward();        // interval boundary → fire the streak bonus
 }
 function killStreakReward() {
   const n = player.killStreak;
@@ -749,15 +758,21 @@ function updateLockOn(dt) {
   const dist = to.length(); to.multiplyScalar(1 / Math.max(dist, 0.001));
   const aligned = fwd.dot(to);
   const acquiring = aligned > 0.92 && dist < 5200 * (weather.lockRangeMul || 1) && !tgt.isInCloud;   // weather cuts lock acquisition range
+  // PURE progress/promote math lives in core.js (advanceLock); THREE geometry (aligned/dist) stays here.
+  const adv = advanceLock(
+    { progress: player.lockProgress, target: player.lockedTarget },
+    { acquiring: acquiring,
+      dt: dt,
+      rate: LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1),   // weather slows lock-on
+      decayRate: LOCK_TIME * 0.5 }
+  );
+  player.lockProgress = adv.progress;
   if (acquiring) {
-    const prev = player.lockProgress;
-    player.lockProgress = Math.min(1, player.lockProgress + dt / (LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1)));   // weather slows lock-on
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
-    if (prev < 1 && player.lockProgress >= 1) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); player.lockFlash = 0.42; }   // lockFlash = VISUAL-ONLY snap timer for hud.js (no balance/timing impact)
+    if (adv.justLocked) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); player.lockFlash = 0.42; }   // lockFlash = VISUAL-ONLY snap timer for hud.js (no balance/timing impact)
   } else {
-    player.lockProgress = Math.max(0, player.lockProgress - dt / (LOCK_TIME * 0.5));
-    if (player.lockProgress < 1) player.lockedTarget = null;
+    if (!adv.locked) player.lockedTarget = null;
     if (aligned < 0.55 || dist > 6500) player.lockTarget = null;
   }
 }

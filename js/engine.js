@@ -1216,3 +1216,48 @@ function disposeGroup(group) {
     }
   });
 }
+
+/* --------------------------------------------------------------------------
+   Render-layer despawn seam (Candidate D). The render layer (engine.js) owns
+   the THREE object lifecycle: scene removal + GPU disposal + (for bullets)
+   pooling. Gameplay marks an entity dead and calls one of these — it must NOT
+   reach into scene.remove / disposeGroup / mutate THREE materials directly.
+   These are SYNCHRONOUS (despawn happens this frame, exactly as before — no
+   deferral, so behavior is byte-for-byte identical). -------------------------- */
+
+/* Full enemy despawn: drop the body group from the scene, free its per-instance
+   GPU resources (disposeGroup spares userData.shared), and remove the radar
+   marker WITHOUT disposing it (marker geo/mat is shared/cached). Mirrors the
+   exact 3-line pattern that was duplicated across the gameplay despawn sites. */
+function despawnEnemy(e) {
+  if (!e) return;
+  if (e.group) { scene.remove(e.group); disposeGroup(e.group); }
+  if (e.marker) scene.remove(e.marker);   // marker geometry/material may be shared — never dispose it
+}
+
+/* Despawn a plain THREE group we own (e.g. a downed wingman): remove + dispose. */
+function despawnObject(obj) {
+  if (!obj) return;
+  scene.remove(obj); disposeGroup(obj);
+}
+
+/* Remove a mesh from the scene WITHOUT disposing it — for objects whose GPU
+   resources outlive the scene membership (pooled bullets, shared-asset flares). */
+function detachFromScene(obj) {
+  if (obj) scene.remove(obj);
+}
+
+/* Holographic decoy look (Tejas): make a freshly-built jet group translucent +
+   self-lit. This is a pure RENDER concern (a visual effect on per-instance
+   materials at build time), so the render layer owns the THREE material poke. */
+function holoTint(group) {
+  if (!group) return;
+  group.traverse(o => {
+    if (o.isMesh && o.material) {
+      const m = o.material;
+      m.transparent = true; m.opacity = 0.42;
+      if (m.emissive) { m.emissive = new THREE.Color(0x1bd6ff); m.emissiveIntensity = 0.9; }
+      m.depthWrite = false;
+    }
+  });
+}
