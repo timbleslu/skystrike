@@ -87,6 +87,49 @@ function nextBossPhase(reached, hpFrac) {
   return want > reached ? want : reached;
 }
 
+/* ---------------- damage resolution core ---------------- */
+// PURE — resolve a single hit into a plain DamageResult. NO mutation of inputs, NO THREE/DOM.
+// combat.js gathers `state` off the enemy + `hit` off the player, calls this, then APPLIES the
+// result back (hp/playerDmg), awards `player.tp += rp`, and fires the existing side-effects
+// (damage numbers, audio, haptic, boss-phase machine, killEnemy, EXECUTE blast FX).
+//
+//   state = { hp, maxHp, type, playerDmg }   (the enemy's relevant numeric fields)
+//   hit   = { amt, byPlayer, rand,           (rand in [0,1) — the crit roll, injected so this stays pure)
+//             alphaMul, comboDmg, combo,     (player damage modifiers; combo is player.combo)
+//             critChance, critMul,
+//             execThresh, rpMul,
+//             tpDmg }                         (TP.dmg — the per-damage RP rate, injected to keep core data-free)
+// returns { amt, crit, hp, hpDelta, died, executed, playerDmg, rp }
+//   amt       — final damage actually applied (post-multipliers; same value combat.js shows/scores)
+//   crit      — whether this hit critted (combat.js plays the crit SFX + crit blast)
+//   hp        — enemy hp AFTER the hit (and after any EXECUTE clamp to 0)
+//   hpDelta   — how much hp dropped (>=0; == amt unless EXECUTE forced the rest)
+//   died      — hp <= 0 after resolution
+//   executed  — EXECUTIONER finished a wounded non-boss outright (combat.js fires execBlast)
+//   playerDmg — enemy's accumulated player-dealt damage AFTER this hit (unchanged if !byPlayer)
+//   rp        — RP (player.tp) to award for the damage dealt (0 if !byPlayer)
+function resolveDamage(state, hit) {
+  const byPlayer = hit.byPlayer === undefined ? true : !!hit.byPlayer;
+  let amt = hit.amt;
+  let crit = false;
+  if (byPlayer) {
+    if (hit.alphaMul > 1 && state.hp >= state.maxHp - 0.5) amt *= hit.alphaMul;            // MARKSMAN — alpha strike on a healthy target
+    if (hit.comboDmg) amt *= 1 + Math.min(0.3, (hit.combo || 0) * hit.comboDmg);           // RHYTHM OF WAR — combo feeds damage, capped at +30%
+    if (hit.critChance && (hit.rand || 0) < hit.critChance) { amt *= hit.critMul; crit = true; }   // CRITICAL OPTICS
+  }
+  let hp = state.hp - amt;
+  let playerDmg = state.playerDmg || 0;
+  let rp = 0;
+  if (byPlayer) { playerDmg += amt; rp = amt * (hit.tpDmg || 0) * (hit.rpMul || 1); }      // RP from damage YOU deal
+  // EXECUTIONER — finish a wounded non-boss outright
+  let executed = false;
+  if (byPlayer && hit.execThresh && state.type !== 'boss' && hp > 0 && hp <= state.maxHp * hit.execThresh) {
+    hp = 0; executed = true;
+  }
+  const hpDelta = state.hp - hp;
+  return { amt, crit, hp, hpDelta, died: hp <= 0, executed, playerDmg, rp };
+}
+
 /* ---------------- boss-rush core (F15) ---------------- */
 // The fixed boss gauntlet, flown in order. Each entry is the boss type spawned for that leg
 // (all reuse the F4 multi-phase 'boss' enemy). Length defines the sequence; index 0 spawns first.
@@ -960,6 +1003,96 @@ function campaignClearTarget(verb, wave, spawn) {
   return Math.min(campaignProceduralTarget(verb, wave), killable);
 }
 
+/* ---------------- kill-reward / combo / killstreak cores (Candidate C) ---------------- */
+// PURE owners of the RP / combo / killstreak / score math that used to be smeared across four
+// call sites in combat.js (damageEnemy hit-score + killEnemy kill-score/RP + killstreak). The
+// impure callers gather plain numbers, call these, and APPLY the returned values; all FX/audio/
+// ammo refills stay in the caller. NO mutation of inputs, NO THREE/store/DOM.
+
+// COMBO_TIMER: seconds the combo stays alive after a hit (combat.js used the literal 2.2).
+const COMBO_TIMER = 2.2;
+// KILLSTREAK_INTERVAL: a streak reward fires every Nth kill (combat.js used % 5).
+const KILLSTREAK_INTERVAL = 5;
+
+// Per-HIT reward (combat.js damageEnemy): a landed hit bumps the combo, refreshes its timer, and
+// scores points scaled by the (post-increment) combo and the score multiplier. `state` carries the
+// pre-hit combo; `event` carries the rounded damage dealt and the score multiplier.
+//   state: { combo }
+//   event: { amt, scoreMul? }
+// returns: { combo, comboTimer, score } — new combo, the refreshed timer, and the score DELTA to add.
+function awardHit(state, event) {
+  const combo = (state.combo || 0) + 1;
+  const scoreMul = event.scoreMul == null ? 1 : event.scoreMul;
+  const score = Math.round(event.amt * (1 + combo * 0.05) * scoreMul);
+  return { combo: combo, comboTimer: COMBO_TIMER, score: score };
+}
+
+// Per-KILL reward (combat.js killEnemy): the kill's score (base points × combo multiplier × score
+// multiplier), the RP award (by source: the player, an escort CCA, or an assist), and the killstreak
+// bookkeeping (increment + whether THIS kill lands on a reward interval).
+//   state: { combo, killStreak }
+//   event: { pts, scoreMul?, byPlayer, byCCA, tpBase, rpPerKill?, rpMul?, assistFrac?, playerDmg? }
+// returns: { score, rp, killStreak, streakReward }
+//   - score        : score DELTA to add
+//   - rp           : RP (player.tp) DELTA to add for this kill
+//   - killStreak   : new killstreak count
+//   - streakReward : true if this kill hits a KILLSTREAK_INTERVAL boundary (caller fires the bonus)
+function awardKill(state, event) {
+  const combo = state.combo || 0;
+  const scoreMul = event.scoreMul == null ? 1 : event.scoreMul;
+  const score = Math.round(event.pts * (1 + combo * 0.1) * scoreMul);
+
+  const rpm = event.rpMul == null ? 1 : event.rpMul;
+  const tpBase = event.tpBase || 0;
+  let rp = 0;
+  if (event.byPlayer) rp = (tpBase + (event.rpPerKill || 0)) * rpm;
+  else if (event.byCCA) rp = tpBase * 0.5 * rpm;
+  else if ((event.playerDmg || 0) > 0.5) rp = tpBase * (event.assistFrac || 0) * rpm;
+
+  const killStreak = (state.killStreak || 0) + 1;
+  const streakReward = killStreak > 0 && killStreak % KILLSTREAK_INTERVAL === 0;
+  return { score: score, rp: rp, killStreak: killStreak, streakReward: streakReward };
+}
+
+/* ---- Lock-on / targeting cores (Candidate B) -----------------------
+   The two-stage lock state machine (acquire candidate -> advance progress -> promote to locked)
+   has its PURE progress arithmetic + clear-on-death rule here; the impure caller (combat.js /
+   entities.js) does the THREE geometry (cone/range) and feeds plain scalars/booleans in.
+
+   advanceLock(lock, sample):
+     lock   = {progress, target}             (current scalar progress + the locked target ref)
+     sample = {acquiring, dt, rate, decayRate}
+              acquiring  = aligned && in range && visible  (pre-computed by the caller)
+              rate       = seconds to a full lock while acquiring (LOCK_TIME * mults)
+              decayRate  = seconds to bleed a full lock while NOT acquiring (LOCK_TIME * 0.5)
+     -> {progress, locked, justLocked}
+        justLocked is true ONLY on the frame progress crosses from <1 to >=1 — the impure
+        caller hangs the lock-tone/haptic/flash side effects off it (no re-fire while held). */
+function advanceLock(lock, sample) {
+  const prev = (lock && lock.progress) || 0;
+  let progress;
+  if (sample.acquiring) {
+    progress = Math.min(1, prev + sample.dt / sample.rate);
+  } else {
+    progress = Math.max(0, prev - sample.dt / sample.decayRate);
+  }
+  const locked = progress >= 1;
+  return { progress: progress, locked: locked, justLocked: locked && prev < 1 };
+}
+
+/* clearLockIf(lock, deadTarget): when an enemy dies, decide what the player's lock should become —
+   replaces the enemy module reaching into player.lock* directly. Returns a PLAIN lock; the OWNER
+   applies it. A matching locked `target` is dropped; a matching mid-acquire `candidate` is dropped
+   and its progress reset. Unrelated deaths return the lock unchanged. Never mutates the input. */
+function clearLockIf(lock, deadTarget) {
+  const candidateDead = lock.candidate === deadTarget;
+  return {
+    target: lock.target === deadTarget ? null : lock.target,
+    candidate: candidateDead ? null : lock.candidate,
+    progress: candidateDead ? 0 : lock.progress,
+  };
+}
+
 /* ===================================================================
    CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
    is skipped and every symbol above remains a plain browser global (no behavioural change).
@@ -970,6 +1103,7 @@ if (typeof module !== 'undefined' && module.exports) {
     TWO_PI, DEG, clamp, lerp, rand, randInt, damp,
     NIGHT_RADAR_MUL, WEATHER, resolveWeather, turbSample, rollWeather,
     BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase,
+    resolveDamage,
     BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime,
     TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,
     makeRng, dailySeedFor,
@@ -996,5 +1130,7 @@ if (typeof module !== 'undefined' && module.exports) {
     captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
     objectiveTypes, nextObjectivePhase, strikeSiteResolves,
     campaignSpawnedKillCount, campaignProceduralTarget, campaignClearTarget,
+    COMBO_TIMER, KILLSTREAK_INTERVAL, awardHit, awardKill,
+    advanceLock, clearLockIf,
   };
 }

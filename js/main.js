@@ -379,7 +379,7 @@ function damageWingman(w, amt) {
   if (!w.alive) return;
   w.hp -= amt; w.hitFlash = 0.1;
   if (w.hp <= 0) {
-    w.alive = false; explode(w.group.position, true); scene.remove(w.group);
+    w.alive = false; explode(w.group.position, true); detachFromScene(w.group);
     w.rtb = 13;   // regroup / replacement timer
     showBanner(tf('banner.down', { name: w.name })); audio.warn();
   }
@@ -518,7 +518,7 @@ function updateWingmen(dt) {
     if (w.temp) {
       w.expire -= dt;
       if (!w.alive || w.expire <= 0) {            // CCA expended or recalled to base — no respawn
-        if (w.alive && w.group) { explode(w.group.position, false); scene.remove(w.group); }
+        if (w.alive && w.group) { explode(w.group.position, false); detachFromScene(w.group); }
         wingmen.splice(i, 1);
         continue;
       }
@@ -739,7 +739,7 @@ function wingmanSpecial(w) {
 }
 
 function clearWingmen() {
-  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].group) scene.remove(wingmen[i].group);
+  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].group) detachFromScene(wingmen[i].group);
   wingmen.length = 0;
 }
 

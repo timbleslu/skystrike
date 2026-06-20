@@ -413,7 +413,7 @@ function statBar(lbl, v) {
 /* hangar-preview paint: show the TRANSIENT previewSkin (owned OR not) on the live jet; fall back to the
    owned/equipped paint. UI-ONLY — never reaches createPlayer/gameplay (which uses jetPaint = owned only). */
 function previewPaint(jet) {
-  if (previewSkin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkinPaint === 'function') return resolveSkinPaint(jet, previewSkin);
+  if (previewSkin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, previewSkin);
   return jetPaint(jet);
 }
 /* TRACK C2: the preview no longer lives in a cleared world gutter — it renders to its OWN isolated
