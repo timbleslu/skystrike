@@ -33,7 +33,7 @@ function loadSettings() {
     if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
     if (typeof s.aimAssist === 'boolean') aimAssist = s.aimAssist;
     if (typeof s.aimStrength === 'number') aimStrength = clamp(s.aimStrength | 0, 1, 5);
-    if (s.lang === 'EN' || s.lang === 'ZH') LANG = s.lang;
+    if (s.lang === 'EN' || s.lang === 'ZH' || s.lang === 'KO') LANG = s.lang;
     if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
     else if ('ontouchstart' in window) hudScale = 0.8;
@@ -156,7 +156,7 @@ function applyLang() {
   setTxt('lblAutoLock', t('set.autoLock')); setTxt('lblWingman', t('set.wingman'));
   setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
   setTxt('lblGunLead', t('set.gunLead')); setTxt('lblAimAssist', t('set.aimAssist')); setTxt('lblAimStrength', t('set.aimStrength')); setTxt('lblMute', t('set.mute'));
-  setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH'));
+  setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH')); setTxt('setLangKO', t('set.langKO'));
   // mobile control settings labels + segmented button captions
   setTxt('lblControlScheme', t('set.controlScheme'));
   setTxt('lblMobileControl', t('set.mobileControl')); setTxt('lblAggression', t('set.aggression'));
