@@ -37,6 +37,10 @@ class AudioEngine {
     o1.start(); o2.start();
     this.eO1 = o1; this.eO2 = o2; this.eLP = lp;
   }
+  // Ramp the engine hum to silence on flight exit. Oscillators are KEPT running (not .stop()'d) —
+  // setEngine/setEngineJet ramps engGain back up on the next flight. Without this, the hum HOLDS at
+  // its last value whenever the flight loop stops driving it.
+  stopEngine() { if (this.on && this.engGain) this.engGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12); }
   setEngine(thr, sf) {
     if (!this.on) return;
     const t = this.ctx.currentTime;

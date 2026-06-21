@@ -162,11 +162,26 @@ function drawStealthThreats(ctx) {
   if (typeof enemies === 'undefined' || !enemies.length) return;
   const blown = (typeof stealthBlown !== 'undefined' && stealthBlown);
   const col = blown ? '255,70,70' : '255,162,58';
-  ctx.save(); ctx.lineWidth = 2;
+  const coneHalf = (typeof STEALTH_CONE_HALF !== 'undefined') ? STEALTH_CONE_HALF : 0.6;
+  ctx.save(); ctx.lineWidth = 3;
+  // SAFE-LANE hint (pre-blown): the central corridor toward the extraction waypoint is kept clear of rings
+  // (spawnStealthExtraction). Draw a soft guide line player→extraction so the flyable gap reads at a glance.
+  if (!blown && typeof mission !== 'undefined' && mission && mission.params && mission.params.waypoints && mission.params.waypoints[0]) {
+    const wp = mission.params.waypoints[0];
+    const py = player.group.position.y, gy0 = terrainH(player.group.position.x, player.group.position.z) + 30;
+    const a0 = projectPoint(t2.set(player.group.position.x, gy0, player.group.position.z));
+    const a1 = projectPoint(t3.set(wp.x, terrainH(wp.x, wp.z) + 30, wp.z));
+    if (!a0.behind && !a1.behind) {
+      ctx.setLineDash([14, 12]); ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(120,230,160,0.32)';   // green = the clear lane
+      ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(a1.x, a1.y); ctx.stroke();
+      ctx.setLineDash([]); ctx.lineWidth = 3;
+    }
+  }
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive || !e.stealthThreat || !e.detectR) continue;
     const cxp = e.group.position.x, czp = e.group.position.z, gy = terrainH(cxp, czp) + 8;
-    // detection ring as a projected ground polygon
+    // detection ring as a projected ground polygon — bolder, with a faint fill so the no-go zone is unmistakable
     ctx.setLineDash([10, 8]); ctx.beginPath(); let started = false, anyFront = false;
     for (let s = 0; s <= 36; s++) {
       const a = s / 36 * TWO_PI;
@@ -175,17 +190,20 @@ function drawStealthThreats(ctx) {
       anyFront = true;
       if (!started) { ctx.moveTo(sp.x, sp.y); started = true; } else ctx.lineTo(sp.x, sp.y);
     }
-    if (anyFront) { ctx.strokeStyle = 'rgba(' + col + ',0.5)'; ctx.stroke(); }
+    if (anyFront) { ctx.strokeStyle = 'rgba(' + col + ',0.85)'; ctx.lineWidth = 3; ctx.stroke(); }
     ctx.setLineDash([]);
-    // patrol facing wedge (which way it is looking → pass behind it)
+    // patrol scan cone (the ACTUAL detection wedge — STEALTH_CONE_HALF half-angle, range e.detectR). Brightens
+    // when the patrol is investigating or actively sees you (coneLOS), so the threat reads honestly.
     if (e.patrol && !blown && e.logicQuat) {
-      const fwd = fwdQ(e.logicQuat, t3), fa = Math.atan2(fwd.x, fwd.z), cone = 0.5, len = e.detectR;
+      const fwd = fwdQ(e.logicQuat, t3), fa = Math.atan2(fwd.x, fwd.z), len = e.detectR;
       const c = projectPoint(t2.set(cxp, gy, czp));
-      const pl = projectPoint(t2.set(cxp + Math.sin(fa - cone) * len, gy, czp + Math.cos(fa - cone) * len));
-      const pr = projectPoint(t2.set(cxp + Math.sin(fa + cone) * len, gy, czp + Math.cos(fa + cone) * len));
+      const pl = projectPoint(t2.set(cxp + Math.sin(fa - coneHalf) * len, gy, czp + Math.cos(fa - coneHalf) * len));
+      const pr = projectPoint(t2.set(cxp + Math.sin(fa + coneHalf) * len, gy, czp + Math.cos(fa + coneHalf) * len));
       if (!c.behind && !pl.behind && !pr.behind) {
+        const hot = e.investigating ? 0.30 : (e.coneLOS ? 0.14 + 0.3 * e.coneLOS : 0.12);
         ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(pl.x, pl.y); ctx.lineTo(pr.x, pr.y); ctx.closePath();
-        ctx.fillStyle = 'rgba(' + col + ',0.10)'; ctx.fill();
+        ctx.fillStyle = (e.investigating ? 'rgba(255,90,90,' : 'rgba(' + col + ',') + hot.toFixed(2) + ')'; ctx.fill();
+        ctx.strokeStyle = 'rgba(' + col + ',0.45)'; ctx.lineWidth = 1.5; ctx.stroke();
       }
     }
   }
@@ -244,7 +262,7 @@ function drawHUD() {
     ctx.textBaseline = 'middle';
     // recon/stealth: point the objective marker at the next waypoint + (stealth) draw the detection bar
     if (mission.type === 'recon' || mission.type === 'stealth') drawMissionWaypoint(ctx, cx, cy, k, reduce);
-    if (mission.type === 'stealth') { drawStealthThreats(ctx); drawDetectionBar(ctx, cx, k); drawStealthWarning(ctx, mission.params._prox || 0); }
+    if (mission.type === 'stealth') { drawStealthThreats(ctx); drawDetectionBar(ctx, cx, k); drawStealthWarning(ctx, Math.max(mission.params._prox || 0, mission.params._coneLOS || 0)); }
   }
   drawObjectiveCallout(ctx, cx, cy, k);   // Req D: 3s big centre flash on objective issue / phase change
 
@@ -787,9 +805,9 @@ function drawRadar() {
     const ahead = dx * Fx + dz * Fz, right = dx * Rx + dz * Rz;
     const X = cx + right / range * R, Y = cy - ahead / range * R, rr = e.detectR / range * R;
     const blown = (typeof stealthBlown !== 'undefined' && stealthBlown);
-    ctx.fillStyle = blown ? 'rgba(255,70,70,0.10)' : 'rgba(255,162,58,0.10)';
+    ctx.fillStyle = blown ? 'rgba(255,70,70,0.14)' : 'rgba(255,162,58,0.16)';
     ctx.beginPath(); ctx.arc(X, Y, rr, 0, TWO_PI); ctx.fill();
-    ctx.strokeStyle = blown ? 'rgba(255,70,70,0.55)' : 'rgba(255,162,58,0.5)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = blown ? 'rgba(255,70,70,0.7)' : 'rgba(255,162,58,0.7)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(X, Y, rr, 0, TWO_PI); ctx.stroke();
   }
   // radar contacts mirror the marker roles: boss magenta, rival --rival, elite --reward, drone/fighter --danger

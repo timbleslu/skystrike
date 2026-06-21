@@ -107,17 +107,19 @@ const MISSIONS = {
       return 'active';
     },
   },
-  // STEALTH (no-kill): reach the extraction waypoint without the detection meter (params.detect,
-  // 0..1) hitting 1. detect rises while firing weapons OR while any enemy is aiming at you, decays
-  // otherwise (ticked impurely in updateMission via the pure detectionDelta). Pure win/fail below.
+  // STEALTH (no-kill, ADR-0006 "go loud"): reach the extraction waypoint ALIVE. The detection meter
+  // (params.detect, 0..1) is PRE-DETECTION PRESSURE only — reaching 1 TRIGGERS go-loud (blowStealthCover),
+  // it never fails the level. detect rises from patrol cone-LOS / proximity rings / firing / being aimed at,
+  // and DECAYS otherwise (gentler decay so a brief slip recovers before 100% — ADR-0006 retune). Once blown
+  // the meter freezes. The ONLY stealth fail is death (HP→0, handled by gameOver). Pure win below.
   stealth: {
     setup: function (wave, rng) {
-      return { target: 1, timer: 0, params: { waypoints: [], count: 1, hitRadius: 360, detect: 0, riseRate: 0.45, decayRate: 0.18 } };
+      return { target: 1, timer: 0, params: { waypoints: [], count: 1, hitRadius: 360, detect: 0, riseRate: 0.45, decayRate: 0.30, coneMul: 1.8 } };
     },
     onKill: function (e, m) {},
     onTick: function (dt, m) {},
     winFail: function (m) {
-      if (stealthFailed(m)) return 'failed';
+      // NEVER 'failed' from the meter (ADR-0006) — win only by reaching the waypoint; death fails elsewhere.
       if (stealthWon(m)) return 'won';
       return 'active';
     },
@@ -167,9 +169,10 @@ function objectiveText(m) {
   if (m.type === 'sweep')     return t('mission.sweep') + ' ' + m.progress + '/' + m.target;
   if (m.type === 'recon')     return t('mission.recon') + ' ' + m.progress + '/' + m.target;
   if (m.type === 'stealth') {
+    // ADR-0006: once blown the meter is irrelevant — read it as a hot escape to the extraction point.
+    if (typeof stealthBlown !== 'undefined' && stealthBlown) return t('mission.stealth') + ' — ' + t('mission.stealth.escape');
     const det = Math.round(((m.params.detect || 0)) * 100);
-    const tag = (typeof stealthBlown !== 'undefined' && stealthBlown) ? t('mission.stealth.blown')
-              : det >= 60 ? t('mission.stealth.spotted') : t('mission.stealth.undetected');
+    const tag = det >= 60 ? t('mission.stealth.spotted') : t('mission.stealth.undetected');
     return t('mission.stealth') + ' — ' + tag + ' ' + det + '%';
   }
   return '';
@@ -305,6 +308,7 @@ function spawnReconWaypoints(m, wave) {
 // threat carries `e.detectR` (its ring radius); proximity to any ring fills the detection meter
 // (updateMission), and the rings are drawn on the world + radar so the safe lane is readable.
 function spawnStealthExtraction(m, wave) {
+  stealthExtraSpawns = 0;   // reset the go-loud reinforcement cap counter for this sortie
   const p = player.group.position;
   const ang = rand(0, TWO_PI), r = rand(4200, 5200);
   const ex = p.x + Math.cos(ang) * r, ez = p.z + Math.sin(ang) * r;
@@ -358,26 +362,30 @@ function stealthProximity() {
   return prox;
 }
 
-// v1.3: blow cover — flip every stealth threat to aggressive (patrols start pursuing), once.
+// ADR-0006: blow cover = GO LOUD (not a fail). Flip every stealth threat to aggressive (patrols start
+// pursuing), once. The detection meter is frozen from here (detectionDelta returns 0 when blown); the
+// sortie becomes a hot escape to the extraction waypoint — only death fails it.
 function blowStealthCover() {
   if (stealthBlown) return;
   stealthBlown = true;
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (!e.stealthThreat) continue;
-    e.patrol = false; e.aggressive = true;
+    e.patrol = false; e.aggressive = true; e.investigating = false; e.coneLOS = 0;
     if (e.marker) e.marker.material.color.setHex(0xff4444);   // hostile red now
   }
-  showBanner(t('mission.stealth.blown'));
+  showBanner(t('mission.stealth.goLoud'));
   if (typeof audio !== 'undefined' && audio.warn) audio.warn();
 }
 
-// v1.3: a player kill during a stealth op blows cover AND spawns two more attacking fighters — so going
-// loud spirals (kill → +2 → kill → +2…). Called from combat.js killEnemy.
+// A player kill during a stealth op blows cover AND spawns reinforcements — going loud escalates. The TOTAL
+// extra spawns are CAPPED (STEALTH_SPAWN_CAP, ADR-0006) so the hot escape stays hard but survivable; once the
+// cap is hit, kills still aggro but stop adding pressure. Called from combat.js killEnemy.
 function onStealthKill(e) {
   if (!mission || mission.type !== 'stealth') return;
   blowStealthCover();
-  for (let k = 0; k < 2; k++) pendingSpawns.push(spawnFighter);
+  const cap = (typeof STEALTH_SPAWN_CAP !== 'undefined') ? STEALTH_SPAWN_CAP : 6;
+  for (let k = 0; k < 2 && stealthExtraSpawns < cap; k++) { pendingSpawns.push(spawnFighter); stealthExtraSpawns++; }
 }
 
 /* ---------------- per-frame update + resolution ----------------
@@ -415,21 +423,31 @@ function updateMission(dt) {
     if (r.hitCount > mission.progress && typeof audio !== 'undefined' && audio.ping) audio.ping();   // F1: one-shot chime the frame a waypoint checks off
     mission.progress = r.hitCount;
   } else if (mission.type === 'stealth') {
-    // detection rises while: cover is blown, firing weapons, an enemy is aiming at you, OR you fly inside a
-    // SAM/radar/patrol detection ring (proximity). Decays otherwise. Firing a shot also BLOWS cover (v1.3).
+    // ADR-0006 "go loud": the meter is PRE-DETECTION PRESSURE. It rises from patrol cone-LOS (fastest),
+    // proximity rings, firing, or being aimed at; decays otherwise. Reaching 1.0 TRIGGERS go-loud (NOT a fail).
+    // Firing/killing also go loud. Once blown the meter freezes (detectionDelta returns 0) and stops driving
+    // anything — the sortie is now a hot escape to the extraction waypoint; only death fails.
     const firing = (player.firingT || 0) > 0;
     if (firing) blowStealthCover();
-    let beingAimed = false;
-    for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.aimingPlayer) { beingAimed = true; break; } }
+    let beingAimed = false, coneLOS = 0;
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]; if (!e.alive) continue;
+      if (e.aimingPlayer) beingAimed = true;
+      if (e.coneLOS && e.coneLOS > coneLOS) coneLOS = e.coneLOS;   // strongest patrol scan-cone LOS this frame
+    }
     const prox = stealthProximity();
-    const d = detectionDelta({ blown: stealthBlown, firing: firing, beingAimed: beingAimed, proximity: prox, dt: dt, riseRate: mission.params.riseRate, decayRate: mission.params.decayRate });
+    const d = detectionDelta({ blown: stealthBlown, firing: firing, beingAimed: beingAimed, coneLOS: coneLOS, coneMul: mission.params.coneMul, proximity: prox, dt: dt, riseRate: mission.params.riseRate, decayRate: mission.params.decayRate });
     mission.params.detect = clamp((mission.params.detect || 0) + d, 0, 1);
+    // meter reaching 100% TRIGGERS go-loud (ADR-0006) — it is never a loss condition.
+    if (!stealthBlown && mission.params.detect >= 1) blowStealthCover();
     mission.params._prox = prox;   // cached for the proximity warning glow (HUD)
-    // proximity audio cue: a warble that quickens the closer you are to a ring
+    mission.params._coneLOS = coneLOS;   // cached for HUD telegraph
+    // proximity audio cue: a warble that quickens the closer you are to a ring or patrol cone (pre-blown only)
+    const cue = stealthBlown ? 0 : Math.max(prox, coneLOS);
     mission.params._beepT = (mission.params._beepT || 0) - dt;
-    if (prox > 0.35 && mission.params._beepT <= 0) {
+    if (cue > 0.35 && mission.params._beepT <= 0) {
       if (typeof audio !== 'undefined' && audio.warn) audio.warn();
-      mission.params._beepT = 0.9 - prox * 0.6;   // 0.36s at the ring centre, ~0.7s at the edge
+      mission.params._beepT = 0.9 - cue * 0.6;   // 0.36s at full cue, ~0.7s at the edge
     }
     // reach the extraction waypoint (pure hit-test); win/fail resolved by the pure stealth predicates
     const rs = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);

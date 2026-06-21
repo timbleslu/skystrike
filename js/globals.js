@@ -428,7 +428,18 @@ let barrelRollCooldown   = 0;   // counts down from BARREL_ROLL_COOLDOWN; >0 = o
 let barrelRollAnim       = 0;   // counts down from BARREL_ROLL_DURATION; >0 = rolling
 let barrelRollRequest    = false; // set true by controls when double-tap detected; cleared by combat
 let barrelRollLastKeyTap = -999; // time (performance.now()/1000) of last keyboard Q or E press
-let stealthBlown = false;        // v1.3 STEALTH: cover blown (fired/killed) → patrols aggro + each kill spawns +2
+let stealthBlown = false;        // STEALTH: cover blown (fired/killed/meter-100%) → GO LOUD (ADR-0006): patrols aggro, escape to the waypoint alive
+let stealthExtraSpawns = 0;      // running count of go-loud reinforcements spawned this sortie (capped at STEALTH_SPAWN_CAP)
+// v1.4 STEALTH patrol tunables (ADR-0006 "go loud") — patrols sweep a vision cone + investigate on suspicion.
+// Centralized here so the feel is easy to retune. Cone half-angle/range, suspicion thresholds, timeouts.
+const STEALTH_CONE_HALF = 0.62;          // rad (~36°) half-angle of a patrol's forward scan cone
+const STEALTH_CONE_MUL = 1.8;            // cone-LOS rise multiplier (fastest detection term, ∝ how centred you are)
+const STEALTH_SUSPICION_RISE = 0.9;      // per-second suspicion gain while a patrol holds you in cone-LOS
+const STEALTH_SUSPICION_DECAY = 0.4;     // per-second suspicion bleed-off when not seen
+const STEALTH_SUSPICION_THRESHOLD = 1.0; // suspicion ≥ this → the nearest suspicious patrol peels off to investigate
+const STEALTH_INVESTIGATE_TIMEOUT = 4.0; // s a patrol hunts the last-seen point before giving up + returning to route
+const STEALTH_INVESTIGATE_SPEED_MUL = 1.5; // patrols move faster while actively investigating
+const STEALTH_SPAWN_CAP = 6;             // hard cap on total go-loud reinforcements (keeps a hot escape survivable)
 let barrelRollLastTouchTap = -999; // time of last joystick roll-direction flick release
 let barrelRollDir = 1;   // +1 right, -1 left; captured at roll initiation
 let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live device-orientation tilt

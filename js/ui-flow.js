@@ -106,6 +106,7 @@ function gameOver() {
   if (state !== 'playing') return;
   if (campaignMode) { campaignLevelFailed(); return; }   // Operations campaign: roll back to the pre-level checkpoint + return to the map (NOT run-end)
   state = 'dead';
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // flight exit → silence the engine hum
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   explode(player.group.position, true);
   player.group.visible = false;
@@ -116,6 +117,7 @@ function gameOver() {
 // shared end-of-run overlay (death or operation victory) — fills stats and shows #gameover with the given title.
 // `win` true = success outcome (debrief eyebrow turns --ok via .gowrap.win), default false = failure (--danger).
 function endRun(title, win) {
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // run end (death or op victory) is a flight exit → silence the engine hum
   const gw = g('gameover').querySelector('.gowrap');
   if (gw) gw.classList.toggle('win', !!win);
   const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
@@ -171,11 +173,15 @@ function endRun(title, win) {
   } else {
     if (rd) rd.classList.add('hide');
     if (sd) sd.classList.remove('hide');
-    // per-mission star conditions in Ops/campaign — read the active level's authored `stars` (if any),
-    // else fall back to the default 3 conditions. evalStarsFor is PURE; conds undefined ⇒ evalStars.
-    const lvl = (typeof currentCampaignLevel === 'function' && currentCampaignLevel()) || null;
-    const conds = (lvl && Array.isArray(lvl.stars) && lvl.stars.length) ? lvl.stars : null;
-    const stars = evalStarsFor(run, player, conds);
+    // SINGLE STAR-TRUTH: a campaign/op victory carries the per-level result computed ONCE in
+    // campaignLevelComplete (delta vs level base, composed levelConds) via lastLevelResult — render
+    // THAT, so the boss/op debrief matches the map pips. (The old path read a dead `lvl.stars` field —
+    // rows carry `starUnique`, not `stars` — so conds was always null and it fell back to generic
+    // evalStars on the cumulative run.) Endless/Daily (no stash) keep the conds=null → evalStars fallback.
+    const lr = (lastLevelResult && lastLevelResult.lr) || run;       // per-level delta on op victory, else cumulative run
+    const conds = (lastLevelResult && lastLevelResult.conds) || null;
+    const stars = (lastLevelResult && typeof lastLevelResult.stars === 'number') ? lastLevelResult.stars : evalStarsFor(run, player, conds);
+    lastLevelResult = null;   // consumed — don't leak into a later non-campaign debrief
     const jetId = (player && player.jet && player.jet.id) || null;
     const best = bestStars(meta, jetId, stars); saveMeta();   // meta.stars[jet] now holds the lifetime best
     if (sd) {
@@ -186,8 +192,9 @@ function endRun(title, win) {
       if (conds) {
         if (!cl) { cl = document.createElement('span'); cl.className = 'stars-conds'; sd.appendChild(cl); }
         cl.innerHTML = conds.slice(0, 3).map(c =>
-          '<span class="' + (starCondMet(c, run) ? 'met' : '') + '">' +
-          (starCondMet(c, run) ? '★ ' : '☆ ') + tf('stars.cond.' + c.type, { n: c.n || 0 }) + '</span>'
+          '<span class="' + (starCondMet(c, lr) ? 'met' : 'miss') + '">' +
+          (starCondMet(c, lr) ? '★ ' : '☆ ') + tf('stars.cond.' + c.type, { n: c.n || 0 }) +
+          ' ' + t(starCondMet(c, lr) ? 'campaign.met' : 'campaign.miss') + '</span>'
         ).join('');
         cl.classList.remove('hide');
       } else if (cl) { cl.classList.add('hide'); }
@@ -213,6 +220,7 @@ function endRun(title, win) {
 function operationComplete() {
   if (state !== 'playing') return;
   state = 'dead';
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // flight exit → silence the engine hum
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   player.score += 5000;
   // F15: clearing the campaign once unlocks Boss Rush mode (persisted; healed for legacy saves)
@@ -230,6 +238,23 @@ function operationComplete() {
    between levels lives in the next level's snapshot and is preserved. Beating the operation's boss
    level completes the operation (unlocks the next) via operationComplete. */
 let campaignBriefOp = null, campaignBriefIdx = -1;   // briefing-screen target
+// SINGLE STAR-TRUTH stash: campaignLevelComplete computes the per-level stars ONCE (delta vs level base,
+// composed levelConds). Both the #levelCleared panel and the boss/op endRun debrief render from THIS —
+// never a separate recompute. Holds {stars, conds, lr}; endRun consumes + clears it on op victory.
+let lastLevelResult = null;
+// render the met/missed condition checklist into a container from a computed {conds, lr} result.
+// One row per condition: ★/☆ + label (tf 'stars.cond.<type>') + (met)/(miss). Single source of truth.
+function renderStarChecklist(el, conds, lr) {
+  if (!el) return;
+  if (!conds || !conds.length) { el.innerHTML = ''; el.classList.add('hide'); return; }
+  el.innerHTML = conds.slice(0, 3).map(c => {
+    const met = starCondMet(c, lr);
+    return '<span class="' + (met ? 'met' : 'miss') + '">' +
+      (met ? '★ ' : '☆ ') + tf('stars.cond.' + c.type, { n: c.n || 0 }) +
+      ' ' + t(met ? 'campaign.met' : 'campaign.miss') + '</span>';
+  }).join('');
+  el.classList.remove('hide');
+}
 
 // clear the live arena between levels but KEEP the player (clearArena nulls the player; we don't want that)
 function clearCampaignArena() {
@@ -492,18 +517,44 @@ function campaignLevelComplete() {
   const lr = levelRunDelta(run, campaignLevelRunBase);
   lr.waveReached = lvl.waves || campaignWaveCount(idx);
   lr.timeSecs = campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
-  const stars = evalStarsFor(lr, player, levelConds(lvl));
+  const conds = levelConds(lvl);
+  const stars = evalStarsFor(lr, player, conds);
   campaignClearLevel(opId, idx, lvl.id, (player && player.score) || 0, stars);   // persists + advances furthest unlocked
+  lastLevelResult = { stars: stars, conds: conds, lr: lr };   // SINGLE star-truth → #levelCleared AND the boss/op endRun debrief
   if (lvl.isBoss) { operationComplete(); return; }   // op boss → victory/debrief + unlock next operation
+  // NORMAL level win: stop the flight loop (state out of 'playing' so the main loop stops driving engine
+  // audio + guns under the overlay — mirrors operationComplete), silence the hum, and show the dedicated
+  // LEVEL CLEARED debrief (no SP award / hangar return). Continue → map.
+  state = 'dead';
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
   clearCampaignArena();
-  showBanner(t('campaign.cleared'));
-  openLevelMap(opId);   // back to the paused map; the next node is now unlocked
+  showLevelCleared(opId, idx, lvl, rw);
+}
+
+// dedicated LEVEL CLEARED panel for a NORMAL (non-boss) level win — renders the SAME computed stars
+// (lastLevelResult) as a pip row + met/missed checklist + this level's RP/score, then Continue → map.
+function showLevelCleared(opId, idx, lvl, rw) {
+  const ov = g('levelCleared'); if (!ov) { openLevelMap(opId); return; }
+  const res = lastLevelResult || { stars: 0, conds: levelConds(lvl), lr: {} };
+  lastLevelResult = null;   // consumed by THIS panel — never let it linger into a later non-campaign endRun debrief
+  setTxt('lvlcTitle', t('campaign.levelCleared'));
+  const op = OPERATIONS.find(o => o.id === opId);
+  setTxt('lvlcSub', '// ' + ((op && t(op.nameKey)) || '') + ' · ' + t('campaign.level') + ' ' + (idx + 1) + ' //');
+  const pips = g('lvlcPips'); if (pips) pips.textContent = '★'.repeat(res.stars) + '☆'.repeat(3 - res.stars);
+  setTxt('lvlcNote', res.stars + ' / 3');
+  renderStarChecklist(g('lvlcConds'), res.conds, res.lr);
+  setTxt('lvlcRwRp', '+' + (rw ? rw.rp : 0) + ' RP');
+  setTxt('lvlcRwScore', '+' + (rw ? rw.score : 0));
+  const go = g('lvlcContinue'); if (go) { go.textContent = t('campaign.continueMap'); go.onclick = () => { ov.classList.remove('show'); openLevelMap(opId); }; }
+  ov.classList.add('show');
+  if (audio.on) audio.ui();
 }
 
 // FAIL (death or objective failure): roll back the economy, return to the map, level stays unlocked
 function campaignLevelFailed() {
   const opId = campaignOpId;
   campaignMode = false;
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // flight exit → silence the engine hum
   if (campaignSnapshot && player) {
     const r = rollbackSnapshot(campaignSnapshot);   // pure; tech untouched (no mid-level shop) — only restore economy
     player.tp = r.rp; player.score = r.score;

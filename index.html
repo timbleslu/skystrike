@@ -105,7 +105,7 @@
 <button id="manualBtn" class="ghostbtn manual-cta manual-fixed mb-hide">&#9881; CONTROLS &amp; MANUAL</button>
 <!-- Global version tag: body-level so it pins to the viewport bottom-right (rides scroll) on the language-select
      screen and every menu; visibility toggled with the gear by syncManualBtn(). -->
-<div id="versionTag" class="version-tag mb-hide">Version 1.3</div>
+<div id="versionTag" class="version-tag mb-hide">Version 1.4</div>
 <!-- v1.3 flight-to-flight loading curtain: opaque overlay covering the arena swap so no stale mission frame shows -->
 <div id="loadingScreen" class="loading-screen" aria-hidden="true">
   <div class="loading-spinner"></div>
@@ -310,6 +310,18 @@
       <button id="levelMapBack" class="cmp-btn cmp-back">&#9664; BACK</button>
       <button id="levelMapTech" class="cmp-btn">&#9874; R&amp;D</button>
     </div>
+  </div>
+</div>
+<div id="levelCleared">
+  <div class="cmp-box lvlc-box">
+    <div class="cmp-title" id="lvlcTitle">LEVEL CLEARED</div>
+    <div class="cmp-sub" id="lvlcSub">// OPERATION &middot; LV //</div>
+    <div class="cmp-core ui-dense">
+      <div id="lvlc_stars" class="gostars"><span class="stars-pips" id="lvlcPips">&#9734;&#9734;&#9734;</span><span class="stars-note" id="lvlcNote">0 / 3</span></div>
+      <div class="stars-conds" id="lvlcConds"></div>
+      <div class="lvlc-rewards"><span id="lvlcRwRp">+0 RP</span><span class="lvlc-rwsep">&middot;</span><span id="lvlcRwScore">+0</span></div>
+    </div>
+    <button id="lvlcContinue" class="cmp-btn cmp-play">CONTINUE &#9654; MAP</button>
   </div>
 </div>
 <div id="briefing">
@@ -593,7 +605,7 @@
       </select>
     </div>
     <!-- version readout on the language-select screen; text is synced from #versionTag (single source) in initOnboarding -->
-    <p id="langVersion" class="ls-version">Version 1.3</p>
+    <p id="langVersion" class="ls-version">Version 1.4</p>
   </div>
 </div>
 

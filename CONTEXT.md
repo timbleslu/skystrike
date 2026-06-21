@@ -23,7 +23,7 @@ All code is browser globals; **availability is defined by `<script>` load order 
 - **Boss phase** — multi-phase boss state (`e.phase` 1→3, `core.js` `bossPhaseFor`).
 - **Sortie** — one flight of one level. A **fresh sortie** (`freshSortie`) resets the persistent campaign player's flight position + ability timers + consumables so each level starts clean (the player object itself persists for the economy — see [ADR-0005](./docs/adr/0005-campaign-player-persist-arena-reset.md)).
 - **Loading curtain** — the opaque `#loadingScreen` overlay shown during a flight-to-flight arena swap so no frame of the previous mission's terrain/weather is seen.
-- **Detection meter / Blown cover** — STEALTH state. The meter rises near SAM/radar/patrol **detection rings** or while spotted; reaching 100% fails. Firing or killing **blows cover** (`stealthBlown`): all threats aggro and every kill spawns +2 attackers — but it is not an instant fail.
+- **Detection meter / Blown cover** — STEALTH state. The meter rises near SAM/radar/patrol **detection rings** or while spotted; it is the *pre-detection* pressure, **not a fail bar**. **Blown cover** (`stealthBlown`) is triggered by firing, killing, OR the meter reaching 100% — it flips the sortie from stealth to a **hot escape ("go loud")**: all threats aggro and chase, the meter stops driving failure, and you win by reaching the extraction/infiltration waypoint **alive**. The only stealth failure is **death** — blown cover is explicitly *not* a level fail (a glimpse must never instantly end the level). [decided 2026-06-21; see ADR-0006]
 - **Per-level stars** — a level's 3 star objectives = 2 from its mission **type** (`starsForType`) + 1 hand-authored **unique** condition (`lvl.starUnique`); scored on the per-level run delta and recorded per level in `meta.campaign`.
 
 ## Decisions (ADR index)
@@ -32,3 +32,4 @@ All code is browser globals; **availability is defined by `<script>` load order 
 - [ADR-0003 — Staged ESM + GameState migration (deferred → scheduled)](./docs/adr/0003-staged-esm-gamestate-migration.md)
 - [ADR-0004 — Web stack confirmed; constraint is architecture, not the renderer](./docs/adr/0004-web-stack-confirmed.md)
 - [ADR-0005 — Campaign player persists; arena + sortie reset per flight behind a loading curtain](./docs/adr/0005-campaign-player-persist-arena-reset.md)
+- [ADR-0006 — Stealth "blown cover" is a go-loud escape, not a fail](./docs/adr/0006-stealth-blown-cover-go-loud.md)

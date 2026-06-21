@@ -363,10 +363,11 @@ function clearArena() {
   const up = g('upgrade'); if (up) up.classList.remove('show');
 }
 function returnToHangar() {
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // leaving flight for the hangar → silence the engine hum (also covers abortMission, which routes here)
   clearArena();
   // Operations campaign: tear down any active operation run + hide its navigation overlays
   campaignMode = false; campaignPlayerOpId = null; campaignOpId = null; campaignLevelIdx = -1; opSector = null;
-  ['modeChoice', 'endlessSetup', 'opsSelect', 'levelMap', 'briefing'].forEach(id => { const e = g(id); if (e) e.classList.remove('show'); });
+  ['modeChoice', 'endlessSetup', 'opsSelect', 'levelMap', 'levelCleared', 'briefing'].forEach(id => { const e = g(id); if (e) e.classList.remove('show'); });
   g('gameover').classList.remove('show');
   g('touchControls').classList.remove('show');
   makePlatform();
