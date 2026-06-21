@@ -477,7 +477,11 @@ function campaignLevelUnlocked(opId, levelIndex) {
   return isLevelUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
 }
 function campaignLevelState(opId, levelIndex) {
-  return levelState((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
+  var st = levelState((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
+  // v1.3 dev: unlock-all-levels reveals every node as playable. Keep a genuine 'cleared' so star pips
+  // still render; only promote a 'locked' node to 'unlocked'. (campaignOpUnlocked already bypasses above.)
+  if (st === 'locked' && typeof devUnlockLevels !== 'undefined' && devUnlockLevels) return 'unlocked';
+  return st;
 }
 function campaignClearLevel(opId, levelIndex, levelId, score, stars) {
   if (!meta) return;

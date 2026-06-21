@@ -1306,20 +1306,73 @@ function tickEnemyStatus(e, dt) {
   }
 }
 const _patrolQ = new THREE.Quaternion();
-// v1.3 STEALTH patrol: a non-pursuing sentry fighter. It flies a lazy constant-rate orbit around its post
-// and NEVER engages or aims (its detection is purely the proximity ring computed in missions.js). The
-// instant cover is blown (stealthBlown) the caller clears e.patrol, so it reverts to the aggressive AI below.
+// STEALTH patrol (ADR-0006 "go loud"): a sentry fighter that SWEEPS a forward vision cone while flying its
+// telegraphed orbit and INVESTIGATES on suspicion. It never fires until cover is blown (it only feeds the
+// detection meter). Player inside the cone WITH line-of-sight → `e.coneLOS` (0..1, how centred you are) fills
+// the meter fast (missions.js reads the max across patrols) and raises `e.suspicion`. When suspicion crosses
+// STEALTH_SUSPICION_THRESHOLD the patrol peels off its route to hunt the player's last-seen point (`e.lastSeen`);
+// re-acquiring LOS there → blowStealthCover() (go loud); losing the trail for STEALTH_INVESTIGATE_TIMEOUT →
+// return to route and bleed off suspicion. The instant cover is blown the caller clears e.patrol → aggressive AI.
+// cone-LOS test: planar (horizontal) angle from the patrol's facing to the player, within the cone + ring range.
+function stealthConeLOS(e) {
+  const dx = player.group.position.x - e.group.position.x;
+  const dz = player.group.position.z - e.group.position.z;
+  const dist = Math.hypot(dx, dz);
+  const range = e.detectR || 800;
+  if (dist < 1 || dist > range) return 0;
+  const fwd = fwdQ(e.logicQuat || e.group.quaternion, t3);
+  const fl = Math.hypot(fwd.x, fwd.z); if (fl < 1e-4) return 0;
+  const dot = (fwd.x * dx + fwd.z * dz) / (fl * dist);       // cos(angle between facing and player)
+  const ang = Math.acos(clamp(dot, -1, 1));
+  if (ang > STEALTH_CONE_HALF) return 0;                     // outside the scan cone → no LOS
+  // centred-ness (1 dead-ahead → 0 at the cone edge) × closeness (1 at the patrol → 0 at ring edge)
+  const centred = 1 - ang / STEALTH_CONE_HALF;
+  const close = 1 - dist / range;
+  return clamp(centred * (0.4 + 0.6 * close), 0, 1);
+}
 function updateStealthPatrol(e, dt) {
   e.aimingPlayer = false;
   if (!e.logicQuat) e.logicQuat = e.group.quaternion.clone();
-  _patrolQ.setFromAxisAngle(UPV, (e.orbitSign || 1) * 0.16 * dt);
-  e.group.quaternion.premultiply(_patrolQ);
-  e.logicQuat.premultiply(_patrolQ);
+  if (e.suspicion == null) e.suspicion = 0;
+
+  // 1) sweep: how clearly does this patrol see the player right now?
+  const los = stealthConeLOS(e);
+  e.coneLOS = los;   // missions.js detection meter reads the max coneLOS across all live patrols
+  if (los > 0) {
+    e.suspicion = Math.min(2, e.suspicion + STEALTH_SUSPICION_RISE * dt);
+    e.lastSeen = { x: player.group.position.x, y: player.group.position.y, z: player.group.position.z };
+  } else {
+    e.suspicion = Math.max(0, e.suspicion - STEALTH_SUSPICION_DECAY * dt);
+  }
+
+  // 2) state: investigate once suspicion trips the threshold; re-acquire LOS → go loud; timeout → return.
+  if (!e.investigating && e.suspicion >= STEALTH_SUSPICION_THRESHOLD && e.lastSeen) {
+    e.investigating = true; e.investigateT = STEALTH_INVESTIGATE_TIMEOUT;
+  }
+  if (e.investigating) {
+    if (los > 0.15 && typeof blowStealthCover === 'function') { blowStealthCover(); return; }  // re-acquired → GO LOUD
+    e.investigateT -= dt;
+    if (e.investigateT <= 0 || e.suspicion <= 0.05) { e.investigating = false; }   // lost the trail → back to route
+  }
+
+  // 3) steering: investigate = turn toward last-seen point at boosted speed; else lazy orbit of the post.
+  if (e.investigating && e.lastSeen) {
+    const tx = e.lastSeen.x - e.group.position.x, tz = e.lastSeen.z - e.group.position.z;
+    const desired = Math.atan2(tx, tz);                          // world yaw toward the last-seen point
+    const fwd = fwdQ(e.logicQuat, t3); const cur = Math.atan2(fwd.x, fwd.z);
+    let dA = desired - cur; while (dA > Math.PI) dA -= TWO_PI; while (dA < -Math.PI) dA += TWO_PI;
+    _patrolQ.setFromAxisAngle(UPV, clamp(dA, -1.4 * dt, 1.4 * dt));
+    e.group.quaternion.premultiply(_patrolQ); e.logicQuat.premultiply(_patrolQ);
+  } else {
+    _patrolQ.setFromAxisAngle(UPV, (e.orbitSign || 1) * 0.16 * dt);
+    e.group.quaternion.premultiply(_patrolQ); e.logicQuat.premultiply(_patrolQ);
+  }
+  const spd = (e.patrolSpeed || 300) * (e.investigating ? STEALTH_INVESTIGATE_SPEED_MUL : 1);
   const fwd = fwdQ(e.logicQuat, t3);
-  e.group.position.addScaledVector(fwd, (e.patrolSpeed || 300) * dt);
+  e.group.position.addScaledVector(fwd, spd * dt);
   const ay = (e.patrolAlt || 1100) - e.group.position.y;
   e.group.position.y += clamp(ay, -120, 120) * dt;
-  animEngines(e.group, 0.55);
+  animEngines(e.group, e.investigating ? 0.85 : 0.55);
   updateMarker(e);
 }
 function updateEnemy(e, dt) {

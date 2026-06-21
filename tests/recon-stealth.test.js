@@ -86,14 +86,21 @@ const wps = (...pts) => pts.map(p => ({ x: p[0], y: p[1], z: p[2], hit: !!p[3] }
   for (let i = 0; i < 200; i++) det = Math.max(0, Math.min(1, det + detectionDelta({ firing: false, beingAimed: false, dt: 0.1, riseRate: 0.45, decayRate: 0.18 })));
   assert.strictEqual(det, 0, 'going quiet long enough decays the meter to a clamped 0');
 
-  // v1.3: proximity term — inside a detection ring the meter rises proportionally to closeness (0..1)
+  // proximity term — inside a detection ring the meter rises proportionally to closeness (0..1)
   assert.strictEqual(detectionDelta({ proximity: 1, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'ring centre (prox 1) = full rise');
   assert.strictEqual(detectionDelta({ proximity: 0.5, dt, riseRate: 0.5, decayRate: 0.2 }), 0.25, 'half-way into the ring rises at half rate');
   assert.strictEqual(detectionDelta({ proximity: 0, dt, riseRate: 0.5, decayRate: 0.2 }), -0.2, 'outside any ring still decays');
-  // v1.3: blown cover forces full rise regardless of proximity/firing
-  assert.strictEqual(detectionDelta({ blown: true, proximity: 0, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'blown cover = full rise even when clear of rings');
   // firing still dominates proximity (one rise, not stacked)
   assert.strictEqual(detectionDelta({ firing: true, proximity: 0.5, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'firing is full rise, proximity does not stack on top');
+
+  // ADR-0006 (v1.4): once cover is BLOWN the meter is FROZEN — it neither rises nor decays (no longer drives anything)
+  assert.strictEqual(detectionDelta({ blown: true, proximity: 0, dt, riseRate: 0.5, decayRate: 0.2 }), 0, 'blown = frozen (no decay) even clear of rings');
+  assert.strictEqual(detectionDelta({ blown: true, firing: true, coneLOS: 1, proximity: 1, dt, riseRate: 0.5, decayRate: 0.2 }), 0, 'blown = frozen (no rise) regardless of any rise term');
+  // v1.4: patrol cone-LOS is the FAST detection term (scaled by coneMul) — fills faster than proximity
+  assert.strictEqual(detectionDelta({ coneLOS: 1, coneMul: 2, dt, riseRate: 0.5, decayRate: 0.2 }), 1.0, 'full cone-LOS = riseRate * coneLOS * coneMul');
+  assert.strictEqual(detectionDelta({ coneLOS: 0.5, coneMul: 2, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'half cone-LOS rises at half the cone rate');
+  assert.ok(detectionDelta({ coneLOS: 1, coneMul: 1.8, dt, riseRate: 0.45, decayRate: 0.3 }) >
+            detectionDelta({ proximity: 1, dt, riseRate: 0.45, decayRate: 0.3 }), 'cone-LOS fills faster than a proximity ring');
 }
 
 /* ===== recon win predicate ===== */
@@ -103,21 +110,24 @@ const wps = (...pts) => pts.map(p => ({ x: p[0], y: p[1], z: p[2], hit: !!p[3] }
   assert.strictEqual(reconWon({ params: { waypoints: [] } }), false, 'an empty path is never a win (guards setup race)');
 }
 
-/* ===== stealth win/fail predicates ===== */
+/* ===== stealth win/fail predicates (ADR-0006 "go loud" contract) =====
+   The detection meter is PRE-DETECTION PRESSURE only: reaching 1.0 triggers go-loud (handled by the impure
+   caller via blowStealthCover), it NEVER fails the mission. The ONLY stealth fail is death. So:
+   - stealthWon is reaching the extraction waypoint, irrespective of the meter (alive-ness is enforced by death).
+   - stealthFailed is ALWAYS false (the meter is not a loss condition). */
 {
-  // reached extraction, low detection → win
-  assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, true]), detect: 0.4 } }), true, 'reached + undetected = win');
-  // reached extraction but alarm raised → NOT a win, and a fail
-  const alarmed = { params: { waypoints: wps([0, 0, 0, true]), detect: 1 } };
-  assert.strictEqual(stealthWon(alarmed), false, 'alarm cancels the win even at the extraction point');
-  assert.strictEqual(stealthFailed(alarmed), true, 'detect >= 1 is a fail (alarm raised)');
-  // not yet reached, low detection → neither win nor fail (still active)
-  const enroute = { params: { waypoints: wps([0, 0, 0, false]), detect: 0.3 } };
-  assert.strictEqual(stealthWon(enroute), false, 'not won before reaching extraction');
-  assert.strictEqual(stealthFailed(enroute), false, 'not failed while detect < 1');
-  // fail threshold is exactly 1 (inclusive)
-  assert.strictEqual(stealthFailed({ params: { detect: 0.999 } }), false, 'just under threshold is not a fail');
-  assert.strictEqual(stealthFailed({ params: { detect: 1 } }), true, 'detect == 1 trips the alarm');
+  // reach the extraction waypoint = win, at ANY detection level (the meter no longer cancels the win)
+  assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, true]), detect: 0.4 } }), true, 'reached extraction = win (low detection)');
+  assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, true]), detect: 1 } }), true, 'reached extraction = win EVEN at full meter (meter is not a loss bar)');
+  // not yet reached → not a win regardless of meter
+  assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, false]), detect: 0.3 } }), false, 'not won before reaching extraction');
+  assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, false]), detect: 1 } }), false, 'a full meter alone is not a win (must reach the waypoint)');
+
+  // detect reaching 1.0 ⇒ NOT failed (it triggers blown, handled by the caller). The meter never fails the mission.
+  assert.strictEqual(stealthFailed({ params: { waypoints: wps([0, 0, 0, false]), detect: 1 } }), false, 'detect == 1 does NOT fail (triggers go-loud, not a loss)');
+  assert.strictEqual(stealthFailed({ params: { detect: 0.999 } }), false, 'sub-threshold meter never fails');
+  assert.strictEqual(stealthFailed({ params: { detect: 0 } }), false, 'an empty meter never fails');
+  assert.strictEqual(stealthFailed({ params: { blown: true, detect: 1 } }), false, 'blown ⇒ still not failed (only death fails)');
 }
 
 console.log('ok - recon/stealth non-combat mission cores (waypoint primitive + detection model)');

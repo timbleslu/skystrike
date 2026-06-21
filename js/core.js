@@ -757,35 +757,46 @@ function nextWaypoint(waypoints) {
 }
 
 // Detection-meter delta for the stealth mission. CONTRACT: returns the RAW signed delta for this
-// frame — the CALLER clamps the running meter to 0..1. The meter RISES while the player is firing
-// weapons OR while any enemy is aiming at the player (spotted); otherwise it DECAYS slowly.
+// frame — the CALLER clamps the running meter to 0..1. The meter is PRE-DETECTION PRESSURE only,
+// never a fail bar (ADR-0006): reaching 1 TRIGGERS go-loud (blowStealthCover), it does not fail.
+// The meter RISES while a patrol holds the player in its scan cone with line-of-sight (cone-LOS,
+// the fastest term), while inside a SAM/radar/patrol proximity ring, or while firing/being aimed at;
+// otherwise it DECAYS. Once cover is BLOWN the meter is FROZEN (delta 0) — it no longer drives
+// anything (the go-loud escape is governed by reaching the waypoint alive, not the meter).
 function detectionDelta(o) {
   const dt = o.dt || 0;
   const rise = (o.riseRate == null ? 1 : o.riseRate);
   const decay = (o.decayRate == null ? 1 : o.decayRate);
-  // hard spotted — full rise: cover blown, firing weapons, or an enemy aiming at you (v1.3 adds `blown`)
-  if (o.blown || o.firing || o.beingAimed) return rise * dt;
-  // v1.3: proximity to a SAM/radar/patrol detection ring scales the rise (0..1 = ring edge..centre)
+  // ADR-0006: post-blown the meter is inert — it stops rising AND stops decaying (frozen/capped).
+  if (o.blown) return 0;
+  // cone-LOS is the fast spot: a patrol looking right at you fills the meter quickest (mul scales rise)
+  const coneLOS = o.coneLOS || 0;
+  if (coneLOS > 0) return rise * coneLOS * (o.coneMul == null ? 1.8 : o.coneMul) * dt;
+  // hard spotted — full rise: firing weapons or an enemy actively aiming at you
+  if (o.firing || o.beingAimed) return rise * dt;
+  // proximity to a SAM/radar/patrol detection ring scales the rise (0..1 = ring edge..centre)
   const prox = o.proximity || 0;
   if (prox > 0) return rise * prox * dt;
   return -decay * dt;
 }
 
 // Pure win/fail predicates so the resolve logic is testable without THREE/DOM.
-// RECON wins when every waypoint is hit. STEALTH wins when the extraction waypoint is reached with
-// the detection meter still under the alarm threshold; it FAILS the instant the meter hits 1 (alarm).
+// RECON wins when every waypoint is hit. STEALTH (ADR-0006) wins ONLY by reaching the extraction
+// waypoint ALIVE — the detection meter is never a loss condition (it triggers go-loud at 1, it does
+// not fail). The single stealth failure is death (HP→0), enforced by the impure caller (gameOver).
 function reconWon(m) {
   const w = (m.params && m.params.waypoints) || [];
   if (!w.length) return false;
   for (let i = 0; i < w.length; i++) if (!w[i].hit) return false;
   return true;
 }
+// ADR-0006: the meter NEVER fails the mission. Kept as a stable predicate (always false) so existing
+// callers/tests have one place that encodes "the meter is not a loss condition." Death is the only fail.
 function stealthFailed(m) {
-  return ((m.params && m.params.detect) || 0) >= 1;
+  return false;
 }
 function stealthWon(m) {
-  if (stealthFailed(m)) return false;
-  return reconWon(m);   // reuse: the extraction goal is a (1-waypoint) recon path
+  return reconWon(m);   // reach the extraction waypoint (alive) — the (1-waypoint) recon path
 }
 
 /* ===================================================================

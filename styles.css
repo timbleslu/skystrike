@@ -763,8 +763,8 @@ canvas{display:block}
 .endless-cfg>div{display:flex;flex-direction:column;align-items:center}
 #modeChoice .cmp-back,#endlessSetup .cmp-back{display:block;margin:0 auto}
 /* ---- Operations campaign (linear revamp): ops-select / level-map / briefing overlays ---- */
-#opsSelect,#levelMap,#briefing,#opLore{position:fixed;inset:0;z-index:73;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px)}
-#opsSelect.show,#levelMap.show,#briefing.show,#opLore.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
+#opsSelect,#levelMap,#briefing,#opLore,#levelCleared{position:fixed;inset:0;z-index:73;display:none;background:radial-gradient(ellipse at 50% 35%,rgba(8,20,30,.90),rgba(2,5,10,.975));backdrop-filter:blur(7px)}
+#opsSelect.show,#levelMap.show,#briefing.show,#opLore.show,#levelCleared.show{display:flex;align-items:center;justify-content:center;animation:fadein .35s}
 /* F5 lore panel: expanded operation lore (4-5 paragraphs) can exceed the box height. Make the BODY scroll while
    the title + action buttons stay pinned (the shared .brief-box scrolls as a whole, which would scroll the close
    controls off too). Single full-width column for readability; \n\n paragraph breaks via white-space:pre-line. */
@@ -1781,6 +1781,14 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
 .stars-conds{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:4px}
 .stars-conds span{font-family:var(--disp);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-dim)}
 .stars-conds span.met{color:var(--reward);text-shadow:var(--glow-reward)}
+.stars-conds span.miss{color:var(--ink-dim);opacity:.7}
+/* LEVEL CLEARED debrief panel (Ops normal-level win): reuses the campaign .cmp-box chrome + the
+   debrief star tokens. Distinct from #gameover — no SP award / hangar return; just a per-level recap. */
+.lvlc-box{text-align:center}
+.lvlc-box #lvlc_stars{margin:var(--sp-2) 0}
+.lvlc-box #lvlcConds{margin:var(--sp-2) 0}
+.lvlc-rewards{display:flex;align-items:baseline;justify-content:center;gap:10px;margin-top:var(--sp-2);font-family:var(--disp);font-size:14px;letter-spacing:2px;color:var(--reward);text-shadow:var(--glow-reward)}
+.lvlc-rewards .lvlc-rwsep{color:var(--ink-dim);text-shadow:none}
 /* endless death rating — sits in the stars' slot, mirrors the debrief stat-stack look */
 .gorating{order:1;display:flex;flex-direction:column;align-items:center;margin:var(--sp-2) 0;gap:4px}
 .rating-title{font-family:var(--disp);font-size:var(--fs-label);letter-spacing:var(--ls-caps);color:var(--ink-dim);text-transform:uppercase}
