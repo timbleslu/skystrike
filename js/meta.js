@@ -95,8 +95,58 @@ function starCondMet(cond, run) {
       (run.hits || 0) / run.shots * 100 >= (cond.n || 0);             // shot accuracy ≥ n%
     case 'flawless':  return (run.missions || 0) >= 1 &&
       (run.damageTaken || 0) === 0;                                    // objective done, no hits taken
+    // --- per-mission UNIQUE conditions (v1.3 stars rework) — all over EXISTING run stats, no invented tracking ---
+    case 'gunOnly':   return kills > 0 && (run.pMissiles || 0) === 0;  // every kill with guns — never fired a missile
+    case 'noFlares':  return (kills > 0 || (run.missions || 0) >= 1) &&
+      (run.pFlares || 0) === 0;                                        // cleared the level without burning a flare
+    case 'fastClear': return (run.timeSecs || 0) > 0 &&
+      run.timeSecs <= (cond.n || 0);                                   // cleared within n seconds
+    case 'killsN':    return kills >= (cond.n || 0);                   // absolute kill count ≥ n
     default:          return false;
   }
+}
+/* ---------------- per-mission star conditions, v1.3: 2 type-defaults + 1 hand-authored unique ----------------
+   starsForType(type) gives the TWO default conditions a mission type always rewards; each level row adds ONE
+   bespoke `starUnique` descriptor. levelConds(lvl) composes [typeDefault0, typeDefault1, lvl.starUnique].
+   An explicit `lvl.stars` array still wins (escape hatch). PURE. Mirrored in tests/stars.test.js. */
+var STAR_TYPE_CONDS = {
+  FURBALL:   [{ type: 'kills' },     { type: 'noDamage' }],
+  SWEEP:     [{ type: 'kills' },     { type: 'clean' }],
+  INTERCEPT: [{ type: 'kills' },     { type: 'accuracy', n: 55 }],
+  STRIKE:    [{ type: 'objective' }, { type: 'accuracy', n: 50 }],
+  RECON:     [{ type: 'objective' }, { type: 'clean' }],
+  STEALTH:   [{ type: 'objective' }, { type: 'noDamage' }],
+  ESCORT:    [{ type: 'objective' }, { type: 'clean' }],
+  DEFEND:    [{ type: 'objective' }, { type: 'clean' }],
+  FINAL:     [{ type: 'noDamage' },  { type: 'objective' }],
+};
+function starsForType(type) {
+  var c = STAR_TYPE_CONDS[type];
+  return c ? [c[0], c[1]] : [{ type: 'kills' }, { type: 'clean' }];
+}
+function levelConds(lvl) {
+  if (!lvl) return STAR_DEFAULT_CONDS;
+  if (Array.isArray(lvl.stars) && lvl.stars.length) return lvl.stars.slice(0, 3);   // explicit override wins
+  var base = starsForType(lvl.type);
+  return lvl.starUnique ? [base[0], base[1], lvl.starUnique] : [base[0], base[1]];
+}
+/* Per-LEVEL run-stat delta: run accumulates across an operation's levels (so op-end SP stays cumulative),
+   but stars must reflect THIS level only. Snapshot the counters at level start (snapshotRunCounters) and
+   subtract here; the caller stamps waveReached + timeSecs for the single level. PURE. */
+var RUN_DELTA_KEYS = ['shots', 'hits', 'missiles', 'kills', 'ground', 'boss', 'missions',
+  'escortKills', 'pMissiles', 'pGunKills', 'pFlares', 'damageTaken', 'cleanWaves'];
+function snapshotRunCounters(run) {
+  var s = {}; run = run || {};
+  for (var i = 0; i < RUN_DELTA_KEYS.length; i++) s[RUN_DELTA_KEYS[i]] = run[RUN_DELTA_KEYS[i]] || 0;
+  return s;
+}
+function levelRunDelta(run, base) {
+  run = run || {}; base = base || {};
+  var d = {};
+  for (var i = 0; i < RUN_DELTA_KEYS.length; i++) {
+    d[RUN_DELTA_KEYS[i]] = Math.max(0, (run[RUN_DELTA_KEYS[i]] || 0) - (base[RUN_DELTA_KEYS[i]] || 0));
+  }
+  return d;
 }
 function evalStarsFor(run, player, conds) {
   if (!run) return 0;
@@ -419,9 +469,11 @@ function jetPaint(jet) { return resolveSkin(jet, selectedSkin(jet.id)); }
    these are only ever called after load order completes. meta.campaign persists inside the
    existing skystrike_meta blob (no new storage key, no version bump — healed in loadMeta). */
 function campaignOpUnlocked(opId) {
+  if (typeof devUnlockLevels !== 'undefined' && devUnlockLevels) return true;   // v1.3 dev: every op open
   return isOpUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId);
 }
 function campaignLevelUnlocked(opId, levelIndex) {
+  if (typeof devUnlockLevels !== 'undefined' && devUnlockLevels) return true;   // v1.3 dev: every level open
   return isLevelUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
 }
 function campaignLevelState(opId, levelIndex) {
@@ -459,6 +511,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     // pure/scoring cores
     spAward, gradeRun, evalStars, evalStarsFor, starCondMet, STAR_DEFAULT_CONDS, bestStars, perkCost,
+    starsForType, levelConds, STAR_TYPE_CONDS, snapshotRunCounters, levelRunDelta,
     applyMetaPerks, sanitizeCallsign, emblemUnlocked,
     // meta lifecycle
     freshMeta, validMeta, loadMeta, saveMeta,

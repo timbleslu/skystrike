@@ -763,7 +763,11 @@ function detectionDelta(o) {
   const dt = o.dt || 0;
   const rise = (o.riseRate == null ? 1 : o.riseRate);
   const decay = (o.decayRate == null ? 1 : o.decayRate);
-  if (o.firing || o.beingAimed) return rise * dt;
+  // hard spotted — full rise: cover blown, firing weapons, or an enemy aiming at you (v1.3 adds `blown`)
+  if (o.blown || o.firing || o.beingAimed) return rise * dt;
+  // v1.3: proximity to a SAM/radar/patrol detection ring scales the rise (0..1 = ring edge..centre)
+  const prox = o.proximity || 0;
+  if (prox > 0) return rise * prox * dt;
   return -decay * dt;
 }
 
