@@ -223,6 +223,23 @@ function advanceTutorial(event) {
 
 let bannerT = 0;
 function showBanner(txt) { el.banner.textContent = txt; el.banner.classList.remove('show'); void el.banner.offsetWidth; el.banner.classList.add('show'); bannerT = 2.0; }
+// v1.3 loading curtain: an opaque overlay shown during a flight-to-flight arena swap so the player never
+// glimpses the previous mission's terrain/weather. showLoading() raises it instantly; hideLoading() holds
+// it briefly (so the freshly-built arena paints underneath) then fades it out.
+let _loadingHideT = null;
+function showLoading() {
+  const ls = g('loadingScreen'); if (!ls) return;
+  if (_loadingHideT) { clearTimeout(_loadingHideT); _loadingHideT = null; }
+  ls.classList.remove('fading'); ls.classList.add('show');
+}
+function hideLoading() {
+  const ls = g('loadingScreen'); if (!ls) return;
+  if (_loadingHideT) clearTimeout(_loadingHideT);
+  _loadingHideT = setTimeout(() => {
+    ls.classList.add('fading');   // CSS transitions opacity → 0
+    _loadingHideT = setTimeout(() => { ls.classList.remove('show', 'fading'); _loadingHideT = null; }, 420);
+  }, 450);
+}
 // Mission intro CARD (§2): center-screen at sector/mission start — mission-type name + mechanical
 // description + the per-level lore blurb. FIRST time a type is seen (seenMissionType_<verb> in storage)
 // the card is interactive and persists until the player taps/clicks/keys to dismiss; REPEAT encounters

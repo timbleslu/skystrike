@@ -85,6 +85,15 @@ const wps = (...pts) => pts.map(p => ({ x: p[0], y: p[1], z: p[2], hit: !!p[3] }
   // then go quiet — it decays back down, clamped at 0
   for (let i = 0; i < 200; i++) det = Math.max(0, Math.min(1, det + detectionDelta({ firing: false, beingAimed: false, dt: 0.1, riseRate: 0.45, decayRate: 0.18 })));
   assert.strictEqual(det, 0, 'going quiet long enough decays the meter to a clamped 0');
+
+  // v1.3: proximity term — inside a detection ring the meter rises proportionally to closeness (0..1)
+  assert.strictEqual(detectionDelta({ proximity: 1, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'ring centre (prox 1) = full rise');
+  assert.strictEqual(detectionDelta({ proximity: 0.5, dt, riseRate: 0.5, decayRate: 0.2 }), 0.25, 'half-way into the ring rises at half rate');
+  assert.strictEqual(detectionDelta({ proximity: 0, dt, riseRate: 0.5, decayRate: 0.2 }), -0.2, 'outside any ring still decays');
+  // v1.3: blown cover forces full rise regardless of proximity/firing
+  assert.strictEqual(detectionDelta({ blown: true, proximity: 0, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'blown cover = full rise even when clear of rings');
+  // firing still dominates proximity (one rise, not stacked)
+  assert.strictEqual(detectionDelta({ firing: true, proximity: 0.5, dt, riseRate: 0.5, decayRate: 0.2 }), 0.5, 'firing is full rise, proximity does not stack on top');
 }
 
 /* ===== recon win predicate ===== */

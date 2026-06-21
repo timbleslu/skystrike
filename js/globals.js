@@ -428,6 +428,7 @@ let barrelRollCooldown   = 0;   // counts down from BARREL_ROLL_COOLDOWN; >0 = o
 let barrelRollAnim       = 0;   // counts down from BARREL_ROLL_DURATION; >0 = rolling
 let barrelRollRequest    = false; // set true by controls when double-tap detected; cleared by combat
 let barrelRollLastKeyTap = -999; // time (performance.now()/1000) of last keyboard Q or E press
+let stealthBlown = false;        // v1.3 STEALTH: cover blown (fired/killed) → patrols aggro + each kill spawns +2
 let barrelRollLastTouchTap = -999; // time of last joystick roll-direction flick release
 let barrelRollDir = 1;   // +1 right, -1 left; captured at roll initiation
 let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live device-orientation tilt
@@ -441,6 +442,12 @@ let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude
 //   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
 let controlScheme = 'auto';
 let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
+let devUnlockLevels = false; // dev toggle: unlock every Operations-map level (v1.3)
+let devUnlocked = false;     // dev panel password gate cleared (persisted once 'timbles' entered, v1.3)
+// v1.3 per-level star scoring: run accumulates across an op's levels (op-end SP stays cumulative), so we
+// snapshot the run counters + a level-start clock at each level launch and score stars on the DELTA.
+let campaignLevelRunBase = null;
+let campaignLevelT0 = 0;
 // steering core (STEER tunables + pure steerCommand) → core.js. combat.js reads STEER + calls steerCommand.
 
 // graphics quality (F11 mobile perf): 'auto' picks a render tier by a cheap device heuristic; 'low'/'high'

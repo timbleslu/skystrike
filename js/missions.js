@@ -168,7 +168,8 @@ function objectiveText(m) {
   if (m.type === 'recon')     return t('mission.recon') + ' ' + m.progress + '/' + m.target;
   if (m.type === 'stealth') {
     const det = Math.round(((m.params.detect || 0)) * 100);
-    const tag = det >= 60 ? t('mission.stealth.spotted') : t('mission.stealth.undetected');
+    const tag = (typeof stealthBlown !== 'undefined' && stealthBlown) ? t('mission.stealth.blown')
+              : det >= 60 ? t('mission.stealth.spotted') : t('mission.stealth.undetected');
     return t('mission.stealth') + ' — ' + tag + ' ' + det + '%';
   }
   return '';
@@ -299,10 +300,84 @@ function spawnReconWaypoints(m, wave) {
 
 // stealth: one extraction waypoint placed far out — the player must reach it undetected. Same plain
 // {x,y,z,hit} shape feeding the pure waypoint primitive (1-waypoint path = the extraction goal).
+// v1.3: also seeds the THREAT FIELD — static SAM/radar detection rings + non-pursuing patrol fighters,
+// all pushed clear of a central CORRIDOR so there is always a flyable gap to the extraction point. Each
+// threat carries `e.detectR` (its ring radius); proximity to any ring fills the detection meter
+// (updateMission), and the rings are drawn on the world + radar so the safe lane is readable.
 function spawnStealthExtraction(m, wave) {
   const p = player.group.position;
   const ang = rand(0, TWO_PI), r = rand(4200, 5200);
-  m.params.waypoints = [{ x: p.x + Math.cos(ang) * r, y: clamp(p.y + rand(-200, 400), 400, 2400), z: p.z + Math.sin(ang) * r, hit: false }];
+  const ex = p.x + Math.cos(ang) * r, ez = p.z + Math.sin(ang) * r;
+  m.params.waypoints = [{ x: ex, y: clamp(p.y + rand(-200, 400), 400, 2400), z: ez, hit: false }];
+  // route frame: forward (player→extraction) + its left normal, for a guaranteed central corridor
+  const dx = (ex - p.x) / r, dz = (ez - p.z) / r;
+  const nx = -dz, nz = dx;
+  const CORRIDOR = 950;   // half-width of the safe lane no ring may intrude on
+  const placeRing = (along, side, ringR, lateralPad, build) => {
+    const lateral = CORRIDOR + ringR + lateralPad;   // pushed fully outside the corridor
+    const cx = p.x + dx * r * along + nx * side * lateral;
+    const cz = p.z + dz * r * along + nz * side * lateral;
+    pendingSpawns.push(() => build(cx, cz, ringR));
+  };
+  // 2–3 static ground rings (first is a RADAR, rest SAM sites)
+  const nGround = 2 + (wave > 1 ? 1 : 0);
+  for (let i = 0; i < nGround; i++) {
+    const ringR = rand(720, 980);
+    placeRing((i + 1) / (nGround + 1), (i % 2 ? 1 : -1), ringR, rand(140, 380), (cx, cz, rr) => {
+      const e = spawnGroundAt(i === 0 ? 'radar' : 'sam', cx, cz);
+      e.stealthThreat = true; e.detectR = rr; e.aggressive = false;
+      if (e.marker) e.marker.material.color.setHex(0xffa23a);
+    });
+  }
+  // 2 patrol fighters orbiting posts off to the sides (moving rings, non-pursuing until cover is blown)
+  for (let i = 0; i < 2; i++) {
+    const ringR = rand(650, 850);
+    const side = (i % 2 ? 1 : -1);
+    placeRing((i + 0.5) / 2, side, ringR, rand(220, 500), (cx, cz, rr) => {
+      const alt = clamp(p.y + rand(-150, 250), 600, 2000);
+      const e = createEnemy('fighter', new THREE.Vector3(cx, alt, cz));
+      e.patrol = true; e.stealthThreat = true; e.detectR = rr; e.aggressive = false;
+      e.orbitSign = side; e.patrolAlt = alt; e.patrolSpeed = rand(260, 340);
+      if (e.marker) e.marker.material.color.setHex(0xffa23a);
+    });
+  }
+}
+
+// v1.3: proximity to the nearest live detection ring, 0 (clear) .. 1 (ring centre). Horizontal distance
+// only — altitude doesn't help you hide from radar.
+function stealthProximity() {
+  let prox = 0;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !e.stealthThreat || !e.detectR) continue;
+    const ddx = player.group.position.x - e.group.position.x;
+    const ddz = player.group.position.z - e.group.position.z;
+    const d = Math.hypot(ddx, ddz);
+    if (d < e.detectR) { const pf = (e.detectR - d) / e.detectR; if (pf > prox) prox = pf; }
+  }
+  return prox;
+}
+
+// v1.3: blow cover — flip every stealth threat to aggressive (patrols start pursuing), once.
+function blowStealthCover() {
+  if (stealthBlown) return;
+  stealthBlown = true;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.stealthThreat) continue;
+    e.patrol = false; e.aggressive = true;
+    if (e.marker) e.marker.material.color.setHex(0xff4444);   // hostile red now
+  }
+  showBanner(t('mission.stealth.blown'));
+  if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+}
+
+// v1.3: a player kill during a stealth op blows cover AND spawns two more attacking fighters — so going
+// loud spirals (kill → +2 → kill → +2…). Called from combat.js killEnemy.
+function onStealthKill(e) {
+  if (!mission || mission.type !== 'stealth') return;
+  blowStealthCover();
+  for (let k = 0; k < 2; k++) pendingSpawns.push(spawnFighter);
 }
 
 /* ---------------- per-frame update + resolution ----------------
@@ -340,13 +415,22 @@ function updateMission(dt) {
     if (r.hitCount > mission.progress && typeof audio !== 'undefined' && audio.ping) audio.ping();   // F1: one-shot chime the frame a waypoint checks off
     mission.progress = r.hitCount;
   } else if (mission.type === 'stealth') {
-    // detection: rises while firing weapons OR while any enemy is aiming at you, decays otherwise.
-    // player.firingT (combat.js) > 0 means a gun/missile left the rail in the last few frames.
+    // detection rises while: cover is blown, firing weapons, an enemy is aiming at you, OR you fly inside a
+    // SAM/radar/patrol detection ring (proximity). Decays otherwise. Firing a shot also BLOWS cover (v1.3).
+    const firing = (player.firingT || 0) > 0;
+    if (firing) blowStealthCover();
     let beingAimed = false;
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.aimingPlayer) { beingAimed = true; break; } }
-    const firing = (player.firingT || 0) > 0;
-    const d = detectionDelta({ firing: firing, beingAimed: beingAimed, dt: dt, riseRate: mission.params.riseRate, decayRate: mission.params.decayRate });
+    const prox = stealthProximity();
+    const d = detectionDelta({ blown: stealthBlown, firing: firing, beingAimed: beingAimed, proximity: prox, dt: dt, riseRate: mission.params.riseRate, decayRate: mission.params.decayRate });
     mission.params.detect = clamp((mission.params.detect || 0) + d, 0, 1);
+    mission.params._prox = prox;   // cached for the proximity warning glow (HUD)
+    // proximity audio cue: a warble that quickens the closer you are to a ring
+    mission.params._beepT = (mission.params._beepT || 0) - dt;
+    if (prox > 0.35 && mission.params._beepT <= 0) {
+      if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+      mission.params._beepT = 0.9 - prox * 0.6;   // 0.36s at the ring centre, ~0.7s at the edge
+    }
     // reach the extraction waypoint (pure hit-test); win/fail resolved by the pure stealth predicates
     const rs = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
     if (rs.hitCount > (mission._wpHit || 0) && typeof audio !== 'undefined' && audio.ping) audio.ping();   // F1: chime when extraction point reached

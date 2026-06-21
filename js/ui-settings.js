@@ -24,6 +24,8 @@ function loadSettings() {
     if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
     if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
     if (typeof s.devUnlockAll === 'boolean') devUnlockAll = s.devUnlockAll;
+    if (typeof s.devUnlockLevels === 'boolean') devUnlockLevels = s.devUnlockLevels;   // v1.3 dev: unlock all levels
+    if (typeof s.devUnlocked === 'boolean') devUnlocked = s.devUnlocked;               // v1.3: dev-panel password gate cleared
     if (typeof s.mouseFlight === 'boolean') mouseFlight = s.mouseFlight;   // F7: desktop mouse-pointer flight toggle
     if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
     if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
@@ -327,7 +329,7 @@ function applyUiScale() {
 function saveSettings() {
   try {
     store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, devUnlockAll, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
+      volume, muted, invertY, autoLock, startWingman, devUnlockAll, devUnlockLevels, devUnlocked, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
       lang: LANG, controlSensitivity, hudScale, uiScale, controlScheme,
       mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality, unitSystem
     }));

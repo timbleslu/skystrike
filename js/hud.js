@@ -155,6 +155,56 @@ function drawWeatherChip(ctx) {
   ctx.restore();
 }
 
+// v1.3 STEALTH telegraphing — world-space detection rings drawn on the ground (projected polygon) so the
+// player can literally see the no-go circles + the safe lane between them. Patrols also show a facing
+// wedge so you can tell which way to slip behind them. Amber while sneaking, red once cover is blown.
+function drawStealthThreats(ctx) {
+  if (typeof enemies === 'undefined' || !enemies.length) return;
+  const blown = (typeof stealthBlown !== 'undefined' && stealthBlown);
+  const col = blown ? '255,70,70' : '255,162,58';
+  ctx.save(); ctx.lineWidth = 2;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive || !e.stealthThreat || !e.detectR) continue;
+    const cxp = e.group.position.x, czp = e.group.position.z, gy = terrainH(cxp, czp) + 8;
+    // detection ring as a projected ground polygon
+    ctx.setLineDash([10, 8]); ctx.beginPath(); let started = false, anyFront = false;
+    for (let s = 0; s <= 36; s++) {
+      const a = s / 36 * TWO_PI;
+      const sp = projectPoint(t2.set(cxp + Math.cos(a) * e.detectR, gy, czp + Math.sin(a) * e.detectR));
+      if (sp.behind) { started = false; continue; }
+      anyFront = true;
+      if (!started) { ctx.moveTo(sp.x, sp.y); started = true; } else ctx.lineTo(sp.x, sp.y);
+    }
+    if (anyFront) { ctx.strokeStyle = 'rgba(' + col + ',0.5)'; ctx.stroke(); }
+    ctx.setLineDash([]);
+    // patrol facing wedge (which way it is looking → pass behind it)
+    if (e.patrol && !blown && e.logicQuat) {
+      const fwd = fwdQ(e.logicQuat, t3), fa = Math.atan2(fwd.x, fwd.z), cone = 0.5, len = e.detectR;
+      const c = projectPoint(t2.set(cxp, gy, czp));
+      const pl = projectPoint(t2.set(cxp + Math.sin(fa - cone) * len, gy, czp + Math.cos(fa - cone) * len));
+      const pr = projectPoint(t2.set(cxp + Math.sin(fa + cone) * len, gy, czp + Math.cos(fa + cone) * len));
+      if (!c.behind && !pl.behind && !pr.behind) {
+        ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(pl.x, pl.y); ctx.lineTo(pr.x, pr.y); ctx.closePath();
+        ctx.fillStyle = 'rgba(' + col + ',0.10)'; ctx.fill();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+// v1.3: red proximity vignette that intensifies as you near a ring (or pulses hard once cover is blown) —
+// the "you're getting too close" cue before the meter alarms.
+function drawStealthWarning(ctx, prox) {
+  const blown = (typeof stealthBlown !== 'undefined' && stealthBlown);
+  const intensity = blown ? 0.6 : prox;
+  if (intensity <= 0.02) return;
+  const pulse = 0.6 + 0.4 * Math.sin(performance.now() * 0.012);
+  const a = clamp(intensity, 0, 1) * 0.45 * pulse;
+  const grad = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.max(W, H) * 0.62);
+  grad.addColorStop(0, 'rgba(255,40,40,0)'); grad.addColorStop(1, 'rgba(255,40,40,' + a.toFixed(3) + ')');
+  ctx.save(); ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H); ctx.restore();
+}
+
 function drawHUD() {
   const ctx = h2d, cx = W / 2, cy = H / 2, k = hudK();
   const reduce = (typeof prefersReducedMotion === 'function') && prefersReducedMotion();   // gates the non-essential canvas juice (kill flash, hit ring, lock-snap overshoot, HP pulse)
@@ -194,7 +244,7 @@ function drawHUD() {
     ctx.textBaseline = 'middle';
     // recon/stealth: point the objective marker at the next waypoint + (stealth) draw the detection bar
     if (mission.type === 'recon' || mission.type === 'stealth') drawMissionWaypoint(ctx, cx, cy, k, reduce);
-    if (mission.type === 'stealth') drawDetectionBar(ctx, cx, k);
+    if (mission.type === 'stealth') { drawStealthThreats(ctx); drawDetectionBar(ctx, cx, k); drawStealthWarning(ctx, mission.params._prox || 0); }
   }
   drawObjectiveCallout(ctx, cx, cy, k);   // Req D: 3s big centre flash on objective issue / phase change
 
@@ -729,6 +779,18 @@ function drawRadar() {
     if (sq) ctx.fillRect(X - sz, Y - sz, sz * 2, sz * 2);
     else { ctx.beginPath(); ctx.arc(X, Y, sz, 0, TWO_PI); ctx.fill(); }
     if (ring) { ctx.strokeStyle = 'rgba(' + HUD.reward + ',0.95)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(X, Y, sz + 3, 0, TWO_PI); ctx.stroke(); }
+  }
+  // v1.3 stealth: detection rings on the scope so the safe lane is readable at a glance (under the blips)
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i]; if (!e.alive || !e.stealthThreat || !e.detectR) continue;
+    const dx = e.group.position.x - player.group.position.x, dz = e.group.position.z - player.group.position.z;
+    const ahead = dx * Fx + dz * Fz, right = dx * Rx + dz * Rz;
+    const X = cx + right / range * R, Y = cy - ahead / range * R, rr = e.detectR / range * R;
+    const blown = (typeof stealthBlown !== 'undefined' && stealthBlown);
+    ctx.fillStyle = blown ? 'rgba(255,70,70,0.10)' : 'rgba(255,162,58,0.10)';
+    ctx.beginPath(); ctx.arc(X, Y, rr, 0, TWO_PI); ctx.fill();
+    ctx.strokeStyle = blown ? 'rgba(255,70,70,0.55)' : 'rgba(255,162,58,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(X, Y, rr, 0, TWO_PI); ctx.stroke();
   }
   // radar contacts mirror the marker roles: boss magenta, rival --rival, elite --reward, drone/fighter --danger
   for (let i = 0; i < enemies.length; i++) {

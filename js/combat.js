@@ -600,6 +600,7 @@ function tpBaseFor(e) {
 function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
+  if (byPlayer && typeof onStealthKill === 'function' && mission && mission.type === 'stealth') onStealthKill(e);   // v1.3: a kill blows cover → aggro + reinforcements
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
   if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); if (typeof killFlash !== 'undefined') killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;

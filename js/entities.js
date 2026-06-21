@@ -1305,10 +1305,28 @@ function tickEnemyStatus(e, dt) {
     }
   }
 }
+const _patrolQ = new THREE.Quaternion();
+// v1.3 STEALTH patrol: a non-pursuing sentry fighter. It flies a lazy constant-rate orbit around its post
+// and NEVER engages or aims (its detection is purely the proximity ring computed in missions.js). The
+// instant cover is blown (stealthBlown) the caller clears e.patrol, so it reverts to the aggressive AI below.
+function updateStealthPatrol(e, dt) {
+  e.aimingPlayer = false;
+  if (!e.logicQuat) e.logicQuat = e.group.quaternion.clone();
+  _patrolQ.setFromAxisAngle(UPV, (e.orbitSign || 1) * 0.16 * dt);
+  e.group.quaternion.premultiply(_patrolQ);
+  e.logicQuat.premultiply(_patrolQ);
+  const fwd = fwdQ(e.logicQuat, t3);
+  e.group.position.addScaledVector(fwd, (e.patrolSpeed || 300) * dt);
+  const ay = (e.patrolAlt || 1100) - e.group.position.y;
+  e.group.position.y += clamp(ay, -120, 120) * dt;
+  animEngines(e.group, 0.55);
+  updateMarker(e);
+}
 function updateEnemy(e, dt) {
   if (e.type === 'ground') { updateGround(e, dt); return; }
   if (e.type === 'drone') { updateDrone(e, dt); return; }
   if (e.type === 'bomber') { updateBomber(e, dt); return; }
+  if (e.patrol && typeof stealthBlown !== 'undefined' && !stealthBlown) { updateStealthPatrol(e, dt); return; }
   const toP = t1.copy(player.group.position).sub(e.group.position);
   const dist = toP.length();
   toP.multiplyScalar(1 / Math.max(dist, 0.001));

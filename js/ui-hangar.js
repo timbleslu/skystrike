@@ -56,6 +56,17 @@ function buildHangar() {
   const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; if (audio.on) audio.ui(); saveSettings(); renderJetCard(); }); }
+  const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { devUnlockLevels = sdl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  // v1.3 dev-panel password gate: 'timbles' unlocks the panel PERMANENTLY (devUnlocked persisted in settings).
+  syncDevPanel();
+  const dpb = g('devUnlockBtn'), dpf = g('devPass'), dpd = g('devDeny');
+  const tryDevUnlock = () => {
+    if (!dpf) return;
+    if (dpf.value === 'timbles') { devUnlocked = true; saveSettings(); if (dpd) dpd.hidden = true; dpf.value = ''; syncDevPanel(); if (audio.on) audio.ui(); }
+    else { if (dpd) dpd.hidden = false; if (audio.on) audio.warn(); const dl = g('devLock'); if (dl) { dl.classList.remove('deny-shake'); void dl.offsetWidth; dl.classList.add('deny-shake'); } }
+  };
+  if (dpb) dpb.addEventListener('click', tryDevUnlock);
+  if (dpf) dpf.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tryDevUnlock(); } });
   const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
   const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
@@ -132,6 +143,12 @@ function buildHangar() {
   const js = g('jetStage'); if (js) { js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
     js.addEventListener('mouseover', onJetMetaHover); js.addEventListener('focusin', onJetMetaHover); }   // F3: surface livery name on hover/focus (delegated)
   renderPilotPanel();
+}
+/* v1.3 dev-panel password gate: show the lock prompt until 'timbles' has ever been entered, then the panel. */
+function syncDevPanel() {
+  const lock = g('devLock'), panel = g('devPanel');
+  if (lock) lock.hidden = !!devUnlocked;
+  if (panel) panel.hidden = !devUnlocked;
 }
 /* ---------------- pilot callsign + emblem (F13) ---------------- */
 const EMBLEM_GLYPHS = { wings: '✈', skull: '☠', star: '★', dragon: 'ᚴ', ace: '◈' };

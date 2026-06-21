@@ -7,6 +7,7 @@ const assert = require('assert');
 const {
   evalStars, evalStarsFor, starCondMet, STAR_DEFAULT_CONDS,
   bestStars, freshMeta, validMeta, loadMeta, saveMeta, META_KEY, META_VERSION,
+  starsForType, levelConds, snapshotRunCounters, levelRunDelta,
 } = require('../js/meta.js');
 
 // loadMeta()/saveMeta() mutate meta.js's internal `meta`, which is not exported.
@@ -128,5 +129,63 @@ const healed = loadedMeta();
 assert.strictEqual(healed.sp, 5, 'legacy save loads as-is — SP/progression preserved, NOT reset to a fresh meta');
 assert.ok(healed.stars && typeof healed.stars === 'object', 'loaded meta has a healed stars map');
 console.log('ok - validMeta stays lenient; a stars-less legacy save loads with progression intact and heals stars');
+
+// ============================================================================
+//  v1.3: unique per-mission conditions (gunOnly / noFlares / fastClear / killsN)
+// ============================================================================
+// gunOnly: at least one kill AND no missiles fired
+assert.strictEqual(starCondMet({ type: 'gunOnly' }, { kills: 5, pMissiles: 0 }), true, 'gunOnly met: kills, no missiles fired');
+assert.strictEqual(starCondMet({ type: 'gunOnly' }, { kills: 5, pMissiles: 2 }), false, 'gunOnly failed: a missile was fired');
+assert.strictEqual(starCondMet({ type: 'gunOnly' }, { kills: 0, pMissiles: 0 }), false, 'gunOnly needs at least one kill');
+// noFlares: engaged (kills or objective) AND no flares burned
+assert.strictEqual(starCondMet({ type: 'noFlares' }, { kills: 3, pFlares: 0 }), true, 'noFlares met: kills, no flares');
+assert.strictEqual(starCondMet({ type: 'noFlares' }, { missions: 1, pFlares: 0 }), true, 'noFlares met via objective');
+assert.strictEqual(starCondMet({ type: 'noFlares' }, { kills: 3, pFlares: 1 }), false, 'noFlares failed: a flare was burned');
+assert.strictEqual(starCondMet({ type: 'noFlares' }, { kills: 0, missions: 0, pFlares: 0 }), false, 'noFlares needs engagement');
+// fastClear: within n seconds
+assert.strictEqual(starCondMet({ type: 'fastClear', n: 120 }, { timeSecs: 90 }), true, 'fastClear met under the time bar');
+assert.strictEqual(starCondMet({ type: 'fastClear', n: 120 }, { timeSecs: 150 }), false, 'fastClear missed over the time bar');
+assert.strictEqual(starCondMet({ type: 'fastClear', n: 120 }, { timeSecs: 0 }), false, 'fastClear unmet with no time recorded');
+// killsN: absolute kill count (kills+ground+boss)
+assert.strictEqual(starCondMet({ type: 'killsN', n: 8 }, { kills: 5, ground: 2, boss: 1 }), true, 'killsN folds ground+boss into the count');
+assert.strictEqual(starCondMet({ type: 'killsN', n: 8 }, { kills: 5, ground: 2 }), false, 'killsN unmet below n');
+console.log('ok - v1.3 unique conds: gunOnly/noFlares/fastClear/killsN over existing run stats');
+
+// ============================================================================
+//  starsForType + levelConds: 2 type-defaults + 1 unique
+// ============================================================================
+assert.deepStrictEqual(starsForType('FURBALL'), [{ type: 'kills' }, { type: 'noDamage' }], 'FURBALL → kills+noDamage');
+assert.deepStrictEqual(starsForType('STEALTH'), [{ type: 'objective' }, { type: 'noDamage' }], 'STEALTH → objective+noDamage');
+assert.strictEqual(starsForType('UNKNOWN').length, 2, 'unknown type → 2 fallback conds');
+// levelConds composes type defaults + the level's unique 3rd condition
+const lvlA = { type: 'FURBALL', starUnique: { type: 'gunOnly' } };
+assert.deepStrictEqual(levelConds(lvlA), [{ type: 'kills' }, { type: 'noDamage' }, { type: 'gunOnly' }], 'levelConds = 2 type + 1 unique');
+// explicit stars override still wins
+const lvlB = { type: 'FURBALL', stars: [{ type: 'clean' }], starUnique: { type: 'gunOnly' } };
+assert.deepStrictEqual(levelConds(lvlB), [{ type: 'clean' }], 'explicit lvl.stars overrides the composed set');
+// no unique → just the 2 type defaults
+assert.strictEqual(levelConds({ type: 'SWEEP' }).length, 2, 'no starUnique → 2 conds');
+// a full 3-star evaluation through levelConds
+const lvlStealth = { type: 'STEALTH', starUnique: { type: 'fastClear', n: 200 } };
+assert.strictEqual(
+  evalStarsFor({ missions: 1, damageTaken: 0, timeSecs: 120 }, { score: 0 }, levelConds(lvlStealth)), 3,
+  'flawless fast stealth run earns all 3 composed stars');
+console.log('ok - starsForType/levelConds: 2 type-defaults + 1 unique, override honored');
+
+// ============================================================================
+//  levelRunDelta: per-level counters from a cumulative run
+// ============================================================================
+const base = snapshotRunCounters({ kills: 10, damageTaken: 5, pMissiles: 2, shots: 100, hits: 40 });
+const dlt = levelRunDelta({ kills: 14, damageTaken: 5, pMissiles: 2, shots: 130, hits: 55 }, base);
+assert.strictEqual(dlt.kills, 4, 'delta kills = this level only');
+assert.strictEqual(dlt.damageTaken, 0, 'no new damage this level → 0');
+assert.strictEqual(dlt.pMissiles, 0, 'no new missiles fired this level → 0 (gunOnly stays earnable)');
+assert.strictEqual(dlt.shots, 30, 'shots delta');
+assert.strictEqual(dlt.hits, 15, 'hits delta');
+// gunOnly is earnable on the delta even if earlier levels fired missiles
+assert.strictEqual(starCondMet({ type: 'gunOnly' }, dlt), true, 'gunOnly met on a clean-this-level delta despite cumulative missiles');
+// never goes negative if a counter somehow regressed
+assert.strictEqual(levelRunDelta({ kills: 1 }, { kills: 5 }).kills, 0, 'delta floors at 0');
+console.log('ok - levelRunDelta: per-level deltas floor at 0, keep stars per-mission');
 
 console.log('ok - meta.js star mirrors (evalStars/bestStars/validMeta/freshMeta) match source');

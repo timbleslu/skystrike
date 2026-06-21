@@ -247,6 +247,47 @@ function clearCampaignArena() {
   mission = null; setpieceActive = null;
 }
 
+/* v1.3 — make every flight a CLEAN START. The op player object persists across levels (so RP/tech/economy
+   carry over — see ADR-0004), but each launch must reset the SORTIE state so abilities are ready and the
+   jet starts at the runway, not wherever the last mission ended. PURE-ish: mutates player + the ability
+   timer globals only. */
+function freshSortie(p) {
+  if (!p || !p.group) return;
+  // flight reset — runway spawn, wings level, cruise throttle (mirrors createPlayer's spawn init)
+  p.group.position.set(0, terrainH(0, 3200) + 950, 3200);
+  p.group.quaternion.identity();
+  if (p.vel) p.vel.set(0, 0, -1);
+  p.speed = p.stats.minSpeed * 1.5; p.throttle = 0.6;
+  p.pitchRate = 0; p.yawRate = 0; p.rollRate = 0;
+  // ability timers → READY (the core ask: specials available at the start of every level)
+  if (p.special) p.special.cd = 0;
+  if (p.special2) p.special2.cd = 0;
+  p.gunCd = 0; p.missileCd = 0; p.flareCd = 0; p.firingT = 0;
+  // clear any lingering buff/debuff timers from the previous flight
+  p.invuln = 0; p.jammer = 0; p.slow = 0; p.overdrive = 0; p.empBurst = 0; p.stealthField = 0;
+  p.lockedTarget = null; p.lockTarget = null; p.lockProgress = 0; p.combo = 0; p.comboTimer = 0;
+  // consumables → full
+  p.hp = p.maxHp; if (p.maxShield) p.shield = p.maxShield;
+  p.missiles = p.maxMissiles; p.flares = p.maxFlares; p.bullets = p.maxBullets;
+  // barrel-roll + AWACS timers fresh each sortie
+  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
+  awacsUses = { strike: 0, resupply: 0, jam: 0 };
+  awacsLast = { strike: 0, resupply: 0, jam: 0 };
+  if (typeof stealthBlown !== 'undefined') stealthBlown = false;
+}
+
+/* v1.3 — full arena reset for a level, applied BEFORE the first rendered frame (under the loading curtain)
+   so no stale terrain/weather from the previous mission leaks through. */
+function resetArenaForLevel(lvl) {
+  clearCampaignArena();   // idempotent: tears down enemies/projectiles/particles/mission (keeps the player)
+  const sp = (lvl && lvl.spawn) || {};
+  // authored condition for THIS level, applied now (nextWave re-applies the same values idempotently)
+  if (typeof applyTimeOfDay === 'function') applyTimeOfDay(sp.tod || 0);
+  if (typeof applyWeather === 'function') applyWeather(sp.weather || 'clear');
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // rebuild scatter for the new conditions
+  freshSortie(player);
+}
+
 // hangar "Operations" launch entry → the operations-select screen (player NOT built yet)
 function openOperationsSelect() {
   campaignMode = false; campaignOpId = null; opSector = null; paused = true;
@@ -415,6 +456,7 @@ function launchLevel(opId, idx) {
   g('briefing') && g('briefing').classList.remove('show');
   g('opsSelect') && g('opsSelect').classList.remove('show');
   g('levelMap') && g('levelMap').classList.remove('show');
+  if (typeof showLoading === 'function') showLoading();   // v1.3: opaque curtain hides the arena swap → no stale-mission frame
   if (campaignPlayerOpId !== opId || !player) enterOperationRun(opId);   // fresh op run, or switching ops
   campaignOpId = opId; campaignLevelIdx = idx;
   campaignWavesLeft = lvl.waves || campaignWaveCount(idx);
@@ -423,14 +465,18 @@ function launchLevel(opId, idx) {
   player.missiles = player.maxMissiles; player.flares = player.maxFlares;
   if (player.group) player.group.visible = true;
   campaignSnapshot = captureSnapshot(player);   // pre-level economy checkpoint (tp/score)
+  campaignLevelRunBase = snapshotRunCounters(run);   // v1.3: per-level star scoring baseline (run is cumulative across the op)
+  campaignLevelT0 = performance.now();               // v1.3: level-start clock for the fastClear star
   wave = 0; betweenWaves = true; waveTimer = 1.4; strikeWaveActive = false;
   mission = null; setpieceActive = null; campaignBossPhases = null; noDamageWave = false;
   campaignMode = true; opSector = lvl.type;   // opSector reused as the level's mission/sector type
+  resetArenaForLevel(lvl);   // v1.3: reposition jet to runway + apply this level's weather/TOD + ready all abilities, BEFORE first render
   state = 'playing'; paused = false;
   if (clock) clock.getDelta();
   if (isTouchEnabled) g('touchControls').classList.add('show');
   if (startWingman) spawnWingman(false, 'STD');
   showBanner(t('banner.launching'));
+  if (typeof hideLoading === 'function') hideLoading();   // fade the curtain out once the new arena is built + state is live
 }
 
 // WIN: commit rewards, persist the clear, return to the map (boss level → operation complete)
@@ -441,7 +487,12 @@ function campaignLevelComplete() {
   const firstClear = campaignLevelState(opId, idx) !== 'cleared';
   const rw = grantLevelRewards(idx, !!lvl.isBoss, !firstClear, CAMPAIGN_REPLAY_REWARDS);
   if (player) { player.tp = (player.tp || 0) + rw.rp; player.score += rw.score; }
-  const stars = evalStars(run, player);
+  // v1.3: stars are PER-LEVEL — score the delta of run counters since this level launched, against the
+  // level's composed conditions (2 type-defaults + 1 hand-authored unique). Falls back cleanly if no base.
+  const lr = levelRunDelta(run, campaignLevelRunBase);
+  lr.waveReached = lvl.waves || campaignWaveCount(idx);
+  lr.timeSecs = campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
+  const stars = evalStarsFor(lr, player, levelConds(lvl));
   campaignClearLevel(opId, idx, lvl.id, (player && player.score) || 0, stars);   // persists + advances furthest unlocked
   if (lvl.isBoss) { operationComplete(); return; }   // op boss → victory/debrief + unlock next operation
   clearCampaignArena();
