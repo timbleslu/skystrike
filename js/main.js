@@ -33,7 +33,7 @@ function nextWave() {
     // multi-phase objective levels (plan.objectives) own ALL their spawns per phase (startMissionPhase
     // in missions.js); skip the level's base air/ground budget so phase 1 (a nav leg) starts clean.
     if (!plan.objectives) {
-      for (let i = 0; i < plan.fighters; i++) pendingSpawns.push(spawnFighter);
+      queueFighterWave(plan.fighters);   // F2: a >=3 fighter budget flies in as a formation
       for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
       for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
     }
@@ -52,7 +52,7 @@ function nextWave() {
     strikeWaveActive = true; bossWaveActive = lastWaveWasBoss = false;
     showBanner(t('banner.strikeWave'));
     queueStrikeSite(wave);
-    for (let i = 0; i < 3; i++) pendingSpawns.push(spawnFighter);
+    queueFighterWave(3);   // F2: strike-wave escort flies in as a formation
     return;
   }
   // Windowed boss schedule (balance pass 2026-06) — replaces the old `wave % 4` metronome. Seed the
@@ -66,7 +66,7 @@ function nextWave() {
   const wildcard = isWildcardWave(wave, bossWaveActive, Math.random());
   let count = waveCount(wave, DIFFS[difficulty].count, WAVE_COUNT_CAP);
   if (wildcard) count = Math.min(WAVE_COUNT_CAP, count + randInt(2, 4));
-  for (let i = 0; i < count; i++) pendingSpawns.push(spawnFighter);   // fighters first \u2192 first drained = combat enemy
+  queueFighterWave(count);   // F2: a >=3 endless wave flies in as a formation // fighters first \u2192 first drained = combat enemy
   if (bossWaveActive) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
   else if (wildcard) { showBanner(t('banner.wildcardWave')); }
   else showBanner(_wCond ? tf('banner.wave', { n: wave }) + '  ·  ' + _wCond : tf('banner.wave', { n: wave }));
@@ -152,6 +152,40 @@ function spawnRival() {
 }
 function spawnFighter() {
   createEnemy('fighter', airSpawnPos(2600, 4600, -400, 650, 400, 4200));
+}
+// === F2 enemy-formations: spawn a coherent >=3 fighter formation (leader + slot-holding followers) ===
+// The leader spawns at a normal air point and flies NORMAL AI (no e.formation); each follower spawns AT its
+// leader-relative slot world position and holds it (applyFormationSteer, entities.js) until the player closes
+// to engage range or the leader dies, then reverts to normal AI. forceType pins the roll (verify harness).
+function spawnFighterFormation(n, forceType) {
+  const types = Object.keys(FORMATIONS);
+  const type = (forceType && FORMATIONS[forceType]) ? forceType : types[randInt(0, types.length - 1)];
+  const cfg = FORMATIONS[type];
+  const slots = formationSlots(type, n, cfg.spacing);
+  const leaderPos = airSpawnPos(2600, 4600, -400, 650, 400, 4200);
+  // leader heading bores in toward the player so the whole formation flies in together (locals: createEnemy is
+  // called between placements and may touch the global t-scratch, so we must NOT keep heading/right in scratch)
+  const heading = new THREE.Vector3().copy(player.group.position).sub(leaderPos); heading.y *= 0.3;
+  if (heading.lengthSq() < 1e-6) heading.set(0, 0, -1); else heading.normalize();
+  const right = new THREE.Vector3().copy(heading).cross(UPV);
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0); else right.normalize();
+  const leader = createEnemy('fighter', leaderPos);
+  dirToQuat(heading, leader.logicQuat); leader.group.quaternion.copy(leader.logicQuat);
+  for (let i = 1; i < slots.length; i++) {
+    const off = slots[i];   // world slot = leaderPos + right*off.x - heading*off.z (off.z = behind the leader)
+    const fx = leaderPos.x + right.x * off.x - heading.x * off.z;
+    const fz = leaderPos.z + right.z * off.x - heading.z * off.z;
+    const fy = clamp(leaderPos.y + right.y * off.x - heading.y * off.z, terrainH(fx, fz) + 400, 4200);
+    const fol = createEnemy('fighter', new THREE.Vector3(fx, fy, fz));
+    dirToQuat(heading, fol.logicQuat); fol.group.quaternion.copy(fol.logicQuat);
+    fol.formation = { type: type, leaderRef: leader, slot: i, offset: off };
+  }
+  return leader;
+}
+// queue a fighter wave: >=3 flies in as ONE spawned formation, otherwise individual mooks (legacy behaviour)
+function queueFighterWave(n) {
+  if (n >= 3) { pendingSpawns.push(() => spawnFighterFormation(n)); return; }
+  for (let i = 0; i < n; i++) pendingSpawns.push(spawnFighter);
 }
 function spawnBomber() {
   const pos = airSpawnPos(5500, 5500, -150, 500, 700, 4200);

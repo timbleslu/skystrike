@@ -1258,3 +1258,56 @@ function heatStep(state, firing, dt) {
 
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { HEAT, heatStep });
 /* === end F1 gun-overheat === */
+// === F2 enemy-formations ===
+// Pure geometry + break logic for non-boss fighter formations. A wave of >=3 fighters spawns with a
+// leader (slot 0, normal AI) and followers that hold a leader-relative slot until the player closes to
+// engage range OR the leader dies (formationBreak), then revert to normal AI permanently. Slots are
+// LOCAL offsets in a leader frame where +x = leader's right and +z = BEHIND the leader; entities.js
+// rotates them into world space by the leader's heading. No THREE/store/DOM here — require-safe.
+const FORMATION_ENGAGE_RANGE = 1200;   // followers break (revert to normal AI) once the player is this close
+const FORMATIONS = {
+  // spacing = base unit between slots (world units); engageRange = break distance to the player.
+  vee:     { spacing: 190, engageRange: FORMATION_ENGAGE_RANGE },   // symmetric arms trailing the leader
+  wall:    { spacing: 210, engageRange: FORMATION_ENGAGE_RANGE },   // abreast line, wingtip-to-wingtip
+  echelon: { spacing: 200, engageRange: FORMATION_ENGAGE_RANGE },   // monotonic stepped diagonal
+  pincer:  { spacing: 220, engageRange: FORMATION_ENGAGE_RANGE },   // two flanking groups bracketing the axis
+};
+// formationSlots(type, n, spacing) -> array of n LOCAL {x, z} offsets; slot 0 = leader at the origin.
+function formationSlots(type, n, spacing) {
+  const s = spacing || (FORMATIONS[type] && FORMATIONS[type].spacing) || 200;
+  const slots = [{ x: 0, z: 0 }];               // slot 0 = leader
+  const fc = Math.max(0, (n | 0) - 1);          // follower count
+  if (type === 'wall') {
+    // abreast line: every follower shares the leader's forward position (z = 0), spread alternately L/R.
+    for (let i = 1; i <= fc; i++) {
+      const rank = Math.ceil(i / 2), side = (i % 2 === 1) ? 1 : -1;
+      slots.push({ x: side * rank * s, z: 0 });
+    }
+  } else if (type === 'echelon') {
+    // stepped diagonal: each follower is one rank further back AND further to one side (strictly monotonic).
+    for (let i = 1; i <= fc; i++) slots.push({ x: i * s, z: i * s });
+  } else if (type === 'pincer') {
+    // two flanking groups on opposite flanks with a clear central gap (min |x| = 2s, no follower near the axis).
+    for (let i = 1; i <= fc; i++) {
+      const rank = Math.ceil(i / 2), side = (i % 2 === 1) ? 1 : -1;
+      slots.push({ x: side * s * (rank + 1), z: rank * s * 0.5 });
+    }
+  } else {
+    // vee (default): symmetric ± pairs trailing behind the leader; an odd leftover trails on the centreline.
+    const pairs = Math.floor(fc / 2);
+    for (let r = 1; r <= pairs; r++) {
+      slots.push({ x:  r * s, z: r * s });
+      slots.push({ x: -r * s, z: r * s });
+    }
+    if (fc % 2 === 1) slots.push({ x: 0, z: (pairs + 1) * s });
+  }
+  return slots;
+}
+// formationBreak(distToPlayer, leaderAlive, cfg) -> true once the follower should quit the formation.
+function formationBreak(distToPlayer, leaderAlive, cfg) {
+  if (!leaderAlive) return true;                                     // leader dead -> scatter
+  const range = (cfg && cfg.engageRange) || FORMATION_ENGAGE_RANGE;
+  return distToPlayer <= range;                                      // player in engage range -> break to fight
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { FORMATIONS, formationSlots, formationBreak });
+// === end F2 ===

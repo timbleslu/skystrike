@@ -1381,6 +1381,10 @@ function updateEnemy(e, dt) {
   if (e.type === 'drone') { updateDrone(e, dt); return; }
   if (e.type === 'bomber') { updateBomber(e, dt); return; }
   if (e.patrol && typeof stealthBlown !== 'undefined' && !stealthBlown) { updateStealthPatrol(e, dt); return; }
+  // === F2 enemy-formations hook: a formation FOLLOWER holds its leader-relative slot. applyFormationSteer
+  // runs the marker/ring/hit-flash housekeeping itself, so this early return skips ONLY the normal-AI
+  // steering + fire below (leaders and broken followers return false and fall through unchanged). ===
+  if (applyFormationSteer(e, dt)) return;
   const toP = t1.copy(player.group.position).sub(e.group.position);
   const dist = toP.length();
   toP.multiplyScalar(1 / Math.max(dist, 0.001));
@@ -1786,3 +1790,50 @@ function applyEvade(e, dt) {
   }
 }
 // === end F4 ===
+// === F2 enemy-formations: follower slot-steering (hooked ONCE at the top of updateEnemy) =============
+// A formation FOLLOWER (e.formation set by the spawn path) holds a leader-relative slot until the player
+// closes to engage range or the leader dies (pure formationBreak, core.js) — then it drops e.formation and
+// falls through to normal AI forever. The LEADER carries no e.formation, so it flies normal AI untouched.
+// Returns true only while actively holding: the caller early-returns, so the normal-AI steering + fire are
+// skipped, but the marker/ring/hit-flash housekeeping updateEnemy runs after movement is done HERE instead.
+function applyFormationSteer(e, dt) {
+  const f = e.formation;
+  if (!f) return false;                                     // leader / non-formation enemy -> normal AI
+  const leader = f.leaderRef;
+  const leaderAlive = !!(leader && leader.alive && leader.group);
+  const distToPlayer = e.group.position.distanceTo(player.group.position);
+  if (formationBreak(distToPlayer, leaderAlive, FORMATIONS[f.type])) {
+    e.formation = null;                                     // BREAK: revert to normal AI permanently
+    return false;
+  }
+  // world slot = leaderPos + right*offset.x - forward*offset.z  (offset.z is "behind" the leader)
+  const lf = fwdQ(leader.logicQuat, t3);                    // t3 = leader forward (world)
+  const right = t5.copy(lf).cross(UPV);                     // t5 = leader right
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0); else right.normalize();
+  const off = f.offset;
+  const slot = t4.copy(leader.group.position).addScaledVector(right, off.x).addScaledVector(lf, -off.z);
+  // steer toward the slot with the file's idioms: dirToQuat -> rotateTowards -> forward*speed
+  const toSlot = t1.copy(slot).sub(e.group.position);       // t1 = to-slot vector
+  const gap = toSlot.length();
+  const desired = toSlot.multiplyScalar(1 / Math.max(gap, 0.001));
+  dirToQuat(desired, q1);
+  e.logicQuat.rotateTowards(q1, e.turnRate * 1.5 * dt);     // followers are a touch more agile to hold station
+  const nf = fwdQ(e.logicQuat, t2);                         // t2 = new forward
+  e.bank = damp(e.bank, 0, 4, dt);                          // wings-level formation cruise
+  q2.setFromAxisAngle(ZAX, e.bank);
+  e.group.quaternion.copy(e.logicQuat).multiply(q2);
+  const cruise = leader.speed || 200;
+  const tgt = clamp(cruise + gap * 0.9 - 30, 140, 420);     // close the gap, settle near leader speed on station
+  e.speed = lerp(e.speed, tgt, dt * 3);
+  e.vel.copy(nf).multiplyScalar(e.speed);
+  e.group.position.addScaledVector(e.vel, dt);
+  e.isInCloud = inCloud(e.group.position);
+  // ---- housekeeping updateEnemy normally runs AFTER movement (markers/ring/hit-flash) must still tick ----
+  if (e.group.userData.ring) e.group.userData.ring.rotation.z += dt * 2;
+  if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.14 : 0))); }
+  animEngines(e.group, 0.7);
+  updateMarker(e);
+  e.aimingPlayer = false;                                   // a follower holding station is not a gun threat
+  return true;
+}
+// === end F2 ===
