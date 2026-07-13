@@ -1221,6 +1221,7 @@ function createEnemy(type, pos, opts) {
   else if (type === 'ground') { e.bulletAmmo = 0; e.missileAmmo = (!opts || !opts.gkind || opts.gkind === 'sam') ? 4 : 0; e.flareAmmo = 0; }
   else if (type === 'drone')  { e.bulletAmmo = 0;   e.missileAmmo = 0;  e.flareAmmo = 0;  }
   else                        { e.bulletAmmo = 42;  e.missileAmmo = 1;  e.flareAmmo = 0;  }
+  e.flares = type === 'boss' ? 0 : type === 'fighter' ? (opts.useGLTF ? randInt(2, 3) : 1) : 0;   // === F4 defensive-ai: finite evade flares (ace 2-3 / mook 1 / boss 0 — bosses break-turn only) ===
   if (e.marker) scene.add(e.marker);
   enemies.push(e); return e;
 }
@@ -1407,6 +1408,7 @@ function updateEnemy(e, dt) {
     else if (e.marker && !e.marker.visible) e.marker.visible = true;
   }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
+  applyEvade(e, dt);   // === F4 defensive-ai: cooldown-gated break-turn / finite-flare evasion (see tail fn) ===
   // ----- archetype scratch (2026-06): all behavior below is gated on e.archetype, so duelists run the
   // unchanged routine. lockedByPlayer = the player is acquiring or fully locked onto THIS enemy. -----
   e.jinkCd -= dt;
@@ -1747,3 +1749,40 @@ function enemyFlares(e) {
     flares.push({ mesh: m, vel: new THREE.Vector3(rand(-50, 50), rand(-30, -90), rand(-50, 50)), life: 3, owner: 'enemy' });
   }
 }
+
+// === F4 defensive-ai ===
+// Enemy reaction to being locked or shot at. Called once per frame from updateEnemy (fighters + boss
+// only — drones/bombers/ground early-return before the hook). Gathers the threat, asks the pure
+// evadeDecision (core.js) what to do, and applies it: a cooldown-gated BREAK-TURN (reuses the engine's
+// _jinkT lateral-break primitive — the same turnMul boost the baiter and boss-mirror use, so there is
+// NO bespoke turnRate write to fight the boss-phase ramp) or a finite FLARE popped from the e.flares
+// pool (distinct from the legacy e.flareAmmo) that spoofs an inbound player missile. Boss e.flares is 0
+// -> the boss never flares (break-turns only), exactly per spec.
+function applyEvade(e, dt) {
+  if (e._evadeBreakT > 0) e._evadeBreakT -= dt;   // tick the observable break-turn timer
+  // threat: player lock-progress on THIS enemy + distance to the nearest inbound player missile
+  const lockProgress = (player.lockedTarget === e) ? 1 : (player.lockTarget === e ? (player.lockProgress || 0) : 0);
+  let missileDist = Infinity;
+  for (let i = 0; i < missiles.length; i++) {
+    const m = missiles[i];
+    if (m.enemy || m.target !== e) continue;
+    const d = Math.sqrt(m.mesh.position.distanceToSquared(e.group.position));
+    if (d < missileDist) missileDist = d;
+  }
+  const res = evadeDecision({ lastEvade: e._evadeLast, flares: e.flares }, { lockProgress, missileDist }, performance.now() / 1000);
+  e._evadeLast = res.state.lastEvade;
+  e.flares = res.state.flares;
+  if (res.action === 'break') {
+    e._evadeBreakT = EVADE.breakDur;                      // break-turn active for ~1.5s (boost = EVADE.breakTurnMul)
+    e.orbitSign = -e.orbitSign;                           // swing the break the other way
+    e._jinkT = Math.max(e._jinkT || 0, EVADE.breakDur);   // drive the engine's hard lateral break + turnMul
+  } else if (res.action === 'flare') {
+    // pop a visible flare burst — mirrors the player flare fx (same ASSET geo/mat, owner:'enemy' so
+    // combat.js updateMissiles spoofs player missiles off it and updateFlares owns its lifecycle).
+    for (let i = 0; i < 3; i++) {
+      const m = new THREE.Mesh(ASSET.flareGeo, ASSET.flareMat); m.position.copy(e.group.position); scene.add(m);
+      flares.push({ mesh: m, vel: new THREE.Vector3(rand(-60, 60), rand(-30, -90), rand(-60, 60)), life: 3, owner: 'enemy' });
+    }
+  }
+}
+// === end F4 ===

@@ -148,7 +148,8 @@ function updateMissiles(dt, ts) {
       else if (m.decoyed) tgtPos = null;        // spoofed/jammed → fly ballistic, never reacquire
       else if (!player.stealth) tgtPos = player.group.position;
     } else {
-      if (!m.decoy) { for (let k = 0; k < flares.length; k++) { const f = flares[k]; if (f.owner === 'enemy' && m.mesh.position.distanceToSquared(f.mesh.position) < 67600 && Math.random() < 0.45) { m.decoy = f; break; } } }
+      // === F4 defensive-ai: enemy flares spoof PLAYER missiles (mirror of the player-flare spoof above) ===
+      if (!m.decoy) { for (let k = 0; k < flares.length; k++) { const f = flares[k]; if (f.owner === 'enemy' && m.mesh.position.distanceToSquared(f.mesh.position) < 67600 && Math.random() < EVADE.flareSpoofChance) { m.decoy = f; break; } } }
       if (m.decoy && m.decoy.life > 0) tgtPos = m.decoy.mesh.position;
       else if (m.target && m.target.alive && !m.target.isInCloud) tgtPos = m.target.group.position;
     }

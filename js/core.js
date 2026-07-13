@@ -1194,3 +1194,38 @@ function wingmanOrder(state, cmd) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { WINGMAN_ORDERS, wingmanOrder });
 // === end F3 ===
+// === F4 defensive-ai ===
+// Enemy evasion core (pure, deterministic). The impure caller (entities.js applyEvade) gathers the
+// per-frame threat and threads {lastEvade, flares} in and out; every source of randomness stays in the
+// caller so this stays require-safe and testable. breakTurnMul documents the effective turn-rate boost
+// applyEvade triggers by reusing the engine's _jinkT lateral-break — enemies get NO bespoke turnRate
+// write that could fight the boss-phase turnRate ramp.
+const EVADE = {
+  breakDur: 1.5,          // seconds a break-turn stays active (~1.5s per spec)
+  breakTurnMul: 1.6,      // effective turn-rate boost during a break (matches updateEnemy's _jinkT block)
+  cooldown: 2.2,          // minimum seconds between evades — gates spammy repeat reactions
+  lockTrigger: 0.5,       // player lock-progress on THIS enemy that provokes an evade
+  missileDist: 900,       // nearest inbound player-missile distance (world units) that provokes an evade
+  flareSpoofChance: 0.45, // chance one enemy flare spoofs a player missile (combat.js updateMissiles)
+};
+// evadeDecision(state{lastEvade, flares}, threat{lockProgress, missileDist}, now) -> {action, state}.
+//   action: 'none' | 'break' | 'flare'. Below BOTH triggers, or still inside the cooldown -> 'none'
+//   (cooldown/flare state carried through unchanged). An inbound missile WITH flares left -> 'flare'
+//   (flare count decremented in the returned state); otherwise (incl. the 0-flare fallback) -> 'break'.
+//   Deterministic: identical inputs always yield identical output.
+function evadeDecision(state, threat, now) {
+  state = state || {}; threat = threat || {};
+  const flares = state.flares || 0;
+  const lastEvade = (state.lastEvade == null) ? -Infinity : state.lastEvade;
+  const lockProgress = threat.lockProgress || 0;
+  const missileDist = (threat.missileDist == null) ? Infinity : threat.missileDist;
+  const lockThreat = lockProgress >= EVADE.lockTrigger;
+  const missileThreat = missileDist <= EVADE.missileDist;
+  if ((!lockThreat && !missileThreat) || (now - lastEvade) < EVADE.cooldown) {
+    return { action: 'none', state: { lastEvade: state.lastEvade, flares } };
+  }
+  const action = (missileThreat && flares > 0) ? 'flare' : 'break';
+  return { action, state: { lastEvade: now, flares: action === 'flare' ? flares - 1 : flares } };
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { EVADE, evadeDecision });
+// === end F4 ===
