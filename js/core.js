@@ -1170,3 +1170,27 @@ function streakStep(streak, event, now) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { STREAK, streakStep });
 // === end F5 ===
+// === F3 wingman-wheel ===
+// Pure wingman command-wheel state machine (no clock, no DOM). The active order is one of WINGMAN_ORDERS.
+// `wingmanOrder(state, cmd)` folds an order command (FREE/ENGAGE/COVER/REGROUP) OR a fallback event
+// ('targetLost' / 'lockLost') onto the current order and returns { order, banner }. Real transitions carry a
+// banner i18n key; no-ops (re-issuing the active order, an unknown cmd, or an event that does not apply)
+// return the same order with banner:null. Only ENGAGE reverts to FREE on a fallback event — REGROUP/COVER
+// (and FREE) are unaffected by a lost lock or a lost target.
+const WINGMAN_ORDERS = ['FREE', 'ENGAGE', 'COVER', 'REGROUP'];
+const WINGMAN_ORDER_BANNER = {
+  FREE: 'banner.wingmanFree', ENGAGE: 'banner.wingmanEngage',
+  COVER: 'banner.wingmanCover', REGROUP: 'banner.wingmanRegroup',
+};
+function wingmanOrder(state, cmd) {
+  const cur = WINGMAN_ORDERS.indexOf(state) >= 0 ? state : 'FREE';
+  if (cmd === 'targetLost' || cmd === 'lockLost') {          // fallback events — only ENGAGE breaks off
+    return cur === 'ENGAGE' ? { order: 'FREE', banner: 'banner.wingmanBreak' } : { order: cur, banner: null };
+  }
+  if (WINGMAN_ORDERS.indexOf(cmd) >= 0) {                    // order command: change → banner, re-issue → no-op
+    return cmd === cur ? { order: cur, banner: null } : { order: cmd, banner: WINGMAN_ORDER_BANNER[cmd] };
+  }
+  return { order: cur, banner: null };                      // unknown command — no-op
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { WINGMAN_ORDERS, wingmanOrder });
+// === end F3 ===
