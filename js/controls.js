@@ -291,6 +291,9 @@ function initTouchControls() {
   bindBtn('tb-aws', 'aws', () => { if (state === 'playing' && !paused) awacsAction('strike'); });    // AWACS orbital strike
   bindBtn('tb-ars', 'ars', () => { if (state === 'playing' && !paused) awacsAction('resupply'); });   // AWACS resupply
   bindBtn('tb-ajm', 'ajm', () => { if (state === 'playing' && !paused) awacsAction('jam'); });        // AWACS jamming
+  bindBtn('tb-weng', 'weng', () => { if (state === 'playing' && !paused) issueWingOrder('ENGAGE'); });    // F3 wingman-wheel: wingmen engage my target
+  bindBtn('tb-wcov', 'wcov', () => { if (state === 'playing' && !paused) issueWingOrder('COVER'); });     // F3 wingman-wheel: wingmen cover the player
+  bindBtn('tb-wrgp', 'wrgp', () => { if (state === 'playing' && !paused) issueWingOrder('REGROUP'); });   // F3 wingman-wheel: wingmen form up + hold fire
 
   applyButtonStyle();
 }

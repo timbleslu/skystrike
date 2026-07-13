@@ -428,8 +428,10 @@ function wingCommand(kind) {
 function updateCCA(w, dt) {
   w.retargetCd -= dt;
   if (w.forced && !w.forced.alive) w.forced = null;
-  if (w.forced) { w.target = w.forced; }
-  else if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = nearestEnemyForWingman(w); w.retargetCd = 0.4; }
+  if (!wingApplyOrder(w)) {   // F3 wingman-wheel: a non-FREE order drives targeting; FREE ⇒ legacy nearest logic
+    if (w.forced) { w.target = w.forced; }
+    else if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = nearestEnemyForWingman(w); w.retargetCd = 0.4; }
+  }
 
   const terminal = w.expire <= 1.5 || w.hp <= 10;
   let desired = t2, engaging = false;
@@ -512,6 +514,7 @@ function cullDistantEnemies() {
   }
 }
 function updateWingmen(dt) {
+  wingOrderTick();   // F3 wingman-wheel: per-frame order fallbacks (ENGAGE bogey dead / player lock moved → FREE)
   for (let i = wingmen.length - 1; i >= 0; i--) {
     const w = wingmen[i];
     if (w.alive && w.group) animEngines(w.group, 0.85);
@@ -530,12 +533,14 @@ function updateWingmen(dt) {
   }
 }
 function updateWingman(w, dt) {
-  // ----- target selection (honours FOCUS / REGROUP flight orders) -----
+  // ----- target selection (legacy FOCUS/REGROUP one-shots + F3 wingman-wheel persistent ORDERS) -----
   w.retargetCd -= dt;
   if (w.forced && !w.forced.alive) w.forced = null;
   if (w.defend > 0) w.defend -= dt;
-  if (w.forced) { w.target = w.forced; }
-  else if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = (w.defend > 0 ? null : nearestEnemyForWingman(w)); w.retargetCd = 0.5; }
+  if (!wingApplyOrder(w)) {   // F3 wingman-wheel: a non-FREE order drives targeting; FREE ⇒ legacy nearest logic
+    if (w.forced) { w.target = w.forced; }
+    else if (!w.target || !w.target.alive || w.retargetCd <= 0) { w.target = (w.defend > 0 ? null : nearestEnemyForWingman(w)); w.retargetCd = 0.5; }
+  }
 
   let desired = t2, engaging = false, aimGood = false, td = Infinity;
   if (w.target && w.target.alive) {
@@ -863,6 +868,9 @@ addEventListener('keydown', e => {
     case 'Digit1': awacsAction('strike'); break;     // AWACS orbital strike (key 1)
     case 'Digit2': awacsAction('resupply'); break;   // AWACS emergency resupply (key 2)
     case 'Digit3': awacsAction('jam'); break;        // AWACS jamming (key 3)
+    case 'Digit4': issueWingOrder('ENGAGE'); break;  // F3 wingman-wheel: wingmen engage my locked bogey (key 4)
+    case 'Digit5': issueWingOrder('COVER'); break;   // F3 wingman-wheel: wingmen cover the player (key 5)
+    case 'Digit6': issueWingOrder('REGROUP'); break; // F3 wingman-wheel: wingmen form up + hold fire (key 6)
   }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -958,6 +966,60 @@ function initPreviewDrag() {
   addEventListener('pointercancel', endDrag);
   addEventListener('resize', () => { if (typeof resizePreview === 'function') resizePreview(); });   // keep the preview canvas matched to its host box
 }
+
+/* === F3 wingman-wheel === */
+/* Wingman command wheel — persistent flight ORDERS (keys 4/5/6 + touch tb-weng/wcov/wrgp), pure state
+   machine in core.js (wingmanOrder). The active order lives on player.wingOrder, read everywhere with a
+   `|| 'FREE'` fallback and written only through issueWingOrder; the player is rebuilt each sortie so it
+   auto-resets to FREE per run (no createPlayer edit). ENGAGE latches the player's locked bogey on
+   player.wingTarget so the fallbacks can tell "ordered target died" from "player lock moved off it". */
+function wingPlayerLock() {
+  if (!player) return null;
+  if (player.lockedTarget && player.lockedTarget.alive) return player.lockedTarget;
+  if (player.lockTarget && player.lockTarget.alive) return player.lockTarget;
+  return null;
+}
+// COVER priority: nearest enemy actively aiming at the player (entities.js maintains e.aimingPlayer each tick).
+function wingCoverTarget(w) {
+  let best = null, bs = Infinity;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !e.group || !e.aimingPlayer) continue;
+    const d2 = w.group.position.distanceToSquared(e.group.position);
+    if (d2 < bs) { bs = d2; best = e; }
+  }
+  return best;
+}
+// Order → target override for one escort. Returns true when a non-FREE order set targeting (skips legacy logic).
+function wingApplyOrder(w) {
+  const order = player ? (player.wingOrder || 'FREE') : 'FREE';
+  if (order === 'FREE') return false;
+  if (order === 'REGROUP') { w.forced = null; w.target = null; return true; }   // form up on the player + hold fire (no target ⇒ no engage)
+  if (order === 'ENGAGE')  { w.forced = null; w.target = (player.wingTarget && player.wingTarget.alive) ? player.wingTarget : nearestEnemyForWingman(w); return true; }
+  if (order === 'COVER')   { w.forced = null; w.target = wingCoverTarget(w) || nearestEnemyForWingman(w); return true; }
+  return false;
+}
+// Per-frame fallback: while ENGAGE, the latched bogey dying (targetLost) or the player's lock moving off it
+// (lockLost) reverts the order to FREE via the pure state machine. No latched bogey ⇒ general engage, no revert.
+function wingOrderTick() {
+  if (!player || (player.wingOrder || 'FREE') !== 'ENGAGE') return;
+  const wt = player.wingTarget;
+  if (!wt) return;
+  if (!wt.alive) issueWingOrder('targetLost');
+  else if (wingPlayerLock() !== wt) issueWingOrder('lockLost');
+}
+// Route every order command (ENGAGE/COVER/REGROUP) and fallback event through core wingmanOrder + reflect it.
+function issueWingOrder(cmd) {
+  if (!player || state !== 'playing') return;
+  const cur = player.wingOrder || 'FREE';
+  const res = wingmanOrder(cur, cmd);
+  player.wingOrder = res.order;
+  // Latch the ordered bogey on a fresh ENGAGE command; any other resolved order clears it.
+  player.wingTarget = res.order === 'ENGAGE' ? (cmd === 'ENGAGE' ? wingPlayerLock() : player.wingTarget) : null;
+  if (res.banner) { showBanner(t(res.banner)); (cmd === 'targetLost' || cmd === 'lockLost') ? audio.warn() : audio.power(); }
+  else if (WINGMAN_ORDERS.indexOf(cmd) >= 0) audio.ui();   // re-issued the active order (state-machine no-op) — soft ack
+}
+/* === end F3 === */
 
 /* ---------------- boot ---------------- */
 initThree();

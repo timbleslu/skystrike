@@ -219,6 +219,7 @@ function applyLang() {
   setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
   setTxt('tb-thr-lbl', t('touch.thr')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
   setTxt('tb-aws', t('touch.aws')); setTxt('tb-ars', t('touch.ars')); setTxt('tb-ajm', t('touch.ajm'));
+  setTxt('tb-weng', t('touch.weng')); setTxt('tb-wcov', t('touch.wcov')); setTxt('tb-wrgp', t('touch.wrgp'));   // F3 wingman-wheel: order touch buttons
   // flight manual body (HTML content)
   const setHTML = (id, key) => { const e = g(id); if (e) e.innerHTML = t(key); };
   setHTML('manUL_Flight', 'manBody.flight'); setHTML('manUL_Combat', 'manBody.combat'); setHTML('manP_Lock', 'manBody.lock');

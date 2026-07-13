@@ -281,18 +281,28 @@ function updateWingmanSidebar() {
   if (!el.sidebar) return;
   if (!wingmen.length) { el.sidebar.classList.remove('visible'); return; }
   el.sidebar.classList.add('visible');
-  // Rebuild structure only when wingmen count changes; otherwise just patch text/style
-  if (el.sidebar.children.length !== wingmen.length) {
-    el.sidebar.innerHTML = '';
+  // F3 wingman-wheel: active flight-ORDER badge — a persistent child 0 (wingman rows follow at 1..n), patched
+  // in place and excluded from the count-driven row rebuild below. Order read from player.wingOrder (|| FREE).
+  let badge = el.sidebar.firstElementChild;
+  if (!badge || badge.className !== 'wing-order') {
+    badge = document.createElement('div'); badge.className = 'wing-order';
+    badge.style.cssText = 'font:700 11px/1.5 var(--hud-font,monospace);letter-spacing:.08em;text-align:center;padding:2px 6px;margin-bottom:4px;border-radius:4px;background:rgba(0,0,0,.35)';
+    el.sidebar.insertBefore(badge, el.sidebar.firstChild);
+  }
+  const ord = (typeof player !== 'undefined' && player && player.wingOrder) || 'FREE';
+  badge.textContent = '◆ ' + t('wing.order.' + ord.toLowerCase());
+  badge.style.color = ord === 'ENGAGE' ? '#ff6a4d' : ord === 'COVER' ? '#ffd24d' : ord === 'REGROUP' ? '#6cc8ff' : '#7dffcf';
+  // Rebuild wingman rows only when the count changes; otherwise just patch text/style. (Badge is child 0.)
+  if (el.sidebar.children.length - 1 !== wingmen.length) {
+    while (el.sidebar.children.length > 1) el.sidebar.removeChild(el.sidebar.lastChild);
     for (let i = 0; i < wingmen.length; i++) {
       const row = document.createElement('div');
       row.innerHTML = '<div class="wn"></div><div class="ws"></div><div class="whb"><div class="whf"></div></div>';
       el.sidebar.appendChild(row);
     }
   }
-  const rows = el.sidebar.children;
   for (let i = 0; i < wingmen.length; i++) {
-    const w = wingmen[i], row = rows[i];
+    const w = wingmen[i], row = el.sidebar.children[i + 1];
     row.className = 'wing-row' + (w.cca ? ' cca' : '') + (!w.alive ? ' down' : '');
     const hp = w.alive ? clamp(w.hp / w.maxHp * 100, 0, 100) : 0;
     let sub;

@@ -2330,3 +2330,29 @@ Object.assign(I18N.KO, {
   'hud.streak': '연속',
 });
 /* === end F5 === */
+/* === F3 wingman-wheel i18n === */
+/* Command-wheel strings injected via Object.assign so the four concurrent factory features don't collide
+   inside the big I18N.EN/ZH/KO literals. Order-badge names (wing.order.*), order banners (banner.wingman*),
+   and the three order touch buttons (touch.w*). EN + ZH + KO for every key. */
+Object.assign(I18N.EN, {
+  'wing.order.free': 'FREE', 'wing.order.engage': 'ENGAGE', 'wing.order.cover': 'COVER', 'wing.order.regroup': 'REGROUP',
+  'banner.wingmanFree': '▸ FLIGHT: WEAPONS FREE', 'banner.wingmanEngage': '▸ FLIGHT: ENGAGE MY TARGET',
+  'banner.wingmanCover': '▸ FLIGHT: COVER ME', 'banner.wingmanRegroup': '▸ FLIGHT: FORM UP · HOLD FIRE',
+  'banner.wingmanBreak': '▸ FLIGHT: TARGET LOST · WEAPONS FREE',
+  'touch.weng': 'ENG', 'touch.wcov': 'COV', 'touch.wrgp': 'RGP',
+});
+Object.assign(I18N.ZH, {
+  'wing.order.free': '自由', 'wing.order.engage': '攻击', 'wing.order.cover': '掩护', 'wing.order.regroup': '归队',
+  'banner.wingmanFree': '▸ 编队：自由开火', 'banner.wingmanEngage': '▸ 编队：攻击我的目标',
+  'banner.wingmanCover': '▸ 编队：掩护我', 'banner.wingmanRegroup': '▸ 编队：归队 · 停火',
+  'banner.wingmanBreak': '▸ 编队：目标丢失 · 自由开火',
+  'touch.weng': '攻击', 'touch.wcov': '掩护', 'touch.wrgp': '归队',
+});
+Object.assign(I18N.KO, {
+  'wing.order.free': '자유', 'wing.order.engage': '공격', 'wing.order.cover': '엄호', 'wing.order.regroup': '재편성',
+  'banner.wingmanFree': '▸ 편대: 자유 교전', 'banner.wingmanEngage': '▸ 편대: 내 표적 공격',
+  'banner.wingmanCover': '▸ 편대: 날 엄호하라', 'banner.wingmanRegroup': '▸ 편대: 대형 유지 · 사격 중지',
+  'banner.wingmanBreak': '▸ 편대: 표적 상실 · 자유 교전',
+  'touch.weng': '공격', 'touch.wcov': '엄호', 'touch.wrgp': '재편성',
+});
+/* === end F3 === */
