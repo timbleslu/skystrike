@@ -487,7 +487,7 @@ function damagePlayer(amt, src) {
       player.invuln = 2.5; player.damageFlash = 0; empFlash = Math.max(empFlash, 0.6);
       showBanner(t('banner.guardianAngel')); audio.power(); return;
     }
-    player.hp = 0; gameOver();
+    player.hp = 0; player.streak = streakStep(player.streak, 'death', 0); gameOver();   // F5: player death resets the kill-streak (death branch ignores the clock arg)
   }
 }
 /* ---- tech-driven effect helpers (crits, chains, splash, reactive armour) ---- */
@@ -604,6 +604,9 @@ function killEnemy(e, byPlayer, byCCA) {
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
   if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); if (typeof killFlash !== 'undefined') killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
+  // === F5 killstreak === extend the chain (window/tiers in core.js streakStep); the resulting mult scales THIS kill's score below.
+  player.streak = streakStep(player.streak, 'kill', performance.now() / 1000);
+  // === end F5 ===
   // Pure kill-reward (core.js awardKill): kill score (combo-scaled) + RP by source + killstreak.
   const kr = awardKill(
     { combo: player.combo, killStreak: player.killStreak },
@@ -611,7 +614,8 @@ function killEnemy(e, byPlayer, byCCA) {
       tpBase: tpBaseFor(e), rpPerKill: player.rpPerKill || 0, rpMul: player.rpMul || 1,
       assistFrac: TP.assistFrac, playerDmg: e.playerDmg || 0 }
   );
-  player.score += kr.score; player.tp += kr.rp;
+  player.score += Math.round(kr.score * player.streak.mult); player.tp += kr.rp;   // F5: kill-streak multiplier scales the kill's score contribution
+  if (player.streak.tierUp) { showBanner(tf('banner.streak', { mult: player.streak.mult })); haptic([30, 40, 30]); }   // F5: banner + haptic once per tier crossing (x1.5 / x2 / x3)
   if (byPlayer) { if (e._lastPlayerWp === 'gun') run.pGunKills++; }
   else if (byCCA) { run.escortKills++; }
   // field-upgrade payoffs

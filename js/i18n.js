@@ -2313,3 +2313,20 @@ function genText(gen) {
   if (L && L['gen.' + gen] != null) return L['gen.' + gen];
   return gen;
 }
+
+/* === F5 killstreak === kill-streak momentum strings, appended after the I18N dict is fully built (it is
+   closed above) so we extend each language table in place. `banner.streak` is parameterized by the new
+   multiplier ({mult} = 1.5 / 2 / 3, fired once per tier crossing); `hud.streak` labels the HUD chip. EN + ZH + KO. */
+Object.assign(I18N.EN, {
+  'banner.streak': '⚡ KILL STREAK ×{mult} ⚡',
+  'hud.streak': 'STREAK',
+});
+Object.assign(I18N.ZH, {
+  'banner.streak': '⚡ 连杀 ×{mult} ⚡',
+  'hud.streak': '连杀',
+});
+Object.assign(I18N.KO, {
+  'banner.streak': '⚡ 연속 격추 ×{mult} ⚡',
+  'hud.streak': '연속',
+});
+/* === end F5 === */

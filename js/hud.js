@@ -389,6 +389,8 @@ function drawHUD() {
     ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
     if (killFlash <= 0) killFlash = 0;
   }
+
+  drawStreakChip(ctx);   // === F5 killstreak === kill-streak chip near the top-right score readout (drawn last, on top)
 }
 
 function drawWingman(ctx, w, cx, cy) {
@@ -830,3 +832,27 @@ function drawRadar() {
   ctx.fillStyle = '#ffb938'; ctx.beginPath();
   ctx.moveTo(cx, cy - 8); ctx.lineTo(cx - 6, cy + 6); ctx.lineTo(cx + 6, cy + 6); ctx.closePath(); ctx.fill();
 }
+
+// === F5 killstreak === HUD streak chip, right-aligned under the top-right Score/R&D/Wave/Combo stat stack
+// (index.html .panel.tr). Surfaces the live chain count + score multiplier once a streak is actually forming
+// (count >= 2). Reward-amber, brightening at the x2/x3 tiers; scales with hudK() like the other canvas chips.
+function drawStreakChip(ctx) {
+  const s = (typeof player !== 'undefined' && player) ? player.streak : null;
+  if (!s || s.count < 2) return;
+  const k = hudK();
+  const label = t('hud.streak') + ' ' + s.count + '  ×' + s.mult;   // e.g. "STREAK 4  x1.5"
+  ctx.save();
+  ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+  ctx.font = 'bold ' + (13 * k) + 'px ' + HUDFONT;
+  const padX = 9 * k, h = 23 * k, w = ctx.measureText(label).width + padX * 2;
+  const x = W - 16 - w, y = 150;   // right margin matches the top-left weather chip; y clears the 4-row TR stat stack
+  const hot = s.mult >= 2;         // x2 and x3 tiers read as "hot"
+  ctx.fillStyle = 'rgba(' + HUD.reward + ',' + (hot ? 0.20 : 0.10) + ')';
+  ctx.fillRect(x, y, w, h);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(' + HUD.reward + ',' + (hot ? 0.95 : 0.55) + ')';
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(' + HUD.reward + ',0.98)';
+  ctx.fillText(label, x + w - padX, y + 6 * k);
+  ctx.restore();
+}
+// === end F5 ===

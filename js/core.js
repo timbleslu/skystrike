@@ -1149,3 +1149,24 @@ if (typeof module !== 'undefined' && module.exports) {
     advanceLock, clearLockIf,
   };
 }
+
+// === F5 killstreak === pure kill-streak momentum core (require-safe; no THREE/store/DOM).
+// A chain of kills within STREAK.window seconds builds a count; the multiplier steps up at the tier
+// counts (3/6/10 -> x1.5/x2/x3) and scales the kill's score contribution in combat.js killEnemy.
+const STREAK = { window: 6, counts: [3, 6, 10], mults: [1, 1.5, 2, 3] };
+// streakStep(streak{count,mult,t}, event 'kill'|'death', now) -> new streak{count,mult,t,tierUp}. PURE: now (seconds) is a param.
+//   'kill'  : if now is past the last kill's t + window the chain lapsed -> count restarts at 1, else count+1;
+//             the multiplier follows the new count; tierUp flags a multiplier INCREASE (caller banners once per crossing).
+//   'death' : hard reset to a fresh streak (count 0, base multiplier), tierUp false.
+function streakStep(streak, event, now) {
+  const base = STREAK.mults[0];
+  const s = (streak && typeof streak.count === 'number') ? streak : { count: 0, mult: base, t: 0 };
+  if (event === 'death') return { count: 0, mult: base, t: 0, tierUp: false };
+  const lapsed = now > (s.t || 0) + STREAK.window;   // window measured from the LAST kill time (s.t)
+  const count = lapsed ? 1 : s.count + 1;
+  let mult = base;
+  for (let i = 0; i < STREAK.counts.length; i++) if (count >= STREAK.counts[i]) mult = STREAK.mults[i + 1];
+  return { count: count, mult: mult, t: now, tierUp: mult > (s.mult || base) };
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { STREAK, streakStep });
+// === end F5 ===
