@@ -1229,3 +1229,32 @@ function evadeDecision(state, threat, now) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { EVADE, evadeDecision });
 // === end F4 ===
+/* === F1 gun-overheat ===================================================================
+   Gun thermal model. Sustained fire builds heat 0->1; at 1.0 the cannon LOCKS OUT and stays
+   locked (hysteresis) until heat cools back below HEAT.rearm, then re-arms. Heat decays whenever
+   the gun is NOT discharging — which includes the entire lockout, so a held trigger can never pin
+   it hot. State-in/state-out like awacsCall/advanceLock; the impure caller (combat.js) hangs the
+   overheat banner+haptic off `justLocked` and gates fireGun() on `locked`.
+   Default tuning: rise 0.20/s => 5.0s cold->lock, so the >=4s continuous-fire balance guard holds
+   (4s => heat 0.80, no lock); decay 0.40/s => ~1.6s lockout (1.0 -> rearm 0.35). */
+const HEAT = { rise: 0.20, decay: 0.40, rearm: 0.35 };
+
+// heatStep(state{heat, locked}, firing, dt) -> {heat, locked, justLocked, justArmed}
+//   firing = the gun is commanded to fire this frame (trigger held + has a cannon).
+//   A LOCKED gun is gated OFF and cannot discharge, so heat ALWAYS bleeds off during lockout
+//   (regardless of `firing`) — this is what makes the hysteresis robust to a held trigger.
+//   justLocked / justArmed fire ONLY on the frame the lock state flips (the crossing frame),
+//   mirroring advanceLock's justLocked, so the caller's side effects run exactly once.
+function heatStep(state, firing, dt) {
+  const wasLocked = !!(state && state.locked);
+  const prevHeat = (state && state.heat) || 0;
+  const building = firing && !wasLocked;                       // a locked gun never builds heat
+  const heat = clamp(prevHeat + (building ? HEAT.rise : -HEAT.decay) * dt, 0, 1);
+  let locked = wasLocked, justLocked = false, justArmed = false;
+  if (!wasLocked && heat >= 1)             { locked = true;  justLocked = true; }
+  else if (wasLocked && heat < HEAT.rearm) { locked = false; justArmed = true; }
+  return { heat: heat, locked: locked, justLocked: justLocked, justArmed: justArmed };
+}
+
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { HEAT, heatStep });
+/* === end F1 gun-overheat === */
