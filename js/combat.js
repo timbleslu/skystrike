@@ -1156,7 +1156,14 @@ function updatePlayer(dt) {
       player._trailT = 0.07;
   }
 
-  if (down('Space') || touchBtns.gun || mouseFiring) fireGun();
+  // F1 gun-overheat: sustained fire builds gun heat; at 1.0 the cannon locks out (banner + haptic)
+  // and cools — fire is gated below — until it re-arms under HEAT.rearm. State lives on the player and
+  // auto-resets each run (?? fallbacks; no createPlayer edit needed).
+  const wantFire = down('Space') || touchBtns.gun || mouseFiring;
+  const heatRes = heatStep({ heat: player.gunHeat ?? 0, locked: player.gunLocked ?? false }, wantFire && !player.noCannon, dt);
+  player.gunHeat = heatRes.heat; player.gunLocked = heatRes.locked;
+  if (heatRes.justLocked) { showBanner(t('banner.gunsOverheat')); haptic([40, 60, 40]); }
+  if (wantFire && !heatRes.locked) fireGun();
   updateLockOn(dt);
 
   // ---- DEW LANCE (NGAD): sustained directed-energy beam down the boresight ----

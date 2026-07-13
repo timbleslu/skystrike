@@ -2356,3 +2356,20 @@ Object.assign(I18N.KO, {
   'touch.weng': '공격', 'touch.wcov': '엄호', 'touch.wrgp': '재편성',
 });
 /* === end F3 === */
+/* === F1 gun-overheat — banner + heat-gauge labels (EN + ZH + KO) === */
+Object.assign(I18N.EN, {
+  'banner.gunsOverheat': '⚠ GUNS OVERHEATED ⚠',
+  'hud.gunHeat': 'GUN HEAT',
+  'hud.overheat': 'OVERHEAT',
+});
+Object.assign(I18N.ZH, {
+  'banner.gunsOverheat': '⚠ 机炮过热 ⚠',
+  'hud.gunHeat': '机炮热量',
+  'hud.overheat': '过热',
+});
+Object.assign(I18N.KO, {
+  'banner.gunsOverheat': '⚠ 기총 과열 ⚠',
+  'hud.gunHeat': '기총 열',
+  'hud.overheat': '과열',
+});
+/* === end F1 gun-overheat === */

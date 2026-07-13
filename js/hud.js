@@ -391,6 +391,7 @@ function drawHUD() {
   }
 
   drawStreakChip(ctx);   // === F5 killstreak === kill-streak chip near the top-right score readout (drawn last, on top)
+  drawHeatGauge(ctx);   // F1 gun-overheat: gun-heat bar in the bottom-right ammo cluster
 }
 
 function drawWingman(ctx, w, cx, cy) {
@@ -856,3 +857,41 @@ function drawStreakChip(ctx) {
   ctx.restore();
 }
 // === end F5 ===
+/* === F1 gun-overheat: HUD gun-heat gauge =================================================
+   Persistent canvas bar in the bottom-right gun cluster (just left of the radar / ammo readout).
+   Fill tracks player.gunHeat 0..1 amber->gold->orange; a tick marks the HEAT.rearm re-arm point;
+   on lockout the bar pulses red under an OVERHEAT label. Dim when cold, brightens as it heats.
+   hudK()-scaled, HUD colour vars — reads global game state, writes the 2D canvas, no DOM. */
+function drawHeatGauge(ctx) {
+  if (player.noCannon) return;                                 // gun-less airframes (J-20) never heat
+  const heat = clamp(player.gunHeat || 0, 0, 1);
+  const locked = !!player.gunLocked;
+  const k = hudK();
+  const bw = 150 * k, bh = 9 * k;
+  const bx = W - 200 * k - bw;                                 // right edge sits just left of the radar
+  const by = H - 150 * k;
+  const warm = heat > 0.55, hot = heat > 0.82;
+  const col = locked ? HUD.danger : hot ? HUD.warn : warm ? HUD.reward : HUD.primary;
+  ctx.save();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  // label — OVERHEAT while locked, else GUN HEAT (brightens with heat)
+  ctx.font = 'bold ' + (10 * k) + 'px ' + HUDFONT;
+  ctx.fillStyle = 'rgba(' + col + ',' + (locked ? 0.98 : 0.55 + 0.4 * heat) + ')';
+  ctx.fillText(locked ? t('hud.overheat') : t('hud.gunHeat'), bx, by - 5 * k);
+  // track
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, bw, bh);
+  // fill (pulses while locked)
+  let a = 0.9 * (0.4 + 0.6 * heat);
+  if (locked) a = 0.55 + 0.4 * Math.abs(Math.sin(performance.now() * 0.008));
+  ctx.fillStyle = 'rgba(' + col + ',' + a + ')';
+  ctx.fillRect(bx, by, bw * heat, bh);
+  // re-arm threshold tick — the gun re-arms once heat cools left of this mark
+  const tx = bx + bw * HEAT.rearm;
+  ctx.strokeStyle = 'rgba(' + HUD.ink + ',0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(tx, by - 2 * k); ctx.lineTo(tx, by + bh + 2 * k); ctx.stroke();
+  // border
+  ctx.strokeStyle = 'rgba(' + (locked ? HUD.danger : HUD.dim) + ',' + (0.5 + 0.4 * heat) + ')'; ctx.lineWidth = 1;
+  ctx.strokeRect(bx, by, bw, bh);
+  ctx.restore();
+}
+/* === end F1 gun-overheat === */
