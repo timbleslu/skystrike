@@ -73,13 +73,18 @@ const live = await page.evaluate(() => {
   const out = [];
   const ok = (name, cond) => out.push({ name, pass: !!cond });
   const wk = weeklyThisWeek();
-  // effect predicate per modifier id — matches whatever the CURRENT week's seed picked
+  // effect predicate per modifier id — matches whatever the CURRENT week's seed picked from the
+  // pack-EXTENDED pool (CF content-factory: base 5 + iron-skies pack; _weeklyAces is a COUNT now)
   const EFFECT = {
     stormFront:  () => typeof weather !== 'undefined' && weather.type === 'storm',
     noFlares:    () => player.maxFlares === 0 && player.flares === 0,
     noMissiles:  () => player.maxMissiles === 0 && player.missiles === 0,
-    doubleAces:  () => player._weeklyAces === true,
+    doubleAces:  () => player._weeklyAces >= 1,
     heavyWing:   () => player.turnMul > 0 && player.turnMul < 1,
+    fogBank:     () => typeof weather !== 'undefined' && weather.type === 'fog',
+    lastFlare:   () => player.maxFlares <= 1 && player.flares <= 1,   // MIN-merge: a harsher co-draw (noFlares) may take it to 0
+    oneShot:     () => player.maxMissiles <= 1 && player.missiles <= 1,
+    aceSeason:   () => player._weeklyAces >= 2,
   };
   ok('real launch reached flight (state = playing)', state === 'playing');
   ok('weeklyMode flag is set', weeklyMode === true);

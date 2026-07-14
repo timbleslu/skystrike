@@ -9,6 +9,12 @@
 
 /* ---------------- jet roster ---------------- */
 // JETS roster + aceShapePool/jetNameForShape → js/roster.js (require-safe, loaded before this file). jetStats stays here (call-site uses lerp from core.js).
+// CF content-factory: merge the shipped CONTENT_PACKS (js/content-packs.js, loaded before this
+// file) into the live pools ONCE at load. Valid packs extend FORMATIONS in place (new types join
+// every spawn roll); packRuntime carries the extended weekly-modifier pool + wave patterns (read
+// by ui-flow.js weeklyThisWeek). A rejected candidate contributes nothing and never bricks load.
+var packRuntime = applyContentPacks(CONTENT_PACKS, FORMATIONS, WEEKLY_MODIFIERS);
+if (packRuntime.rejected.length && typeof console !== 'undefined') console.warn('[content-packs] rejected:', packRuntime.rejected);
 function jetStats(j) {
   return {
     maxSpeed: 150 + j.speed * 26,

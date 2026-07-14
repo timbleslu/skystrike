@@ -47,7 +47,7 @@ function nextWave() {
     return;
   }
   applyWeather(rollWeather(weatherSeed + wave));
-  if (player && player._weeklyMods && player._weeklyMods.indexOf('stormFront') >= 0) applyWeather('storm');   // F8 weekly: stormFront modifier locks the sky to storm every wave
+  if (player && player._weeklyEffects && player._weeklyEffects.lockWeather) applyWeather(player._weeklyEffects.lockWeather);   // F8 weekly: a lockWeather modifier (stormFront / pack fogBank / …) pins the sky every wave
   const _wCond = weatherLabel();
   if (strike) {
     strikeWaveActive = true; bossWaveActive = lastWaveWasBoss = false;
@@ -67,13 +67,17 @@ function nextWave() {
   const wildcard = isWildcardWave(wave, bossWaveActive, Math.random());
   let count = waveCount(wave, DIFFS[difficulty].count, WAVE_COUNT_CAP);
   if (wildcard) count = Math.min(WAVE_COUNT_CAP, count + randInt(2, 4));
-  queueFighterWave(count);   // F2: a >=3 endless wave flies in as a formation // fighters first \u2192 first drained = combat enemy
+  // CF content-factory: a weekly pack wave plan drives fighter count (+ optionally pins the
+  // formation) for waves 1..len, then the normal endless cadence resumes.
+  const wrow = (player && player._weeklyWavePlan && wave <= player._weeklyWavePlan.pattern.length) ? player._weeklyWavePlan.pattern[wave - 1] : null;
+  if (wrow) count = wrow.n;
+  queueFighterWave(count, wrow && wrow.formation);   // F2: a >=3 endless wave flies in as a formation // fighters first \u2192 first drained = combat enemy
   if (bossWaveActive) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
   else if (wildcard) { showBanner(t('banner.wildcardWave')); }
   else showBanner(_wCond ? tf('banner.wave', { n: wave }) + '  ·  ' + _wCond : tf('banner.wave', { n: wave }));
   if (wave >= 3 && !bossWaveActive && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
   if (wildcard) pendingSpawns.push(spawnAce);   // wildcard always brings an extra ace for spice
-  if (player && player._weeklyAces && !bossWaveActive) pendingSpawns.push(spawnAce);   // F8 weekly: doubleAces modifier adds one extra ace on every non-boss wave
+  if (player && player._weeklyAces && !bossWaveActive) for (let a = 0; a < player._weeklyAces; a++) pendingSpawns.push(spawnAce);   // F8 weekly: extraAces modifiers add N extra aces on every non-boss wave
   if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && !bossWaveActive && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
   if (wave >= 3 && !bossWaveActive && Math.random() < 0.5) {
@@ -184,9 +188,10 @@ function spawnFighterFormation(n, forceType) {
   }
   return leader;
 }
-// queue a fighter wave: >=3 flies in as ONE spawned formation, otherwise individual mooks (legacy behaviour)
-function queueFighterWave(n) {
-  if (n >= 3) { pendingSpawns.push(() => spawnFighterFormation(n)); return; }
+// queue a fighter wave: >=3 flies in as ONE spawned formation, otherwise individual mooks (legacy
+// behaviour). forceType (CF: weekly wave-plan rows) pins the formation; unknown/absent → random.
+function queueFighterWave(n, forceType) {
+  if (n >= 3) { pendingSpawns.push(() => spawnFighterFormation(n, forceType)); return; }
   for (let i = 0; i < n; i++) pendingSpawns.push(spawnFighter);
 }
 function spawnBomber() {

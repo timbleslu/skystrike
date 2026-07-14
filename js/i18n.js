@@ -2578,6 +2578,15 @@ Object.assign(I18N.EN, {
   'weekly.mod.doubleAces.d': 'An extra enemy ace joins every wave. The skies are thick with veterans.',
   'weekly.mod.heavyWing': 'Heavy Wing',
   'weekly.mod.heavyWing.d': 'A reinforced, heavier airframe — turn rate is cut. Fly smooth, plan your turns.',
+  // CF content-factory pack modifiers (iron-skies)
+  'weekly.mod.fogBank': 'Fog Bank',
+  'weekly.mod.fogBank.d': 'The sky is locked to dense fog all week — radar cut, short sightlines, close-range fights.',
+  'weekly.mod.lastFlare': 'Last Flare',
+  'weekly.mod.lastFlare.d': 'One flare for the whole run. Spend it on the missile that matters.',
+  'weekly.mod.oneShot': 'One Shot',
+  'weekly.mod.oneShot.d': 'A single missile on the rails. Every launch must count — the gun does the rest.',
+  'weekly.mod.aceSeason': 'Ace Season',
+  'weekly.mod.aceSeason.d': 'Two extra enemy aces join every wave. The veterans are out in force.',
 });
 Object.assign(I18N.ZH, {
   'weekly.title': '◈ 每周挑战',
@@ -2594,6 +2603,15 @@ Object.assign(I18N.ZH, {
   'weekly.mod.doubleAces.d': '每一波都多出一名敌方王牌。天空满是老手。',
   'weekly.mod.heavyWing': '重型机翼',
   'weekly.mod.heavyWing.d': '强化加重的机体 — 转向速率下降。飞得平稳，规划转弯。',
+  // CF content-factory pack modifiers (iron-skies)
+  'weekly.mod.fogBank': '浓雾封锁',
+  'weekly.mod.fogBank.d': '整周天空锁定为浓雾 — 雷达削弱、视野极短，只能近距离缠斗。',
+  'weekly.mod.lastFlare': '最后一发干扰弹',
+  'weekly.mod.lastFlare.d': '整局只有一发干扰弹。留给最致命的那枚导弹。',
+  'weekly.mod.oneShot': '仅此一发',
+  'weekly.mod.oneShot.d': '挂架上只有一枚导弹。每次发射都必须命中 — 其余交给机炮。',
+  'weekly.mod.aceSeason': '王牌季',
+  'weekly.mod.aceSeason.d': '每一波都多出两名敌方王牌。老手倾巢而出。',
 });
 Object.assign(I18N.KO, {
   'weekly.title': '◈ 위클리 챌린지',
@@ -2610,5 +2628,14 @@ Object.assign(I18N.KO, {
   'weekly.mod.doubleAces.d': '매 웨이브마다 적 에이스가 하나 더 합류합니다. 하늘은 베테랑으로 가득합니다.',
   'weekly.mod.heavyWing': '헤비 윙',
   'weekly.mod.heavyWing.d': '강화되어 무거워진 기체 — 선회율이 감소합니다. 부드럽게 비행하고 선회를 계획하라.',
+  // CF content-factory pack modifiers (iron-skies)
+  'weekly.mod.fogBank': '안개 지대',
+  'weekly.mod.fogBank.d': '한 주 내내 하늘이 짙은 안개로 고정됩니다 — 레이더 약화, 짧은 시야, 근접전뿐.',
+  'weekly.mod.lastFlare': '마지막 플레어',
+  'weekly.mod.lastFlare.d': '한 판에 플레어 단 한 발. 가장 치명적인 미사일에 아껴 쓰라.',
+  'weekly.mod.oneShot': '원 샷',
+  'weekly.mod.oneShot.d': '레일 위 미사일은 단 한 발. 모든 발사가 명중해야 합니다 — 나머지는 기총으로.',
+  'weekly.mod.aceSeason': '에이스의 계절',
+  'weekly.mod.aceSeason.d': '매 웨이브마다 적 에이스가 둘 더 합류합니다. 베테랑이 총출동했습니다.',
 });
 /* === end F8 weekly-challenge === */

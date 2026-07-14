@@ -1277,6 +1277,19 @@ function formationSlots(type, n, spacing) {
   const s = spacing || (FORMATIONS[type] && FORMATIONS[type].spacing) || 200;
   const slots = [{ x: 0, z: 0 }];               // slot 0 = leader
   const fc = Math.max(0, (n | 0) - 1);          // follower count
+  const tmpl = FORMATIONS[type] && FORMATIONS[type].slots;   // CF content-factory: data-driven pack formation
+  if (tmpl && tmpl.length) {
+    // Template slots are follower offsets in SPACING UNITS (leader implicit at the origin). When n
+    // exceeds the template, extra followers repeat it one full template-depth further back.
+    let depth = 0;
+    for (let k = 0; k < tmpl.length; k++) depth = Math.max(depth, tmpl[k].z);
+    depth += 1;
+    for (let i = 1; i <= fc; i++) {
+      const u = tmpl[(i - 1) % tmpl.length], rep = Math.floor((i - 1) / tmpl.length);
+      slots.push({ x: u.x * s, z: (u.z + rep * depth) * s });
+    }
+    return slots;
+  }
   if (type === 'wall') {
     // abreast line: every follower shares the leader's forward position (z = 0), spread alternately L/R.
     for (let i = 1; i <= fc; i++) {
@@ -1377,17 +1390,20 @@ function weeklySeedFor(dateStr) {
 }
 // Weekly modifier table — >=5 distinct run-start handicaps. IDs only (pure data); the impure
 // application (player/weather mutation) lives in ui-flow.js + main.js spawn guards.
+// Each entry's `effects` is DATA interpreted by ui-flow.js applyWeeklyMods / the main.js wave
+// guards (CF content-factory: pack modifiers use the same schema — see PACK_LIMITS.effectKeys).
 var WEEKLY_MODIFIERS = [
-  { id: 'stormFront' },   // the sky is locked to storm all week
-  { id: 'noFlares' },     // countermeasures offline — no flares
-  { id: 'noMissiles' },   // hardpoints sealed — guns only
-  { id: 'doubleAces' },   // an extra ace joins every wave
-  { id: 'heavyWing' },    // reinforced airframe — agility cut
+  { id: 'stormFront', effects: { lockWeather: 'storm' } },   // the sky is locked to storm all week
+  { id: 'noFlares',   effects: { flares: 0 } },              // countermeasures offline — no flares
+  { id: 'noMissiles', effects: { missiles: 0 } },            // hardpoints sealed — guns only
+  { id: 'doubleAces', effects: { extraAces: 1 } },           // an extra ace joins every wave
+  { id: 'heavyWing',  effects: { turnMul: 0.6 } },           // reinforced airframe — agility cut
 ];
-// weeklyModifiers(seed) → 2 DISTINCT modifiers for the week, deterministic from the seed via makeRng.
-function weeklyModifiers(seed) {
+// weeklyModifiers(seed, pool) → 2 DISTINCT modifiers for the week, deterministic from the seed via
+// makeRng. `pool` defaults to the base table; the weekly runtime passes the pack-extended pool.
+function weeklyModifiers(seed, pool) {
   var rng = makeRng(seed);
-  var pool = WEEKLY_MODIFIERS.slice();
+  pool = (pool || WEEKLY_MODIFIERS).slice();
   var out = [];
   for (var k = 0; k < 2 && pool.length; k++) {
     var i = Math.floor(rng() * pool.length) % pool.length;
@@ -1398,3 +1414,134 @@ function weeklyModifiers(seed) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { weeklySeedFor, weekIdFor, WEEKLY_MODIFIERS, weeklyModifiers });
 // === end F8 ===
+// === CF content-factory ===
+// Versioned CONTENT PACKS (js/content-packs.js) carry new formations / weekly modifiers / weekly
+// wave patterns as pure DATA. This section is the pure half: bounds, validation, merge, and the
+// deterministic weekly picks. Impure application lives at the existing F2/F8 call sites
+// (globals.js merge → packRuntime; ui-flow.js applyWeeklyMods; main.js nextWave guards).
+var PACK_LIMITS = {
+  spacingMin: 120, spacingMax: 400,
+  engageMin: 600, engageMax: 2400,
+  slotsMax: 15, slotOffMax: 8, slotSepMin: 0.5,
+  ordnanceMax: 6, extraAcesMax: 3, turnMulMin: 0.4,
+  waveRowsMax: 10,
+  effectKeys: ['lockWeather', 'flares', 'missiles', 'extraAces', 'turnMul'],
+  lockWeathers: ['fog', 'storm'],
+};
+function packNum(v) { return typeof v === 'number' && isFinite(v); }
+function packInt(v) { return packNum(v) && v === (v | 0); }
+// validatePack(pack, formations, modIds) → { ok, errors[] }. `formations` = the CURRENT merged
+// formation table (base + already-accepted packs — id collisions checked against it); `modIds` =
+// ids already in the weekly modifier pool. Packs must be self-contained: a wave row may only
+// reference base formations or formations defined in THIS pack.
+function validatePack(pack, formations, modIds) {
+  var errs = [], L = PACK_LIMITS;
+  if (!pack || typeof pack !== 'object') return { ok: false, errors: ['pack: not an object'] };
+  if (typeof pack.id !== 'string' || !/^[a-z0-9-]{3,40}$/.test(pack.id)) errs.push('id: must be a 3-40 char kebab slug');
+  if (pack.version !== 1) errs.push('version: must be 1');
+  var fkeys = Object.keys(pack.formations || {});
+  var mods = pack.modifiers || [], waves = pack.waves || [];
+  if (!fkeys.length && !mods.length && !waves.length) errs.push('pack: empty (no formations/modifiers/waves)');
+  for (var fi = 0; fi < fkeys.length; fi++) {
+    var fid = fkeys[fi], f = pack.formations[fid], tag = 'formation ' + fid;
+    if (formations && formations[fid]) { errs.push(tag + ': id collides with an existing formation'); continue; }
+    if (!f || typeof f !== 'object') { errs.push(tag + ': not an object'); continue; }
+    if (!packNum(f.spacing) || f.spacing < L.spacingMin || f.spacing > L.spacingMax) errs.push(tag + ': spacing out of ' + L.spacingMin + '-' + L.spacingMax);
+    if (!packNum(f.engageRange) || f.engageRange < L.engageMin || f.engageRange > L.engageMax) errs.push(tag + ': engageRange out of ' + L.engageMin + '-' + L.engageMax);
+    var sl = f.slots;
+    if (!Array.isArray(sl) || !sl.length || sl.length > L.slotsMax) { errs.push(tag + ': slots must be 1-' + L.slotsMax + ' entries'); continue; }
+    var pts = [{ x: 0, z: 0 }];   // leader — no follower slot may sit on/near the origin
+    for (var si = 0; si < sl.length; si++) {
+      var p = sl[si];
+      if (!p || !packNum(p.x) || !packNum(p.z) || Math.abs(p.x) > L.slotOffMax || Math.abs(p.z) > L.slotOffMax) { errs.push(tag + ' slot ' + si + ': x/z must be finite within ±' + L.slotOffMax); continue; }
+      for (var pi = 0; pi < pts.length; pi++) {
+        var dx = p.x - pts[pi].x, dz = p.z - pts[pi].z;
+        if (Math.sqrt(dx * dx + dz * dz) < L.slotSepMin) { errs.push(tag + ' slot ' + si + ': closer than ' + L.slotSepMin + ' spacing units to another jet'); break; }
+      }
+      pts.push(p);
+    }
+  }
+  var seenMods = {};
+  for (var mi = 0; mi < mods.length; mi++) {
+    var m = mods[mi], mtag = 'modifier ' + (m && m.id);
+    if (!m || typeof m.id !== 'string' || !m.id) { errs.push('modifier ' + mi + ': missing id'); continue; }
+    if (seenMods[m.id] || (modIds && modIds.indexOf(m.id) >= 0)) { errs.push(mtag + ': id collides with an existing modifier'); continue; }
+    seenMods[m.id] = true;
+    var fx = m.effects, keys = (fx && typeof fx === 'object') ? Object.keys(fx) : [];
+    if (!keys.length) { errs.push(mtag + ': effects must be a non-empty object'); continue; }
+    for (var ki = 0; ki < keys.length; ki++) {
+      var k = keys[ki], v = fx[k];
+      if (L.effectKeys.indexOf(k) < 0) { errs.push(mtag + ': unknown effect "' + k + '"'); continue; }
+      if (k === 'lockWeather' && L.lockWeathers.indexOf(v) < 0) errs.push(mtag + ': lockWeather must be one of ' + L.lockWeathers.join('/'));
+      if ((k === 'flares' || k === 'missiles') && (!packInt(v) || v < 0 || v > L.ordnanceMax)) errs.push(mtag + ': ' + k + ' must be an int 0-' + L.ordnanceMax);
+      if (k === 'extraAces' && (!packInt(v) || v < 1 || v > L.extraAcesMax)) errs.push(mtag + ': extraAces must be an int 1-' + L.extraAcesMax);
+      if (k === 'turnMul' && (!packNum(v) || v < L.turnMulMin || v >= 1)) errs.push(mtag + ': turnMul must be ' + L.turnMulMin + '-1 (handicap)');
+    }
+  }
+  var seenWaves = {};
+  for (var wi = 0; wi < waves.length; wi++) {
+    var w = waves[wi], wtag = 'wave-pattern ' + (w && w.id);
+    if (!w || typeof w.id !== 'string' || !w.id || seenWaves[w.id]) { errs.push('wave-pattern ' + wi + ': missing/duplicate id'); continue; }
+    seenWaves[w.id] = true;
+    var rows = w.pattern;
+    if (!Array.isArray(rows) || !rows.length || rows.length > L.waveRowsMax) { errs.push(wtag + ': pattern must be 1-' + L.waveRowsMax + ' rows'); continue; }
+    for (var ri = 0; ri < rows.length; ri++) {
+      var r = rows[ri];
+      if (!r || !packInt(r.n) || r.n < 1 || r.n > WAVE_COUNT_CAP) errs.push(wtag + ' row ' + ri + ': n must be an int 1-' + WAVE_COUNT_CAP);
+      if (r && r.formation != null && !((formations && formations[r.formation]) || (pack.formations && pack.formations[r.formation]))) errs.push(wtag + ' row ' + ri + ': unknown formation "' + r.formation + '"');
+    }
+  }
+  return { ok: !errs.length, errors: errs };
+}
+// applyContentPacks(packs, formations, baseMods) → { applied[], rejected[], modPool[], wavePatterns[] }.
+// Validates each pack IN ORDER against the progressively-merged tables; a valid pack merges its
+// formations INTO `formations` (mutated — the browser passes the live FORMATIONS) and contributes
+// modifiers/wave-patterns to the returned pools. A rejected pack contributes NOTHING (all-or-nothing
+// per pack) and is reported with its errors.
+function applyContentPacks(packs, formations, baseMods) {
+  var modPool = (baseMods || []).slice();
+  var out = { applied: [], rejected: [], modPool: modPool, wavePatterns: [] };
+  var modIds = modPool.map(function (m) { return m.id; });
+  var seenPacks = {};
+  for (var i = 0; i < (packs || []).length; i++) {
+    var pk = packs[i];
+    var res = (pk && seenPacks[pk.id]) ? { ok: false, errors: ['id: duplicate pack id'] } : validatePack(pk, formations, modIds);
+    if (!res.ok) { out.rejected.push({ id: (pk && pk.id) || ('(pack ' + i + ')'), errors: res.errors }); continue; }
+    seenPacks[pk.id] = true;
+    var fkeys = Object.keys(pk.formations || {});
+    for (var fi = 0; fi < fkeys.length; fi++) formations[fkeys[fi]] = pk.formations[fkeys[fi]];
+    var mods = pk.modifiers || [];
+    for (var mi = 0; mi < mods.length; mi++) { modPool.push(mods[mi]); modIds.push(mods[mi].id); }
+    var wv = pk.waves || [];
+    for (var wi = 0; wi < wv.length; wi++) out.wavePatterns.push(wv[wi]);
+    out.applied.push(pk.id);
+  }
+  return out;
+}
+// weeklyEffectsFor(ids, pool) → ONE merged effects object for the run. Merge rules when the two
+// picked modifiers touch the same knob: flares/missiles take the MIN (harsher wins), extraAces
+// SUM, turnMul MULTIPLIES, lockWeather last-in-pool-order wins (pool order is deterministic).
+function weeklyEffectsFor(ids, pool) {
+  var out = {};
+  pool = pool || WEEKLY_MODIFIERS;
+  for (var i = 0; i < pool.length; i++) {
+    var m = pool[i];
+    if (!m.effects || !ids || ids.indexOf(m.id) < 0) continue;
+    var fx = m.effects;
+    if (fx.lockWeather != null) out.lockWeather = fx.lockWeather;
+    if (fx.flares != null) out.flares = out.flares == null ? fx.flares : Math.min(out.flares, fx.flares);
+    if (fx.missiles != null) out.missiles = out.missiles == null ? fx.missiles : Math.min(out.missiles, fx.missiles);
+    if (fx.extraAces != null) out.extraAces = (out.extraAces || 0) + fx.extraAces;
+    if (fx.turnMul != null) out.turnMul = (out.turnMul == null ? 1 : out.turnMul) * fx.turnMul;
+  }
+  return out;
+}
+// weeklyWavePattern(seed, patterns) → this week's wave pattern (or null when none shipped).
+// Decoupled from the modifier draw by a fixed xor so adding patterns never reshuffles the mods.
+function weeklyWavePattern(seed, patterns) {
+  if (!patterns || !patterns.length) return null;
+  var rng = makeRng((seed ^ 0x5f356495) >>> 0);
+  return patterns[Math.floor(rng() * patterns.length) % patterns.length];
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { PACK_LIMITS, validatePack, applyContentPacks, weeklyEffectsFor, weeklyWavePattern });
+// === end CF ===

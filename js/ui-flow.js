@@ -59,7 +59,7 @@ function startGame(i, daily, rush, weekly) {
   }
   dailyMode = !!daily;   // explicit per-launch: only startDaily passes true; normal launches reset it to false
   bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
-  weeklyMode = !!weekly; if (!weeklyMode) weeklyMods = null;   // F8 weekly: only startWeekly passes true; normal launches reset it + drop any stale modifier pick
+  weeklyMode = !!weekly; if (!weeklyMode) { weeklyMods = null; weeklyWavePlan = null; }   // F8 weekly: only startWeekly passes true; normal launches reset it + drop any stale modifier/wave-plan pick
   selectedJet = i; audio.init();
   closeManual();
   if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }   // C2: preview lives in the ISOLATED previewScene now, not the shared scene
@@ -72,7 +72,7 @@ function startGame(i, daily, rush, weekly) {
   createPlayer(i);
   if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
   equipSpecial2(player, special2Id, JETS[i].id);   // feature #3: load the equipped SLOT-2 special (or leave empty/inert if none/stale); slot 1 untouched
-  if (weeklyMode && weeklyMods) applyWeeklyMods(player, weeklyMods);   // F8 weekly: stack this week's 2 modifiers on the finished loadout (AFTER meta perks); main.js spawn guards read player._weeklyMods/_weeklyAces
+  if (weeklyMode && weeklyMods) applyWeeklyMods(player, weeklyMods);   // F8 weekly: stack this week's 2 modifiers on the finished loadout (AFTER meta perks); main.js spawn guards read player._weeklyEffects/_weeklyAces/_weeklyWavePlan
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
@@ -673,26 +673,38 @@ function startDaily() {
 let weeklyMode = false;   // true only while flying a weekly run (mirrors dailyMode)
 let weeklySeed = 1;       // startGame reads this to fix weatherSeed deterministically when weeklyMode
 let weeklyMods = null;    // [id, id] the 2 active modifier ids for the current weekly run (null otherwise)
-// resolve today's ISO week id, seed, and this week's 2 modifier ids (pure fns fed the runtime date)
+let weeklyWavePlan = null; // CF content-factory: this week's pack wave pattern (null when none shipped/active)
+// resolve today's ISO week id, seed, this week's 2 modifier ids and wave plan (pure fns fed the
+// runtime date; pools are the pack-extended packRuntime ones, merged once in globals.js)
 function weeklyThisWeek() {
   const key = todayKey();                       // 'YYYY-MM-DD' from the one daily clock read
   const seed = weeklySeedFor(key);
-  return { id: weekIdFor(key), seed: seed, mods: weeklyModifiers(seed).map(function (m) { return m.id; }) };
+  return {
+    id: weekIdFor(key), seed: seed,
+    mods: weeklyModifiers(seed, packRuntime.modPool).map(function (m) { return m.id; }),
+    wavePlan: weeklyWavePattern(seed, packRuntime.wavePatterns),
+  };
 }
 // resolved display names for a list of modifier ids, joined for the card / banner
 function weeklyModNames(ids) {
   return (ids || []).map(function (id) { return t('weekly.mod.' + id); }).join('  ·  ');
 }
-// apply the 2 stacked modifiers onto the freshly-built player (called from startGame AFTER meta perks).
-// Behavioural modifiers (stormFront weather-lock, doubleAces extra spawn) are enforced per-wave by the
-// main.js nextWave guards, which read player._weeklyMods / player._weeklyAces set here.
+// apply the 2 stacked modifiers onto the freshly-built player (called from startGame AFTER meta
+// perks). Modifier effects are DATA (core.js WEEKLY_MODIFIERS + pack modifiers, merged by pure
+// weeklyEffectsFor): ordnance/turn knobs apply here once; behavioural knobs (lockWeather,
+// extraAces) + the weekly wave plan are enforced per-wave by the main.js nextWave guards via
+// player._weeklyEffects/_weeklyAces/_weeklyWavePlan. ui-tech.js re-seals ordnance from
+// _weeklyEffects after every tech/armory buy.
 function applyWeeklyMods(p, ids) {
   if (!p || !ids) return;
-  p._weeklyMods = ids.slice();                          // stormFront: main.js re-locks weather to storm each wave
-  p._weeklyAces = ids.indexOf('doubleAces') >= 0;       // doubleAces: main.js pushes one extra ace per wave
-  if (ids.indexOf('noFlares') >= 0)   { p.flares = 0; p.maxFlares = 0; }        // countermeasures offline
-  if (ids.indexOf('noMissiles') >= 0) { p.missiles = 0; p.maxMissiles = 0; }    // hardpoints sealed — guns only
-  if (ids.indexOf('heavyWing') >= 0)  { p.turnMul = (p.turnMul || 1) * 0.6; }   // reinforced airframe — agility cut
+  p._weeklyMods = ids.slice();
+  const fx = weeklyEffectsFor(ids, packRuntime.modPool);
+  p._weeklyEffects = fx;
+  p._weeklyAces = fx.extraAces || 0;            // COUNT of extra aces per non-boss wave (was a boolean)
+  p._weeklyWavePlan = weeklyWavePlan || null;   // CF: this week's pack wave pattern (or null)
+  if (fx.flares != null)   { p.flares = fx.flares; p.maxFlares = fx.flares; }
+  if (fx.missiles != null) { p.missiles = fx.missiles; p.maxMissiles = fx.missiles; }
+  if (fx.turnMul != null)  { p.turnMul = (p.turnMul || 1) * fx.turnMul; }
 }
 // refresh the hangar Weekly entry: CTA + this week's 2 modifiers + this week's best (replayable, never locks)
 function refreshWeeklyEntry() {
@@ -714,6 +726,7 @@ function startWeekly() {
   opMode = false;                                 // weekly is standalone endless, not the op-map campaign
   weeklySeed = wk.seed;                            // startGame fixes weatherSeed off this when weeklyMode
   weeklyMods = wk.mods;                            // startGame reads this to apply the 2 modifiers
+  weeklyWavePlan = wk.wavePlan;                    // CF: applyWeeklyMods stamps this onto the player
   const rng = makeRng(wk.seed);
   const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;   // seed-derived airframe (everyone flies the same jet this week)
   showBanner(t('weekly.title') + '  ·  ' + weeklyModNames(wk.mods));

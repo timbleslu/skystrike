@@ -239,11 +239,13 @@ function commitNode(node) {
   const cost = nodeCost(node);
   player.tp -= cost;
   node.apply(player);
-  // Weekly noMissiles/noFlares stay sealed for the whole run: tech/armory nodes that do max+=n + refill
-  // (m5, e1, fk, armory bundles) would otherwise buy the ordnance back — re-zero after apply.
-  if (player._weeklyMods) {
-    if (player._weeklyMods.indexOf('noFlares') >= 0)   { player.flares = 0; player.maxFlares = 0; }
-    if (player._weeklyMods.indexOf('noMissiles') >= 0) { player.missiles = 0; player.maxMissiles = 0; }
+  // Weekly ordnance caps (noMissiles/noFlares/pack lastFlare/oneShot) stay sealed for the whole
+  // run: tech/armory nodes that do max+=n + refill (m5, e1, fk, armory bundles) would otherwise
+  // buy the ordnance back — re-clamp to the modifier's cap after apply (CF: effects are data).
+  if (player._weeklyEffects) {
+    const fx = player._weeklyEffects;
+    if (fx.flares != null)   { player.flares = Math.min(player.flares, fx.flares); player.maxFlares = fx.flares; }
+    if (fx.missiles != null) { player.missiles = Math.min(player.missiles, fx.missiles); player.maxMissiles = fx.missiles; }
   }
   if (node.repeat) { player.techRepeat[node.id] = repeatCount(node) + 1; }
   else { player.tech.push(node.id); player.upgrades.push(node.id); }
