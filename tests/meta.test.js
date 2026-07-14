@@ -5,16 +5,19 @@ global.store = { get(k) { return k in _kv ? _kv[k] : null; }, set(k, v) { _kv[k]
 global.devUnlockAll = false;   // js/globals.js dev toggle (default off — preserves existing assertions)
 
 const assert = require('assert');
+// F9: meta.js applyMetaPerks reads vetRank as a load-order global (core.js loads first in-browser);
+// mirror that in Node so the veterancy perk resolves the pure rank helper.
+global.vetRank = require('../js/core.js').vetRank;
 const {
-  spAward, perkCost, applyMetaPerks, sanitizeCallsign, emblemUnlocked,
+  spAward, perkCost, applyMetaPerks, stampVeterancy, sanitizeCallsign, emblemUnlocked,
   freshMeta, validMeta, loadMeta, saveMeta,
   perkLevel, perkMaxed, perkUnlocked, buyPerk,
   jetUnlocked, jetCost, buyJet, skinOwned, skinCost, buySkin,
   achEarned, grantAch, checkAchievements,
   META_KEY, META_VERSION,
 } = require('../js/meta.js');
-// boss-rush trio moved to core.js
-const { bossRushNext, bossRushDone, betterTime } = require('../js/core.js');
+// boss-rush trio + F9 veterancy cores from core.js
+const { bossRushNext, bossRushDone, betterTime, vetRank, VET_THRESHOLDS } = require('../js/core.js');
 
 const BOSS_RUSH_TOTAL = 5;   // gauntlet length (BOSS_RUSH_POOL in core.js)
 
@@ -317,3 +320,74 @@ assert.strictEqual(betterTime(100, 0), 100, 'an invalid (0) new time keeps the o
 assert.strictEqual(betterTime(0, 0), 0, 'no record and no valid time stays 0');
 assert.strictEqual(betterTime(100, -5), 100, 'a negative new time keeps the old record');
 console.log('ok - boss-rush pure helpers: sequence bounds, saturating completion, lower-wins best time');
+
+// ============================================================================
+//  F9 veterancy — vetRank thresholds, stamp accumulation, legacy heal, turn-rate perk cap
+// ============================================================================
+// vetRank: 5 escalating thresholds -> rank 0..5; each boundary exact, 0 below first, 5 at/above last
+assert.strictEqual(VET_THRESHOLDS.length, 5, 'exactly 5 veterancy thresholds');
+assert.strictEqual(vetRank(0), 0, 'zero kills = rank 0');
+assert.strictEqual(vetRank(VET_THRESHOLDS[0] - 1), 0, 'one below the first threshold = rank 0');
+for (var vi = 0; vi < VET_THRESHOLDS.length; vi++) {
+  assert.strictEqual(vetRank(VET_THRESHOLDS[vi]), vi + 1, 'exactly at threshold index ' + vi + ' = rank ' + (vi + 1));
+  if (vi > 0) assert.strictEqual(vetRank(VET_THRESHOLDS[vi] - 1), vi, 'one below threshold index ' + vi + ' stays rank ' + vi);
+}
+assert.strictEqual(vetRank(VET_THRESHOLDS[4]), 5, 'at the last threshold = rank 5 (max)');
+assert.strictEqual(vetRank(VET_THRESHOLDS[4] + 100000), 5, 'far above the last threshold caps at rank 5');
+assert.strictEqual(vetRank(-10), 0, 'negative kills clamp to rank 0');
+for (var vj = 1; vj < VET_THRESHOLDS.length; vj++) assert.ok(VET_THRESHOLDS[vj] > VET_THRESHOLDS[vj - 1], 'thresholds strictly escalate');
+console.log('ok - vetRank: 5 escalating thresholds, boundaries exact, 0 below first, 5 capped at/above last');
+
+// stampVeterancy: two runs accumulate per jet; other jets untouched; persists through the store seam
+setMeta(freshMeta());
+assert.deepStrictEqual(getMeta().veterancy, {}, 'fresh meta starts with an empty veterancy map');
+stampVeterancy('F-22', 10);
+stampVeterancy('F-22', 15);
+stampVeterancy('SU-57', 4);
+let mVet = getMeta();
+assert.strictEqual(mVet.veterancy['F-22'], 25, 'two runs on F-22 accumulate (10 + 15)');
+assert.strictEqual(mVet.veterancy['SU-57'], 4, 'a different jet tallies independently, untouched by F-22 runs');
+stampVeterancy('F-22', 0);   // a zero-kill run adds nothing
+assert.strictEqual(getMeta().veterancy['F-22'], 25, 'a zero-kill run leaves the tally unchanged');
+stampVeterancy(null, 5);     // no jet id -> ignored, no crash, no stray key
+assert.strictEqual(Object.keys(getMeta().veterancy).length, 2, 'a null jetId adds no entry');
+console.log('ok - stampVeterancy: per-jet accumulation, other jets untouched, zero/null runs are no-ops');
+
+// legacy-save heal: a meta WITHOUT veterancy heals to {} on load and keeps all other progression (no wipe)
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 321, jets: { 'J-20': true }, skins: {}, perks: { hull: 2 }, ach: {} });
+assert.ok(validMeta(JSON.parse(_kv[META_KEY])), 'legacy save (no veterancy field) still validates — validMeta stayed lenient');
+loadMeta();
+let mVetHeal = getMeta();
+assert.deepStrictEqual(mVetHeal.veterancy, {}, 'legacy save healed: veterancy defaults to an empty object');
+assert.strictEqual(mVetHeal.sp, 321, 'legacy save keeps its SP (no progression wipe)');
+assert.strictEqual(mVetHeal.perks.hull, 2, 'legacy save keeps its perk levels');
+assert.strictEqual(mVetHeal.jets['J-20'], true, 'legacy save keeps its unlocked jets');
+// a corrupt (non-object) veterancy field also heals to {} without wiping the rest
+_kv = {}; _kv[META_KEY] = JSON.stringify({ v: 1, sp: 5, jets: {}, skins: {}, perks: {}, ach: {}, veterancy: 'oops' });
+loadMeta();
+assert.deepStrictEqual(getMeta().veterancy, {}, 'a corrupt veterancy field heals to {}');
+console.log('ok - veterancy heal: legacy/corrupt saves gain veterancy:{} on load, progression preserved');
+
+// turn-rate perk: applyMetaPerks bumps the flown airframe's turnMul by +1% per veterancy rank (cap +5%)
+function vetPlayer(jetId) {
+  return { jet: { id: jetId }, stats: { turnRate: 1 }, turnMul: 1,
+    maxHp: 100, hp: 100, maxShield: 50, shield: 50, gunDmgMul: 1, missileDmgMul: 1,
+    missiles: 16, maxMissiles: 40, flares: 10, maxFlares: 10, rpMul: 1, scoreMul: 1 };
+}
+// rank 5 (kills at/above the last threshold) -> exactly +5% (the cap)
+setMeta(freshMeta()); stampVeterancy('F-22', VET_THRESHOLDS[4]);
+let pVet5 = vetPlayer('F-22'); applyMetaPerks(pVet5);
+assert.ok(Math.abs(pVet5.turnMul - 1.05) < 1e-9, 'rank 5 veterancy -> turnMul +5% (cap)');
+// rank 2 -> exactly +2%
+setMeta(freshMeta()); stampVeterancy('F-22', VET_THRESHOLDS[1]);
+let pVet2 = vetPlayer('F-22'); applyMetaPerks(pVet2);
+assert.ok(Math.abs(pVet2.turnMul - 1.02) < 1e-9, 'rank 2 veterancy -> turnMul +2%');
+// rank 0 (no kills) -> no turn-rate change
+setMeta(freshMeta());
+let pVet0 = vetPlayer('F-22'); applyMetaPerks(pVet0);
+assert.strictEqual(pVet0.turnMul, 1, 'rank 0 veterancy -> turnMul unchanged');
+// veterancy on a DIFFERENT airframe does not buff the flown one
+setMeta(freshMeta()); stampVeterancy('SU-57', VET_THRESHOLDS[4]);
+let pVetOther = vetPlayer('F-22'); applyMetaPerks(pVetOther);
+assert.strictEqual(pVetOther.turnMul, 1, 'veterancy on another airframe does not buff the flown jet');
+console.log('ok - veterancy perk: +1% turn rate per rank via applyMetaPerks, cap +5%, per-airframe');

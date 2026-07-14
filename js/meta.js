@@ -166,6 +166,18 @@ function bestStars(m, jetId, stars) {
   return best;
 }
 
+/* F9 veterancy: accumulate a run's kills onto the flown airframe's lifetime tally (meta.veterancy[jetId]).
+   Called ONCE per run from ui-flow.js endRun. Store-touching wrapper (mutates module meta + persists),
+   guarded + lenient like bankSP/bestStars; a zero-kill or unknown-jet run is a no-op. Returns the new tally. */
+function stampVeterancy(jetId, kills) {
+  if (!meta || !jetId) return 0;
+  if (!meta.veterancy) meta.veterancy = {};
+  var add = kills > 0 ? Math.floor(kills) : 0;
+  meta.veterancy[jetId] = (meta.veterancy[jetId] || 0) + add;
+  saveMeta();
+  return meta.veterancy[jetId];
+}
+
 /* ---------------- meta-upgrade perk tree ----------------
    Each perk is a bounded persistent edge applied at run start. apply(p, lvl) mutates the freshly
    spawned player; lvl 0 is a no-op (perk not owned). Costs scale with level via perkCost. */
@@ -204,6 +216,15 @@ function applyMetaPerks(player) {
     var lvl = meta.perks[def.id] || 0;
     if (lvl > 0) def.apply(player, lvl);
   }
+  // === F9 veterancy perk: +1% turn rate per veterancy rank of the FLOWN airframe (cap +5% at rank 5).
+  // Multiplies player.turnMul (combat.js's dedicated turn-rate multiplier), so it composes with the base
+  // stat + in-run modifiers. vetRank is a load-order global (core.js loads first); typeof-guarded for safety. ===
+  var vetJet = player.jet && player.jet.id;
+  if (vetJet && meta.veterancy && typeof vetRank === 'function') {
+    var vr = vetRank(meta.veterancy[vetJet] || 0);
+    if (vr > 0) player.turnMul = (player.turnMul || 1) * (1 + 0.01 * vr);
+  }
+  // === end F9 ===
 }
 
 /* ---------------- cosmetic skins (per airframe) ----------------
@@ -349,7 +370,7 @@ function setCallsign(str) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, campaign: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, campaign: {}, veterancy: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -372,6 +393,7 @@ function loadMeta() {
   if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
   if (typeof meta.slot2 !== 'boolean') meta.slot2 = false;   // F3: 2nd-special-slot unlock
   if (!meta.campaign || typeof meta.campaign !== 'object') meta.campaign = {};   // Operations Map revamp — campaign progress (heal, never wipe)
+  if (!meta.veterancy || typeof meta.veterancy !== 'object') meta.veterancy = {};   // F9 veterancy — per-airframe lifetime kill tallies (heal, keep progression, never wipe)
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
@@ -525,7 +547,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // pure/scoring cores
     spAward, gradeRun, evalStars, evalStarsFor, starCondMet, STAR_DEFAULT_CONDS, bestStars, perkCost,
     starsForType, levelConds, STAR_TYPE_CONDS, snapshotRunCounters, levelRunDelta,
-    applyMetaPerks, sanitizeCallsign, emblemUnlocked,
+    applyMetaPerks, stampVeterancy, sanitizeCallsign, emblemUnlocked,
     // meta lifecycle
     freshMeta, validMeta, loadMeta, saveMeta,
     // perk API

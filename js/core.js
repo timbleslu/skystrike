@@ -1311,3 +1311,16 @@ function formationBreak(distToPlayer, leaderAlive, cfg) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { FORMATIONS, formationSlots, formationBreak });
 // === end F2 ===
+// === F9 veterancy ===
+// Per-airframe veterancy rank derived from lifetime kills. vetRank(kills) → integer 0..5 over 5
+// escalating thresholds: rank 0 below the first threshold, rank N once kills ≥ VET_THRESHOLDS[N-1],
+// capped at 5 (kills ≥ the last threshold). PURE — no THREE/store/DOM.
+const VET_THRESHOLDS = [25, 75, 150, 300, 600];
+function vetRank(kills) {
+  var k = kills > 0 ? kills : 0;
+  var r = 0;
+  for (var i = 0; i < VET_THRESHOLDS.length; i++) if (k >= VET_THRESHOLDS[i]) r = i + 1;
+  return r;
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { VET_THRESHOLDS, vetRank });
+// === end F9 ===

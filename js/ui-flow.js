@@ -144,6 +144,7 @@ function endRun(title, win) {
   const gradedAward = Math.round(award * grade.mult);
   const achRes = checkAchievements(run, player);
   bankSP(gradedAward);                 // achievement SP is banked inside grantAch
+  stampVeterancy((player && player.jet && player.jet.id) || null, run.kills);   // F9 veterancy: tally this run's kills onto the flown airframe (once per run)
   const total = gradedAward + (achRes.sp || 0);
   const spd = g('go_sp');
   if (spd) {

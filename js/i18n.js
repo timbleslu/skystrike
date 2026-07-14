@@ -2391,3 +2391,18 @@ Object.assign(I18N.KO.meta, {
   'skin.emberwake': { name: '엠버 웨이크' },
 });
 /* === end F7 new-jet === */
+/* === F9 veterancy — per-airframe rank insignia strings (chip label + 5 escalating rank names), EN + ZH + KO.
+   Appended via Object.assign so the concurrent factory features don't collide inside the big I18N literals. */
+Object.assign(I18N.EN, {
+  'vet.label': 'VETERANCY',
+  'vet.rank1': 'BLOODED', 'vet.rank2': 'SEASONED', 'vet.rank3': 'VETERAN', 'vet.rank4': 'ACE', 'vet.rank5': 'LEGEND',
+});
+Object.assign(I18N.ZH, {
+  'vet.label': '资历',
+  'vet.rank1': '初阵', 'vet.rank2': '老练', 'vet.rank3': '老兵', 'vet.rank4': '王牌', 'vet.rank5': '传奇',
+});
+Object.assign(I18N.KO, {
+  'vet.label': '숙련도',
+  'vet.rank1': '실전', 'vet.rank2': '숙련', 'vet.rank3': '베테랑', 'vet.rank4': '에이스', 'vet.rank5': '전설',
+});
+/* === end F9 === */

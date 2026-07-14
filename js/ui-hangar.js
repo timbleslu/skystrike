@@ -276,6 +276,16 @@ function setSpecial2(id) {
 
 function renderJetCard(i) {
   const j = JETS[i];
+  // F9 veterancy: rank insignia chip (chevrons + rank name) for this airframe, hidden at rank 0.
+  // Inline-styled (styles.css is out of scope) so it reads as an amber badge regardless of theme.
+  const vetKills = (typeof meta !== 'undefined' && meta && meta.veterancy && meta.veterancy[j.id]) || 0;
+  const vetR = (typeof vetRank === 'function') ? vetRank(vetKills) : 0;
+  const vetChip = vetR > 0
+    ? '<div class="cvet" title="' + t('vet.label') + ' · ' + vetKills + '" style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:2px 9px;border-radius:11px;background:rgba(255,210,63,0.14);border:1px solid rgba(255,210,63,0.55);color:#ffd23f;font-size:11px;font-weight:700;letter-spacing:0.06em;white-space:nowrap">'
+        + '<span style="letter-spacing:-2px;font-size:12px">' + '❯'.repeat(vetR) + '</span>'
+        + '<span>' + t('vet.rank' + vetR) + '</span>'
+      + '</div>'
+    : '';
   g('jetCard').innerHTML =
     '<div id="jetPreview3D" class="jetpreview3d">' +   // C1: 3D preview HERO at the TOP of the card (the persistent isolated canvas is reparented in here)
       '<div class="jpzoom">' +   // F2: side-mounted zoom slider (dollies previewCamera; reset to 1.0 on jet switch)
@@ -286,7 +296,7 @@ function renderJetCard(i) {
     '<div class="cbgrid">' +
       '<div class="cbhead">' +
         '<div><div class="cname">' + jetText(j, 'name') + '</div><div class="crole">' + jetText(j, 'role') + '</div></div>' +
-        '<div class="cbtags"><div class="cgen">' + genText(j.gen) + '</div><div class="cability">\u25C8 ' + (j.ability ? jetText(j, 'ability') : t('card.noSpecial')) + '</div></div>' +
+        '<div class="cbtags"><div class="cgen">' + genText(j.gen) + '</div><div class="cability">\u25C8 ' + (j.ability ? jetText(j, 'ability') : t('card.noSpecial')) + '</div>' + vetChip + '</div>' +
       '</div>' +
       '<div>' +
         '<div class="cstats">' +
