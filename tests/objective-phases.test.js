@@ -27,6 +27,7 @@ const FLAGGED = [
   ['ironVeil', 'firstLight'], ['ironVeil', 'blindspot'],
   ['midnightMeridian', 'deadChannel'], ['midnightMeridian', 'ghostSignal'],
   ['sunfireHorizon', 'deadReckoning'], ['sunfireHorizon', 'silentEntry'],
+  ['polarVortex', 'iceBreaker'], ['polarVortex', 'whiteout'],   // F6 op4: two authored objective sequences
 ];
 const NAV = { RECON: 4, STEALTH: 1 };   // default fly-to-waypoints a nav objective lays
 function flyToOf(o) { return (o && typeof o === 'object' && o.wp != null) ? o.wp : (NAV[typeof o === 'string' ? o : o.type] || 0); }
@@ -56,6 +57,6 @@ for (const op of OPERATIONS) for (const lvl of op.levels) {
       'only previously-flagged levels carry an objectives sequence: ' + op.id + '.' + lvl.id);
   }
 }
-assert.strictEqual(converted, 6, 'exactly the 6 flagged levels were converted');
+assert.strictEqual(converted, 8, 'exactly the 8 flagged levels were converted (6 base + 2 op4)');
 
 console.log('objective-phases.test.js PASS');
