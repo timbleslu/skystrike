@@ -2373,3 +2373,21 @@ Object.assign(I18N.KO, {
   'hud.overheat': '과열',
 });
 /* === end F1 gun-overheat === */
+/* === F7 new-jet — NGAD directed-energy demonstrator (EN + ZH + KO) ===
+   Jet name is language-neutral (roster.js NGAD row); its role/desc/ability/passive/context are the
+   canonical EN roster fields, with the ZH + KO overrides already in I18N.ZH.jet / I18N.KO.jet.
+   The only net-new strings are the two designed-livery NAMES, added to each language's meta group
+   (metaText reads I18N[LANG].meta['skin.<id>'].name; the 'default' skin reuses the shared skin.default). */
+Object.assign(I18N.EN.meta, {
+  'skin.ionveil':   { name: 'ION VEIL' },
+  'skin.emberwake': { name: 'EMBER WAKE' },
+});
+Object.assign(I18N.ZH.meta, {
+  'skin.ionveil':   { name: '离子帷幕' },
+  'skin.emberwake': { name: '余烬尾焰' },
+});
+Object.assign(I18N.KO.meta, {
+  'skin.ionveil':   { name: '이온 베일' },
+  'skin.emberwake': { name: '엠버 웨이크' },
+});
+/* === end F7 new-jet === */

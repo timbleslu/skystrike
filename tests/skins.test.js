@@ -13,10 +13,12 @@ const {
 
 function setMeta(obj) { _kv[META_KEY] = JSON.stringify(obj); loadMeta(); }
 
-const TEXTURELESS = ['FT-1', 'F-47', 'J-20', 'J-36', 'J-50', 'EFT', 'FA18'];
+// The skinnable jets: 7 textureless glTF exports + the procedural NGAD (F7 — buildJet, no glTF; its
+// liveries render via color/accent and the `zones` maps are inert schema-parity, but the structure holds).
+const TEXTURELESS = ['FT-1', 'F-47', 'J-20', 'J-36', 'J-50', 'EFT', 'FA18', 'NGAD'];
 
-// ---- structure: exactly the 7 textureless jets, 3 skins each ----
-assert.deepStrictEqual(Object.keys(SKINS).sort(), TEXTURELESS.slice().sort(), 'SKINS keys are exactly the 7 textureless jets');
+// ---- structure: exactly the 8 skinnable jets, 3 skins each ----
+assert.deepStrictEqual(Object.keys(SKINS).sort(), TEXTURELESS.slice().sort(), 'SKINS keys are exactly the 8 skinnable jets');
 for (const id of TEXTURELESS) {
   const list = SKINS[id];
   assert.strictEqual(list.length, 3, id + ' has exactly 3 skins (default + 2 designed)');
@@ -37,11 +39,11 @@ for (const id of TEXTURELESS) {
   // the two designed ids differ (distinct liveries, not a repeat)
   assert.notStrictEqual(list[1].id, list[2].id, id + ' skins 2 & 3 are distinct');
 }
-console.log('ok - SKINS: 7 textureless jets × (plain default + 2 designed zoned liveries)');
+console.log('ok - SKINS: 8 skinnable jets × (plain default + 2 designed zoned liveries)');
 
-// ---- the 7 plain defaults read distinct ----
+// ---- the 8 plain defaults read distinct ----
 const defs = TEXTURELESS.map(id => SKINS[id][0].color);
-assert.strictEqual(new Set(defs).size, TEXTURELESS.length, 'all 7 default colours are unique');
+assert.strictEqual(new Set(defs).size, TEXTURELESS.length, 'all 8 default colours are unique');
 console.log('ok - default skins are unique per jet');
 
 // ---- resolveSkinPaint: ownership-agnostic descriptor (color/accent/zones) ----
