@@ -1324,3 +1324,77 @@ function vetRank(kills) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { VET_THRESHOLDS, vetRank });
 // === end F9 ===
+// === F8 weekly-challenge ===
+// PURE — ISO-8601 week → deterministic seed + week id + 2-modifier pick, mirroring the daily core.
+// Every helper takes a date STRING ('YYYY-MM-DD') and NEVER reads the clock (pure integer arithmetic,
+// no Date object at all) so the SAME ISO week yields the SAME seed on ANY weekday and in ANY timezone.
+// ISO week: weeks start Monday; week 1 is the week holding the year's first Thursday (the Jan-4 rule).
+function wkIsLeap(y) { return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0; }
+// day-of-year 1..366
+function wkDayOfYear(y, m, d) {
+  var cum = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+  var ord = cum[(m - 1) | 0] + (d | 0);
+  if (m > 2 && wkIsLeap(y)) ord += 1;
+  return ord;
+}
+// ISO weekday Mon=1..Sun=7 via Sakamoto's congruence (integer-only, clock-free)
+function wkIsoDow(y, m, d) {
+  var t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+  var yy = m < 3 ? y - 1 : y;
+  var dow = (yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) + t[(m - 1) | 0] + d) % 7; // 0=Sun
+  return ((dow + 6) % 7) + 1; // Mon=1..Sun=7
+}
+// ISO weeks in a year: 53 iff its first day (or its predecessor's) lands on a long-year weekday.
+function wkWeeksInYear(y) {
+  var p = function (yr) { return ((yr + Math.floor(yr / 4) - Math.floor(yr / 100) + Math.floor(yr / 400)) % 7 + 7) % 7; };
+  return (p(y) === 4 || p(y - 1) === 3) ? 53 : 52;
+}
+// Parse 'YYYY-MM-DD' → { weekYear, week } ISO-8601 week parts. PURE.
+function isoWeekParts(dateStr) {
+  var s = String(dateStr).split('-');
+  var y = s[0] | 0, m = s[1] | 0, d = s[2] | 0;
+  var ord = wkDayOfYear(y, m, d), dow = wkIsoDow(y, m, d);
+  var week = Math.floor((ord - dow + 10) / 7);
+  var weekYear = y;
+  if (week < 1) { weekYear = y - 1; week = wkWeeksInYear(weekYear); }
+  else if (week > wkWeeksInYear(y)) { weekYear = y + 1; week = 1; }
+  return { weekYear: weekYear, week: week };
+}
+// weekIdFor('2026-07-13') → '2026-W29' (the meta key). PURE.
+function weekIdFor(dateStr) {
+  var p = isoWeekParts(dateStr);
+  return p.weekYear + '-W' + ('0' + p.week).slice(-2);
+}
+// weeklySeedFor('2026-07-13') → deterministic uint32 seed for that ISO week. PURE, clock-free.
+// Same avalanche as dailySeedFor; packs (weekYear, week) so all 7 days of one ISO week map to ONE seed.
+function weeklySeedFor(dateStr) {
+  var p = isoWeekParts(dateStr);
+  var x = ((p.weekYear | 0) * 54 + (p.week | 0)) | 0;
+  x = (x ^ 0x9e3779b9) | 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
+  return (x ^ (x >>> 16)) >>> 0;
+}
+// Weekly modifier table — >=5 distinct run-start handicaps. IDs only (pure data); the impure
+// application (player/weather mutation) lives in ui-flow.js + main.js spawn guards.
+var WEEKLY_MODIFIERS = [
+  { id: 'stormFront' },   // the sky is locked to storm all week
+  { id: 'noFlares' },     // countermeasures offline — no flares
+  { id: 'noMissiles' },   // hardpoints sealed — guns only
+  { id: 'doubleAces' },   // an extra ace joins every wave
+  { id: 'heavyWing' },    // reinforced airframe — agility cut
+];
+// weeklyModifiers(seed) → 2 DISTINCT modifiers for the week, deterministic from the seed via makeRng.
+function weeklyModifiers(seed) {
+  var rng = makeRng(seed);
+  var pool = WEEKLY_MODIFIERS.slice();
+  var out = [];
+  for (var k = 0; k < 2 && pool.length; k++) {
+    var i = Math.floor(rng() * pool.length) % pool.length;
+    out.push(pool[i]);
+    pool.splice(i, 1);
+  }
+  return out;
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { weeklySeedFor, weekIdFor, WEEKLY_MODIFIERS, weeklyModifiers });
+// === end F8 ===

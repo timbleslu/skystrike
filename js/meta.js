@@ -165,6 +165,21 @@ function bestStars(m, jetId, stars) {
   m.stars[jetId] = best;
   return best;
 }
+/* F8 weekly-challenge best score, keyed by ISO week id — PURE over (meta, ...), mirrors bestStars.
+   weeklyBest reads (0 when unset); recordWeeklyBest keeps the higher of stored/new and returns it.
+   Lazy-creates meta.weekly so a meta predating the field still works. */
+function weeklyBest(m, weekId) {
+  if (!m || !m.weekly || !weekId) return 0;
+  return m.weekly[weekId] || 0;
+}
+function recordWeeklyBest(m, weekId, score) {
+  if (!m || !weekId) return score > 0 ? score : 0;
+  if (!m.weekly) m.weekly = {};
+  var prev = m.weekly[weekId] || 0;
+  var best = score > prev ? score : prev;
+  m.weekly[weekId] = best;
+  return best;
+}
 
 /* F9 veterancy: accumulate a run's kills onto the flown airframe's lifetime tally (meta.veterancy[jetId]).
    Called ONCE per run from ui-flow.js endRun. Store-touching wrapper (mutates module meta + persists),
@@ -370,7 +385,7 @@ function setCallsign(str) {
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
-  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, campaign: {}, veterancy: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
+  return { v: META_VERSION, sp: 0, jets: jets, skins: {}, perks: {}, ach: {}, stars: {}, campaign: {}, veterancy: {}, weekly: {}, callsign: '', emblem: 'wings', patches: {}, slot2: false, bossRushUnlocked: false, bossRushBest: 0 };
 }
 function validMeta(m) {
   return !!(m && typeof m === 'object' && typeof m.v === 'number' && typeof m.sp === 'number' && m.sp >= 0 &&
@@ -394,6 +409,7 @@ function loadMeta() {
   if (typeof meta.slot2 !== 'boolean') meta.slot2 = false;   // F3: 2nd-special-slot unlock
   if (!meta.campaign || typeof meta.campaign !== 'object') meta.campaign = {};   // Operations Map revamp — campaign progress (heal, never wipe)
   if (!meta.veterancy || typeof meta.veterancy !== 'object') meta.veterancy = {};   // F9 veterancy — per-airframe lifetime kill tallies (heal, keep progression, never wipe)
+  if (!meta.weekly || typeof meta.weekly !== 'object') meta.weekly = {};   // F8 weekly-challenge — best score per ISO week id (heal, never wipe)
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 
@@ -567,3 +583,4 @@ if (typeof module !== 'undefined' && module.exports) {
     JET_LOCK_COST, SKIN_COST,
   };
 }
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { weeklyBest, recordWeeklyBest });   // F8 weekly-challenge
