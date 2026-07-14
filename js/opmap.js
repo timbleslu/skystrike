@@ -65,6 +65,24 @@ const OPERATIONS = [
         ] } },
     ],
   },
+  {
+    id: 'polarVortex', nameKey: 'op.polarVortex.name', theaterKey: 'op.polarVortex.theater', loreKey: 'op.polarVortex.lore',
+    levels: [
+      { id: 'iceBreaker',  coords: { x: 20, y: 84 }, nameKey: 'op.polarVortex.l1.name', type: 'RECON',     objectives: [{ type: 'RECON', wp: 2 }, { type: 'STRIKE', spawn: { ground: true } }], loreKey: 'op.polarVortex.l1.lore', objectivesKey: 'op.polarVortex.l1.obj', enemyIntelKey: 'op.polarVortex.l1.intel', starUnique: { type: 'fastClear', n: 150 }, waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'fog',   tod: 0, hostileAce: false } },
+      { id: 'coldStart',   coords: { x: 44, y: 74 }, nameKey: 'op.polarVortex.l2.name', type: 'FURBALL',   loreKey: 'op.polarVortex.l2.lore', objectivesKey: 'op.polarVortex.l2.obj', enemyIntelKey: 'op.polarVortex.l2.intel', starUnique: { type: 'gunOnly' }, waves: 2, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
+      { id: 'whiteout',    coords: { x: 70, y: 78 }, nameKey: 'op.polarVortex.l3.name', type: 'STEALTH',   objectives: [{ type: 'STEALTH', wp: 1 }, { type: 'STRIKE', spawn: { ground: true } }, { type: 'SWEEP', spawn: { fighters: 3 } }], loreKey: 'op.polarVortex.l3.lore', objectivesKey: 'op.polarVortex.l3.obj', enemyIntelKey: 'op.polarVortex.l3.intel', starUnique: { type: 'noFlares' }, waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: true,  weather: 'fog',   tod: 2, hostileAce: false } },
+      { id: 'hardFreeze',  coords: { x: 60, y: 50 }, nameKey: 'op.polarVortex.l4.name', type: 'INTERCEPT', loreKey: 'op.polarVortex.l4.lore', objectivesKey: 'op.polarVortex.l4.obj', enemyIntelKey: 'op.polarVortex.l4.intel', starUnique: { type: 'fastClear', n: 150 }, waves: 3, spawn: { fighters: 3, aces: 0, bombers: 3, ground: false, weather: 'storm', tod: 1, hostileAce: true } },
+      { id: 'polarNight',  coords: { x: 28, y: 40 }, nameKey: 'op.polarVortex.l5.name', type: 'DEFEND',    loreKey: 'op.polarVortex.l5.lore', objectivesKey: 'op.polarVortex.l5.obj', enemyIntelKey: 'op.polarVortex.l5.intel', starUnique: { type: 'flawless' }, waves: 3, spawn: { fighters: 3, aces: 1, bombers: 1, ground: false, weather: 'storm', tod: 2, hostileAce: true } },
+      { id: 'iceRoad',     coords: { x: 14, y: 60 }, nameKey: 'op.polarVortex.l6.name', type: 'ESCORT',    loreKey: 'op.polarVortex.l6.lore', objectivesKey: 'op.polarVortex.l6.obj', enemyIntelKey: 'op.polarVortex.l6.intel', setpiece: 'bomberRun', starUnique: { type: 'noDamage' }, waves: 4, spawn: { fighters: 3, aces: 1, bombers: 0, ground: false, weather: 'fog',   tod: 1, hostileAce: true } },
+      { id: 'thinIce',     coords: { x: 50, y: 30 }, nameKey: 'op.polarVortex.l7.name', type: 'STRIKE',    loreKey: 'op.polarVortex.l7.lore', objectivesKey: 'op.polarVortex.l7.obj', enemyIntelKey: 'op.polarVortex.l7.intel', starUnique: { type: 'killsN', n: 6 }, waves: 4, spawn: { fighters: 3, aces: 0, bombers: 0, ground: true,  weather: 'storm', tod: 0, hostileAce: true } },
+      { id: 'northWind',   coords: { x: 72, y: 20 }, nameKey: 'op.polarVortex.l8.name', type: 'FINAL',     loreKey: 'op.polarVortex.l8.lore', objectivesKey: 'op.polarVortex.l8.obj', enemyIntelKey: 'op.polarVortex.l8.intel', starUnique: { type: 'killsN', n: 6 }, waves: 1, isBoss: true, bossApproachWave: true, spawn: { fighters: 4, aces: 2, bombers: 0, ground: false, weather: 'storm', tod: 2, hostileAce: false },
+        boss: { callsignKey: 'boss.boreas', introKey: 'op.polarVortex.l8.bossIntro', phases: [
+          { descKey: 'boss.boreas.p1', turnMul: 0.9, fireMul: 1.0, extraMissiles: 2, pattern: 'standoff', weather: 'storm', tod: 2 },
+          { descKey: 'boss.boreas.p2', turnMul: 1.2, fireMul: 1.3, extraMissiles: 2, weather: 'fog', flags: ['chaff'] },
+          { descKey: 'boss.boreas.p3', turnMul: 1.5, fireMul: 1.0, extraMissiles: 0, pattern: 'headOn' },
+        ] } },
+    ],
+  },
 ];
 
 // PURE: build the authored-absolute spawn plan for a level row. Unlike sectorPlan(type, wave)
