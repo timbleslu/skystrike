@@ -741,16 +741,16 @@ function buildJet(color, accent, cfg, hero) {
   for (const ex of xs) {
     if (cfg.nozzle === '2d') {
       const w = rR * 1.5, h = rR * 1.5 * flat;
-      const noz = new THREE.Mesh(new THREE.BoxGeometry(w, h, 2.2), dark);
+      const noz = new THREE.Mesh(cacheGeo(gk('exnoz2d'), () => new THREE.BoxGeometry(w, h, 2.2)), dark);
       noz.position.set(ex, 0, exZ - 0.4); g.add(noz);
       const ramps = hero ? 5 : 1;
       for (const sy of [-1, 1]) {
         for (let r = 0; r < ramps; r++) {
-          const ramp = new THREE.Mesh(new THREE.BoxGeometry(w * 0.96, 0.12, 2.0 / ramps), hero ? steel : steel);
+          const ramp = new THREE.Mesh(cacheGeo(gk('exramp2d'), () => new THREE.BoxGeometry(w * 0.96, 0.12, 2.0 / ramps)), hero ? steel : steel);
           ramp.position.set(ex, sy * h * 0.5, exZ - 1.0 + (r + 0.5) * (2.0 / ramps)); g.add(ramp);
         }
       }
-      const inner = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.6, 1.0), nozIn);
+      const inner = new THREE.Mesh(cacheGeo(gk('exinner2d'), () => new THREE.BoxGeometry(w * 0.7, h * 0.6, 1.0)), nozIn);
       inner.position.set(ex, 0, exZ + 0.3); g.add(inner);
     } else {
       const segN = hero ? 40 : 20;

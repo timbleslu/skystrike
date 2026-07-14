@@ -780,7 +780,7 @@ function wingmanSpecial(w) {
 }
 
 function clearWingmen() {
-  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].group) detachFromScene(wingmen[i].group);
+  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].group) { scene.remove(wingmen[i].group); disposeGroup(wingmen[i].group); }
   wingmen.length = 0;
 }
 

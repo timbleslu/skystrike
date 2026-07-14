@@ -338,7 +338,7 @@ function saveSettings() {
   } catch (e) {}
 }
 function clearArena() {
-  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
+  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); disposeGroup(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
   for (let i = 0; i < bullets.length; i++) scene.remove(bullets[i].mesh);
   for (let i = 0; i < missiles.length; i++) scene.remove(missiles[i].mesh);
   for (let i = 0; i < flares.length; i++) scene.remove(flares[i].mesh);
@@ -350,7 +350,7 @@ function clearArena() {
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0;
   BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
-  if (player && player.group) scene.remove(player.group);
+  if (player && player.group) { scene.remove(player.group); disposeGroup(player.group); }
   player = null;
   if (h2d) h2d.clearRect(0, 0, W, H);
   if (radarCtx) radarCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
