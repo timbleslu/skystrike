@@ -134,6 +134,8 @@ function buildHangar() {
   renderKillBoard();
   const db = g('dailyBtn'); if (db) db.addEventListener('click', startDaily);
   refreshDailyEntry();
+  const wb = g('weeklyBtn'); if (wb) wb.addEventListener('click', startWeekly);   // F8 weekly: wire the weekly entry beside the daily one
+  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();   // F8 weekly: render this week's modifiers + best
   const brb = g('bossRushBtn'); if (brb) brb.addEventListener('click', startBossRush);   // F15
   refreshBossRushEntry();
   const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);

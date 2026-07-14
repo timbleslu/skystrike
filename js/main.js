@@ -47,6 +47,7 @@ function nextWave() {
     return;
   }
   applyWeather(rollWeather(weatherSeed + wave));
+  if (player && player._weeklyMods && player._weeklyMods.indexOf('stormFront') >= 0) applyWeather('storm');   // F8 weekly: stormFront modifier locks the sky to storm every wave
   const _wCond = weatherLabel();
   if (strike) {
     strikeWaveActive = true; bossWaveActive = lastWaveWasBoss = false;
@@ -72,6 +73,7 @@ function nextWave() {
   else showBanner(_wCond ? tf('banner.wave', { n: wave }) + '  ·  ' + _wCond : tf('banner.wave', { n: wave }));
   if (wave >= 3 && !bossWaveActive && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
   if (wildcard) pendingSpawns.push(spawnAce);   // wildcard always brings an extra ace for spice
+  if (player && player._weeklyAces && !bossWaveActive) pendingSpawns.push(spawnAce);   // F8 weekly: doubleAces modifier adds one extra ace on every non-boss wave
   if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
   if (wave >= 4 && !bossWaveActive && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
   if (wave >= 3 && !bossWaveActive && Math.random() < 0.5) {

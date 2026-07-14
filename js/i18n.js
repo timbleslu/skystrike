@@ -2562,3 +2562,53 @@ Object.assign(I18N.KO, {
   'boss.boreas.p3': '페이즈 3 — 수가 다한 그는 어둠 속으로 상승했다가 마지막 고속 정면으로 굴러 들어온다. 교차를 이겨라.',
 });
 /* === end F6 operation-4 === */
+/* === F8 weekly-challenge — hangar card + modifier names/descs (EN + ZH + KO) === */
+Object.assign(I18N.EN, {
+  'weekly.title': '◈ WEEKLY CHALLENGE',
+  'weekly.play': '▶ FLY THIS WEEK’S OPS',
+  'weekly.sub': 'This week’s modifiers: {mods}. Fixed seed — chase your best.',
+  'weekly.best': 'WEEK’S BEST {best}',
+  'weekly.mod.stormFront': 'Storm Front',
+  'weekly.mod.stormFront.d': 'The sky is locked to a raging storm all week — fog, turbulence, low visibility.',
+  'weekly.mod.noFlares': 'Flares Offline',
+  'weekly.mod.noFlares.d': 'Countermeasures are grounded. No flares — dodge every missile the hard way.',
+  'weekly.mod.noMissiles': 'Guns Only',
+  'weekly.mod.noMissiles.d': 'Hardpoints sealed. No missiles this week — every kill is a gun kill.',
+  'weekly.mod.doubleAces': 'Double Aces',
+  'weekly.mod.doubleAces.d': 'An extra enemy ace joins every wave. The skies are thick with veterans.',
+  'weekly.mod.heavyWing': 'Heavy Wing',
+  'weekly.mod.heavyWing.d': 'A reinforced, heavier airframe — turn rate is cut. Fly smooth, plan your turns.',
+});
+Object.assign(I18N.ZH, {
+  'weekly.title': '◈ 每周挑战',
+  'weekly.play': '▶ 出击本周任务',
+  'weekly.sub': '本周修正：{mods}。固定种子 — 刷新你的最佳成绩。',
+  'weekly.best': '本周最佳 {best}',
+  'weekly.mod.stormFront': '暴风前线',
+  'weekly.mod.stormFront.d': '整周天空锁定为狂暴风暴 — 浓雾、颠簸、低能见度。',
+  'weekly.mod.noFlares': '干扰弹失效',
+  'weekly.mod.noFlares.d': '对抗手段停用。没有干扰弹 — 只能硬躲每一枚导弹。',
+  'weekly.mod.noMissiles': '仅限机炮',
+  'weekly.mod.noMissiles.d': '挂架封锁。本周没有导弹 — 每一杀都靠机炮。',
+  'weekly.mod.doubleAces': '双倍王牌',
+  'weekly.mod.doubleAces.d': '每一波都多出一名敌方王牌。天空满是老手。',
+  'weekly.mod.heavyWing': '重型机翼',
+  'weekly.mod.heavyWing.d': '强化加重的机体 — 转向速率下降。飞得平稳，规划转弯。',
+});
+Object.assign(I18N.KO, {
+  'weekly.title': '◈ 위클리 챌린지',
+  'weekly.play': '▶ 이번 주 작전 출격',
+  'weekly.sub': '이번 주 수정자: {mods}. 고정 시드 — 최고 기록에 도전하라.',
+  'weekly.best': '이번 주 최고 {best}',
+  'weekly.mod.stormFront': '폭풍 전선',
+  'weekly.mod.stormFront.d': '한 주 내내 하늘이 사나운 폭풍으로 고정됩니다 — 안개, 난기류, 낮은 시야.',
+  'weekly.mod.noFlares': '플레어 불능',
+  'weekly.mod.noFlares.d': '대응 수단이 정지됩니다. 플레어 없음 — 모든 미사일을 맨몸으로 회피하라.',
+  'weekly.mod.noMissiles': '기총 전용',
+  'weekly.mod.noMissiles.d': '무장 장착대가 봉인됩니다. 이번 주 미사일 없음 — 모든 격추는 기총으로.',
+  'weekly.mod.doubleAces': '더블 에이스',
+  'weekly.mod.doubleAces.d': '매 웨이브마다 적 에이스가 하나 더 합류합니다. 하늘은 베테랑으로 가득합니다.',
+  'weekly.mod.heavyWing': '헤비 윙',
+  'weekly.mod.heavyWing.d': '강화되어 무거워진 기체 — 선회율이 감소합니다. 부드럽게 비행하고 선회를 계획하라.',
+});
+/* === end F8 weekly-challenge === */

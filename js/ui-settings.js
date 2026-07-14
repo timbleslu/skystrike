@@ -90,6 +90,7 @@ function applyLang() {
   setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
   if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
+  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();   // F8 weekly: entry label/modifiers follow language
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: boss-rush entry label/note follow language + unlock state
   setTxt('lblCallsign', t('pilot.callsign')); setTxt('lblEmblem', t('pilot.emblem'));
   const ci = g('callsignInput'); if (ci) ci.placeholder = t('pilot.placeholder');
@@ -383,5 +384,6 @@ function returnToHangar() {
   updateBest();
   renderKillBoard();
   refreshDailyEntry();   // daily button label/play-state can change after a run — keep it current
+  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();   // F8 weekly: best/modifiers can change after a run — keep it current
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: unlock/best-time can change after a run
 }

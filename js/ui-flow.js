@@ -46,10 +46,10 @@ function onMetaGridClick(e) {
   if (buyPerk(b.dataset.perk)) { updateSpHud(); renderMetaScreen(); audio.ui(); }
   else showBanner(t('meta.needSp'));
 }
-function startGame(i, daily, rush) {
+function startGame(i, daily, rush, weekly) {
   if (state !== 'hangar') return;
-  if (!daily && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
-  if (!daily && !rush && typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first
+  if (!daily && !weekly && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }   // F8: weekly (like daily) flies the seed-picked jet regardless of ownership
+  if (!daily && !rush && !weekly && typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first (weekly uses the seed jet, not the hangar preview)
   previewSkin = null;   // committing to launch → drop any transient preview (gameplay always uses the OWNED skin)
   if (opMode && !daily && !rush) { selectedJet = i; openOperationsSelect(); return; }   // Operations: enter campaign navigation (player built per-operation in launchLevel), not a direct run
   const _ptag = g('pilotTag');
@@ -59,6 +59,7 @@ function startGame(i, daily, rush) {
   }
   dailyMode = !!daily;   // explicit per-launch: only startDaily passes true; normal launches reset it to false
   bossRush = !!rush;     // F15: only startBossRush passes true; normal/daily launches reset it to false
+  weeklyMode = !!weekly; if (!weeklyMode) weeklyMods = null;   // F8 weekly: only startWeekly passes true; normal launches reset it + drop any stale modifier pick
   selectedJet = i; audio.init();
   closeManual();
   if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }   // C2: preview lives in the ISOLATED previewScene now, not the shared scene
@@ -71,6 +72,7 @@ function startGame(i, daily, rush) {
   createPlayer(i);
   if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
   equipSpecial2(player, special2Id, JETS[i].id);   // feature #3: load the equipped SLOT-2 special (or leave empty/inert if none/stale); slot 1 untouched
+  if (weeklyMode && weeklyMods) applyWeeklyMods(player, weeklyMods);   // F8 weekly: stack this week's 2 modifiers on the finished loadout (AFTER meta perks); main.js spawn guards read player._weeklyMods/_weeklyAces
   for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
@@ -82,7 +84,7 @@ function startGame(i, daily, rush) {
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
-  weatherT = 0; weatherSeed = dailyMode ? dailySeed : ((Math.random() * 0x7fffffff) | 0);   // daily fixes the weather seed; otherwise fresh per-run (standalone rolls derive from it)
+  weatherT = 0; weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);   // daily/weekly fix the weather seed off their date seed; otherwise fresh per-run (F8: stormFront overrides the roll per-wave in main.js)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
@@ -125,6 +127,9 @@ function endRun(title, win) {
   if (dailyMode) {   // record today's daily best (attempt already marked played in startDaily); keep the higher score
     const rec = dailyToday();
     saveDaily({ date: rec.date, played: true, best: Math.max(rec.best || 0, player.score) });
+  }
+  if (weeklyMode && typeof meta !== 'undefined') {   // F8 weekly: keep this week's best score in meta, keyed by ISO week id
+    recordWeeklyBest(meta, weekIdFor(todayKey()), player.score); saveMeta();
   }
   g('go_score').textContent = player.score.toLocaleString();
   g('go_wave').textContent = wave;
@@ -456,7 +461,7 @@ function enterOperationRun(opId) {
   clearCampaignArena();
   if (player && player.group) scene.remove(player.group);
   player = null;
-  dailyMode = false; bossRush = false;
+  dailyMode = false; bossRush = false; weeklyMode = false;   // F8 weekly: operation runs are never weekly
   wingDmgMul = 1;
   createPlayer(selectedJet);
   applyMetaPerks(player);
@@ -657,4 +662,60 @@ function startDaily() {
   const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;   // seed-derived jet restriction (everyone flies the same airframe today)
   dailySeed = seed;                                // startGame reads this to reset weatherSeed deterministically when dailyMode
   startGame(jetIdx, true);
+}
+
+// ===== Weekly challenge (F8) =====
+// ISO-week seed → 2 stacked run-start modifiers, replayable, best score saved per week in meta.
+// CRITICAL: the clock is read ONCE here at the call site (todayKey, browser runtime); the pure fns
+// (weeklySeedFor/weekIdFor/weeklyModifiers in core.js) never read the clock. These state vars live
+// here (not globals.js) because globals.js is not F8-owned; being top-level makes them readable by
+// main.js spawn guards / ui-hangar wiring at runtime.
+let weeklyMode = false;   // true only while flying a weekly run (mirrors dailyMode)
+let weeklySeed = 1;       // startGame reads this to fix weatherSeed deterministically when weeklyMode
+let weeklyMods = null;    // [id, id] the 2 active modifier ids for the current weekly run (null otherwise)
+// resolve today's ISO week id, seed, and this week's 2 modifier ids (pure fns fed the runtime date)
+function weeklyThisWeek() {
+  const key = todayKey();                       // 'YYYY-MM-DD' from the one daily clock read
+  const seed = weeklySeedFor(key);
+  return { id: weekIdFor(key), seed: seed, mods: weeklyModifiers(seed).map(function (m) { return m.id; }) };
+}
+// resolved display names for a list of modifier ids, joined for the card / banner
+function weeklyModNames(ids) {
+  return (ids || []).map(function (id) { return t('weekly.mod.' + id); }).join('  ·  ');
+}
+// apply the 2 stacked modifiers onto the freshly-built player (called from startGame AFTER meta perks).
+// Behavioural modifiers (stormFront weather-lock, doubleAces extra spawn) are enforced per-wave by the
+// main.js nextWave guards, which read player._weeklyMods / player._weeklyAces set here.
+function applyWeeklyMods(p, ids) {
+  if (!p || !ids) return;
+  p._weeklyMods = ids.slice();                          // stormFront: main.js re-locks weather to storm each wave
+  p._weeklyAces = ids.indexOf('doubleAces') >= 0;       // doubleAces: main.js pushes one extra ace per wave
+  if (ids.indexOf('noFlares') >= 0)   { p.flares = 0; p.maxFlares = 0; }        // countermeasures offline
+  if (ids.indexOf('noMissiles') >= 0) { p.missiles = 0; p.maxMissiles = 0; }    // hardpoints sealed — guns only
+  if (ids.indexOf('heavyWing') >= 0)  { p.turnMul = (p.turnMul || 1) * 0.6; }   // reinforced airframe — agility cut
+}
+// refresh the hangar Weekly entry: CTA + this week's 2 modifiers + this week's best (replayable, never locks)
+function refreshWeeklyEntry() {
+  const wk = weeklyThisWeek();
+  const btn = g('weeklyBtn');
+  if (btn) btn.textContent = t('weekly.play');
+  const note = g('weeklyNoteTxt');
+  if (note) {
+    const best = (typeof weeklyBest === 'function' && typeof meta !== 'undefined') ? weeklyBest(meta, wk.id) : 0;
+    let line = t('weekly.sub').replace('{mods}', weeklyModNames(wk.mods));
+    if (best > 0) line += '  ·  ' + t('weekly.best').replace('{best}', best.toLocaleString());
+    note.textContent = line;
+  }
+}
+// launch this week's run: seed-fix weather off the week seed, stash the 2 modifiers, fly standalone endless
+function startWeekly() {
+  if (state !== 'hangar') return;
+  const wk = weeklyThisWeek();
+  opMode = false;                                 // weekly is standalone endless, not the op-map campaign
+  weeklySeed = wk.seed;                            // startGame fixes weatherSeed off this when weeklyMode
+  weeklyMods = wk.mods;                            // startGame reads this to apply the 2 modifiers
+  const rng = makeRng(wk.seed);
+  const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;   // seed-derived airframe (everyone flies the same jet this week)
+  showBanner(t('weekly.title') + '  ·  ' + weeklyModNames(wk.mods));
+  startGame(jetIdx, false, false, true);
 }
