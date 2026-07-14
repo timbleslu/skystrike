@@ -1,6 +1,8 @@
 # ADR-0003 — Staged ESM + GameState migration (deferred)
 
-**Status:** Proposed / Deferred
+**Status:** Proposed / Deferred → scheduled after deployment (see [ADR-0004](./0004-web-stack-confirmed.md))
+
+> **Update (2026-06-20):** [ADR-0004](./0004-web-stack-confirmed.md) confirmed the web stack and identified this migration as the real lever behind "won't limit functionality" + the on-ramp to multiplayer. Deferral rationale #3 below ("live game shipping to iOS → a regression reaches production") is now **weaker**: iOS/App Store is no longer a goal, and the Vercel web deploy is trivially revertible. The incremental, screenshot-gated approach under "If revisited later" still stands.
 
 ## Context
 Two larger refactors were considered to attack the downsides of [ADR-0001](./0001-no-build-globals-script-tags.md): (1) migrating to **ES modules** (explicit `import` / `export`, engine-enforced load order) and (2) collapsing the loose globals in `globals.js` into a single **`GameState`** object.
