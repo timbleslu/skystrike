@@ -72,7 +72,9 @@ const dataUrl = await page.evaluate(({ view, shapesArg, skinId }) => {
 }, { view, shapesArg, skinId });
 
 const b64 = dataUrl.url.split(',')[1];
-const { writeFile } = await import('fs/promises');
+const { writeFile, mkdir } = await import('fs/promises');
+const { dirname } = await import('path');
+await mkdir(dirname(join(root, out)), { recursive: true });
 await writeFile(join(root, out), Buffer.from(b64, 'base64'));
 console.log('wrote', out, '\norder (4 cols):', dataUrl.loaded.join(' '));
 await browser.close(); server.close();
