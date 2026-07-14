@@ -294,7 +294,7 @@ function buildJet(color, accent, cfg, hero) {
     const hud = new THREE.Mesh(new THREE.BoxGeometry(fR * 0.5, 0.5, 0.06), glass);
     hud.position.set(0, fR * flat * 0.95, canopyZ - 1.0); g.add(hud);
   }
-  const can = new THREE.Mesh(new THREE.SphereGeometry(fR * 0.9, hero ? 48 : 20, hero ? 32 : 14), glass);
+  const can = new THREE.Mesh(cacheGeo(gk('canopy'), () => new THREE.SphereGeometry(fR * 0.9, hero ? 48 : 20, hero ? 32 : 14)), glass);
   if (cfg.canopyFlush) { can.scale.set(0.92, 0.5, 2.1); can.position.set(0, fR * flat + 0.3 - 0.15, canopyZ); }
   else { can.scale.set(0.92, 0.74, 1.9); can.position.set(0, fR * flat + 0.3, canopyZ); }
   if (cfg.wideCanopy) { can.scale.x *= cfg.wideCanopy; can.scale.y = 0.6; }
@@ -754,7 +754,7 @@ function buildJet(color, accent, cfg, hero) {
       inner.position.set(ex, 0, exZ + 0.3); g.add(inner);
     } else {
       const segN = hero ? 40 : 20;
-      const noz = new THREE.Mesh(new THREE.CylinderGeometry(rR * 0.8, rR * 0.94, 1.9, segN), dark);
+      const noz = new THREE.Mesh(cacheGeo(gk('exnoz'), () => new THREE.CylinderGeometry(rR * 0.8, rR * 0.94, 1.9, segN)), dark);
       noz.rotation.x = Math.PI / 2; noz.scale.y = flat; noz.position.set(ex, 0, exZ - 0.5); g.add(noz);
       if (hero) {
         const petals = 22;
@@ -768,12 +768,12 @@ function buildJet(color, accent, cfg, hero) {
         can2.rotation.x = Math.PI / 2; can2.scale.y = flat; can2.position.set(ex, 0, exZ + 0.7); g.add(can2);
       }
       // throttle-heated nozzle interior on every jet (animEngines drives the emissive)
-      const inner = new THREE.Mesh(new THREE.CylinderGeometry(rR * 0.6, rR * 0.7, 1.6, segN), nozIn);
+      const inner = new THREE.Mesh(cacheGeo(gk('exinner'), () => new THREE.CylinderGeometry(rR * 0.6, rR * 0.7, 1.6, segN)), nozIn);
       inner.rotation.x = Math.PI / 2; inner.scale.y = flat; inner.position.set(ex, 0, exZ + 0.2); g.add(inner);
     }
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(rR * 0.78, 10, 8), new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5, fog: false }));
+    const glow = new THREE.Mesh(cacheGeo(gk('exglow'), () => new THREE.SphereGeometry(rR * 0.78, 10, 8)), new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5, fog: false }));
     glow.position.set(ex, 0, exZ + 0.5); glow.scale.set(1, flat, 1.8); g.add(glow);
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(rR * 0.7, 5.5, hero ? 18 : 12), new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const flame = new THREE.Mesh(cacheGeo(gk('exflame'), () => new THREE.ConeGeometry(rR * 0.7, 5.5, hero ? 18 : 12)), new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     flame.rotation.x = Math.PI / 2; flame.position.set(ex, 0, exZ + 2.4); g.add(flame);
     const eng = { glow, flame };
     if (hero) {
@@ -890,24 +890,25 @@ function addBurner(g, burn, accent) {
   const engines = [];
   const acc = (typeof accent === 'number') ? accent : 0xff7a2a;
   const r = burn.rad || 1;
+  const rk = 'burn:' + r;   // afterburner plume geometry is deterministic per nozzle radius → cache+share it (userData.shared) so per-spawn teardown can't leak it
   const heatMat = new THREE.MeshBasicMaterial({ color: 0xffcaa0, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   for (const ex of burn.xs) {
     const ny = burn.y, nz = burn.z;                   // nozzle exit (game space; aft = +Z)
     // additive glow puff right at the nozzle lip
-    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.9 * r, 12, 10), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const glow = new THREE.Mesh(cacheGeo(rk + ':glow', () => new THREE.SphereGeometry(0.9 * r, 12, 10)), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     glow.position.set(ex, ny, nz + 0.3); glow.scale.set(1, 1, 1.8); g.add(glow);
     // afterburner flame cone — apex at the nozzle, plume streaming aft (+Z)
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.62 * r, 6.0 * r, 16), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const flame = new THREE.Mesh(cacheGeo(rk + ':flame', () => new THREE.ConeGeometry(0.62 * r, 6.0 * r, 16)), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     flame.rotation.x = Math.PI / 2;                   // cone +Y -> +Z (point the base downstream)
     flame.position.set(ex, ny, nz + 2.6 * r); g.add(flame);
     // white-hot inner tongue
-    const core = new THREE.Mesh(new THREE.ConeGeometry(0.34 * r, 4.0 * r, 14), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const core = new THREE.Mesh(cacheGeo(rk + ':core', () => new THREE.ConeGeometry(0.34 * r, 4.0 * r, 14)), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     core.rotation.x = Math.PI / 2; core.position.set(ex, ny, nz + 1.9 * r); g.add(core);
     // shock-diamond ladder (fades in at burner via animEngines)
     const diaMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     const dia = new THREE.Group();
     for (let d = 0; d < 4; d++) {
-      const m = new THREE.Mesh(new THREE.OctahedronGeometry((0.3 - d * 0.045) * r, 1), diaMat);
+      const m = new THREE.Mesh(cacheGeo(rk + ':dia' + d, () => new THREE.OctahedronGeometry((0.3 - d * 0.045) * r, 1)), diaMat);
       m.scale.z = 1.6; m.position.z = (0.9 + d * 1.05) * r; dia.add(m);   // march downstream (+Z)
     }
     dia.position.set(ex, ny, nz + 1.0 * r); dia.visible = false; g.add(dia);

@@ -975,13 +975,18 @@ function updatePlayerShadow() {
   playerShadow.scale.setScalar(1 + agl * 0.0035);
 }
 
+let _platformCache = null;   // F10: the hangar platform is a fixed prop — build its geo/mats once and reuse the group across
+                             // returnToHangar, so the reset path (startGame removes it with no dispose) can never leak it.
 function makePlatform() {
-  platform = new THREE.Group();
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(20, 23, 2.4, 36),
-    new THREE.MeshStandardMaterial({ color: 0x0b1622, metalness: 0.45, roughness: 0.55, emissive: 0x06121e }));
-  disc.position.y = -3; disc.receiveShadow = true; platform.add(disc);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(20, 0.5, 8, 40), new THREE.MeshBasicMaterial({ color: 0x19f0d4 }));
-  ring.rotation.x = Math.PI / 2; ring.position.y = -1.7; platform.add(ring);
+  if (!_platformCache) {
+    _platformCache = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(20, 23, 2.4, 36),
+      new THREE.MeshStandardMaterial({ color: 0x0b1622, metalness: 0.45, roughness: 0.55, emissive: 0x06121e }));
+    disc.position.y = -3; disc.receiveShadow = true; _platformCache.add(disc);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(20, 0.5, 8, 40), new THREE.MeshBasicMaterial({ color: 0x19f0d4 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = -1.7; _platformCache.add(ring);
+  }
+  platform = _platformCache;
   scene.add(platform);
 }
 
