@@ -88,7 +88,6 @@ function startGame(i, daily, rush, weekly) {
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
-  if (_dewBeam) _dewBeam.visible = false;
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   resetDraftState();   // FRONTIER DRAFT (feature 4): fresh run seed + clear pin/pity/visit counter
   awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap fresh each run (F10); nextWave also refreshes per sector

@@ -63,9 +63,6 @@ const SHAPES = {
           wing:[[1.5,-1.0],[10.8,5.2],[10.8,7.0],[5.4,6.2],[1.8,8.2]], wingY:-0.18, wingThick:0.56,
           canard:[[1.5,-6.8],[4.6,-4.6],[4.6,-3.8],[1.7,-4.4]], canardY:0.2, canardCant:0.35,
           lerx:false, engines:2, gap:2.0, intake:'side', wingspan:10.8 },
-  NGAD: { len:21, noseLen:9, frontR:1.7, rearR:1.45, flat:0.5,
-          wing:[[1.4,-3.0],[12.2,6.0],[12.2,8.0],[7.0,7.0],[3.6,9.8],[1.6,9.0]], wingY:-0.14, wingThick:0.6,
-          lerx:true, engines:2, gap:2.4, intake:'side', wingspan:12.2 },
   J50:  { len:18, noseLen:7.5, frontR:1.45, rearR:1.2, flat:0.55,
           wing:[[1.4,-2.0],[9.4,4.3],[9.4,5.4],[5.2,5.0],[3.4,8.0],[1.6,8.4]],
           wingY:-0.12, wingThick:0.55,
@@ -106,20 +103,18 @@ const SHAPES = {
 Object.keys(SHAPES).forEach(k => { SHAPES[k].id = k; });
 
 /* per-airframe accuracy flags (stealth jets fly clean; others carry tip missiles) */
-['F22', 'F35', 'J20', 'SU57', 'J36', 'F47', 'NGAD', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].clean = true; });
+['F22', 'F35', 'J20', 'SU57', 'J36', 'F47', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].clean = true; });
 if (SHAPES.F22) SHAPES.F22.nozzle = '2d';            // F-22: rectangular 2D thrust-vectoring nozzles
 if (SHAPES.J20) { SHAPES.J20.dsi = true; }  // J-20: DSI bumps (ventral fins now carried by finBoom block)
 if (SHAPES.F35) SHAPES.F35.dsi = true;               // F-35: DSI inlet bumps
 // 6th-gen: flat stealth nozzles & diverterless intakes
 if (SHAPES.F47) { SHAPES.F47.nozzle = '2d'; SHAPES.F47.dsi = true; }
-if (SHAPES.NGAD) { SHAPES.NGAD.nozzle = '2d'; SHAPES.NGAD.dsi = true; }
 if (SHAPES.J36) { SHAPES.J36.dsi = true; }
 if (SHAPES.J50) { SHAPES.J50.nozzle = '2d'; SHAPES.J50.dsi = true; }
 // electro-optical sensors: forward IRST ball (Flanker/Typhoon/Rafale) vs faceted under-nose EOTS / aperture (F-35, J-20, 6th-gen)
 ['SU57', 'EFT', 'RAFALE'].forEach(k => { if (SHAPES[k]) SHAPES[k].irst = true; });
-['F35', 'J20', 'F47', 'NGAD', 'J36', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].eots = true; });
-// 6th-gen US blended-body details (NGAD/F47 share dorsalHump + chineRidge; NGAD adds sawtoothTE + buriedExhaust)
-if (SHAPES.NGAD) { SHAPES.NGAD.dorsalHump = true; SHAPES.NGAD.chineRidge = true; SHAPES.NGAD.sawtoothTE = true; SHAPES.NGAD.buriedExhaust = true; }
+['F35', 'J20', 'F47', 'J36', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].eots = true; });
+// 6th-gen US blended-body details
 if (SHAPES.F47) { SHAPES.F47.dorsalHump = true; SHAPES.F47.chineRidge = true; }
 // flag aliasing — unify near-duplicate spec names onto one generic implementation each
 Object.keys(SHAPES).forEach(k => {

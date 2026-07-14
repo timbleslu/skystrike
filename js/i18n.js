@@ -199,7 +199,6 @@ const I18N = {
     'banner.killStreak': '★ {label} x{n} ★',
     'banner.cloakAmbush': 'CLOAK · AMBUSH ARMED',
     'banner.ccaSwarm': '▶ CCA SWARM · {n} DRONES AWAY',
-    'banner.dewLance': 'DEW LANCE · FIRING',
     'banner.wingFocus': '▸ FLIGHT: FOCUS FIRE', 'banner.wingRegroup': '▸ FLIGHT: REGROUP',
     'banner.wingNone': 'NO ESCORTS AIRBORNE', 'banner.wingNoTarget': 'NO TARGET TO FOCUS',
 
@@ -852,7 +851,6 @@ const I18N = {
     'banner.killStreak': '★ {label} x{n} ★',
     'banner.cloakAmbush': '隐身 · 伏击就绪',
     'banner.ccaSwarm': '▶ CCA SWARM · {n} 架无人机出击',
-    'banner.dewLance': 'DEW LANCE · 开火',
     'banner.wingFocus': '▸ 编队：集火', 'banner.wingRegroup': '▸ 编队：归队',
     'banner.wingNone': '无僚机在空', 'banner.wingNoTarget': '无可集火目标',
 
@@ -1300,11 +1298,6 @@ const I18N = {
         passive:'编队四分卫 — 性能均衡且具隐身能力，你部署的所有AI僚机与CCA伤害+25%。',
         desc:'编队中的有人驾驶核心，负责指挥无人僚机编队。',
         context:'波音 · 美国。于2025年3月21日公开，作为美国空军下一代空中主导（NGAD）计划的有人驾驶核心机型。F-47的设计定位并非孤狼式格斗机，而更像"四分卫"——一架隐身、远程的有人战机，指挥成本更低的无人协同作战飞机（CCA）编队，并采用变循环发动机。' },
-      'NGAD': { role:'实验型 · 第六代', topSpeed:'机密', ceiling:'机密', cannon:'定向能武器',
-        abilityDesc:'发射定向能武器：持续约3秒的光束，熔毁前方扇区内的一切目标，并击落误入光束的导弹。',
-        passive:'前沿科技 — 最高速度+10%，几乎完美规避导弹，并配备内置近防激光。',
-        desc:'一架前沿验证机：变循环推进、新一代传感器融合与定向能武器。',
-        context:'美国空军（项目/验证机）。"NGAD"是整个下一代空中主导项目的名称——也是一架全尺寸技术验证机的代号，美国空军表示其早在2020年就已秘密首飞，远早于F-47的选定。在本作中，它代表该项目的前沿科技：变循环推进、新一代传感器融合与机载定向能武器。真实性能数据仍属机密。' },
       'J-50': { role:'隐身战斗机 · 第六代', topSpeed:'机密', ceiling:'机密', cannon:'机密',
         abilityDesc:'转动翼尖并进入超机动状态，持续6秒：转向速率与推力大幅提升，所有来袭导弹脱锁，并留下灼热的等离子尾流重创近距离擦过的目标。',
         passive:'幻影机动 — 转向速率+15%，极难被导弹锁定，并有10%固定暴击率。机体更轻。',
@@ -1656,7 +1649,6 @@ const I18N = {
     'banner.killStreak': '★ {label} x{n} ★',
     'banner.cloakAmbush': '클로크 · 매복 준비 완료',
     'banner.ccaSwarm': '▶ CCA 군집 · 드론 {n}기 발진',
-    'banner.dewLance': 'DEW 랜스 · 발사',
     'banner.wingFocus': '▸ 편대: 집중 사격', 'banner.wingRegroup': '▸ 편대: 재편성',
     'banner.wingNone': '발진한 호위기 없음', 'banner.wingNoTarget': '집중할 표적 없음',
 
@@ -2196,11 +2188,6 @@ const I18N = {
         passive:'편대 쿼터백 — 균형 잡힌 성능과 스텔스 능력, 전개한 모든 AI 호위기와 CCA의 피해 +25%.',
         desc:'편대의 유인 핵심으로, 무인 호위기 편대를 지휘한다.',
         context:'보잉 · 미국. 2025년 3월 21일 공개되었으며, 미 공군 차세대 공중 주도(NGAD) 계획의 유인 핵심 기종이다. F-47은 외톨이 격투기가 아니라 "쿼터백"에 가깝게 설계되었다 — 스텔스·원거리 유인기로, 더 저렴한 무인 협동전투기(CCA) 편대를 지휘하며 가변 사이클 엔진을 채용한다.' },
-      'NGAD': { role:'실험형 · 6세대', topSpeed:'기밀', ceiling:'기밀', cannon:'지향성 에너지 무기',
-        abilityDesc:'지향성 에너지 무기 발사: 약 3초간 지속되는 빔으로 전방 부채꼴 내 모든 것을 녹이고, 빔에 들어온 미사일을 격추.',
-        passive:'첨단 기술 — 최고 속도 +10%, 거의 완벽한 미사일 회피, 내장 근접 방어 레이저 탑재.',
-        desc:'첨단 시제기: 가변 사이클 추진, 신세대 센서 융합, 지향성 에너지 무기.',
-        context:'미 공군(프로그램/시제기). "NGAD"는 차세대 공중 주도 프로그램 전체의 이름이자 — 미 공군이 2020년에 이미 비밀리에 첫 비행했다고 밝힌 실물 크기 기술 시제기의 코드명으로, F-47 선정보다 훨씬 앞선다. 본작에서 그것은 이 프로그램의 첨단 기술을 대표한다: 가변 사이클 추진, 신세대 센서 융합, 기재 지향성 에너지 무기. 실제 성능 데이터는 여전히 기밀이다.' },
       'J-50': { role:'스텔스 전투기 · 6세대', topSpeed:'기밀', ceiling:'기밀', cannon:'기밀',
         abilityDesc:'익단을 회전시켜 초기동 상태에 진입, 6초 지속: 선회율과 추력이 대폭 상승, 들어오는 모든 미사일이 잠금 해제, 작렬하는 플라스마 후류를 남겨 근접 통과한 표적에 중상을 입힘.',
         passive:'팬텀 기동 — 선회율 +15%, 극도로 잠금이 어렵고, 고정 치명타 확률 10%. 더 가벼운 기체.',
@@ -2373,24 +2360,6 @@ Object.assign(I18N.KO, {
   'hud.overheat': '과열',
 });
 /* === end F1 gun-overheat === */
-/* === F7 new-jet — NGAD directed-energy demonstrator (EN + ZH + KO) ===
-   Jet name is language-neutral (roster.js NGAD row); its role/desc/ability/passive/context are the
-   canonical EN roster fields, with the ZH + KO overrides already in I18N.ZH.jet / I18N.KO.jet.
-   The only net-new strings are the two designed-livery NAMES, added to each language's meta group
-   (metaText reads I18N[LANG].meta['skin.<id>'].name; the 'default' skin reuses the shared skin.default). */
-Object.assign(I18N.EN.meta, {
-  'skin.ionveil':   { name: 'ION VEIL' },
-  'skin.emberwake': { name: 'EMBER WAKE' },
-});
-Object.assign(I18N.ZH.meta, {
-  'skin.ionveil':   { name: '离子帷幕' },
-  'skin.emberwake': { name: '余烬尾焰' },
-});
-Object.assign(I18N.KO.meta, {
-  'skin.ionveil':   { name: '이온 베일' },
-  'skin.emberwake': { name: '엠버 웨이크' },
-});
-/* === end F7 new-jet === */
 /* === F9 veterancy — per-airframe rank insignia strings (chip label + 5 escalating rank names), EN + ZH + KO.
    Appended via Object.assign so the concurrent factory features don't collide inside the big I18N literals. */
 Object.assign(I18N.EN, {

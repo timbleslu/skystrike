@@ -150,7 +150,7 @@ let noDamageWave = false;   // per-wave "no hit taken yet" flag for star objecti
 /* per-airframe special-ability cooldown (seconds) */
 const SPECIAL_CD = {
   'F-22':15, 'SU-57':15, 'J-20':18, 'F-35':18, 'EFT':15, 'RAFALE':18, 'TEJAS':15, 'FA18':18,
-  'J-36':20, 'F-47':22, 'NGAD':20, 'J-50':16,
+  'J-36':20, 'F-47':22, 'J-50':16,
 };
 
 /* ---------------- research-point economy ----------------

@@ -59,7 +59,7 @@ function rivalDefeated(atWave) {
 }
 function rivalSpecialFor(shape) {
   if (shape === 'J20' || shape === 'J35') return 'VOLLEY';
-  if (shape === 'NGAD' || shape === 'F47') return 'FLARESTORM';
+  if (shape === 'F47') return 'FLARESTORM';
   if (shape === 'J50' || shape === 'SU57' || shape === 'SU75') return 'GHOST';
   return 'OVERDRIVE';
 }

@@ -571,7 +571,7 @@ function buildJet(color, accent, cfg, hero) {
     hstrip.position.set(0, -fR * flat * 0.7, -half + 1.6); g.add(hstrip);
   }
 
-  // ---- forebody chine strips (generic; J20/J50/F47/NGAD) ----
+  // ---- forebody chine strips (generic; J20/J50/F47) ----
   if (cfg.chineRidge) {
     const cl = cfg.noseLen;
     for (const sx of [-1, 1]) {
@@ -647,7 +647,7 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- generic TE sawtooth serrations (J36/NGAD/F35-style stealth deck trim) ----
+  // ---- generic TE sawtooth serrations (J36/F35-style stealth deck trim) ----
   if (cfg.sawtoothTE && hero) {
     if (cfg.id === 'J36') {
       for (const sx of [-1, 1]) for (const sp of [[4.2, 11.0], [9.5, 9.5]]) {
@@ -658,7 +658,7 @@ function buildJet(color, accent, cfg, hero) {
         tri.scale.x = sx; tri.position.set(sx * sp[0], wy, sp[1]); g.add(tri);
       }
     } else {
-      // NGAD W-deck crank trim strips
+      // W-deck crank trim strips (F35-style sawtooth bay-door trim)
       for (const sx of [-1, 1]) for (const sp of [[7.0, 7.0], [3.6, 9.8]]) {
         const strip = new THREE.Mesh(cacheGeo(gk('sawstrip'), () => new THREE.BoxGeometry(0.6, (cfg.wingThick || 0.5) * 1.4, 0.1)), panel);
         strip.position.set(sx * sp[0], wy, sp[1]); g.add(strip);
@@ -1070,7 +1070,7 @@ function createPlayer(idx) {
     highG: false, stealth: false, gpws: false,
     combo: 0, comboTimer: 0, score: 0, killStreak: 0,
     overdrive: 0, empBurst: 0, stealthField: 0, invuln: 0, jammer: 0, slow: 0,
-    dewLance: 0, vectorSurge: 0,
+    vectorSurge: 0,
     noCannon: false, gunDmgMul: 1, missileDmgMul: 1, mslEvade: 0, lockSpeedMul: 1, shieldRegenMul: 1, flarePro: 0,
     fireRateMul: 1, bulletSpeedMul: 1, scoreMul: 1, lifesteal: 0, mslRefund: 0, lootMagnet: 0, dmgReduce: 0,
     mslHard: false, upgrades: [],
@@ -1141,9 +1141,6 @@ function applyJetPassives(p, j) {
     case 'F-47': // WING QUARTERBACK — balanced, stealthy, and a force multiplier for escorts
       p.gunDmgMul = 1.1; p.missileDmgMul = 1.1; p.lockSpeedMul = 0.7; p.mslEvade = 0.2;
       wingDmgMul = Math.max(wingDmgMul, 1.25); break;   // your AI escorts & CCAs hit 25% harder
-    case 'NGAD': // BLEEDING EDGE — fastest jet in the hangar, near-perfect stealth, point-defense
-      p.gunDmgMul = 1.1; p.missileDmgMul = 1.15; p.lockSpeedMul = 0.65; p.mslEvade = 0.3;
-      p.speedMul = 1.1; p.pointDefense = 0.3; break;
     case 'J-50': // PHANTOM AGILITY — supremely nimble & slippery, lands crits, lightly built
       p.mslEvade = 0.38; p.lockSpeedMul = 0.8; p.turnMul = 1.15; p.critChance = 0.1; p.hpMul = 0.9; break;
   }

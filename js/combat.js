@@ -1,4 +1,4 @@
-/* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update, DEW lance. Load 4th. */
+/* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update. Load 4th. */
 
 /* ---------------- bullets ---------------- */
 function getBullet() {
@@ -908,10 +908,6 @@ function applySpecialEffect(id) {
     audio.power();
     showBanner(tf('banner.ccaSwarm', { n: launched }));
 
-  } else if (id === 'NGAD') {
-    // DEW LANCE — sustained directed-energy beam (damage handled in updatePlayer)
-    player.dewLance = 3; empFlash = 0.3; showBanner(t('banner.dewLance')); audio.power();
-
   } else if (id === 'J-50') {
     // VECTOR SURGE — supermaneuver: agility & thrust soar, missiles lose lock, a plasma wake guts close passes
     player.vectorSurge = 6; player.invuln = 0.4; empFlash = 0.3;
@@ -932,7 +928,6 @@ function updatePlayer(dt) {
   if (barrelRollAnim > 0) barrelRollAnim -= dt;
   if (player.jammer > 0) player.jammer -= dt;
   if (player.slow > 0) player.slow -= dt;
-  if (player.dewLance > 0) player.dewLance -= dt;
   if (player.vectorSurge > 0) player.vectorSurge -= dt;
   if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);   // KILL FRENZY bleeds off when you stop scoring
   if (player.special.cd > 0) player.special.cd -= dt;
@@ -1166,8 +1161,6 @@ function updatePlayer(dt) {
   if (wantFire && !heatRes.locked) fireGun();
   updateLockOn(dt);
 
-  // ---- DEW LANCE (NGAD): sustained directed-energy beam down the boresight ----
-  updateDewLance(dt);
   updatePdBeams(dt);   // fade any point-defense laser bolts
 
   // ---- VECTOR SURGE (J-50): plasma wake guts anything you cut close past; missiles keep losing lock ----
@@ -1222,48 +1215,5 @@ function updatePdBeams(dt) {
     p.mesh.material.opacity = 0.95 * k;
     p.mesh.scale.x = p.mesh.scale.y = 0.5 + (1 - k) * 1.8;   // bloom outward as it dies
     if (p.t <= 0) { p.mesh.visible = false; PD_POOL.push(p.mesh); pdBeams.splice(i, 1); }
-  }
-}
-
-/* DEW LANCE — directed-energy beam: melts whatever is in the forward arc, swats missiles that stray in */
-let _dewBeam = null;
-function ensureDewBeam() {
-  if (_dewBeam) return _dewBeam;
-  const geo = new THREE.CylinderGeometry(0.6, 1.6, 1, 12, 1, true);
-  geo.translate(0, -0.5, 0); geo.rotateX(-Math.PI / 2);   // grows forward along -Z from the nose
-  const mat = new THREE.MeshBasicMaterial({ color: 0x9ff0ff, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
-  _dewBeam = new THREE.Mesh(geo, mat); _dewBeam.visible = false; scene.add(_dewBeam);
-  return _dewBeam;
-}
-function updateDewLance(dt) {
-  const beam = ensureDewBeam();
-  if (!player || player.dewLance <= 0) { beam.visible = false; return; }
-  const pp = player.group.position, fwd = fwdOf(player.group, t1);
-  const RANGE = 2600, COSCONE = 0.985;   // tight ~10° cone
-  // visual: a flickering lance from the nose
-  beam.visible = true;
-  beam.position.copy(pp).addScaledVector(fwd, 13);
-  dirToQuat(fwd, beam.quaternion);
-  beam.scale.set(1 + Math.random() * 0.25, 1 + Math.random() * 0.25, RANGE);
-  beam.material.opacity = 0.45 + Math.random() * 0.3;
-  // damage the nearest target inside the cone
-  let best = null, bd = Infinity;
-  for (let i = 0; i < enemies.length; i++) {
-    const e = enemies[i]; if (!e.alive) continue;
-    const to = t2.copy(e.group.position).sub(pp); const d = to.length();
-    if (d > RANGE) continue; to.multiplyScalar(1 / d);
-    if (fwd.dot(to) < COSCONE) continue;
-    if (d < bd) { bd = d; best = e; }
-  }
-  if (best) {
-    damageEnemy(best, 360 * dt, best.group.position, true);   // ~360 dmg/s — melts fighters, hurts bosses
-    if (Math.random() < 0.5) spawnTrail(best.group.position, 0x9ff0ff, 0.5);
-  }
-  // swat incoming missiles that wander into the beam
-  for (let i = 0; i < missiles.length; i++) {
-    const m = missiles[i]; if (!m.enemy) continue;
-    const to = t2.copy(m.mesh.position).sub(pp); const d = to.length();
-    if (d > RANGE) continue; to.multiplyScalar(1 / d);
-    if (fwd.dot(to) > COSCONE - 0.01) { explode(m.mesh.position, false); m.life = 0; }
   }
 }

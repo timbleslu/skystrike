@@ -13,12 +13,11 @@ const {
 
 function setMeta(obj) { _kv[META_KEY] = JSON.stringify(obj); loadMeta(); }
 
-// The skinnable jets: 7 textureless glTF exports + the procedural NGAD (F7 — buildJet, no glTF; its
-// liveries render via color/accent and the `zones` maps are inert schema-parity, but the structure holds).
-const TEXTURELESS = ['FT-1', 'F-47', 'J-20', 'J-36', 'J-50', 'EFT', 'FA18', 'NGAD'];
+// The skinnable jets: the 7 textureless glTF exports.
+const TEXTURELESS = ['FT-1', 'F-47', 'J-20', 'J-36', 'J-50', 'EFT', 'FA18'];
 
-// ---- structure: exactly the 8 skinnable jets, 3 skins each ----
-assert.deepStrictEqual(Object.keys(SKINS).sort(), TEXTURELESS.slice().sort(), 'SKINS keys are exactly the 8 skinnable jets');
+// ---- structure: exactly the 7 skinnable jets, 3 skins each ----
+assert.deepStrictEqual(Object.keys(SKINS).sort(), TEXTURELESS.slice().sort(), 'SKINS keys are exactly the 7 skinnable jets');
 for (const id of TEXTURELESS) {
   const list = SKINS[id];
   assert.strictEqual(list.length, 3, id + ' has exactly 3 skins (default + 2 designed)');

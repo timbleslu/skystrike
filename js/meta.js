@@ -298,15 +298,6 @@ const SKINS = {
     { id: 'aggressor', accent: 0x36e0ff, color: 0x2e3742, zones: { 'Base_paint': 0x2e3742, 'Base_paint_2': 0x2e3742, 'side_color': 0x556272, 'Whitish_grey.001': 0x556272, 'Whitish_grey.002': 0x556272, 'Not_so_dark.001': 0x3c4854, 'Darker_paint': 0x3c4854, 'Fa18_L': 0x3c4854, 'Fa18_R': 0x3c4854, 'Darkness.001': 0x222932, 'darkenss': 0x222932, 'darkenss.001': 0x222932, 'Nato_black': 0x222932, 'Fa18_engine': 0x161b21, 'engine_color': 0x161b21, 'Glowing_green.001': 0x36e0ff } },
     { id: 'blueangel', accent: 0xffd23f, color: 0x1c4fbf, zones: { 'Base_paint': 0x1c4fbf, 'Base_paint_2': 0x1c4fbf, 'side_color': 0x3f74e0, 'Whitish_grey.001': 0x3f74e0, 'Whitish_grey.002': 0x3f74e0, 'Not_so_dark.001': 0x143a96, 'Darker_paint': 0x143a96, 'Fa18_L': 0x143a96, 'Fa18_R': 0x143a96, 'Darkness.001': 0x0d2a72, 'darkenss': 0x0d2a72, 'darkenss.001': 0x0d2a72, 'Nato_black': 0x0d2a72, 'Fa18_engine': 0x0a1f55, 'engine_color': 0x0a1f55, 'Glowing_green.001': 0xffd23f } },
   ],
-  // NGAD (procedural airframe — NOT a glTF export, so cloneJetGLTF/applyPaint never runs on it).
-  // buildJet paints the whole hull from `color` and the afterburner from `accent`; the textureless
-  // `zones` path is inert here, so these liveries read purely via color/accent (bodies chosen
-  // light / mid / dark for at-a-glance separation). `zones` maps are kept for skin-schema parity.
-  'NGAD': [
-    { id: 'default', color: 0x556170, accent: 0x9ff0ff },
-    { id: 'ionveil', accent: 0x36e0ff, color: 0xd6dde3, zones: { body: 0xd6dde3, panel: 0xaeb8c2, trim: 0x36e0ff } },
-    { id: 'emberwake', accent: 0xff7a1e, color: 0x1c2026, zones: { body: 0x1c2026, panel: 0x2b3138, trim: 0xff7a1e } },
-  ],
 };
 
 /* ---------------- achievements ----------------

@@ -361,7 +361,6 @@ function clearArena() {
   if (el.bossbar) el.bossbar.classList.remove('show');
   if (el.banner) el.banner.classList.remove('show');
   choosingUpgrade = false; pendingUpgrades = null;
-  if (_dewBeam) _dewBeam.visible = false;
   const up = g('upgrade'); if (up) up.classList.remove('show');
 }
 function returnToHangar() {

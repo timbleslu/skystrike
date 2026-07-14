@@ -75,12 +75,6 @@ const JETS = [
     passive:'PHANTOM AGILITY \u2014 +15% turn rate, very slippery to missiles, and a standing 10% critical-hit chance. Lighter hull.',
     desc:'A tailless phantom that steers on swivelling wingtips \u2014 nimble and slippery, lightly built.',
     context:'Shenyang / SAC \u00B7 China (demonstrator). A second Chinese sixth-generation design that surfaced in December 2024 \u2014 smaller and more fighter-like than the J-36. It is a tailless, twin-engine, lambda-wing jet that appears to use swivelling wingtips for control in place of vertical tails, and is rumoured to be aimed in part at future carrier operations.' },
-  { id:'NGAD', shape:'NGAD', name:'NGAD DEMONSTRATOR', role:'Experimental \u00B7 6th Gen', topSpeed:'Classified', ceiling:'Classified', cannon:'Directed-Energy Weapon', gen:'6th GEN',
-    speed:9, agility:7, accel:9, armor:7, stealth:10, firepower:9, color:0x556170, accent:0x9ff0ff,
-    ability:'DEW LANCE', abilityDesc:'Fires a directed-energy weapon: a sustained beam for ~3s that melts everything in the forward arc and shoots down any missile that strays into it.',
-    passive:'BLEEDING EDGE \u2014 +10% top speed, near-perfect missile evasion, and a built-in point-defense laser.',
-    desc:'A cutting-edge demonstrator: variable-cycle propulsion, next-gen sensor fusion, and a directed-energy weapon.',
-    context:'U.S. Air Force (program / demonstrator). \u201CNGAD\u201D is the name of the whole Next Generation Air Dominance program \u2014 and the codename of a full-scale technology demonstrator the USAF says it flew in secret as early as 2020, long before the F-47 was chosen. In this game it stands for the program\u2019s cutting edge: variable-cycle propulsion, next-generation sensor fusion, and an onboard directed-energy weapon. Real performance figures remain classified.' },
 ];
 
 /* ---- ace pool (pure over JETS) — moved out of THREE-coupled entities.js so tests/ace-pool.test.js imports the real impl ---- */

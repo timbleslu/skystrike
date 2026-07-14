@@ -66,7 +66,6 @@ class AudioEngine {
       'FA18':   { baseAdd:  2, ratio: 1.52, lpAdd:  10 },   // Hornet mid-growl
       'J-36':   { baseAdd:-10, ratio: 1.40, lpAdd: -50 },   // flying wing, buried exhaust, deep
       'F-47':   { baseAdd:-12, ratio: 1.38, lpAdd: -60 },   // 6th-gen ultra-deep
-      'NGAD':   { baseAdd: -8, ratio: 1.42, lpAdd: -40 },   // demonstrator, slightly lighter
       'J-50':   { baseAdd:  3, ratio: 1.54, lpAdd:  10 },   // lambda wing, slight whine
     };
     return P[id] || P['FT-1'];
