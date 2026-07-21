@@ -373,6 +373,11 @@ function setCallsign(str) {
 /* ---------------- persistence ----------------
    Only meta.js touches storage for the meta blob (via store.get/set). validMeta guards a loaded
    blob; malformed/legacy data falls back to a fresh meta. Mirrored byte-identical in tests. */
+/* Node tests require meta.js WITHOUT prefs.js; pull loadHealed in so loadMeta can use it (in the browser
+   it is a load-order global — prefs.js loads before meta.js). Inert in the browser (require undefined). */
+if (typeof loadHealed === 'undefined' && typeof require === 'function') {
+  try { loadHealed = require('./prefs.js').loadHealed; } catch (e) {}
+}
 function freshMeta() {
   const jets = {};
   for (var i = 0; i < STARTER_JETS.length; i++) jets[STARTER_JETS[i]] = true;
@@ -384,23 +389,13 @@ function validMeta(m) {
     m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
 }
 function loadMeta() {
-  try {
-    const m = JSON.parse(store.get(META_KEY) || 'null');
-    meta = validMeta(m) ? m : freshMeta();
-  } catch (e) { meta = freshMeta(); }
+  // parse + validMeta outer gate + lenient per-key heal, all in prefs.js loadHealed. It fills any field
+  // whose value is null or whose typeof differs from freshMeta()'s — byte-identical to the old inline heal
+  // wall (stars/callsign/emblem/patches/bossRush*/slot2/campaign/veterancy/weekly), and, gated by validMeta,
+  // a no-op on the validMeta-guaranteed fields (v/sp/jets/skins/perks/ach). Never wipes progression, no version bump.
+  meta = loadHealed(META_KEY, freshMeta, { valid: validMeta });
   // ensure starter jets are always present even if an older save predates one
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
-  // heal legacy saves missing stars (F6) / callsign,emblem,patches (F13) / boss-rush (F15) — keep progression, never wipe
-  if (!meta.stars || typeof meta.stars !== 'object') meta.stars = {};
-  if (typeof meta.callsign !== 'string') meta.callsign = '';
-  if (typeof meta.emblem !== 'string') meta.emblem = 'wings';
-  if (!meta.patches || typeof meta.patches !== 'object') meta.patches = {};
-  if (typeof meta.bossRushUnlocked !== 'boolean') meta.bossRushUnlocked = false;
-  if (typeof meta.bossRushBest !== 'number') meta.bossRushBest = 0;
-  if (typeof meta.slot2 !== 'boolean') meta.slot2 = false;   // F3: 2nd-special-slot unlock
-  if (!meta.campaign || typeof meta.campaign !== 'object') meta.campaign = {};   // Operations Map revamp — campaign progress (heal, never wipe)
-  if (!meta.veterancy || typeof meta.veterancy !== 'object') meta.veterancy = {};   // F9 veterancy — per-airframe lifetime kill tallies (heal, keep progression, never wipe)
-  if (!meta.weekly || typeof meta.weekly !== 'object') meta.weekly = {};   // F8 weekly-challenge — best score per ISO week id (heal, never wipe)
 }
 function saveMeta() { try { store.set(META_KEY, JSON.stringify(meta)); } catch (e) {} }
 

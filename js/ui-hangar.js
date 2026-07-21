@@ -52,11 +52,11 @@ function buildHangar() {
   g('endlessBack').addEventListener('click', () => { g('endlessSetup').classList.remove('show'); openModeChoice(); });
   g('endlessStart').addEventListener('click', () => { opMode = false; g('endlessSetup').classList.remove('show'); startGame(selectedJet); });
   const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
-  const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
-  const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { applySetting('invertY', si.checked); }); }
+  const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { applySetting('autoLock', sal.checked); if (audio.on) audio.ui(); }); }
+  const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { applySetting('startWingman', sw.checked); if (audio.on) audio.ui(); }); }
   const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; if (audio.on) audio.ui(); saveSettings(); renderJetCard(); }); }
-  const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { devUnlockLevels = sdl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { applySetting('devUnlockLevels', sdl.checked); if (audio.on) audio.ui(); }); }
   // v1.3 dev-panel password gate: 'timbles' unlocks the panel PERMANENTLY (devUnlocked persisted in settings).
   syncDevPanel();
   const dpb = g('devUnlockBtn'), dpf = g('devPass'), dpd = g('devDeny');
@@ -67,25 +67,28 @@ function buildHangar() {
   };
   if (dpb) dpb.addEventListener('click', tryDevUnlock);
   if (dpf) dpf.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tryDevUnlock(); } });
-  const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { applySetting('rivalEnabled', srv.checked); if (audio.on) audio.ui(); }); }
+  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { applySetting('groundWar', sgw.checked); if (audio.on) audio.ui(); }); }
+  const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { applySetting('gunLead', sgl.checked); if (audio.on) audio.ui(); }); }
   const saa = g('setAimAssist'); if (saa) { saa.checked = aimAssist; saa.addEventListener('change', () => { aimAssist = saa.checked; if (audio.on) audio.ui(); saveSettings(); updateAimStrengthVis(); }); }
-  const sas = g('setAimStrength'); if (sas) { sas.value = aimStrength; sas.addEventListener('input', () => { aimStrength = clamp(sas.value | 0, 1, 5); saveSettings(); }); }
+  const sas = g('setAimStrength'); if (sas) { sas.value = aimStrength; sas.addEventListener('input', () => { applySetting('aimStrength', sas.value); }); }
   updateAimStrengthVis();
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
-  const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { controlSensitivity = clamp(ss.value / 100, 0.5, 2.0); saveSettings(); }); }
-  // mobile control settings (controls.js owns the input layer; these just set state + persist)
-  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => { controlScheme = v; }, () => { if (audio.on) audio.ui(); });
+  const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { applySetting('controlSensitivity', ss.value / 100); }); }
+  // mobile control settings (controls.js owns the input layer; these just set state + persist). Each seg
+  // setter is now a one-liner into the SETTINGS registry (parse+clamp+apply+save centralised in prefs.js);
+  // bindSeg still fires onChange (audio) + its own saveSettings (a harmless redundant write). mobileControl
+  // stays bespoke — the 'motion' branch triggers the permission flow (enableMotionFlow).
+  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => applySetting('controlScheme', v), () => { if (audio.on) audio.ui(); });
   bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
-  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => { motionAggression = v; }, () => { if (audio.on) audio.ui(); });
-  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
-  // F11 graphics quality (auto/low/high) — re-resolve the render tier + resize the shadow map on change (visual-only)
-  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => { gfxQuality = v; if (typeof refreshGfxTier === 'function') refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }, () => { if (audio.on) audio.ui(); });
-  // F3 HUD units (imperial mph+ft / metric kph+m) — readout reads unitSystem live; refresh the speed/alt labels on change
-  bindSeg('unitsTog', 'un', () => unitSystem, (v) => { unitSystem = v; if (typeof applyUnitLabels === 'function') applyUnitLabels(); }, () => { if (audio.on) audio.ui(); });
+  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => applySetting('motionAggression', v), () => { if (audio.on) audio.ui(); });
+  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => applySetting('buttonLayout', v), () => { if (audio.on) audio.ui(); });
+  // F11 graphics quality — the render-tier re-resolve + shadow-map resize (refreshGfxTier BEFORE applyGfxQuality) is the 'gfx' row's apply chain now
+  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => applySetting('gfx', v), () => { if (audio.on) audio.ui(); });
+  // F3 HUD units (imperial mph+ft / metric kph+m) — the 'unitSystem' row applies applyUnitLabels on change
+  bindSeg('unitsTog', 'un', () => unitSystem, (v) => applySetting('unitSystem', v), () => { if (audio.on) audio.ui(); });
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
-  const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
+  const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { applySetting('buttonOpacity', sbo.value / 100); }); }
   const shs = g('setHudScale');
   if (shs) {
     shs.value = String(hudScale);

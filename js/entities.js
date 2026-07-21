@@ -1463,11 +1463,12 @@ function updateEnemy(e, dt) {
   const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
   if (agl < 220) desired.y = Math.max(desired.y, 0.45);
   // ----- campaign boss phase descriptors (Operations map). Gated on e._phaseCfg (set at spawn by
-  // main.js); absent for endless/boss-rush/rivals, so their AI is byte-identical. Phase 1's cfg is
-  // applied lazily here once (bossEnterPhase in combat.js only fires for crossed thresholds 2/3), then
-  // _pattern/_flags bias the ALREADY-computed `desired` heading rather than rewriting the AI. -----
+  // main.js); absent for endless/boss-rush/rivals, so their AI is byte-identical. Phase 1's state is
+  // resolved lazily here once (bossEnterPhase in combat.js only fires for crossed thresholds 2/3) —
+  // the `!e.phaseState` guard makes it fire exactly once — then phaseState.pattern/flags bias the
+  // ALREADY-computed `desired` heading rather than rewriting the AI. -----
   if (e._phaseCfg) {
-    if (e.phase === 1 && !e._cfgInit && typeof bossApplyPhaseCfg === 'function') bossApplyPhaseCfg(e, 1);
+    if (e.phase === 1 && !e.phaseState && typeof bossApplyPhase === 'function') bossApplyPhase(e, 1);
     bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer);
   }
   // ----- baiter break-turn (2026-06): when the player is locking this enemy, juke HARD sideways on a
@@ -1543,12 +1544,12 @@ function updateEnemy(e, dt) {
   if (e.type === 'boss' && !(e.stun > 0)) updateBossSpecials(e, dt, dist);
 }
 
-// Campaign-boss movement polish (Operations map). Reads e._pattern / e._flags (set from the phase
-// descriptor in combat.js bossApplyPhaseCfg). Biases the ALREADY-computed `desired` heading and reuses
-// existing systems (enemyFlares for chaff, the baiter _jinkT break for mirror) — no new engine. Only
-// touches scratch tA, which updateEnemy no longer reads after this call. Inert when no pattern/flag set.
+// Campaign-boss movement polish (Operations map). Reads e.phaseState.pattern / .flags (resolved from
+// the phase descriptor in combat.js bossApplyPhase). Biases the ALREADY-computed `desired` heading and
+// reuses existing systems (enemyFlares for chaff, the baiter _jinkT break for mirror) — no new engine.
+// Only touches scratch tA, which updateEnemy no longer reads after this call. Inert when no pattern/flag set.
 function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
-  const pat = e._pattern;
+  const pat = e.phaseState ? e.phaseState.pattern : null;
   if (pat === 'standoff') {
     // GLACIER p1 — BVR: hold missile range, refuse the gun merge. Push away when inside ~2400u.
     if (dist < 2400) { desired.copy(e.group.position).sub(player.group.position).normalize(); desired.y += 0.05; desired.normalize(); }
@@ -1566,7 +1567,7 @@ function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
     if (e._diving) { desired.copy(toP); desired.y = Math.min(desired.y, -0.55); desired.normalize(); e.speed = lerp(e.speed, 320, dt); }
     else { desired.y = Math.max(desired.y, 0.6); desired.normalize(); e.speed = lerp(e.speed, 230, dt); }
   }
-  const flags = e._flags;
+  const flags = e.phaseState ? e.phaseState.flags : null;
   if (flags && flags.length) {
     // chaff (WARLORD p2): periodically seed decoys from the boss via the EXISTING enemy flare pathway.
     if (flags.indexOf('chaff') >= 0) {

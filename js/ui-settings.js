@@ -7,7 +7,9 @@ function updateBest() {
 }
 // refresh the persistent SP balance shown in the hangar header (call after any SP spend)
 function updateSpHud() { const v = g('hangarSpVal'); if (v) v.textContent = spBalance().toLocaleString(); }
-// best score survives reloads when the file is opened locally (storage may be blocked in some sandboxes)
+// best score survives reloads when the file is opened locally (storage may be blocked in some sandboxes).
+// NOT loadHealed: this is a bare scalar (parseInt + monotonic max-into-bestScore), not a JSON blob with
+// default-filling — the loadHealed key-heal shape does not apply, so it stays hand-rolled by design.
 function loadBest() {
   try { const v = parseInt(store.get('skystrike_best') || '0', 10); if (!isNaN(v) && v > bestScore) bestScore = v; } catch (e) {}
 }
@@ -18,40 +20,18 @@ function saveBest() {
 function loadSettings() {
   try {
     const s = JSON.parse(store.get('skystrike_settings') || '{}');
-    if (typeof s.volume === 'number') volume = clamp(s.volume, 0, 1);
-    if (typeof s.muted === 'boolean') muted = s.muted;
-    if (typeof s.invertY === 'boolean') invertY = s.invertY;
-    if (typeof s.autoLock === 'boolean') autoLock = s.autoLock;
-    if (typeof s.startWingman === 'boolean') startWingman = s.startWingman;
-    if (typeof s.devUnlockAll === 'boolean') devUnlockAll = s.devUnlockAll;
-    if (typeof s.devUnlockLevels === 'boolean') devUnlockLevels = s.devUnlockLevels;   // v1.3 dev: unlock all levels
-    if (typeof s.devUnlocked === 'boolean') devUnlocked = s.devUnlocked;               // v1.3: dev-panel password gate cleared
-    if (typeof s.mouseFlight === 'boolean') mouseFlight = s.mouseFlight;   // F7: desktop mouse-pointer flight toggle
-    if (typeof s.rivalEnabled === 'boolean') rivalEnabled = s.rivalEnabled;
-    if (typeof s.groundWar === 'boolean') groundWar = s.groundWar;
-    if (typeof s.opMode === 'boolean') opMode = s.opMode;
-    if (typeof s.gunLead === 'boolean') gunLead = s.gunLead;
-    if (typeof s.aimAssist === 'boolean') aimAssist = s.aimAssist;
-    if (typeof s.aimStrength === 'number') aimStrength = clamp(s.aimStrength | 0, 1, 5);
-    if (s.lang === 'EN' || s.lang === 'ZH' || s.lang === 'KO') LANG = s.lang;
-    if (typeof s.controlSensitivity === 'number') controlSensitivity = clamp(s.controlSensitivity, 0.5, 2.0);
+    loadSettingsFold(s);   // fold the SETTINGS registry (prefs.js): parse+clamp+set every accepted row — the 38 if-lines that used to live here
+    // --- bespoke rows kept hand-rolled (device reads / relocalize side effects — don't force the table) ---
+    if (s.lang === 'EN' || s.lang === 'ZH' || s.lang === 'KO') LANG = s.lang;   // language picker: relocalize (applyLang) is caller-driven, not a plain apply chain
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
-    else if ('ontouchstart' in window) hudScale = 0.8;
+    else if ('ontouchstart' in window) hudScale = 0.8;   // touch default is a device read ('ontouchstart' in window)
     if (typeof s.uiScale === 'number') uiScale = Math.max(0.5, Math.min(1.6, s.uiScale));
     else if ('ontouchstart' in window) uiScale = 0.65;   // menus default dense on touch (one level below desktop) so more fits
-    controlScheme = ['auto', 'pointer', 'rate'].includes(s.controlScheme) ? s.controlScheme : 'auto';
-    if (s.mobileControl === 'touch' || s.mobileControl === 'motion') mobileControl = s.mobileControl;
-    if (s.motionAggression === 'casual' || s.motionAggression === 'balanced' || s.motionAggression === 'direct') motionAggression = s.motionAggression;
-    if (typeof s.haptics === 'boolean') haptics = s.haptics;
-    if (typeof s.buttonOpacity === 'number') buttonOpacity = clamp(s.buttonOpacity, 0.4, 1.0);
-    if (s.buttonLayout === 'right' || s.buttonLayout === 'left' || s.buttonLayout === 'compact') buttonLayout = s.buttonLayout;
-    if (s.gfxQuality === 'auto' || s.gfxQuality === 'low' || s.gfxQuality === 'medium' || s.gfxQuality === 'high') gfxQuality = s.gfxQuality;
-    if (typeof refreshGfxTier === 'function') { refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }   // F11: re-resolve tier from the persisted setting + resize the shadow map
-    if (s.unitSystem === 'imperial' || s.unitSystem === 'metric') unitSystem = s.unitSystem;   // HUD units (mph+ft / kph+m)
-    if (typeof s.difficulty === 'number') difficulty = clamp(s.difficulty | 0, 0, 2);
-    if (typeof s.timeOfDay === 'number') timeOfDay = clamp(s.timeOfDay | 0, 0, 2);
-    if (typeof s.selectedJet === 'number') selectedJet = clamp(s.selectedJet | 0, 0, JETS.length - 1);
     if (typeof s.special2Id === 'string' || s.special2Id === null) special2Id = s.special2Id;   // feature #3: equipped SLOT-2 special (validated against the unlocked pool at equip/launch time)
+    // F11: re-resolve the gfx tier from the persisted setting + resize the shadow map. The ordering
+    // invariant (refreshGfxTier BEFORE applyGfxQuality) is now encoded once in the SETTINGS 'gfx' row's
+    // apply chain; run it unconditionally here (independent of whether gfxQuality was in the blob).
+    runSettingApply('gfx');
   } catch (e) {}
 }
 // retranslate all static DOM text + re-render dynamic panels for the current LANG

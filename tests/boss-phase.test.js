@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { bossPhaseFor, nextBossPhase, BOSS_PHASE2_HP, BOSS_PHASE3_HP } = require('../js/core.js');
+const { bossPhaseFor, nextBossPhase, resolveBossPhase, BOSS_PHASE2_HP, BOSS_PHASE3_HP } = require('../js/core.js');
 
 // ---- bossPhaseFor: correct phase at and around the thresholds ----
 assert.strictEqual(bossPhaseFor(1.0), 1, 'full HP is phase 1');
@@ -69,4 +69,63 @@ assert.strictEqual(onlyP2.phase, 2, 'and stays in phase 2');
 // thresholds are ordered and in (0,1) — sanity guard for future tuning
 assert.ok(BOSS_PHASE3_HP > 0 && BOSS_PHASE3_HP < BOSS_PHASE2_HP && BOSS_PHASE2_HP < 1, 'phase thresholds ordered within (0,1)');
 
-console.log('ok - bossPhaseFor thresholds + nextBossPhase once-per-phase guard (monotonic, no double-trigger)');
+// ---- resolveBossPhase: authored 3-phase descriptor — every knob lands per phase ----
+const BASE = 0.9;   // a boss's original (phase-1) turnRate
+// WARLORD-shaped descriptor (matches opmap.js boss.phases: turnMul/fireMul/extraMissiles + pattern/flags/weather)
+const warlord = [
+  { descKey: 'p1', turnMul: 1.0, fireMul: 1.0, extraMissiles: 0 },
+  { descKey: 'p2', turnMul: 1.0, fireMul: 1.3, extraMissiles: 2, weather: 'storm', flags: ['chaff'] },
+  { descKey: 'p3', turnMul: 1.4, fireMul: 1.0, extraMissiles: 0, pattern: 'headOn' },
+];
+const w1 = resolveBossPhase(warlord, 1, BASE);
+assert.strictEqual(w1.turnRate, BASE * 1.0, 'p1 turnRate = base × turnMul(1.0)');
+assert.strictEqual(w1.fireMul, 1.0, 'p1 fireMul lands');
+assert.strictEqual(w1.extraMissiles, 0, 'p1 extraMissiles lands');
+assert.strictEqual(w1.pattern, null, 'p1 has no pattern → null');
+assert.deepStrictEqual(w1.flags, [], 'p1 has no flags → []');
+assert.strictEqual(w1.baseTurnRate, BASE, 'p1 echoes base for carry-forward');
+const w2 = resolveBossPhase(warlord, 2, BASE);
+assert.strictEqual(w2.turnRate, BASE * 1.0, 'p2 turnRate = base × turnMul(1.0)');
+assert.strictEqual(w2.fireMul, 1.3, 'p2 fireMul lands');
+assert.strictEqual(w2.extraMissiles, 2, 'p2 extraMissiles lands');
+assert.deepStrictEqual(w2.flags, ['chaff'], 'p2 flags land');
+assert.strictEqual(w2.pattern, null, 'p2 has no pattern → null');
+const w3 = resolveBossPhase(warlord, 3, BASE);
+assert.strictEqual(w3.turnRate, BASE * 1.4, 'p3 turnRate = base × turnMul(1.4)');
+assert.strictEqual(w3.pattern, 'headOn', 'p3 pattern lands');
+assert.deepStrictEqual(w3.flags, [], 'p3 has no flags → []');
+
+// ---- resolveBossPhase: a bare descriptor entry falls back to every default ----
+const bare = resolveBossPhase([{ descKey: 'x' }], 1, BASE);
+assert.strictEqual(bare.turnRate, BASE, 'missing turnMul → base unchanged');
+assert.strictEqual(bare.fireMul, 1, 'missing fireMul → 1');
+assert.strictEqual(bare.extraMissiles, 0, 'missing extraMissiles → 0');
+assert.strictEqual(bare.pattern, null, 'missing pattern → null');
+assert.deepStrictEqual(bare.flags, [], 'missing flags → []');
+
+// ---- resolveBossPhase: null cfg reproduces the LEGACY endless/boss-rush ramp EXACTLY ----
+assert.strictEqual(resolveBossPhase(null, 1, BASE).turnRate, BASE, 'legacy p1 = base (never bumped)');
+assert.strictEqual(resolveBossPhase(null, 2, BASE).turnRate, BASE * 1.18, 'legacy p2 = base × 1.18');
+// p3 MUST equal the old in-place compounding `e.turnRate *= 1.18` (twice), NOT base × Math.pow(1.18,2)
+// — those differ in the last ULP (1.25316 vs 1.2531599999999998), so the resolver multiplies iteratively.
+let legacyCompound = BASE; legacyCompound *= 1.18; legacyCompound *= 1.18;
+assert.strictEqual(resolveBossPhase(null, 3, BASE).turnRate, legacyCompound, 'legacy p3 = compounding ×1.18×1.18 (byte-identical)');
+const ln = resolveBossPhase(null, 2, BASE);
+assert.strictEqual(ln.fireMul, 1, 'legacy fireMul default 1');
+assert.strictEqual(ln.extraMissiles, 0, 'legacy extraMissiles default 0');
+assert.strictEqual(ln.pattern, null, 'legacy pattern null');
+assert.deepStrictEqual(ln.flags, [], 'legacy flags []');
+assert.strictEqual(ln.baseTurnRate, BASE, 'legacy echoes base for carry-forward');
+
+// ---- carry-forward: driving the resolver phase-by-phase (feeding phaseState.baseTurnRate back in,
+// exactly as combat.js bossApplyPhase does) equals the OLD in-place `e.turnRate *= 1.18` sequence ----
+let ps = null;              // no phaseState yet (fresh boss)
+let oldTurn = BASE;         // the OLD model: mutate e.turnRate in place
+for (const ph of [2, 3]) {
+  const carriedBase = (ps && ps.baseTurnRate != null) ? ps.baseTurnRate : BASE;
+  ps = resolveBossPhase(null, ph, carriedBase);
+  oldTurn *= 1.18;         // old: one ×1.18 per crossed phase
+  assert.strictEqual(ps.turnRate, oldTurn, 'resolver carry-forward == old compounding at phase ' + ph);
+}
+
+console.log('ok - bossPhaseFor thresholds + nextBossPhase once-per-phase guard (monotonic) + resolveBossPhase authored/legacy phase-state');

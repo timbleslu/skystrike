@@ -86,6 +86,32 @@ function nextBossPhase(reached, hpFrac) {
   const want = bossPhaseFor(hpFrac);
   return want > reached ? want : reached;
 }
+// PURE — resolve a boss's per-phase combat state. `phaseCfg` is the authored e._phaseCfg array
+// (one {turnMul,fireMul,extraMissiles,pattern,flags,…} entry per phase) or null for the legacy
+// endless/boss-rush/rivals ramp; `phase` is 1/2/3; `baseTurnRate` is the boss's ORIGINAL (phase-1)
+// turn rate. Returns ONE plain phase-state consumed by all the readers that used to poke scattered
+// underscore fields: entities.js (pattern/flags movement + turnRate), main.js (fireMul cadence /
+// extraMissiles salvo). `baseTurnRate` is echoed back so the impure caller can carry it forward
+// across phases WITHOUT a separate _baseTurnRate field. NO mutation, NO THREE/DOM.
+// null/absent cfg reproduces the legacy behaviour EXACTLY: one ×1.18 turn bump per crossed phase
+// (byte-identical to the old compounding `e.turnRate *= 1.18`), fireMul 1 / extraMissiles 0 / no
+// pattern/flags — so main.js/entities.js fall back to their hardcoded phase≥2/≥3 branches unchanged.
+function resolveBossPhase(phaseCfg, phase, baseTurnRate) {
+  const cfg = phaseCfg && phaseCfg[phase - 1];
+  if (cfg) {
+    return {
+      turnRate: baseTurnRate * (cfg.turnMul != null ? cfg.turnMul : 1),
+      fireMul: cfg.fireMul != null ? cfg.fireMul : 1,
+      extraMissiles: cfg.extraMissiles || 0,
+      pattern: cfg.pattern || null,
+      flags: cfg.flags || [],
+      baseTurnRate: baseTurnRate,
+    };
+  }
+  let turnRate = baseTurnRate;
+  for (let p = 2; p <= phase; p++) turnRate *= 1.18;   // one twitchier bump per crossed phase (legacy)
+  return { turnRate: turnRate, fireMul: 1, extraMissiles: 0, pattern: null, flags: [], baseTurnRate: baseTurnRate };
+}
 
 /* ---------------- damage resolution core ---------------- */
 // PURE — resolve a single hit into a plain DamageResult. NO mutation of inputs, NO THREE/DOM.
@@ -1117,7 +1143,7 @@ if (typeof module !== 'undefined' && module.exports) {
     reqSatisfied,
     TWO_PI, DEG, clamp, lerp, rand, randInt, damp,
     NIGHT_RADAR_MUL, WEATHER, resolveWeather, turbSample, rollWeather,
-    BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase,
+    BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase, resolveBossPhase,
     resolveDamage,
     BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime,
     TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,

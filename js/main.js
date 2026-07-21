@@ -291,7 +291,7 @@ function updateBossSpecials(e, dt, dist) {
       e.attack = null;
       if (u.core) u.core.material.emissiveIntensity = 1.2;
       if (u.ring) u.ring.scale.setScalar(1);
-      e.specialCd = (e.phase >= 3 ? rand(2.6, 4.2) : e.phase >= 2 ? rand(3.5, 5.5) : rand(6, 9)) / (e._fireMul || 1);   // _fireMul: authored campaign boss cadence (default 1)
+      e.specialCd = (e.phase >= 3 ? rand(2.6, 4.2) : e.phase >= 2 ? rand(3.5, 5.5) : rand(6, 9)) / ((e.phaseState && e.phaseState.fireMul) || 1);   // phaseState.fireMul: authored campaign boss cadence (default 1)
     }
     return;
   }
@@ -321,7 +321,7 @@ function fireBossAttack(e, dist) {
   const p3 = e.phase >= 3;
   if (e.attack === 'barrage') {
     // radial fan of homing missiles — wide spread so positioning + flares matter
-    const count = (p3 ? 16 : enr ? 12 : 8) + (e._extraMissiles || 0);   // _extraMissiles: authored campaign boss salvo bonus (default 0)
+    const count = (p3 ? 16 : enr ? 12 : 8) + ((e.phaseState && e.phaseState.extraMissiles) || 0);   // phaseState.extraMissiles: authored campaign boss salvo bonus (default 0)
     const fwd = fwdQ(e.logicQuat, t3);
     const spread = p3 ? 3.1 : enr ? 2.6 : 1.9;
     for (let i = 0; i < count; i++) {

@@ -614,6 +614,9 @@ function refreshBossRushEntry() {
 // (dailySeedFor/makeRng in globals.js) never call new Date(). y/m/d are passed in.
 function todayParts() { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }; }
 function todayKey() { const p = todayParts(); return p.y + '-' + ('0' + p.m).slice(-2) + '-' + ('0' + p.d).slice(-2); }
+// NOT loadHealed: this is a nullable pass-through (returns the stored object or null) — the default
+// record is built date-based in dailyToday (fresh unplayed when the stored date != today), not by
+// typeof-key filling. loadHealed's fill-missing-keys shape does not apply, so it stays hand-rolled.
 function loadDaily() {
   try { const o = JSON.parse(store.get('skystrike_daily') || 'null'); if (o && typeof o === 'object') return o; } catch (e) {}
   return null;
