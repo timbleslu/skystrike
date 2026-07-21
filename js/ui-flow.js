@@ -2,6 +2,9 @@
 /* ui-flow.js: meta-progression screen, game lifecycle, end-run, boss rush, daily challenge. */
 /* ---------------- meta-progression screen (perk tree + achievements) ---------------- */
 let metaTab = 'perks';
+// #meta is a MODAL over the still-visible hangar (state stays 'hangar'), NOT a screen swap — so it is
+// deliberately NOT routed through nav.js showScreen (which would hide the hangar underneath). Direct
+// .show toggle. Same rationale for #manual / #upgrade / #wingpick / #opmap below.
 function openMetaScreen() { if (state !== 'hangar') return; metaTab = 'perks'; g('meta').classList.add('show'); renderMetaScreen(); if (audio.on) audio.ui(); }
 function closeMetaScreen() { g('meta').classList.remove('show'); if (audio.on) audio.ui(); }
 function showMetaTab(name) { metaTab = name; renderMetaScreen(); if (audio.on) audio.ui(); }
@@ -64,9 +67,9 @@ function startGame(i, daily, rush, weekly) {
   closeManual();
   if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }   // C2: preview lives in the ISOLATED previewScene now, not the shared scene
   if (platform) { scene.remove(platform); platform = null; }
-  g('hangar').classList.add('hide');
-  
-  if (isTouchEnabled) g('touchControls').classList.add('show');
+  // screen nav (hide hangar + show touch controls + state='playing') is applied together below via
+  // showScreen('playing') — see the state transition further down; ordering within this sync fn is
+  // invisible (no frame renders mid-call), so consolidating the panel/touch/state writes is identical.
 
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
@@ -95,7 +98,7 @@ function startGame(i, daily, rush, weekly) {
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)
-  state = 'playing';
+  showScreen('playing');   // hide hangar + show touch controls (if touch) + state='playing' (nav.js)
   // first-run guided tutorial (F5): only a brand-new player (this session) who hasn't finished it yet.
   // isReturningPlayer (globals.js) is captured at boot, so returning players skip entirely. Never in boss-rush.
   if (!bossRush && !isReturningPlayer && !tutorial.done) startTutorial();
@@ -216,8 +219,7 @@ function endRun(title, win) {
     goPilot.textContent = (glyph ? glyph + (cs ? ' ' + cs : '') : cs);
   }
   updateBest();
-  g('touchControls').classList.remove('show');
-  g('gameover').classList.add('show');
+  showScreen('gameover');   // hide touch controls + show #gameover + state='dead' (nav.js; callers already set 'dead')
   // JUICE: retrigger the staged reward reveal (grade snap → stars → SP rise) each time the debrief opens.
   if (gw && !prefersReducedMotion()) { gw.classList.remove('reveal'); void gw.offsetWidth; gw.classList.add('reveal'); }
   else if (gw) gw.classList.add('reveal');
@@ -321,12 +323,9 @@ function resetArenaForLevel(lvl) {
 // hangar "Operations" launch entry → the operations-select screen (player NOT built yet)
 function openOperationsSelect() {
   campaignMode = false; campaignOpId = null; opSector = null; paused = true;
-  g('hangar').classList.add('hide');
   const ov = g('opsSelect'); if (!ov) return;
   renderOperationsSelect();
-  g('briefing') && g('briefing').classList.remove('show');
-  g('levelMap') && g('levelMap').classList.remove('show');
-  ov.classList.add('show');
+  showScreen('opsSelect');   // hide current screen (hangar on entry, or opLore on back) + show #opsSelect (nav.js)
   setTxt('opsTitle', t('campaign.operations'));
   const back = g('opsBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); campaignPlayerOpId = null; returnToHangar(); }; }
   if (audio.on) audio.ui();
@@ -342,8 +341,7 @@ function renderOperationsSelect() {
       '</div><div class="op-card-name">' + t(op.nameKey) + '</div><div class="op-card-sub">' + sub + '</div></div>';
   }).join('');
   wrap.querySelectorAll('.op-card:not(.locked)').forEach(c => c.addEventListener('click', () => {
-    g('opsSelect').classList.remove('show');
-    openOperationLore(c.getAttribute('data-op'));
+    openOperationLore(c.getAttribute('data-op'));   // openOperationLore → showScreen('opLore') hides #opsSelect (nav.js)
   }));
 }
 
@@ -352,14 +350,13 @@ function renderOperationsSelect() {
 function openOperationLore(opId) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
   campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
-  g('opsSelect') && g('opsSelect').classList.remove('show');
   const ov = g('opLore'); if (!ov) { openLevelMap(opId); return; }   // graceful fallback if markup is absent
   setTxt('opLoreTitle', t(op.nameKey));
   setTxt('opLoreH', t('campaign.background'));
   setTxt('opLoreBody', t(op.loreKey));
-  ov.classList.add('show');
-  const go = g('opLoreGo'); if (go) { go.textContent = '▶ ' + t('campaign.enter'); go.onclick = () => { ov.classList.remove('show'); openLevelMap(opId); }; }
-  const back = g('opLoreBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); openOperationsSelect(); }; }
+  showScreen('opLore');   // hide #opsSelect + show #opLore (nav.js)
+  const go = g('opLoreGo'); if (go) { go.textContent = '▶ ' + t('campaign.enter'); go.onclick = () => { openLevelMap(opId); }; }   // openLevelMap → showScreen('levelMap') hides #opLore
+  const back = g('opLoreBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }   // openOperationsSelect → showScreen('opsSelect') hides #opLore
   if (audio.on) audio.ui();
 }
 
@@ -368,10 +365,9 @@ function openLevelMap(opId) {
   campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
   const ov = g('levelMap'); if (!ov) return;
   renderLevelMap(opId);
-  g('briefing') && g('briefing').classList.remove('show');
-  ov.classList.add('show');
+  showScreen('levelMap');   // hide current screen (opLore/briefing/levelCleared) + show #levelMap (nav.js)
   const rd = g('levelMapTech'); if (rd) { rd.textContent = '⚒ ' + t('campaign.rd'); rd.onclick = () => { if (campaignPlayerOpId === opId && player && typeof openTechScreen === 'function') { ov.classList.remove('show'); openTechScreen(); } }; }
-  const back = g('levelMapBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); openOperationsSelect(); }; }
+  const back = g('levelMapBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }   // openOperationsSelect → showScreen('opsSelect') hides #levelMap
   if (audio.on) audio.ui();
 }
 function renderLevelMap(opId) {
@@ -421,7 +417,6 @@ function openBriefing(opId, idx) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
   const lvl = op.levels[idx]; if (!lvl) return;
   campaignBriefOp = opId; campaignBriefIdx = idx;
-  g('levelMap') && g('levelMap').classList.remove('show');
   const ov = g('briefing'); if (!ov) return;
   setTxt('briefTitle', t(op.nameKey) + ' — ' + t('campaign.level') + ' ' + (idx + 1) + ': ' + t(lvl.nameKey));
   // §1: the expanded 2-paragraph mission blurb IS the situational text on this pre-launch screen. The old
@@ -439,9 +434,9 @@ function openBriefing(opId, idx) {
   setTxt('briefLoadout', campaignLoadoutSummary(opId));
   setTxt('briefLoreH', t('campaign.situation')); setTxt('briefObjH', t('campaign.objectives'));
   setTxt('briefIntelH', t('campaign.enemyIntel')); setTxt('briefLoadoutH', t('campaign.loadout'));
-  ov.classList.add('show');
+  showScreen('briefing');   // hide #levelMap + show #briefing (nav.js)
   const play = g('briefPlay'); if (play) { play.textContent = '▶ ' + t('campaign.play'); play.onclick = () => launchLevel(opId, idx); }
-  const back = g('briefBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); openLevelMap(opId); }; }
+  const back = g('briefBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openLevelMap(opId); }; }   // openLevelMap → showScreen('levelMap') hides #briefing
   if (audio.on) audio.ui();
 }
 // read-only loadout summary for the briefing screen
@@ -483,9 +478,8 @@ function launchLevel(opId, idx) {
   const lvl = op.levels[idx]; if (!lvl) return;
   if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // campaign launch respects the same unowned-skin gate
   previewSkin = null;   // committing to a level → drop any transient preview (op player uses the OWNED skin)
-  g('briefing') && g('briefing').classList.remove('show');
-  g('opsSelect') && g('opsSelect').classList.remove('show');
-  g('levelMap') && g('levelMap').classList.remove('show');
+  // #briefing (the current screen) is hidden by showScreen('playing') below; #opsSelect / #levelMap are
+  // already hidden from navigating into the briefing. (nav.js)
   if (typeof showLoading === 'function') showLoading();   // v1.3: opaque curtain hides the arena swap → no stale-mission frame
   if (campaignPlayerOpId !== opId || !player) enterOperationRun(opId);   // fresh op run, or switching ops
   campaignOpId = opId; campaignLevelIdx = idx;
@@ -501,9 +495,8 @@ function launchLevel(opId, idx) {
   mission = null; setpieceActive = null; campaignBossPhases = null; noDamageWave = false;
   campaignMode = true; opSector = lvl.type;   // opSector reused as the level's mission/sector type
   resetArenaForLevel(lvl);   // v1.3: reposition jet to runway + apply this level's weather/TOD + ready all abilities, BEFORE first render
-  state = 'playing'; paused = false;
+  showScreen('playing'); paused = false;   // hide #briefing + show touch controls (if touch) + state='playing' (nav.js)
   if (clock) clock.getDelta();
-  if (isTouchEnabled) g('touchControls').classList.add('show');
   if (startWingman) spawnWingman(false, 'STD');
   showBanner(t('banner.launching'));
   if (typeof hideLoading === 'function') hideLoading();   // fade the curtain out once the new arena is built + state is live
@@ -550,8 +543,8 @@ function showLevelCleared(opId, idx, lvl, rw) {
   renderStarChecklist(g('lvlcConds'), res.conds, res.lr);
   setTxt('lvlcRwRp', '+' + (rw ? rw.rp : 0) + ' RP');
   setTxt('lvlcRwScore', '+' + (rw ? rw.score : 0));
-  const go = g('lvlcContinue'); if (go) { go.textContent = t('campaign.continueMap'); go.onclick = () => { ov.classList.remove('show'); openLevelMap(opId); }; }
-  ov.classList.add('show');
+  const go = g('lvlcContinue'); if (go) { go.textContent = t('campaign.continueMap'); go.onclick = () => { openLevelMap(opId); }; }   // openLevelMap → showScreen('levelMap') hides #levelCleared
+  showScreen('levelCleared');   // show #levelCleared over the (hidden) flight view; state stays 'dead' (nav.js)
   if (audio.on) audio.ui();
 }
 

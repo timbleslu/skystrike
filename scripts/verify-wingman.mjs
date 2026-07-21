@@ -2,44 +2,16 @@
    so the wingman sidebar (and its order badge) renders, then dispatches Digit4/5/6 and asserts BOTH the order
    STATE (player.wingOrder) and the sidebar BADGE text advance ENGAGE → COVER → REGROUP. Saves
    wingman-check-sidebar.png. Exit non-zero on any failure. Pattern mirrors scripts/shot.mjs. */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  try {
-    const data = await readFile(join(root, p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
+import { launchGame, bootToHangar } from './lib/boot.mjs';
 
 let failed = false;
 const fail = (msg) => { console.error('FAIL:', msg); failed = true; };
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const { page, port, close } = await launchGame();
 page.on('pageerror', e => { console.error('PAGE ERROR:', e.message); failed = true; });
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1200);
-
 // clear the first-run language / onboarding gates → hangar
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const c = document.getElementById('obContinue'); if (c) c.click(); });
-await page.waitForTimeout(600);
+await bootToHangar(page, { port });
 
 // start a run, then put one permanent escort on-station so the wingman sidebar + order badge render
 await page.evaluate(() => { startGame(selectedJet); });
@@ -78,7 +50,6 @@ for (const c of checks) {
 // capture the sidebar badge in its final (REGROUP) state
 await page.screenshot({ path: 'wingman-check-sidebar.png' });
 
-await browser.close();
-server.close();
+await close();
 if (failed) { console.error('verify-wingman: FAILED'); process.exit(1); }
 console.log('verify-wingman: OK — orders ENGAGE/COVER/REGROUP drive both state + sidebar badge');

@@ -2,8 +2,6 @@
 // F8 WEEKLY CHALLENGE — pure ISO-week seed + modifier pick (core.js) and the weekly-best meta seam.
 // Mirrors tests/daily.test.js (seed determinism) + tests/meta.test.js (store-seam heal check).
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
 
 // ---- Node seam: meta.js store stub, installed BEFORE requiring meta.js ----
 let _kv = {};
@@ -80,15 +78,33 @@ assert.ok(pairs.size >= 3, 'the picked pair varies across seeds');
 assert.strictEqual(reached.size, tableIds.length, 'every modifier in the table is reachable by some seed');
 
 // ============================================================================
-//  No-clock rule — the F8 core block must never read the clock
+//  No-clock rule (behavioral) — the seed/id are a pure fn of the date-STRING and
+//  must NEVER consult the wall clock. Prove it through the interface: freeze the
+//  ambient clock at two absurd, far-apart instants and confirm the result for a
+//  FIXED date string is identical. Any hidden Date.now()/new Date() read would move
+//  with the frozen clock and trip this — catches a clock dependency however it is
+//  spelled (unlike a source-text scrape for the literal `Date.now`/`new Date(`).
 // ============================================================================
-const coreSrc = fs.readFileSync(path.join(__dirname, '../js/core.js'), 'utf8');
-const start = coreSrc.indexOf('// === F8 weekly-challenge ===');
-const end = coreSrc.indexOf('// === end F8 ===');
-assert.ok(start >= 0 && end > start, 'the F8 core block is present and delimited');
-const f8block = coreSrc.slice(start, end);
-assert.ok(!/Date\.now/.test(f8block), 'F8 core block never calls Date.now');
-assert.ok(!/new\s+Date\s*\(/.test(f8block), 'F8 core block never constructs a Date');
+const RealDate = global.Date;
+function withFrozenClock(ms, fn) {
+  class FrozenDate extends RealDate {
+    constructor() { return arguments.length === 0 ? super(ms) : super(...arguments); }
+    static now() { return ms; }
+  }
+  global.Date = FrozenDate;
+  try { return fn(); } finally { global.Date = RealDate; }
+}
+const probeDay = '2026-07-15';   // a Wednesday inside 2026-W29 (same week as seed29's Monday)
+const seedFrozenA = withFrozenClock(0, () => weeklySeedFor(probeDay));
+const seedFrozenB = withFrozenClock(RealDate.UTC(2099, 11, 31), () => weeklySeedFor(probeDay));
+const idFrozenA = withFrozenClock(0, () => weekIdFor(probeDay));
+const idFrozenB = withFrozenClock(RealDate.UTC(2099, 11, 31), () => weekIdFor(probeDay));
+assert.strictEqual(seedFrozenA, seedFrozenB, 'weeklySeedFor ignores the wall clock (no hidden Date.now/new Date read)');
+assert.strictEqual(idFrozenA, idFrozenB, 'weekIdFor ignores the wall clock');
+// and the clock-frozen results equal the normal (unfrozen) values for that same ISO week
+assert.strictEqual(seedFrozenA, seed29, 'clock-frozen seed equals the deterministic 2026-W29 seed');
+assert.strictEqual(idFrozenA, '2026-W29', 'clock-frozen id equals the deterministic 2026-W29 id');
+assert.strictEqual(global.Date, RealDate, 'the real Date is restored after the frozen-clock probes');
 
 // ============================================================================
 //  weeklyBest / recordWeeklyBest — pure over meta, monotonic

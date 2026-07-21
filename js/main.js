@@ -18,9 +18,8 @@ function nextWave() {
   strikeWaveActive = strike;
   if (campaignMode && campaignOpId) {
     // Operations campaign: a BOUNDED level. The plan is AUTHORED per level (levelPlan reads the level's
-    // own spawn fields — NOT sectorPlan(type,wave), whose wave-scaled branches are dead at the small
-    // bounded wave counts). Difficulty/weather/tod are FIXED by the level row. Distinct path; the
-    // endless scheduler below is untouched.
+    // own hand-authored spawn budget verbatim, not a wave-scaled procedural roll). Difficulty/weather/tod
+    // are FIXED by the level row. Distinct path; the endless scheduler below is untouched.
     const lvl = currentCampaignLevel();
     let plan = levelPlan(lvl);
     if (lvl.setpiece && !run.setpieceDone[lvl.id]) { run.setpieceDone[lvl.id] = true; plan = setpiecePlan(lvl.setpiece, plan); }

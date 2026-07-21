@@ -85,8 +85,7 @@ const OPERATIONS = [
   },
 ];
 
-// PURE: build the authored-absolute spawn plan for a level row. Unlike sectorPlan(type, wave)
-// (whose wave-scaled branches are DEAD at bounded waves), this reads the level's hand-authored
+// PURE: build the authored-absolute spawn plan for a level row. Reads the level's hand-authored
 // `spawn` budget verbatim, adds the typed-mission descriptor + boss flag, and folds an optional
 // set-piece. Returns a NEW object; the level row is never mutated (mirrors setpiecePlan).
 function levelPlan(lvl) {
@@ -127,21 +126,6 @@ function sectorMission(type) {
   if (type === 'DEPOT') return 'none';
   return 'boss';   // FINAL
 }
-// Each plan carries the legacy spawn fields PLUS a `mission` descriptor and the feature #4
-// `weather` + `tod` slots — the tactical condition for the sector (applied in main.js nextWave
-// via applyWeather/applyTimeOfDay). tod: 0 day · 1 dusk · 2 night. Deterministic per sector type.
-function sectorPlan(type, wave) {
-  if (type === 'FURBALL')   return { fighters: Math.min(4 + (wave >> 1), 10), aces: wave >= 6 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'sweep', weather: 'clear', tod: 0 };
-  if (type === 'INTERCEPT') return { fighters: 3, aces: 0, bombers: wave >= 8 ? 4 : 3, ground: false, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'intercept', weather: 'fog', tod: 1 };
-  if (type === 'STRIKE')    return { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'strike', weather: 'storm', tod: 0 };
-  if (type === 'ESCORT')    return { fighters: 3, aces: wave >= 8 ? 1 : 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'escort', weather: 'clear', tod: 0 };
-  if (type === 'DEFEND')    return { fighters: 3, aces: 0, bombers: wave >= 8 ? 2 : 1, ground: false, boss: false, rival: false, depot: false, hostileAce: true,  mission: 'defend', weather: 'storm', tod: 1 };
-  if (type === 'RECON')     return { fighters: 2, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: false, mission: 'recon', weather: 'clear', tod: 0 };   // non-combat photo-pass: light contact, kills not required
-  if (type === 'STEALTH')   return { fighters: 2, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: false, hostileAce: false, mission: 'stealth', weather: 'fog', tod: 2 };   // no-kill infiltration: patrols that can SPOT you raise the alarm
-  if (type === 'ELITE')     return { fighters: 2, aces: 2, bombers: 0, ground: false, boss: false, rival: true, depot: false, hostileAce: true,  mission: 'none', weather: 'fog', tod: 2 };
-  if (type === 'DEPOT')     return { fighters: 0, aces: 0, bombers: 0, ground: false, boss: false, rival: false, depot: true, hostileAce: false, mission: 'none', weather: 'clear', tod: 1 };
-  return { fighters: 4, aces: 2, bombers: 0, ground: false, boss: true, rival: false, depot: false, hostileAce: false, mission: 'boss', weather: 'storm', tod: 2 };   // FINAL
-}
 
 /* ---- Scripted set-pieces (F14) ----
    Specific campaign NODES trigger an AUTHORED encounter instead of procedural waves.
@@ -161,12 +145,6 @@ const SETPIECES = {
   // thread a carrier group's screen of interceptors (no ground; pure air gauntlet).
   carrier:     { mission: 'intercept', ground: false, bombers: 5, convoy: 0, name: 'setpiece.carrier',     intro: 'setpiece.carrier.intro',     outro: 'setpiece.carrier.outro' },
 };
-
-// RETIRED with genOpMap: set-pieces are now opt-in per level row (`lvl.setpiece`, folded by
-// levelPlan), not keyed on stage coordinates. Kept exported for back-compat; always returns null.
-function setpieceFor(type, stage) {
-  return null;
-}
 
 // PURE: fold an authored encounter onto a base sector plan. Overrides the mission
 // descriptor + ground flag + bomber/convoy counts the script needs, tags `setpiece`,
@@ -197,5 +175,5 @@ function setpieceOutcome(id, won) {
 
 /* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { OPERATIONS, levelPlan, levelBlurbKey, sectorMission, sectorPlan, SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome };
+  module.exports = { OPERATIONS, levelPlan, levelBlurbKey, sectorMission, SETPIECES, setpiecePlan, setpieceOutcome };
 }

@@ -3,28 +3,12 @@
    onMissionResolved advance), the Req D objective CALLOUT render, and the Req B distinct marker.
    Drives ONE converted level (ironVeil.firstLight: RECON -> STRIKE) by stubbing the minimal runtime
    state the phase runner touches, then simulating phase wins. Usage: node scripts/verify-objective-phases.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => { const en = document.querySelector('[data-lang="en"]'); if (en) en.click(); });
-await page.waitForTimeout(200);
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'langOnly', langSelector: '[data-lang="en"]', wait: 200 });
 
 const R = await page.evaluate(() => {
   const out = [];
@@ -84,8 +68,7 @@ const R = await page.evaluate(() => {
   return out;
 });
 
-await browser.close();
-await new Promise(r => server.close(r));
+await close();
 
 let fail = 0;
 for (const r of R) { console.log((r.pass ? 'ok   - ' : 'FAIL - ') + r.name); if (!r.pass) fail++; }

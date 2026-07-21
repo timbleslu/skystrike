@@ -184,7 +184,7 @@ function missionName(type) { return t('mission.name.' + type) !== 'mission.name.
 
 /* ---------------- sector start ----------------
    Called from nextWave() (main.js) for op-mode sectors. `plan.mission` is the descriptor
-   from sectorPlan() — escort/defend are first-class sectors now (no roll).
+   from levelPlan() (sectorMission(type)) — escort/defend are first-class sectors now (no roll).
    'none' (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
 // §2 mission-card lore-blurb key for the level currently being flown (campaign only; null elsewhere).
 function missionCardBlurbKey() {

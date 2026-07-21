@@ -5,6 +5,7 @@
   "description": "SKYSTRIKE // ACE PROTOCOL — arcade jet combat (Three.js)",
   "scripts": {
     "test": "sh -c 'for f in tests/*.test.js; do node \"$f\" || exit 1; done; echo ALL TESTS PASS'",
+    "verify": "sh -c 'for f in scripts/verify-*.mjs; do echo \"# $f\"; node \"$f\" || exit 1; done; echo ALL VERIFY PASS'",
     "build:www": "sh scripts/build-www.sh",
     "serve:https": "node scripts/serve-https.mjs"
   },

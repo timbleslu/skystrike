@@ -5,33 +5,15 @@
    formation legitimately HOLDS (> engage range), steps ~3.5s, then asserts each follower is within
    tolerance of its slot's world position and the group is a tight cluster. Saves formation-check-vee.png.
    Usage: node scripts/verify-formation.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+import { join } from 'path';
+const { page, port, root, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => {
-  // dismiss the first-run language gate the way the game does — the native <select> change (shot.mjs pattern)
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  ['langSelect', 'onboard', 'manual', 'touchControls'].forEach(id => { const e = document.getElementById(id); if (e) { e.classList.remove('show'); e.classList.add('hide'); e.style.display = 'none'; } });
-});
-await page.waitForTimeout(400);
+// dismiss the first-run language gate the way the game does — set EN + hide the gate overlays (no
+// onboarding Continue, so no tutorial sortie; the test drives the run itself)
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'hide' });
 
 // ---- enter a real run, freeze the player far from the ring, force-spawn a 5-fighter vee via the REAL path ----
 const setup = await page.evaluate(() => {
@@ -105,8 +87,7 @@ const R = await page.evaluate(() => {
 await page.waitForTimeout(500);                   // let the chase camera settle on the formation
 await page.screenshot({ path: join(root, 'formation-check-vee.png') });
 
-await browser.close();
-await new Promise(r => server.close(r));
+await close();
 
 let fail = 0;
 console.log('setup: ' + JSON.stringify(setup));

@@ -3,37 +3,13 @@
    Boots the game, starts a run, kills 3 enemies rapidly through killEnemy -> asserts count 3 / mult 1.5 /
    3rd-kill score delta reflects the multiplier; then forces a tier-2+ streak and saves streak-check-chip.png.
    Usage: node scripts/verify-streak.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-
 // drive past the first-run language + onboarding gate into the hangar
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]') || document.querySelector('[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const c = document.getElementById('obContinue'); if (c) c.click(); });
-await page.waitForTimeout(500);
+await bootToHangar(page, { port, gotoWait: 1400, continueWait: 500 });
 
 // start a run so the real player/enemies/killEnemy path is live
 await page.evaluate(() => { startGame(selectedJet); });
@@ -102,8 +78,7 @@ const chipHasInk = await page.evaluate(() => {
   return false;
 });
 
-await browser.close();
-server.close();
+await close();
 
 let fail = 0;
 for (const r of R.out) { console.log((r.pass ? 'ok   - ' : 'FAIL - ') + r.name); if (!r.pass) fail++; }

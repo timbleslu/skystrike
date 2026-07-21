@@ -4,41 +4,14 @@
        in live globals — whichever pair the current ISO-week seed picks (read from weeklyModifiers first).
    Saves weekly-check-card.png. Exits non-zero on any failure.
    Usage: node scripts/verify-weekly.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
+import { launchGame, bootToHangar } from './lib/boot.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  try { const p = req.url === '/' ? '/index.html' : req.url.split('?')[0]; const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const pageErrs = [];
 page.on('pageerror', e => pageErrs.push('PAGEERR ' + e.message));
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-
-// drive past the first-run language gate (langSelect → onboard → hangar)
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]') || document.querySelector('[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const c = document.getElementById('obContinue'); if (c) c.click(); });
-await page.waitForTimeout(700);
-// the first-run onboarding auto-starts a tutorial sortie; land back in the hangar so the weekly
-// entry point (which requires state === 'hangar') behaves exactly as it does for a real player.
-await page.evaluate(() => { if (typeof state !== 'undefined' && state !== 'hangar' && typeof returnToHangar === 'function') returnToHangar(); });
-await page.waitForTimeout(400);
+// drive past the first-run language gate (langSelect → onboard → hangar); the onboarding auto-starts a
+// tutorial sortie, so land back in the hangar (the weekly entry point requires state === 'hangar').
+await bootToHangar(page, { port, gotoWait: 1400, continueWait: 700, returnToHangar: true, returnWait: 400 });
 
 // ===== Phase 1: hangar weekly card renders this week's 2 modifier NAMES (resolved) =====
 const card = await page.evaluate(() => {
@@ -93,8 +66,7 @@ const live = await page.evaluate(() => {
   return { out, mods: wk.mods, weatherType: (typeof weather !== 'undefined' ? weather.type : '?'), maxFlares: player.maxFlares, maxMissiles: player.maxMissiles, turnMul: player.turnMul, aces: player._weeklyAces };
 });
 
-await browser.close();
-server.close();
+await close();
 
 // ---- report ----
 const all = [...card.out, ...live.out];

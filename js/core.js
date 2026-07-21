@@ -1414,6 +1414,13 @@ function weeklyModifiers(seed, pool) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { weeklySeedFor, weekIdFor, WEEKLY_MODIFIERS, weeklyModifiers });
 // === end F8 ===
+// === wing-node routing ===
+// Which tech/draft node ids open the jet WING PICKER (choose a wingman airframe) instead of buying
+// immediately. Pure membership predicate; the impure buyNode/deployFromTech (ui-tech.js) delegate here.
+const WING_NODES = new Set(['w1', 'w2', 'reserve']);
+function routesToWingPicker(nodeId) { return WING_NODES.has(nodeId); }
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { WING_NODES, routesToWingPicker });
+// === end wing-node routing ===
 // === CF content-factory ===
 // Versioned CONTENT PACKS (js/content-packs.js) carry new formations / weekly modifiers / weekly
 // wave patterns as pure DATA. This section is the pure half: bounds, validation, merge, and the

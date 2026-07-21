@@ -59,6 +59,9 @@ function openTechScreen() {
   document.querySelectorAll('.tech-tab').forEach(b => { b.classList.toggle('active', b.dataset.tab === 'tech'); b.onclick = () => switchTechTab(b.dataset.tab); });
   renderTechTree(true);
   choosingUpgrade = true; paused = true;
+  // #upgrade is a MODAL over the current screen (play, or the campaign level-map) with context-dependent
+  // teardown (deployFromTech restores play OR the level-map) + state-conditional touch — it resists the
+  // nav.js router's "hide current + show new" model, so its show/hide stays hand-rolled. (nav.js)
   g('touchControls').classList.remove('show');
   g('upgrade').classList.add('show');
 }
@@ -208,7 +211,7 @@ function switchTechTab(tab) {
   if (hint) hint.textContent = t('tech.hintTree');
   renderTechTree(true);
 }
-const WING_NODES = new Set(['w1', 'w2', 'reserve']);
+// WING_NODES + routesToWingPicker live in js/core.js (require-safe, tests/wing-picker.test.js).
 let pendingWingNode = null;
 
 function buyNode(node) {
@@ -216,13 +219,13 @@ function buyNode(node) {
   if (nodeState(node) !== 'avail') { audio.ui(); return; }
   // ARMORY tab: unrestricted, buy-as-many. Wing nodes never live here, but keep the guard for safety.
   if (techTab !== 'tech') {
-    if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
+    if (routesToWingPicker(node.id)) { openWingPicker(node); return; }
     commitNode(node);
     return;
   }
   // FRONTIER DRAFT: commit immediately, then reroll fresh 3 so the player can keep buying with RP.
   if (!inOffer(node.id)) { audio.ui(); return; }
-  if (WING_NODES.has(node.id)) { openWingPicker(node); return; }
+  if (routesToWingPicker(node.id)) { openWingPicker(node); return; }
   commitNode(node);
   rerollAfterPick();
 }
@@ -333,7 +336,7 @@ function deployFromTech() {
     const pick = TECH_BY_ID[draftState.selected];
     draftState.selected = null;
     if (pick && nodeState(pick) === 'avail' && inOffer(pick.id)) {
-      if (WING_NODES.has(pick.id)) { openWingPicker(pick); return; }
+      if (routesToWingPicker(pick.id)) { openWingPicker(pick); return; }
       commitNode(pick);
     }
   }

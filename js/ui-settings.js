@@ -368,16 +368,14 @@ function returnToHangar() {
   clearArena();
   // Operations campaign: tear down any active operation run + hide its navigation overlays
   campaignMode = false; campaignPlayerOpId = null; campaignOpId = null; campaignLevelIdx = -1; opSector = null;
-  ['modeChoice', 'endlessSetup', 'opsSelect', 'levelMap', 'levelCleared', 'briefing'].forEach(id => { const e = g(id); if (e) e.classList.remove('show'); });
-  g('gameover').classList.remove('show');
-  g('touchControls').classList.remove('show');
+  hideAllScreens();   // hide every overlay panel (modeChoice/endlessSetup/campaign-nav/gameover) + touch controls (nav.js)
   makePlatform();
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: re-scatter ground objects for the hangar view (tier-gated)
   camMode = 0;
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
   state = 'hangar'; paused = false;
   if (clock) clock.getDelta();
-  g('hangar').classList.remove('hide');
+  showScreen('hangar');   // show the hangar (remove 'hide') + state='hangar' + hide touch controls + track currentScreen (nav.js)
   previewSkin = null; previewYaw = 0; previewPitch = 0; previewSpinResumeAt = 0; _previewJetIdx = -1;   // enter hangar fresh: no lingering unowned preview, reset drag orientation
   selectJet(selectedJet);
   updateBest();

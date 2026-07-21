@@ -1,28 +1,12 @@
 /* Dev-only: headless assertion of the buy-to-preview skin state machine (Feature 3) — the browser-only
    bits the Node unit tests can't reach (previewSkin / launchBlocked / #launch gate / no gameplay leak).
    Drives the REAL hangar DOM (chip clicks via the delegated handler). Usage: node scripts/verify-skin-gate.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => { const en = document.querySelector('[data-lang="en"]'); if (en) en.click(); });
-await page.waitForTimeout(200);
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'langOnly', langSelector: '[data-lang="en"]', wait: 200 });
 await page.evaluate(() => { const c = document.querySelector('#onboard .btn-primary, #onboard button'); if (c) c.click(); });
 await page.waitForTimeout(300);
 await page.evaluate(() => {
@@ -125,5 +109,5 @@ let fail = 0;
 for (const r of R.concat(D)) { console.log((r.pass ? 'ok   ' : 'FAIL ') + r.name); if (!r.pass) fail++; }
 if (errs.length) { console.log('\nPAGE ERRORS:\n' + errs.join('\n')); fail += errs.length; }
 console.log(fail ? `\n${fail} FAILURE(S)` : '\nALL SKIN-GATE CHECKS PASS');
-await browser.close(); server.close();
+await close();
 process.exit(fail ? 1 : 0);

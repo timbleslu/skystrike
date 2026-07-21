@@ -2,23 +2,9 @@
    Asserts: HUD/UI sliders exist (5 opts, correct labels); UI size publishes --ui-content and is
    decoupled from --hud-scale; and the CORE PROOF — at UI size 0.65 a menu BOX keeps its footprint
    while the .ui-dense content inside scales DOWN (so more content fits the same box). Throwaway tool. */
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { join, extname } from 'path';
-import { chromium } from 'playwright';
+import { launchGame } from './lib/boot.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream', '.svg': 'image/svg+xml' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 860 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
@@ -79,8 +65,7 @@ if (at10.boxW != null) {
   if (at65.denseH == null || !(at65.denseH < at10.denseH * 0.9)) fail(`dense content height did NOT shrink: denseH ${at10.denseH} -> ${at65.denseH}`);
 }
 
-await browser.close();
-server.close();
+await close();
 console.log(JSON.stringify({ sel, dec, briefing_at_1_0: at10, briefing_at_0_65: at65 }, null, 2));
 if (errs.length) { console.log('FAIL\n' + errs.join('\n')); process.exit(1); }
 console.log('PASS — UI size denses content (box fixed, .ui-dense shrinks), decoupled from HUD size');

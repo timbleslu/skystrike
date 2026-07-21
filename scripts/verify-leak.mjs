@@ -18,30 +18,13 @@
 
    Usage: node scripts/verify-leak.mjs   (optional env: LEAK_CYCLES, LEAK_STEP, LEAK_EPS)
    Requires playwright (devDep). Not part of the shipped game. */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  try {
-    const data = await readFile(join(root, p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
+import { launchGame, dismissLanguageGate } from './lib/boot.mjs';
 
 const CYCLES = +(process.env.LEAK_CYCLES || 8);
 const STEP = +(process.env.LEAK_STEP || 300);   // ms of stepped frames between build + teardown
 const EPS = +(process.env.LEAK_EPS || 2);       // allowed spread across the last 3 cycles
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const { page, port, close } = await launchGame();
 let pageErr = null;
 page.on('pageerror', e => { pageErr = e.message; console.error('PAGE ERROR:', e.message); });
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
@@ -74,15 +57,7 @@ await page.evaluate(() => {
 });
 
 // drive past the first-run language gate (langSelect -> onboard -> hangar), same as shot.mjs
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const cont = document.getElementById('obContinue'); if (cont) cont.click(); });
-await page.waitForTimeout(700);
+await dismissLanguageGate(page, { continueWait: 700 });
 
 // The per-cycle sampler runs entirely in page scope so raw THREE objects never cross the bridge.
 const measure = () => {
@@ -129,8 +104,7 @@ for (let c = 0; c < CYCLES; c++) {
   rows.push(m);
 }
 
-await browser.close();
-server.close();
+await close();
 
 // ---- report ----
 const cols = ['gpuGeo', 'gpuTex', 'sceneMat', 'sceneGeo', 'geoCache', 'children', 'programs', 'matLive'];

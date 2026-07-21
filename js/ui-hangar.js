@@ -373,6 +373,9 @@ function refreshLaunchSub() {
 // hangar "SELECT <jet>" → mode-choice screen (Endless / Operation). state stays 'hangar' (no player built yet).
 function openModeChoice() {
   if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first
+  // #modeChoice / #endlessSetup are MODALS over the still-visible hangar (they do NOT hide it), tracked in
+  // nav.js SCREENS as entry:'manual' so hideAllScreens() resets them, but entered here by hand — a router
+  // showScreen would wrongly hide the hangar underneath. They toggle each other's .show directly. (nav.js)
   const ov = g('modeChoice'); if (!ov) return;
   g('endlessSetup') && g('endlessSetup').classList.remove('show');
   ov.classList.add('show');

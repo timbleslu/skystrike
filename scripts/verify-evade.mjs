@@ -6,26 +6,9 @@
                  (e._evadeBreakT active) and NO further flare is popped (pool stays 0).
    Exits non-zero on any failure. Usage: node scripts/verify-evade.mjs
    Requires playwright (dev dep). Not part of the shipped game. */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
+import { launchGame, bootToHangar } from './lib/boot.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  try {
-    const data = await readFile(join(root, p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const { page, port, close } = await launchGame();
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
 
@@ -35,26 +18,14 @@ function ok(cond, label) {
   if (!cond) failed = true;
 }
 async function done() {
-  await browser.close();
-  server.close();
+  await close();
   if (failed) { console.error('verify-evade: FAILURES ABOVE'); process.exit(1); }
   console.log('verify-evade: ALL CHECKS PASS');
   process.exit(0);
 }
 
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1200);
-
 // drive past the first-run language gate → hangar (mirrors scripts/shot.mjs)
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const c = document.getElementById('obContinue'); if (c) c.click(); });
-await page.waitForTimeout(600);
+await bootToHangar(page, { port });
 
 // start a run and let wave 1 spawn
 await page.evaluate(() => { applyTimeOfDay(1); startGame(selectedJet); });
