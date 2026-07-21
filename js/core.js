@@ -316,6 +316,83 @@ function waveCount(wave, diffDelta, cap) {
 function isWildcardWave(wave, isBoss, roll) {
   return !isBoss && wave >= 5 && roll < 0.18;
 }
+// PURE — decide the WHOLE "what is this wave" question up front, returning ONE plain manifest so main.js
+// nextWave shrinks to: build inputs → composeWave → commit schedule state → enact (queue spawns/weather/banner).
+// Two input shapes:
+//   CAMPAIGN: { campaignPlan: <levelPlan(lvl), post-setpiece>, bossPhases, bossWaveNext } — authored + deterministic
+//             (no rng); the endless boss schedule is passed straight through, untouched.
+//   ENDLESS:  { wave, strike, difficulty, weatherSeed, lockWeather, weeklyAces, weeklyWavePlan, countDelta,
+//             groundAllowed, bossWaveNext, rivalDue, rng } — rng() ∈ [0,1) is drawn in the SAME order (with the
+//             same randInt expansions: randInt(a,b) = a + floor(rng()·(b+1−a))) as the old inline nextWave, so
+//             passing rng === Math.random consumes the global stream byte-identically.
+// Mutable boss-schedule state (bossWaveNext/bossWaveActive) is IN via ctx and OUT on the manifest — never a
+// side effect. The manifest carries DECISIONS only (counts + booleans + a banner enum + weather string); the
+// impure caller owns all queueing, i18n banners and weather/TOD application.
+function composeWave(ctx) {
+  // ---- CAMPAIGN: a bounded, authored level. The plan already IS the wave; normalize it into a manifest. ----
+  if (ctx.campaignPlan) {
+    const p = ctx.campaignPlan;
+    return {
+      mode: 'campaign',
+      objectives: (Array.isArray(p.objectives) && p.objectives.length) ? p.objectives : null,
+      fighters: p.fighters, aces: p.aces, bombers: p.bombers, mission: p.mission,
+      ground: !!p.ground, boss: !!p.boss,
+      bossPhases: p.boss ? (ctx.bossPhases || null) : null,
+      hostileAce: !!p.hostileAce,
+      weather: p.weather || 'clear', tod: p.tod || 0,
+      bossWaveNext: ctx.bossWaveNext, bossWaveActive: !!p.boss,   // schedule untouched in campaign
+    };
+  }
+  // ---- ENDLESS ----
+  const rng = ctx.rng, wave = ctx.wave;
+  let weather = rollWeather(ctx.weatherSeed + wave);
+  if (ctx.lockWeather) weather = ctx.lockWeather;   // F8 weekly: a lockWeather modifier pins the sky every wave
+  // STRIKE wave: escort + strike site, never a boss, consumes NO rng and leaves the boss schedule alone.
+  if (ctx.strike) {
+    return {
+      mode: 'endless', strike: true, weather,
+      fighters: 3, formation: null, boss: false, wildcard: false,
+      aces: 0, bomber: false, droneSwarm: 0, ground: 0, rival: false,
+      banner: 'strike', strikeSite: true,
+      bossWaveNext: ctx.bossWaveNext, bossWaveActive: false,
+    };
+  }
+  // Windowed boss schedule: seed if uninitialized, fire once wave reaches the mark, reschedule off a boss wave.
+  let bossWaveNext = ctx.bossWaveNext;
+  if (bossWaveNext < BOSS_WINDOW_MIN) bossWaveNext = BOSS_WINDOW_MIN + Math.floor(rng() * (BOSS_WINDOW_MAX - BOSS_WINDOW_MIN + 1));
+  const boss = isBossWave(wave, bossWaveNext);
+  if (boss) bossWaveNext = wave + nextBossOffset(rng);
+  // occasional non-boss "wildcard spike" (always rolls one rng)
+  const wildcard = isWildcardWave(wave, boss, rng());
+  // fighter count: base density, + wildcard bump (randInt(2,4)); a weekly wave-plan row then overrides both.
+  let count = waveCount(wave, ctx.countDelta, WAVE_COUNT_CAP);
+  if (wildcard) count = Math.min(WAVE_COUNT_CAP, count + (2 + Math.floor(rng() * 3)));
+  const wrow = (ctx.weeklyWavePlan && wave <= ctx.weeklyWavePlan.pattern.length) ? ctx.weeklyWavePlan.pattern[wave - 1] : null;
+  if (wrow) count = wrow.n;
+  // aces: base roll (wave≥3, non-boss) + wildcard bonus + weekly extra-ace COUNT — all push the same spawnAce,
+  // so collapsing three consecutive pushes into one count is order-preserving.
+  let aces = 0;
+  if (wave >= 3 && !boss && rng() < (0.45 + ctx.difficulty * 0.12)) aces++;
+  if (wildcard) aces++;
+  if (ctx.weeklyAces && !boss) aces += ctx.weeklyAces;
+  // bomber / drone-swarm / ground rolls (same order + randInt(3,4)/randInt(1,2) expansions as inline nextWave)
+  const bomber = wave >= 4 && !boss && rng() < 0.32;
+  let droneSwarm = 0;
+  if (wave >= 3 && !boss && rng() < 0.5) droneSwarm = (3 + Math.floor(rng() * 2)) + Math.floor(wave / 4);
+  const ground = ctx.groundAllowed ? (1 + Math.floor(rng() * 2)) : 0;
+  return {
+    mode: 'endless', strike: false, weather,
+    fighters: count, formation: wrow ? (wrow.formation || null) : null,
+    boss, wildcard, aces, bomber, droneSwarm, ground, rival: !!ctx.rivalDue,
+    banner: boss ? 'boss' : (wildcard ? 'wildcard' : 'wave'), strikeSite: false,
+    bossWaveNext, bossWaveActive: boss,
+  };
+}
+// PURE — how many queued spawns to BUILD this frame: clamp the per-frame budget to what's actually queued.
+// The FIFO drain + closure invocation stay impure in main.js processSpawnQueue; this is the decision slice.
+function spawnDrainCount(queueLength, perFrame) {
+  return Math.max(0, Math.min(perFrame, queueLength));
+}
 
 /* ---------------- barrel-roll pure helpers (F-barrel) ---------------- */
 // Returns true if the gap between now and lastTapTime is within threshold (double-tap detected).
@@ -1152,6 +1229,7 @@ if (typeof module !== 'undefined' && module.exports) {
     AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
     shouldOpenTechScreen,
     BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
+    composeWave, spawnDrainCount,
     rollDetect, rollCooldownGate,
     STEER, steerCommand,
     AIM_ASSIST, AIM_ASSIST_LEVELS, AIM_MAGNET_K, aimAssistCfg, aimAssistStep,

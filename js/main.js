@@ -23,70 +23,67 @@ function nextWave() {
     const lvl = currentCampaignLevel();
     let plan = levelPlan(lvl);
     if (lvl.setpiece && !run.setpieceDone[lvl.id]) { run.setpieceDone[lvl.id] = true; plan = setpiecePlan(lvl.setpiece, plan); }
-    strikeWaveActive = plan.ground;
-    bossWaveActive = lastWaveWasBoss = !!plan.boss;
-    applyWeather(plan.weather || 'clear'); applyTimeOfDay(plan.tod || 0);   // authored condition, fixed per level (not rolled)
+    const m = composeWave({ campaignPlan: plan, bossPhases: (lvl.boss && lvl.boss.phases) || null, bossWaveNext });
+    strikeWaveActive = m.ground;
+    bossWaveActive = lastWaveWasBoss = m.boss;
+    applyWeather(m.weather); applyTimeOfDay(m.tod);   // authored condition, fixed per level (not rolled)
     startSectorMission(plan, wave);
-    const sectorLine = plan.boss ? t('banner.finalTarget') : t(lvl.nameKey);
+    const sectorLine = m.boss ? t('banner.finalTarget') : t(lvl.nameKey);
     const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);
-    // multi-phase objective levels (plan.objectives) own ALL their spawns per phase (startMissionPhase
+    // multi-phase objective levels (m.objectives) own ALL their spawns per phase (startMissionPhase
     // in missions.js); skip the level's base air/ground budget so phase 1 (a nav leg) starts clean.
-    if (!plan.objectives) {
-      queueFighterWave(plan.fighters);   // F2: a >=3 fighter budget flies in as a formation
-      for (let i = 0; i < plan.aces; i++) pendingSpawns.push(spawnAce);
-      for (let i = 0; i < plan.bombers; i++) pendingSpawns.push(plan.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
+    if (!m.objectives) {
+      queueFighterWave(m.fighters);   // F2: a >=3 fighter budget flies in as a formation
+      for (let i = 0; i < m.aces; i++) pendingSpawns.push(spawnAce);
+      for (let i = 0; i < m.bombers; i++) pendingSpawns.push(m.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
     }
-    if (plan.boss) {
-      campaignBossPhases = (lvl.boss && lvl.boss.phases) || null;   // hand authored phase knobs to spawnBoss → e._phaseCfg
+    if (m.boss) {
+      campaignBossPhases = m.bossPhases;   // hand authored phase knobs to spawnBoss → e._phaseCfg
       if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss);
     }
-    if (plan.ground && !plan.objectives) queueStrikeSite(wave);
+    if (m.ground && !m.objectives) queueStrikeSite(wave);
     const aceKey = campaignOpId + ':' + campaignLevelIdx;
-    if (plan.hostileAce && !plan.objectives && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
+    if (m.hostileAce && !m.objectives && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
     return;
   }
-  applyWeather(rollWeather(weatherSeed + wave));
-  if (player && player._weeklyEffects && player._weeklyEffects.lockWeather) applyWeather(player._weeklyEffects.lockWeather);   // F8 weekly: a lockWeather modifier (stormFront / pack fogBank / …) pins the sky every wave
+  // ENDLESS — build inputs, decide the whole wave in core.js composeWave, commit the boss schedule, then enact.
+  const m = composeWave({
+    wave, strike, difficulty,
+    weatherSeed,
+    lockWeather: (player && player._weeklyEffects && player._weeklyEffects.lockWeather) || null,   // F8 weekly: pins the sky every wave
+    weeklyAces: (player && player._weeklyAces) || 0,                                                // F8 weekly: extra-ace COUNT per non-boss wave
+    weeklyWavePlan: (player && player._weeklyWavePlan) || null,                                     // CF content-factory: this week's wave pattern
+    countDelta: DIFFS[difficulty].count,
+    groundAllowed: groundSpawnsAllowed(wave, groundWar),
+    bossWaveNext,
+    rivalDue: !strike && rivalDue(wave, run.lastRivalWave, rivalEnabled),
+    rng: Math.random,
+  });
+  bossWaveNext = m.bossWaveNext;                        // commit the (possibly re-rolled) windowed boss schedule
+  bossWaveActive = lastWaveWasBoss = m.bossWaveActive;
+  applyWeather(m.weather);
   const _wCond = weatherLabel();
-  if (strike) {
-    strikeWaveActive = true; bossWaveActive = lastWaveWasBoss = false;
+  if (m.strike) {
     showBanner(t('banner.strikeWave'));
     queueStrikeSite(wave);
     queueFighterWave(3);   // F2: strike-wave escort flies in as a formation
     return;
   }
-  // Windowed boss schedule (balance pass 2026-06) — replaces the old `wave % 4` metronome. Seed the
-  // schedule the first time we need it, then a boss wave fires once `wave` reaches the scheduled mark
-  // and the NEXT mark is rolled 3-5 waves further out, so cadence is never predictable.
-  if (bossWaveNext < BOSS_WINDOW_MIN) bossWaveNext = BOSS_WINDOW_MIN + Math.floor(Math.random() * (BOSS_WINDOW_MAX - BOSS_WINDOW_MIN + 1));
-  bossWaveActive = isBossWave(wave, bossWaveNext);
-  if (bossWaveActive) bossWaveNext = wave + nextBossOffset(Math.random);   // reschedule the next boss off THIS wave
-  lastWaveWasBoss = bossWaveActive;
-  // occasional non-boss "wildcard spike" — a denser-than-usual swarm to break the rhythm (~18%, wave >=5)
-  const wildcard = isWildcardWave(wave, bossWaveActive, Math.random());
-  let count = waveCount(wave, DIFFS[difficulty].count, WAVE_COUNT_CAP);
-  if (wildcard) count = Math.min(WAVE_COUNT_CAP, count + randInt(2, 4));
-  // CF content-factory: a weekly pack wave plan drives fighter count (+ optionally pins the
-  // formation) for waves 1..len, then the normal endless cadence resumes.
-  const wrow = (player && player._weeklyWavePlan && wave <= player._weeklyWavePlan.pattern.length) ? player._weeklyWavePlan.pattern[wave - 1] : null;
-  if (wrow) count = wrow.n;
-  queueFighterWave(count, wrow && wrow.formation);   // F2: a >=3 endless wave flies in as a formation // fighters first \u2192 first drained = combat enemy
-  if (bossWaveActive) { pendingSpawns.push(spawnBoss); showBanner(t('banner.bossIncoming')); }
-  else if (wildcard) { showBanner(t('banner.wildcardWave')); }
+  queueFighterWave(m.fighters, m.formation);   // F2: a >=3 endless wave flies in as a formation // fighters first \u2192 first drained = combat enemy
+  if (m.banner === 'boss') showBanner(t('banner.bossIncoming'));
+  else if (m.banner === 'wildcard') showBanner(t('banner.wildcardWave'));
   else showBanner(_wCond ? tf('banner.wave', { n: wave }) + '  ·  ' + _wCond : tf('banner.wave', { n: wave }));
-  if (wave >= 3 && !bossWaveActive && Math.random() < (0.45 + difficulty * 0.12)) pendingSpawns.push(spawnAce);
-  if (wildcard) pendingSpawns.push(spawnAce);   // wildcard always brings an extra ace for spice
-  if (player && player._weeklyAces && !bossWaveActive) for (let a = 0; a < player._weeklyAces; a++) pendingSpawns.push(spawnAce);   // F8 weekly: extraAces modifiers add N extra aces on every non-boss wave
-  if (!strike && rivalDue(wave, run.lastRivalWave, rivalEnabled)) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
-  if (wave >= 4 && !bossWaveActive && Math.random() < 0.32) pendingSpawns.push(spawnBomber);
-  if (wave >= 3 && !bossWaveActive && Math.random() < 0.5) {
-    const dn = randInt(3, 4) + Math.floor(wave / 4);
-    pendingSpawns.push(() => spawnDroneSwarm(dn));
-  }
-  if (groundSpawnsAllowed(wave, groundWar)) { const ng = randInt(1, 2); for (let k = 0; k < ng; k++) pendingSpawns.push(spawnGround); }
+  if (m.boss) pendingSpawns.push(spawnBoss);
+  for (let i = 0; i < m.aces; i++) pendingSpawns.push(spawnAce);   // base roll + wildcard bonus + weekly extra aces (all spawnAce)
+  if (m.rival) { run.lastRivalWave = wave; pendingSpawns.push(spawnRival); }
+  if (m.bomber) pendingSpawns.push(spawnBomber);
+  if (m.droneSwarm) { const dn = m.droneSwarm; pendingSpawns.push(() => spawnDroneSwarm(dn)); }
+  for (let k = 0; k < m.ground; k++) pendingSpawns.push(spawnGround);
 }
 function processSpawnQueue(n) {
-  for (let i = 0; i < n && pendingSpawns.length; i++) pendingSpawns.shift()();
+  // core.js spawnDrainCount owns the pure "how many to build this frame" decision; the FIFO drain +
+  // closure invocation stay here (impure — the closures run THREE-bound spawn side effects).
+  for (let i = spawnDrainCount(pendingSpawns.length, n); i > 0; i--) pendingSpawns.shift()();
 }
 /* Random spawn point on a ring around the player, altitude clamped to [terrain+minAGL, maxY]. */
 function airSpawnPos(rMin, rMax, yJitMin, yJitMax, minAGL, maxY) {
