@@ -325,7 +325,7 @@ function renderJetCard(i) {
       '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
   mountPreviewCanvas();   // C2: reparent the persistent isolated preview canvas into this card's #jetPreview3D host
-  wireZoomSlider();       // F2: sync the zoom slider to previewZoom + bind its input
+  wireZoomSlider();       // F2: sync the zoom slider to hangarPreview.zoom + bind its input
   renderSpecial2Picker(i);
   renderJetMeta(i);
 }
@@ -445,10 +445,10 @@ function statBar(lbl, v) {
   for (let k = 1; k <= 10; k++) s += '<i class="' + (k <= v ? 'on' : '') + '"></i>';
   return s + '</div></div>';
 }
-/* hangar-preview paint: show the TRANSIENT previewSkin (owned OR not) on the live jet; fall back to the
+/* hangar-preview paint: show the TRANSIENT hangarPreview.skin (owned OR not) on the live jet; fall back to the
    owned/equipped paint. UI-ONLY — never reaches createPlayer/gameplay (which uses jetPaint = owned only). */
 function previewPaint(jet) {
-  if (previewSkin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, previewSkin);
+  if (hangarPreview.skin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, hangarPreview.skin);
   return jetPaint(jet);
 }
 /* TRACK C2: the preview no longer lives in a cleared world gutter — it renders to its OWN isolated
@@ -511,39 +511,39 @@ function mountPreviewCanvas() {
   if (host && previewCanvas && previewCanvas.parentNode !== host) host.appendChild(previewCanvas);
   resizePreview();
 }
-/* F2: sync the zoom slider UI to previewZoom and bind it — previewLoop reads previewZoom each frame.
-   Called after each card rebuild; previewZoom is reset to 1.0 in selectJet on a real jet switch. */
+/* F2: sync the zoom slider UI to hangarPreview.zoom and bind it — previewLoop reads it each frame.
+   Called after each card rebuild; hangarPreview.zoom is reset to 1.0 in selectJet on a real jet switch. */
 function wireZoomSlider() {
   const z = g('jetZoom'); if (!z) return;
-  z.value = previewZoom;
-  z.addEventListener('input', () => { previewZoom = parseFloat(z.value) || 1.0; });
+  z.value = hangarPreview.zoom;
+  z.addEventListener('input', () => { hangarPreview.zoom = parseFloat(z.value) || 1.0; });
 }
 /* dedicated rAF — auto-rotate + drag orientation; idles cheaply (no render) when not in the hangar. */
 function previewLoop() {
   requestAnimationFrame(previewLoop);
   if (typeof state !== 'undefined' && state !== 'hangar') return;   // off-hangar: keep the loop alive but skip the draw
   if (!previewRenderer || !previewScene || !previewCamera) return;
-  const z = 1 / (previewZoom || 1);                                          // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
+  const z = 1 / (hangarPreview.zoom || 1);                                   // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
   previewCamera.position.set(0, PREVIEW_CAM_Y * z, PREVIEW_CAM_Z * z);
   if (previewJet) {
     const pn = performance.now();
-    if (!previewDragging && pn > previewSpinResumeAt) previewYaw += 0.012;   // auto-rotate (resumes ~3s after release via previewSpinResumeAt)
-    previewJet.rotation.set(previewPitch, previewYaw, 0);                    // own the full orientation (yaw spins, dragged pitch held)
+    if (!hangarPreview.dragging && pn > hangarPreview.spinResumeAt) hangarPreview.yaw += 0.012;   // auto-rotate (resumes ~3s after release via spinResumeAt)
+    previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);      // own the full orientation (yaw spins, dragged pitch held)
     previewJet.position.y = Math.sin(pn * 0.0012) * 0.6;                     // gentle bob (optional)
   }
   previewRenderer.render(previewScene, previewCamera);
 }
 /* launch is BLOCKED while previewing an UNOWNED skin (must buy it first). */
 function launchBlocked() {
-  return !!(previewSkin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, previewSkin));
+  return !!(hangarPreview.skin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, hangarPreview.skin));
 }
 /* reflect the gate on the LAUNCH control (disabled + dimmed .gated). */
 function refreshLaunchGate() {
   const lb = g('launch'); if (lb) { const b = launchBlocked(); lb.classList.toggle('gated', b); lb.disabled = b; }
 }
-let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts previewSkin + resets drag orientation
+let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts the preview skin + resets drag orientation
 function selectJet(i) {
-  if (i !== _previewJetIdx) { previewSkin = null; previewYaw = 0; previewPitch = 0; previewZoom = 1.0; previewSpinResumeAt = 0; _previewJetIdx = i; }   // jet switch → revert preview, reset orientation + zoom (F2)
+  if (i !== _previewJetIdx) { hangarPreview.clear(); _previewJetIdx = i; }   // jet switch → revert preview, reset orientation + zoom (F2)
   selectedJet = i;
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
@@ -553,7 +553,7 @@ function selectJet(i) {
   const paint = previewPaint(JETS[i]);   // previewing skin (owned OR not) → live look; gameplay still uses jetPaint
   previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true, { skin: paint });
   previewJet.position.set(0, 0, 0);      // C2: centred at origin in the PREVIEW scene (no world gutter)
-  previewJet.rotation.set(previewPitch, previewYaw, 0);
+  previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);
   if (previewScene) previewScene.add(previewJet);   // → isolated preview scene, NEVER the shared game scene
   refreshLaunchSub();   // CTA reads "SELECT <jet>" — keep it in sync with the selected airframe name
   audio.init(); audio.ui();
@@ -571,7 +571,7 @@ function renderJetMeta(i) {
     const skins = SKINS[j.id];
     if (skins && skins.length > 1) {
       // the skin currently being PREVIEWED but NOT owned (the only state that gates launch + shows the BUY CTA)
-      const pvUnowned = (previewSkin && JETS[selectedJet] && j.id === JETS[selectedJet].id && !skinOwned(j.id, previewSkin)) ? previewSkin : null;
+      const pvUnowned = (hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id && !skinOwned(j.id, hangarPreview.skin)) ? hangarPreview.skin : null;
       html += '<div class="jmskins"><span class="jmskinlbl">' + t('meta.skins') + '</span>';
       for (let s = 0; s < skins.length; s++) {
         const sk = skins[s], owned = skinOwned(j.id, sk.id), sel = selectedSkin(j.id) === sk.id;
@@ -583,7 +583,7 @@ function renderJetMeta(i) {
       }
       html += '</div>';
       // F3: livery NAME readout — shows the hovered/focused/selected paint name prominently (any skin id, via metaText)
-      const curId = previewSkin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? previewSkin : selectedSkin(j.id);
+      const curId = hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? hangarPreview.skin : selectedSkin(j.id);
       html += '<div id="jetSkinName" class="jmskinname">' + metaText({ id: 'skin.' + curId }, 'name') + '</div>';
       // buy-to-preview: while previewing an UNOWNED skin, surface an inline BUY · cost right at the preview
       if (pvUnowned) html += '<button id="jetMetaBuy" class="jmpvbuy" data-buyskin="' + pvUnowned + '" data-jet="' + j.id + '">' + tf('meta.buyPaint', { c: skinCost(j.id, pvUnowned) }) + '</button>';
@@ -600,14 +600,14 @@ function onJetMetaClick(e) {
   const buySk = e.target.closest('[data-buyskin]');
   if (buySk) {
     const jet = buySk.dataset.jet, id = buySk.dataset.buyskin;
-    if (buySkin(jet, id)) { setSkin(jet, id); previewSkin = id; updateSpHud(); selectJet(selectedJet); audio.ui(); }
+    if (buySkin(jet, id)) { setSkin(jet, id); hangarPreview.skin = id; updateSpHud(); selectJet(selectedJet); audio.ui(); }
     else showBanner(t('meta.needSp'));
     return;
   }
   const sk = e.target.closest('.jmskin');
   if (sk) {
     const jet = sk.dataset.jet, id = sk.dataset.skin;
-    previewSkin = id;                          // preview ANY chip (owned or not) on the live model — UI only
+    hangarPreview.skin = id;                   // preview ANY chip (owned or not) on the live model — UI only
     if (skinOwned(jet, id)) setSkin(jet, id);  // owned → also equip (persist); unowned → preview only, NO meta/store write
     selectJet(selectedJet);                    // rebuild preview with previewPaint (+ refreshes chips + gate)
     audio.ui();

@@ -1441,6 +1441,36 @@ function vetRank(kills) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { VET_THRESHOLDS, vetRank });
 // === end F9 ===
+// === run-mode policy table (Candidate 8) ===
+// PURE lookup: classify the current run mode into ONE key, then read a small policy row instead of
+// re-deriving the same boolean from the raw flags at each lifecycle branch point. The mode flags are
+// mutually exclusive at runtime (startDaily/startWeekly/startBossRush each zero opMode; enterOperationRun
+// zeros daily/weekly/bossRush; campaignMode is only ever true while opMode is too), so one key names it.
+//   bounded        — finite authored-wave campaign run (vs unbounded endless/daily/weekly/bossRush)
+//   opensTechShop  — a wave clear always opens the R&D/nav hub (Operation); endless/daily/weekly open it
+//                    on a cadence (shouldOpenTechScreen); bossRush has no tech shop
+// Keys: 'endless' | 'campaign' | 'daily' | 'weekly' | 'bossRush'. 'campaign' == Operations selected
+// (opMode) and/or the in-flight bounded level (campaignMode).
+const MODE_POLICY = {
+  endless:  { bounded: false, opensTechShop: false },
+  campaign: { bounded: true,  opensTechShop: true  },
+  daily:    { bounded: false, opensTechShop: false },
+  weekly:   { bounded: false, opensTechShop: false },
+  bossRush: { bounded: false, opensTechShop: false },
+};
+// Classify {campaignMode, opMode, dailyMode, weeklyActive, bossRush} → one MODE_POLICY key. Precedence
+// matches the runtime exclusivity: bossRush, then campaign (Operations/bounded), then weekly, then daily,
+// else endless. `weeklyActive` is the caller's weeklyMode flag (named input-agnostic so the classifier is pure).
+function modeKeyFor(f) {
+  f = f || {};
+  if (f.bossRush) return 'bossRush';
+  if (f.campaignMode || f.opMode) return 'campaign';
+  if (f.weeklyActive) return 'weekly';
+  if (f.dailyMode) return 'daily';
+  return 'endless';
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { MODE_POLICY, modeKeyFor });
+// === end run-mode policy table ===
 // === F8 weekly-challenge ===
 // PURE — ISO-8601 week → deterministic seed + week id + 2-modifier pick, mirroring the daily core.
 // Every helper takes a date STRING ('YYYY-MM-DD') and NEVER reads the clock (pure integer arithmetic,

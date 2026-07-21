@@ -356,7 +356,7 @@ function returnToHangar() {
   state = 'hangar'; paused = false;
   if (clock) clock.getDelta();
   showScreen('hangar');   // show the hangar (remove 'hide') + state='hangar' + hide touch controls + track currentScreen (nav.js)
-  previewSkin = null; previewYaw = 0; previewPitch = 0; previewSpinResumeAt = 0; _previewJetIdx = -1;   // enter hangar fresh: no lingering unowned preview, reset drag orientation
+  hangarPreview.clear(); _previewJetIdx = -1;   // enter hangar fresh: no lingering unowned preview, reset drag orientation + zoom
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();

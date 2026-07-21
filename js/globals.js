@@ -73,15 +73,18 @@ let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
 let selectedJet = 0, previewJet = null, platform = null;   // default to the FT-1 trainer (roster index 0) — the only jet unlocked at a fresh start; a saved skystrike_settings.selectedJet overrides
-// Hangar 3D-preview interaction. previewSkin is a TRANSIENT, UI-only skin being shown on the preview jet
-// (owned OR not) — it is NEVER persisted and NEVER read by gameplay (createPlayer uses jetPaint = owned only),
-// so an unowned preview can't reach a launched jet. Cleared on jet switch / leaving the hangar.
-let previewSkin = null;
-let previewDragging = false;          // pointer is dragging the preview jet (raycast-gated on pointerdown)
-let previewSpinResumeAt = 0;          // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
-let previewYaw = 0, previewPitch = 0; // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
+// Hangar 3D-preview interaction — ONE cluster object (was 6 loose preview* globals). `skin` is a TRANSIENT,
+// UI-only skin shown on the preview jet (owned OR not); NEVER persisted, NEVER read by gameplay
+// (createPlayer uses jetPaint = owned only), so an unowned preview can't reach a launched jet.
 const PREVIEW_PITCH_MAX = Math.PI / 3;   // ±60° pitch clamp
-let previewZoom = 1.0;                 // hangar preview zoom (F2): dollies previewCamera toward origin; 0.8×–2.5×, reset to 1.0 on jet switch
+const hangarPreview = {
+  skin: null,          // transient UI-only skin id on the preview jet (never leaks into a launched jet)
+  yaw: 0, pitch: 0,    // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
+  zoom: 1.0,           // F2 preview zoom: dollies previewCamera toward origin (0.8×–2.5×), reset to 1 on jet switch
+  dragging: false,     // pointer is dragging the preview jet (raycast-gated on pointerdown)
+  spinResumeAt: 0,     // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
+  clear() { this.skin = null; this.yaw = 0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },   // the "no preview leaks into a launched jet" reset (skin→null, zoom→1, orientation→0)
+};
 let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
 let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
 
@@ -410,6 +413,9 @@ function applySkin(id) {
 // combat.js awacsAction wraps awacsResolve reading {uses: awacsUses, last: awacsLast}.
 let awacsUses = { strike: 0, resupply: 0, jam: 0 };   // calls SPENT this sector (reset per sector + per run)
 let awacsLast = { strike: 0, resupply: 0, jam: 0 };   // sec-clock of last successful call per key (cooldown gate)
+// The ONE AWACS reset invariant — zero both maps. Called per sector (main.js nextWave), per run (ui-flow.js
+// startGame), per sortie (freshSortie), and per op-run entry (enterOperationRun). Was 4 hand-copied pairs.
+function resetAwacs() { awacsUses = { strike: 0, resupply: 0, jam: 0 }; awacsLast = { strike: 0, resupply: 0, jam: 0 }; }
 
 /* Touch controls state */
 let isTouchEnabled = false;
@@ -492,15 +498,13 @@ function refreshGfxTier() {
   return gfxTier;
 }
 
-/* shared temporaries (avoid per-frame allocation) */
+/* --- shared THREE scratch (multi-file) --- used across combat/main/entities/engine/hud/ui-hud (avoid per-frame allocation).
+   Single-file scratch was evicted to its owning file: eul + aimT1..3 → combat.js, pp1..3 → ui-hud.js. */
 const t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), t3 = new THREE.Vector3(),
       t4 = new THREE.Vector3(), t5 = new THREE.Vector3(), tA = new THREE.Vector3();
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
-const eul = new THREE.Euler();
 const ZERO = new THREE.Vector3(0, 0, 0), UPV = new THREE.Vector3(0, 1, 0), ZAX = new THREE.Vector3(0, 0, 1);
-const m4 = new THREE.Matrix4();
-const pp1 = new THREE.Vector3(), pp2 = new THREE.Vector3(), pp3 = new THREE.Vector3();
-const aimT1 = new THREE.Vector3(), aimT2 = new THREE.Vector3(), aimT3 = new THREE.Vector3();  // aim-assist scratch (combat.js updatePlayer)
+const m4 = new THREE.Matrix4();   // globals-only: consumed by dirToQuat below
 
 function fwdOf(o, out) { return (out || new THREE.Vector3()).set(0, 0, -1).applyQuaternion(o.quaternion); }
 function rightOf(o, out) { return (out || new THREE.Vector3()).set(1, 0, 0).applyQuaternion(o.quaternion); }

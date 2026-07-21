@@ -1051,7 +1051,7 @@ function buildDrone() {
 function createPlayer(idx) {
   const j = JETS[idx], st = jetStats(j);
   const paint = (typeof jetPaint === 'function') ? jetPaint(j) : { color: j.color, accent: j.accent };
-  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true, { skin: paint }); scene.add(mesh);   // OWNED skin only (jetPaint never reads previewSkin) → unowned preview can't reach gameplay
+  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true, { skin: paint }); scene.add(mesh);   // OWNED skin only (jetPaint never reads hangarPreview.skin) → unowned preview can't reach gameplay
   // muzzle flash: one persistent sprite at the nose, blinked on by fireGun
   const muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd76a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
   muzzle.position.set(0, 0, -14); muzzle.scale.setScalar(14); muzzle.visible = false; mesh.add(muzzle);

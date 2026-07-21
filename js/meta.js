@@ -492,7 +492,7 @@ function resolveSkin(jet, skinId) {
 /* back-compat alias for the original resolver name (tests + call sites still use it) — same deep interface. */
 function resolveSkinPaint(jet, id) { return resolveSkin(jet, id); }
 /* a jet's OWNED paint (honours the persisted skin choice) — a thin convenience over resolveSkin. Used by
-   gameplay (createPlayer) — NEVER reads the transient hangar previewSkin, so an unowned preview can never
+   gameplay (createPlayer) — NEVER reads the transient hangarPreview.skin, so an unowned preview can never
    leak into a launched jet. */
 function jetPaint(jet) { return resolveSkin(jet, selectedSkin(jet.id)); }
 

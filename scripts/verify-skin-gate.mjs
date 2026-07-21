@@ -31,7 +31,7 @@ const R = await page.evaluate(async () => {
   ok('an unowned (locked) chip exists', lockedChip);
   const previewId = lockedChip && lockedChip.dataset.skin;
   if (lockedChip) lockedChip.click();
-  ok('previewSkin set to the tapped unowned skin', previewSkin === previewId);
+  ok('previewSkin set to the tapped unowned skin', hangarPreview.skin === previewId);
   ok('launchBlocked() true while previewing unowned', launchBlocked() === true);
   const launch = document.getElementById('launch');
   ok('#launch disabled + .gated', launch && launch.disabled && launch.classList.contains('gated'));
@@ -64,7 +64,7 @@ const R = await page.evaluate(async () => {
   if (stillLocked) stillLocked.click();
   ok('previewing an unowned skin again', launchBlocked() === true);
   returnToHangar();
-  ok('previewSkin cleared on leaving the hangar', previewSkin === null);
+  ok('previewSkin cleared on leaving the hangar', hangarPreview.skin === null);
   ok('launch un-gated after revert', launchBlocked() === false);
 
   return out;
@@ -92,16 +92,16 @@ const D = await page.evaluate(async () => {
   if (sx === null) { sx = cx; sy = cy; }
   const fire = (type, x, y) => window.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
   // miss → no drag
-  fire('pointerdown', 4, 4); ok('pointerdown off the jet does NOT start a drag', previewDragging === false); fire('pointerup', 4, 4);
+  fire('pointerdown', 4, 4); ok('pointerdown off the jet does NOT start a drag', hangarPreview.dragging === false); fire('pointerup', 4, 4);
   // hit → drag starts
-  const yaw0 = previewYaw;
-  fire('pointerdown', sx, sy); ok('pointerdown ON the jet starts a drag (raycast hit)', previewDragging === true);
-  fire('pointermove', sx + 100, sy); ok('horizontal drag yaws the jet', Math.abs(previewYaw - (yaw0 + 1.0)) < 0.001);
-  fire('pointermove', sx + 100, sy + 100000); ok('vertical drag pitches, CLAMPED to +60deg', Math.abs(previewPitch - PREVIEW_PITCH_MAX) < 1e-6);
-  fire('pointermove', sx + 100, sy - 100000); ok('opposite drag clamps to -60deg', Math.abs(previewPitch + PREVIEW_PITCH_MAX) < 1e-6);
+  const yaw0 = hangarPreview.yaw;
+  fire('pointerdown', sx, sy); ok('pointerdown ON the jet starts a drag (raycast hit)', hangarPreview.dragging === true);
+  fire('pointermove', sx + 100, sy); ok('horizontal drag yaws the jet', Math.abs(hangarPreview.yaw - (yaw0 + 1.0)) < 0.001);
+  fire('pointermove', sx + 100, sy + 100000); ok('vertical drag pitches, CLAMPED to +60deg', Math.abs(hangarPreview.pitch - PREVIEW_PITCH_MAX) < 1e-6);
+  fire('pointermove', sx + 100, sy - 100000); ok('opposite drag clamps to -60deg', Math.abs(hangarPreview.pitch + PREVIEW_PITCH_MAX) < 1e-6);
   const before = performance.now();
-  fire('pointerup', sx + 100, sy); ok('pointerup ends the drag', previewDragging === false);
-  ok('idle spin/bob paused ~3s after release', previewSpinResumeAt > before + 2000);
+  fire('pointerup', sx + 100, sy); ok('pointerup ends the drag', hangarPreview.dragging === false);
+  ok('idle spin/bob paused ~3s after release', hangarPreview.spinResumeAt > before + 2000);
   return out;
 });
 

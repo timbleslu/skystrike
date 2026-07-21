@@ -1,5 +1,9 @@
 /* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update. Load 4th. */
 
+/* file-local THREE scratch (moved from globals.js — used only here) */
+const eul = new THREE.Euler();
+const aimT1 = new THREE.Vector3(), aimT2 = new THREE.Vector3(), aimT3 = new THREE.Vector3();  // aim-assist scratch (updatePlayer)
+
 /* ---------------- bullets ---------------- */
 function getBullet() {
   let b = BPOOL.pop();

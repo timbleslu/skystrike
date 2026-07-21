@@ -33,7 +33,7 @@ const R = await page.evaluate(() => {
   startSectorMission(plan, wave);
   ok('phase 1 mission = recon', mission && mission.type === 'recon');
   ok('recon opener trimmed to wp:2', mission && mission.target === 2 && (mission.params.count === 2));
-  ok('queue initialized at phase 0 of 2', missionPhases && missionPhases.length === 2 && missionPhaseIdx === 0);
+  ok('queue initialized at phase 0 of 2', missionSeq && missionSeq.phases.length === 2 && missionSeq.idx === 0);
   ok('objective callout fired for phase 1/2', objectiveCallout && objectiveCallout.total === 2 && objectiveCallout.phase === 1 && objectiveCallout.text);
   const calloutP1 = objectiveCallout.text;
 
@@ -48,14 +48,14 @@ const R = await page.evaluate(() => {
   // PHASE 1 -> 2 : simulate the recon win
   onMissionResolved(true);
   ok('advanced to phase 2 mission = strike', mission && mission.type === 'strike');
-  ok('queue index advanced to 1 (still active, not complete)', missionPhases && missionPhaseIdx === 1);
+  ok('queue index advanced to 1 (still active, not complete)', missionSeq && missionSeq.idx === 1);
   ok('objective callout re-fired for phase 2/2', objectiveCallout && objectiveCallout.phase === 2);
   ok('phase-2 callout text differs from phase-1', objectiveCallout.text !== calloutP1);
 
   // PHASE 2 win = LAST phase -> level/sector completes
   const tp0 = player.tp, missions0 = run.missions;
   onMissionResolved(true);
-  ok('sequence exhausted -> queue cleared (level complete path)', missionPhases === null && missionPhaseIdx === 0);
+  ok('sequence exhausted -> queue cleared (level complete path)', missionSeq === null);
   ok('run.missions incremented once for the level (not per phase)', run.missions === missions0 + 1);
   ok('completion paid an RP bonus', player.tp > tp0);
 

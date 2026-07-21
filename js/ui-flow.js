@@ -53,7 +53,7 @@ function startGame(i, daily, rush, weekly) {
   if (state !== 'hangar') return;
   if (!daily && !weekly && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }   // F8: weekly (like daily) flies the seed-picked jet regardless of ownership
   if (!daily && !rush && !weekly && typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first (weekly uses the seed jet, not the hangar preview)
-  previewSkin = null;   // committing to launch → drop any transient preview (gameplay always uses the OWNED skin)
+  hangarPreview.clear();   // committing to launch → drop any transient preview (gameplay always uses the OWNED skin)
   if (opMode && !daily && !rush) { selectedJet = i; openOperationsSelect(); return; }   // Operations: enter campaign navigation (player built per-operation in launchLevel), not a direct run
   const _ptag = g('pilotTag');
   if (_ptag) {
@@ -93,8 +93,7 @@ function startGame(i, daily, rush, weekly) {
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
   choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
   resetDraftState();   // FRONTIER DRAFT (feature 4): fresh run seed + clear pin/pity/visit counter
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap fresh each run (F10); nextWave also refreshes per sector
-  awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clock fresh each run (cooldown-gated, balance 2026-06)
+  resetAwacs();   // AWACS use cap + cooldown fresh each run (F10); nextWave also refreshes per sector
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)
@@ -167,7 +166,7 @@ function endRun(title, win) {
   // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI and
   // show a performance rating instead; Operation victory (win) keeps stars. campaignMode is already
   // off here (gameOver routes campaign deaths to campaignLevelFailed before reaching endRun).
-  const endless = !win && !opMode && !campaignMode;
+  const endless = !win && !MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].bounded;   // Candidate 8: !opMode && !campaignMode ≡ !MODE_POLICY[key].bounded
   const sd = g('go_stars');
   const rd = g('go_rating');
   if (endless) {
@@ -303,8 +302,7 @@ function freshSortie(p) {
   p.missiles = p.maxMissiles; p.flares = p.maxFlares; p.bullets = p.maxBullets;
   // barrel-roll + AWACS timers fresh each sortie
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };
-  awacsLast = { strike: 0, resupply: 0, jam: 0 };
+  resetAwacs();
   if (typeof stealthBlown !== 'undefined') stealthBlown = false;
 }
 
@@ -468,8 +466,7 @@ function enterOperationRun(opId) {
   if (typeof applyWeather === 'function') applyWeather('clear');
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed
   resetDraftState();
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };
-  awacsLast = { strike: 0, resupply: 0, jam: 0 };
+  resetAwacs();
 }
 
 // PLAY: launch the bounded level (builds the op player on first entry, reuses it after)
@@ -477,7 +474,7 @@ function launchLevel(opId, idx) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
   const lvl = op.levels[idx]; if (!lvl) return;
   if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // campaign launch respects the same unowned-skin gate
-  previewSkin = null;   // committing to a level → drop any transient preview (op player uses the OWNED skin)
+  hangarPreview.clear();   // committing to a level → drop any transient preview (op player uses the OWNED skin)
   // #briefing (the current screen) is hidden by showScreen('playing') below; #opsSelect / #levelMap are
   // already hidden from navigating into the briefing. (nav.js)
   if (typeof showLoading === 'function') showLoading();   // v1.3: opaque curtain hides the arena swap → no stale-mission frame

@@ -12,8 +12,7 @@ function currentCampaignLevel() {
 function nextWave() {
   wave++;
   noDamageWave = true;   // arm the per-wave no-damage star tracker; damagePlayer clears it on a hit
-  awacsUses = { strike: 0, resupply: 0, jam: 0 };   // AWACS use cap refreshes each sector/wave (F10)
-  awacsLast = { strike: 0, resupply: 0, jam: 0 };   // AWACS cooldown clears each sector/wave (cooldown-gated, balance 2026-06)
+  resetAwacs();   // AWACS use cap + cooldown refresh each sector/wave (F10, cooldown-gated balance 2026-06)
   const strike = isStrikeWave(wave, groundWar);
   strikeWaveActive = strike;
   if (campaignMode && campaignOpId) {
@@ -806,7 +805,7 @@ function handleWaves(dt) {
       // it must always open. In ENDLESS the shop opens on a cadence (skip wave 1, then every 2nd wave
       // + after any boss) so it stops ejecting the player from the dogfight every ~60-90s; RP banks in
       // player.tp between visits. When skipped, the waveTimer above auto-advances to the next wave.
-      if (opMode || shouldOpenTechScreen(wave, lastWaveWasBoss)) openTechScreen();
+      if (MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].opensTechShop || shouldOpenTechScreen(wave, lastWaveWasBoss)) openTechScreen();   // Candidate 8: opMode ≡ MODE_POLICY[key].opensTechShop here
     }
   } else if (!choosingUpgrade) {
     waveTimer -= dt;
@@ -980,23 +979,23 @@ function initPreviewDrag() {
   if (initPreviewDrag._bound) return; initPreviewDrag._bound = true;
   let lastX = 0, lastY = 0;
   addEventListener('pointerdown', (e) => {
-    if (state !== 'hangar' || previewDragging) return;
+    if (state !== 'hangar' || hangarPreview.dragging) return;
     if (typeof previewCanvas === 'undefined' || !previewCanvas) return;
     if (e.target !== previewCanvas) return;            // only the preview canvas starts a drag — UI/scroll elsewhere untouched
-    previewDragging = true; lastX = e.clientX; lastY = e.clientY;
+    hangarPreview.dragging = true; lastX = e.clientX; lastY = e.clientY;
     previewCanvas.style.cursor = 'grabbing'; e.preventDefault();
   });
   addEventListener('pointermove', (e) => {
-    if (!previewDragging) return;
+    if (!hangarPreview.dragging) return;
     const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
-    previewYaw += dx * 0.01;
-    previewPitch = clamp(previewPitch + dy * 0.01, -PREVIEW_PITCH_MAX, PREVIEW_PITCH_MAX);
-    if (previewJet) previewJet.rotation.set(previewPitch, previewYaw, 0);
+    hangarPreview.yaw += dx * 0.01;
+    hangarPreview.pitch = clamp(hangarPreview.pitch + dy * 0.01, -PREVIEW_PITCH_MAX, PREVIEW_PITCH_MAX);
+    if (previewJet) previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);
     e.preventDefault();
   });
   const endDrag = () => {
-    if (!previewDragging) return;
-    previewDragging = false; previewSpinResumeAt = performance.now() + 3000;   // auto-rotate resumes ~3s after release
+    if (!hangarPreview.dragging) return;
+    hangarPreview.dragging = false; hangarPreview.spinResumeAt = performance.now() + 3000;   // auto-rotate resumes ~3s after release
     if (typeof previewCanvas !== 'undefined' && previewCanvas) previewCanvas.style.cursor = 'grab';
   };
   addEventListener('pointerup', endDrag);
