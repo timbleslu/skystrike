@@ -120,6 +120,36 @@ function weatherLabel() {
   return s;
 }
 
+/* ---------------- per-frame HUD view-model ----------------
+   ONE presentation model, assembled at the top of each HUD frame (main.js animate) and handed to
+   BOTH adapters — the canvas renderer (drawHUD, via a param) and the DOM renderer (updateDom, via a
+   param). It owns the numbers that used to be recomputed on drift-prone paths (canvas / DOM readout /
+   per-skin CSS gauges) PLUS the two helpers the canvas adapter used to reach SIDEWAYS into this file
+   for (hudK / pickGunTarget). Compute once, read everywhere → the surfaces cannot diverge.
+     k          — canvas-HUD scale (hudK's value; 0.6–1.6)
+     gun        — gun-lead solution { target, interceptPoint } or null (null ⇒ draw no pipper)
+     kt / altFt — displayed airspeed (kt) + altitude (ft): the shared flight numbers
+     inst       — instrumentState(kt, altFt, throttle): gauge fracs + pre-clamped needle angles (core.js) */
+function hudViewState() {
+  const k = hudK();
+  // gun lead: the SAME target-pick + firing intercept the pipper draws, resolved once here so the
+  // canvas adapter no longer calls pickGunTarget()/interceptPoint() itself. Gated exactly as before.
+  let gun = null;
+  if (gunLead && !player.noCannon) {
+    const e = pickGunTarget();
+    if (e) {
+      const S = 1400 * (player.bulletSpeedMul || 1);                 // round speed (bullet-speed tech aware)
+      const relV = t1.copy(e.vel || ZERO).addScaledVector(player.vel, -0.9);   // rounds inherit 0.9 of jet vel
+      const ip = interceptPoint(player.group.position, e.group.position, relV, S) || e.group.position;
+      gun = { target: e, interceptPoint: ip.clone() };   // clone: detach from scratch / the live mesh position
+    }
+  }
+  // shared flight instruments — the SAME kt/altFt/throttle the DOM readouts + CSS gauges publish.
+  const kt = Math.round(player.speed * 2.3);
+  const altFt = Math.round(Math.max(0, player.group.position.y) * 3.28);
+  return { k, gun, kt, altFt, inst: instrumentState(kt, altFt, player.throttle) };
+}
+
 /* ---------------- DOM HUD ---------------- */
 let el = {};
 function g(id) { return document.getElementById(id); }
@@ -336,13 +366,12 @@ function updateAwacsHud() {
   chip('resupply', 'awacsUsesResupply', 'awacsCostResupply');
   chip('jam', 'awacsUsesJam', 'awacsCostJam');
 }
-function updateDom(dt) {
+function updateDom(dt, hudView) {
   el.hp.style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
   el.shd.style.width = clamp(player.shield / player.maxShield * 100, 0, 100) + '%';
   el.thr.style.width = clamp(player.throttle * 100, 0, 100) + '%';
   el.abIndicator.style.display = (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none';
-  const kt = Math.round(player.speed * 2.3);
-  const altFt = Math.round(Math.max(0, player.group.position.y) * 3.28);
+  const kt = hudView.kt, altFt = hudView.altFt;   // shared flight numbers from the per-frame view-model (not recomputed here)
   const sd = speedDisplay(kt, unitSystem), ad = altDisplay(altFt, unitSystem);   // imperial(mph+ft) / metric(kph+m); labels via applyUnitLabels
   el.spd.textContent = sd.value;
   el.alt.textContent = ad.value;
@@ -351,7 +380,7 @@ function updateDom(dt) {
   // sweep angles from the *-frac via calc(); altimeter hands need real periodic angles, so we
   // hand those over precomputed. Set on the #hud root so it cascades to every instrument widget.
   if (el.hudRoot) {
-    const s = el.hudRoot.style, m = instrumentState(kt, altFt, player.throttle);
+    const s = el.hudRoot.style, m = hudView.inst;   // instrumentState from the view-model — one source for the readouts + per-skin gauges
     s.setProperty('--spd-kt', sd.value);   // legacy prop name; now carries the displayed speed in the active unit
     s.setProperty('--alt-ft', ad.value);   // legacy prop name; displayed altitude in the active unit
     s.setProperty('--spd-frac', m.spdFrac.toFixed(4));

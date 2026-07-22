@@ -48,14 +48,9 @@ function drawObjectiveCallout(ctx, cx, cy, k) {
   ctx.fillText(objectiveCallout.text, cx, yc + 24 * k);
   ctx.restore();
 }
-function drawGunPipper(ctx, e) {
-  if (!e) { player._gunSol = false; return; }
-  const k = hudK();
+function drawGunPipper(ctx, sol, k) {
+  const e = sol.target, ip = sol.interceptPoint;   // target + firing intercept resolved once in hudViewState (ui-hud.js)
   const pp = player.group.position;
-  const S = 1400 * (player.bulletSpeedMul || 1);
-  // rounds inherit 0.9 of the jet's velocity, so solve in that relative frame
-  const relV = t1.copy(e.vel || ZERO).addScaledVector(player.vel, -0.9);
-  const ip = interceptPoint(pp, e.group.position, relV, S) || e.group.position;
   const sp = projectPoint(ip);
   const dist = pp.distanceTo(e.group.position);
   if (sp.behind) { player._gunSol = false; return; }
@@ -110,7 +105,7 @@ function drawGunPipper(ctx, e) {
 
 // Small secondary-objective (star) checklist on the HUD: three live conditions, each ★ when met.
 // Mirrors evalStars' conditions (kill efficiency / no-damage wave / objectives) against the live run.
-function drawStarObjectives(ctx, cx) {
+function drawStarObjectives(ctx, cx, k) {
   if (typeof run === 'undefined' || !run) return;
   const waves = Math.max(1, wave || 1);
   const killsMet = ((run.kills || 0) + (run.ground || 0) + (run.boss || 0)) / (waves * 4) >= 0.6;
@@ -121,7 +116,6 @@ function drawStarObjectives(ctx, cx) {
     [cleanMet, t('stars.obj.noDamage')],
     [rescMet, t('stars.obj.rescue')],
   ];
-  const k = hudK();
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = (11 * k) + 'px ' + HUDFONT;
@@ -137,11 +131,10 @@ function drawStarObjectives(ctx, cx) {
 }
 
 // HUD weather chip (top-left): names the active condition; storm tints blue-grey, else teal.
-function drawWeatherChip(ctx) {
-  const label = weatherLabel();
+function drawWeatherChip(ctx, k) {
+  const label = weatherLabel();   // co-located data helper in ui-hud.js; single canvas consumer, no cross-path drift — left as a direct call (see report)
   if (!label) return;
   const storm = (typeof weather !== 'undefined' && weather) ? weather.type === 'storm' : false;
-  const k = hudK();
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = 'bold ' + (13 * k) + 'px ' + HUDFONT;
@@ -223,13 +216,13 @@ function drawStealthWarning(ctx, prox) {
   ctx.save(); ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H); ctx.restore();
 }
 
-function drawHUD() {
-  const ctx = h2d, cx = W / 2, cy = H / 2, k = hudK();
+function drawHUD(hudView) {
+  const ctx = h2d, cx = W / 2, cy = H / 2, k = hudView.k;
   const reduce = (typeof prefersReducedMotion === 'function') && prefersReducedMotion();   // gates the non-essential canvas juice (kill flash, hit ring, lock-snap overshoot, HP pulse)
   ctx.clearRect(0, 0, W, H);
   ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-  drawHorizon(ctx, cx, cy);
+  drawHorizon(ctx, cx, cy, k);
 
   // central reticle — scaled around its screen anchor (cx,cy)
   ctx.strokeStyle = 'rgba(' + HUD.primary + ',0.9)';
@@ -266,16 +259,16 @@ function drawHUD() {
   }
   drawObjectiveCallout(ctx, cx, cy, k);   // Req D: 3s big centre flash on objective issue / phase change
 
-  drawStarObjectives(ctx, cx);   // small secondary-objective (star) checklist, top-centre
-  drawWeatherChip(ctx);   // active condition (storm / fog / night) top-left
+  drawStarObjectives(ctx, cx, k);   // small secondary-objective (star) checklist, top-centre
+  drawWeatherChip(ctx, k);   // active condition (storm / fog / night) top-left
 
-  // lead-computing gunsight for the nearest forward gun target
-  if (gunLead && !player.noCannon) drawGunPipper(ctx, pickGunTarget());
+  // lead-computing gunsight — target + firing intercept come from the per-frame view-model (no sideways pickGunTarget/hudK)
+  if (hudView.gun) drawGunPipper(ctx, hudView.gun, k);
   else player._gunSol = false;
 
   const lt = (player.lockTarget && player.lockTarget.alive) ? player.lockTarget : null;
   if (lt) {
-    drawLockReticle(ctx, lt, player.lockProgress, player.lockedTarget === lt && player.lockProgress >= 1);
+    drawLockReticle(ctx, lt, player.lockProgress, player.lockedTarget === lt && player.lockProgress >= 1, k);
   }
 
   drawThreatReticle(ctx, cx, cy, k, reduce);   // §4b: warn bracket when an enemy is currently aiming at YOU
@@ -283,8 +276,8 @@ function drawHUD() {
 
   let near = null, nd = Infinity;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; const d = player.group.position.distanceToSquared(e.group.position); if (d < nd) { nd = d; near = e; } }
-  for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) drawEnemy(ctx, enemies[i], cx, cy, enemies[i] === near);
-  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) drawWingman(ctx, wingmen[i], cx, cy);   // friendly escorts on the main HUD
+  for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) drawEnemy(ctx, enemies[i], cx, cy, enemies[i] === near, k);
+  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) drawWingman(ctx, wingmen[i], cx, cy, k);   // friendly escorts on the main HUD
 
   // supply-crate markers (diamond + range over any crate in view)
   for (let i = 0; i < loots.length; i++) {
@@ -390,11 +383,11 @@ function drawHUD() {
     if (killFlash <= 0) killFlash = 0;
   }
 
-  drawStreakChip(ctx);   // === F5 killstreak === kill-streak chip near the top-right score readout (drawn last, on top)
-  drawHeatGauge(ctx);   // F1 gun-overheat: gun-heat bar in the bottom-right ammo cluster
+  drawStreakChip(ctx, k);   // === F5 killstreak === kill-streak chip near the top-right score readout (drawn last, on top)
+  drawHeatGauge(ctx, k);   // F1 gun-overheat: gun-heat bar in the bottom-right ammo cluster
 }
 
-function drawWingman(ctx, w, cx, cy) {
+function drawWingman(ctx, w, cx, cy, k) {
   const pos = w.group.position;
   const p = projectPoint(pos);
   const dist = player.group.position.distanceTo(pos);
@@ -402,7 +395,7 @@ function drawWingman(ctx, w, cx, cy) {
   const col = w.cca ? '73,182,255' : '77,255,160';
   if (onScreen) {
     const s = clamp(52000 / Math.max(dist, 1), 11, 28), x = p.x, y = p.y;
-    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: escort marker scales around its position
+    ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y);   // UI-size: escort marker scales around its position
     ctx.strokeStyle = 'rgba(' + col + ',0.92)'; ctx.lineWidth = 2;
     ctx.beginPath();                              // upward chevron ∧ centred on the escort
     ctx.moveTo(x - s, y + s * 0.55); ctx.lineTo(x, y - s * 0.7); ctx.lineTo(x + s, y + s * 0.55);
@@ -487,14 +480,14 @@ function drawDetectionBar(ctx, cx, k) {
   ctx.restore();
 }
 
-function drawHorizon(ctx, cx, cy) {
+function drawHorizon(ctx, cx, cy, k) {
   const fwd = fwdOf(player.group, t1), up = upOf(player.group, t2), rgt = rightOf(player.group, t3);
   const pitch = Math.asin(clamp(fwd.y, -1, 1));
   const roll = Math.atan2(rgt.y, up.y);
   const scale = 6.2;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(hudK(), hudK());   // UI-size: enlarge the whole pitch ladder uniformly around centre
+  ctx.scale(k, k);   // UI-size: enlarge the whole pitch ladder uniformly around centre
   ctx.rotate(roll);
   ctx.translate(0, (pitch / DEG) * scale);
   // horizon ladder — primary cyan; storm desaturates to a cold blue-grey
@@ -521,14 +514,14 @@ function drawHorizon(ctx, cx, cy) {
   ctx.textAlign = 'center';
 }
 
-function drawLockReticle(ctx, tgt, progress, locked) {
+function drawLockReticle(ctx, tgt, progress, locked, k) {
   const p = projectPoint(tgt.group.position);
   if (p.behind) return;
   const dist = player.group.position.distanceTo(tgt.group.position);
   const base = clamp(120000 / Math.max(dist, 1), 34, 150);
   const x = p.x, y = p.y, s = base * 0.45;
   ctx.textAlign = 'center';
-  ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: lock box scales around target, position fixed
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y);   // UI-size: lock box scales around target, position fixed
   if (locked) {
     // LOCKED — one red (--danger), thicker box, blinking diamond: the "you can fire" payoff
     // JUICE: the moment lock ENGAGES (player.lockFlash, set once in combat.js), the box SNAPS in from
@@ -692,7 +685,7 @@ function drawMissileWarning(ctx, cx, cy, k, reduce) {
   ctx.restore();
 }
 
-function drawEnemy(ctx, e, cx, cy, isNear) {
+function drawEnemy(ctx, e, cx, cy, isNear, k) {
   const pos = e.group.position;
   const p = projectPoint(pos);
   const dist = player.group.position.distanceTo(pos);
@@ -703,7 +696,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
   if (drone) {                          // lightweight crimson diamond — swarms stay readable
     if (!onScreen) return;
     const s = clamp(60000 / Math.max(dist, 1), 9, 34), x = p.x, y = p.y;
-    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: marker scales around target
+    ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y);   // UI-size: marker scales around target
     ctx.strokeStyle = 'rgba(' + HUD.danger + ',' + (locked || isNear ? 1 : 0.82) + ')'; ctx.lineWidth = locked ? 2.4 : 1.6;
     ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s, y); ctx.closePath(); ctx.stroke();
     ctx.fillStyle = 'rgba(' + HUD.danger + ',0.5)'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TWO_PI); ctx.fill();
@@ -717,7 +710,7 @@ function drawEnemy(ctx, e, cx, cy, isNear) {
   if (onScreen) {
     const size = clamp(90000 / Math.max(dist, 1), 24, 110) * (boss ? 1.7 : 1);
     const s = size / 2, x = p.x, y = p.y, c = Math.max(7, s * 0.32);
-    ctx.save(); ctx.translate(x, y); ctx.scale(hudK(), hudK()); ctx.translate(-x, -y);   // UI-size: bracket + label + hp bar scale around target, position fixed
+    ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.translate(-x, -y);   // UI-size: bracket + label + hp bar scale around target, position fixed
     ctx.strokeStyle = 'rgba(' + col + ',' + (locked || isNear ? 1 : 0.85) + ')';
     ctx.lineWidth = locked ? 3 : isNear ? 2.4 : 1.8;
     ctx.beginPath();
@@ -837,10 +830,9 @@ function drawRadar() {
 // === F5 killstreak === HUD streak chip, right-aligned under the top-right Score/R&D/Wave/Combo stat stack
 // (index.html .panel.tr). Surfaces the live chain count + score multiplier once a streak is actually forming
 // (count >= 2). Reward-amber, brightening at the x2/x3 tiers; scales with hudK() like the other canvas chips.
-function drawStreakChip(ctx) {
+function drawStreakChip(ctx, k) {
   const s = (typeof player !== 'undefined' && player) ? player.streak : null;
   if (!s || s.count < 2) return;
-  const k = hudK();
   const label = t('hud.streak') + ' ' + s.count + '  ×' + s.mult;   // e.g. "STREAK 4  x1.5"
   ctx.save();
   ctx.textAlign = 'right'; ctx.textBaseline = 'top';
@@ -862,11 +854,10 @@ function drawStreakChip(ctx) {
    Fill tracks player.gunHeat 0..1 amber->gold->orange; a tick marks the HEAT.rearm re-arm point;
    on lockout the bar pulses red under an OVERHEAT label. Dim when cold, brightens as it heats.
    hudK()-scaled, HUD colour vars — reads global game state, writes the 2D canvas, no DOM. */
-function drawHeatGauge(ctx) {
+function drawHeatGauge(ctx, k) {
   if (player.noCannon) return;                                 // gun-less airframes (J-20) never heat
   const heat = clamp(player.gunHeat || 0, 0, 1);
   const locked = !!player.gunLocked;
-  const k = hudK();
   const bw = 150 * k, bh = 9 * k;
   const bx = W - 200 * k - bw;                                 // right edge sits just left of the radar
   const by = H - 150 * k;
