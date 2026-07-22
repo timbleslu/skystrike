@@ -961,7 +961,8 @@ function animate() {
     updateCamera(dt);
     updatePlayerShadow();
     audio.setEngineJet(player.jet && player.jet.id, player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
-    drawHUD(); drawRadar(); updateDom(dt);
+    const hudView = hudViewState();   // ONE per-frame presentation model → both HUD adapters read the same scale / gun-lead / flight numbers
+    drawHUD(hudView); drawRadar(); updateDom(dt, hudView);
     if (typeof drawWeatherOverlay === 'function') drawWeatherOverlay(h2d, dt);   // storm rain streaks over the world/HUD canvas, under the DOM HUD (drawHUD cleared h2d first)
   } else if (state === 'dead') {
     updateParticles(dt);

@@ -1431,11 +1431,7 @@ function updateEnemy(e, dt) {
   }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;
-  if (incoming) e.state = 'evade';
-  else if (dist < NEAR) e.state = 'extend';
-  else if (prev === 'extend' && dist < PREF * 1.25) e.state = 'extend';
-  else if (e.archetype === 'decoy' && lockedByPlayer && dist < PREF * 1.6) e.state = 'extend';   // decoy keeps distance while locked
-  else e.state = 'engage';
+  e.state = enemyTacticalState(prev, { dist, incoming, archetype: e.archetype, lockedByPlayer, prefRange: PREF, nearRange: NEAR });   // pure evade/extend/engage decision (core.js)
 
   let desired = t2;
   if (e.state === 'evade') {
@@ -1448,10 +1444,9 @@ function updateEnemy(e, dt) {
     t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * 0.6); desired.add(t5).normalize(); desired.y += 0.04;
     e.speed = lerp(e.speed, 242, dt);
   } else {
-    e.gunRunCd -= dt;
-    if (e.gunRun > 0) e.gunRun -= dt;
-    else if (e.gunRunCd <= 0) { e.gunRun = rand(1.6, 2.8); e.gunRunCd = rand(2.2, 4.2); }
-    const tracking = e.gunRun > 0;
+    const cad = gunRunCadence(e, dt);   // pure gun-run timer (core.js): tick + fresh-window roll
+    e.gunRun = cad.gunRun; e.gunRunCd = cad.gunRunCd;
+    const tracking = cad.tracking;
     const rangeErr = clamp((dist - PREF) / PREF, -1, 1);
     t4.copy(toP).multiplyScalar(tracking ? Math.max(rangeErr, -0.15) : rangeErr);
     t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * (tracking ? 0.3 : 1));

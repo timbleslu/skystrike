@@ -1333,6 +1333,44 @@ function evadeDecision(state, threat, now) {
 }
 if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { EVADE, evadeDecision });
 // === end F4 ===
+/* === enemy tactical state (F4 sibling extraction 2026-07) =============================
+   The evade/extend/engage decision updateEnemy runs each frame, lifted out of the THREE-scratch
+   steering so the transition table is testable in isolation. PURE: given the frame's threat +
+   geometry it returns the next state; the caller keeps ONLY the vector steering for whichever
+   state wins. Priority + hysteresis are byte-identical to the old inline ladder:
+     1. incoming player missile        -> 'evade'   (defensive, overrides everything)
+     2. dist < nearRange               -> 'extend'  (too close, bug out)
+     3. prev==='extend' && dist < prefRange*1.25 -> 'extend'  (STICKY: don't re-engage until 1.25×PREF)
+     4. decoy locked && dist < prefRange*1.6     -> 'extend'  (decoy keeps standoff while locked)
+     5. otherwise                      -> 'engage'
+   prefRange/nearRange are the PREF/NEAR the caller already computes (they also feed the engage
+   steering), passed in so this stays THREE-free. */
+function enemyTacticalState(prev, o) {
+  o = o || {};
+  const dist = o.dist || 0;
+  const prefRange = o.prefRange || 0;
+  const nearRange = o.nearRange || 0;
+  if (o.incoming) return 'evade';
+  if (dist < nearRange) return 'extend';
+  if (prev === 'extend' && dist < prefRange * 1.25) return 'extend';
+  if (o.archetype === 'decoy' && o.lockedByPlayer && dist < prefRange * 1.6) return 'extend';
+  return 'engage';
+}
+// gun-run cadence: the ENGAGE-state tracking timer. Ticks gunRunCd down; while a run is live
+// (gunRun>0) it counts that down instead; when both lapse it rolls a fresh run window. Returns the
+// advanced {gunRun, gunRunCd} plus the derived `tracking` flag the steering + gun-cone read. Byte-
+// identical to the old inline block (same rand(1.6,2.8)/rand(2.2,4.2) draws in the same order); the
+// caller writes gunRun/gunRunCd back onto the enemy. Tests stub Math.random for determinism.
+function gunRunCadence(state, dt) {
+  state = state || {};
+  let gunRun = state.gunRun || 0;
+  let gunRunCd = state.gunRunCd || 0;
+  gunRunCd -= dt;
+  if (gunRun > 0) gunRun -= dt;
+  else if (gunRunCd <= 0) { gunRun = rand(1.6, 2.8); gunRunCd = rand(2.2, 4.2); }
+  return { gunRun, gunRunCd, tracking: gunRun > 0 };
+}
+if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { enemyTacticalState, gunRunCadence });
 /* === F1 gun-overheat ===================================================================
    Gun thermal model. Sustained fire builds heat 0->1; at 1.0 the cannon LOCKS OUT and stays
    locked (hysteresis) until heat cools back below HEAT.rearm, then re-arms. Heat decays whenever
