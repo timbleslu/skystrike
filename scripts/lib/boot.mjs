@@ -59,6 +59,10 @@ export async function launchGame(opts = {}) {
   const port = server.address().port;
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport });
+  // 180s nav timeout for every goto (incl. scripts that navigate themselves):
+  // headless WebGL boot on a loaded machine routinely exceeds Playwright's 30s
+  // default, and this suite gates merges — waiting beats a roving-flake failure.
+  page.setDefaultNavigationTimeout(180000);
   if (initScript) await page.addInitScript(initScript);
   const close = async () => { await browser.close(); await new Promise(r => server.close(r)); };
   return { browser, page, server, port, root: ROOT, close };
@@ -117,9 +121,12 @@ export async function dismissLanguageGate(page, opts = {}) {
 }
 
 /* Convenience: navigate to the served page, settle, then dismiss the language gate.
-   opts.port (required), opts.gotoWait (1200), plus any dismissLanguageGate opts. */
+   opts.port (required), opts.gotoWait (1200), plus any dismissLanguageGate opts.
+   Nav timeout is 180s, not Playwright's 30s default — headless WebGL boot on a
+   loaded machine routinely exceeds 30s and the suite gates merges, so waiting
+   beats a roving-flake failure. */
 export async function bootToHangar(page, opts = {}) {
-  await page.goto(`http://127.0.0.1:${opts.port}/`);
+  await page.goto(`http://127.0.0.1:${opts.port}/`, { timeout: opts.gotoTimeout ?? 180000 });
   await page.waitForTimeout(opts.gotoWait ?? 1200);
   await dismissLanguageGate(page, opts);
 }

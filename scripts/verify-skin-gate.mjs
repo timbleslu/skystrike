@@ -91,11 +91,14 @@ const D = await page.evaluate(async () => {
   ok('the preview jet is grabbable on the canvas (raycast finds it)', sx !== null);
   if (sx === null) { sx = cx; sy = cy; }
   const fire = (type, x, y) => window.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
-  // miss → no drag
-  fire('pointerdown', 4, 4); ok('pointerdown off the jet does NOT start a drag', hangarPreview.dragging === false); fire('pointerup', 4, 4);
-  // hit → drag starts
+  // the drag contract is CANVAS-TARGET (main.js initPreviewDrag: pointerdown must land ON previewCanvas;
+  // no raycast — the whole canvas is grabbable), so the down event is dispatched on the canvas itself
+  const fireOnCanvas = (type, x, y) => previewCanvas.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
+  // off-canvas → no drag
+  fire('pointerdown', 4, 4); ok('pointerdown OFF the canvas does NOT start a drag', hangarPreview.dragging === false); fire('pointerup', 4, 4);
+  // on-canvas → drag starts
   const yaw0 = hangarPreview.yaw;
-  fire('pointerdown', sx, sy); ok('pointerdown ON the jet starts a drag (raycast hit)', hangarPreview.dragging === true);
+  fireOnCanvas('pointerdown', sx, sy); ok('pointerdown ON the preview canvas starts a drag', hangarPreview.dragging === true);
   fire('pointermove', sx + 100, sy); ok('horizontal drag yaws the jet', Math.abs(hangarPreview.yaw - (yaw0 + 1.0)) < 0.001);
   fire('pointermove', sx + 100, sy + 100000); ok('vertical drag pitches, CLAMPED to +60deg', Math.abs(hangarPreview.pitch - PREVIEW_PITCH_MAX) < 1e-6);
   fire('pointermove', sx + 100, sy - 100000); ok('opposite drag clamps to -60deg', Math.abs(hangarPreview.pitch + PREVIEW_PITCH_MAX) < 1e-6);

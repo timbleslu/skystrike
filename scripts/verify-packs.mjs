@@ -92,7 +92,10 @@ const weekly = await page.evaluate(() => {
   return {
     planId: player._weeklyWavePlan && player._weeklyWavePlan.id,
     plannedRow: planned,
-    fighters: enemies.filter(e => e.type === 'fighter').length,
+    // plain fighters only — the wave-plan row governs the formation budget; weekly extraAces
+    // mods (doubleAces/aceSeason) add ELITE fighters on top on any week whose draw includes one,
+    // so counting elites here made the assert week-dependent.
+    fighters: enemies.filter(e => e.type === 'fighter' && !e.elite).length,
     followers: followers.length,
     formationType: followers[0] && followers[0].formation.type,
   };

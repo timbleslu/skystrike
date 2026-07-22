@@ -50,7 +50,9 @@ const R = await page.evaluate(() => {
   ok('card shows on mission start', card && card.classList.contains('show'));
   ok('card title = STRIKE type name', g('missionCardTitle') && g('missionCardTitle').textContent === t('mission.name.strike'));
   ok('card desc = mechanical strike description', g('missionCardDesc') && g('missionCardDesc').textContent === t('mission.desc.strike') && g('missionCardDesc').textContent.length > 6);
-  ok('card blurb = per-level lore blurb', g('missionCardBlurb') && g('missionCardBlurb').textContent === t('op.ironVeil.l7.blurb') && g('missionCardBlurb').textContent.length > 6);
+  // UX pass 2 (2026-06-17): the in-flight card is objective-only — the lore blurb moved to the
+  // briefing screen (#briefLore); showMissionCard empties + hides #missionCardBlurb
+  ok('card blurb hidden (lore lives on the briefing screen)', g('missionCardBlurb') && g('missionCardBlurb').textContent === '' && g('missionCardBlurb').style.display === 'none');
   ok('first encounter is interactive (persists until tap)', card.classList.contains('interactive') && missionCardT === 0);
   ok('first encounter shows the TAP hint', g('missionCardHint') && g('missionCardHint').style.display !== 'none' && g('missionCardHint').textContent === t('card.tapContinue'));
   ok('seen flag persisted after first encounter', !!localStorage.getItem('skystrike_seenMissionType_strike'));
@@ -62,7 +64,7 @@ const R = await page.evaluate(() => {
   ok('repeat encounter is non-interactive (does not block flying)', !card.classList.contains('interactive'));
   ok('repeat encounter arms the 5s auto-dismiss', missionCardT === 5);
   ok('repeat encounter hides the TAP hint', g('missionCardHint') && g('missionCardHint').style.display === 'none');
-  ok('repeat encounter still shows the blurb (context kept)', g('missionCardBlurb') && g('missionCardBlurb').textContent === t('op.ironVeil.l7.blurb'));
+  ok('repeat encounter also keeps the blurb hidden', g('missionCardBlurb') && g('missionCardBlurb').textContent === '' && g('missionCardBlurb').style.display === 'none');
   dismissMissionCard();
 
   // ===== F5 operation-lore panel (tap op -> lore -> Enter proceeds to the level map) =====
