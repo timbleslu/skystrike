@@ -1,26 +1,14 @@
 /* Dev-only: build each roster jet as the game does (buildJetOrGLTF player path → afterburner),
    throttle the engines up, and render a rear-3/4 grid with the game's env lighting — one screenshot
    to verify per-jet FLAMES (count/position) + COLOUR/texture + orientation. Usage: node scripts/verify-jets.mjs [out.png] */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.wasm': 'application/wasm', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
+import { launchGame } from './lib/boot.mjs';
+import { join } from 'path';
 const out = process.argv[2] || '.scratch/jet-visual-overhaul/verify-jets.png';
 const view = process.argv[3] || '3q';                          // top | rear | 3q
 const shapesArg = process.argv[4] || '';                       // csv subset, e.g. SU57,EFT,RAFALE
 const skinId = process.argv[5] || '';                          // optional skin id (e.g. splinter) → render that livery's zones
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1500, height: 1150 } });
+const { page, port, root, close } = await launchGame({ viewport: { width: 1500, height: 1150 } });
 page.on('pageerror', e => console.error('PAGEERR', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
 // wait for all glTF templates to load
@@ -77,4 +65,4 @@ const { dirname } = await import('path');
 await mkdir(dirname(join(root, out)), { recursive: true });
 await writeFile(join(root, out), Buffer.from(b64, 'base64'));
 console.log('wrote', out, '\norder (4 cols):', dataUrl.loaded.join(' '));
-await browser.close(); server.close();
+await close();

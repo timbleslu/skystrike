@@ -1,5 +1,7 @@
 /* SKYSTRIKE — split from ui.js (god-file refactor). Global scope; load order among ui-*.js irrelevant, but all must load after deps and before controls.js/main.js. */
 /* ui-hud.js: camera, projection, gunsight, HUD/radar canvas, DOM HUD, tutorial, banners. */
+/* file-local THREE scratch (moved from globals.js — used only here, projectPoint) */
+const pp1 = new THREE.Vector3(), pp2 = new THREE.Vector3(), pp3 = new THREE.Vector3();
 /* ---------------- camera ---------------- */
 function updateCamera(dt) {
   const p = player.group, fwd = fwdOf(p, t1);

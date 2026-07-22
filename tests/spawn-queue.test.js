@@ -1,13 +1,27 @@
 'use strict';
 const assert = require('assert');
+const { spawnDrainCount } = require('../js/core.js');
 
-// --- Mirror of the production queue logic (js/globals.js + js/main.js) ---
+// The spawn queue's pure DECISION — "how many to build this frame" — now lives in core.js spawnDrainCount
+// and is exercised here directly (no mirror copy). The FIFO drain + closure invocation are THREE-bound in
+// main.js processSpawnQueue, so we keep a THIN local harness that delegates to the REAL spawnDrainCount —
+// byte-identical to the production `for (let i = spawnDrainCount(pendingSpawns.length, n); i > 0; i--) …`.
 let pendingSpawns = [];
 function processSpawnQueue(n) {
-  for (let i = 0; i < n && pendingSpawns.length; i++) pendingSpawns.shift()();
+  for (let i = spawnDrainCount(pendingSpawns.length, n); i > 0; i--) pendingSpawns.shift()();
 }
 
-// --- Test 1: only n built per tick ---
+// --- Test 0: the pure decision (real core.js implementation) ---
+(function testDrainCount() {
+  assert.strictEqual(spawnDrainCount(10, 2), 2, 'plenty queued -> build the full per-frame budget');
+  assert.strictEqual(spawnDrainCount(1, 2), 1, 'fewer queued than the budget -> build only what is left');
+  assert.strictEqual(spawnDrainCount(0, 2), 0, 'empty queue -> build nothing');
+  assert.strictEqual(spawnDrainCount(5, 0), 0, 'zero budget -> build nothing');
+  assert.strictEqual(spawnDrainCount(0, 0), 0, 'empty + zero -> nothing');
+  console.log('ok - drain count decision');
+})();
+
+// --- Test 1: only n built per tick (real spawnDrainCount drives the drain) ---
 (function testDrainRate() {
   pendingSpawns = [];
   let built = 0;

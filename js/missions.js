@@ -1,11 +1,37 @@
 /* SKYSTRIKE — missions.js: typed-mission state machine. Loaded after opmap.js, before combat.js.
    The op-map sets a sector's mission type; the wave scheduler (main.js) reads `mission` and the
    directives from startMission() to spawn what the objective needs; updateMission() ticks it each
-   frame and resolves win/fail. The CORE table + helpers below are PURE (no THREE / DOM) and are
-   mirrored byte-identical in tests/missions.test.js between the MIRROR markers. Runtime glue
-   (banners, sector resolve) lives below the pure core. */
+   frame and resolves win/fail.
 
-// ---- BEGIN MIRROR (js/missions.js) ----
+   The file is split into two VISIBLY separated halves:
+   • PURE HALF (require-safe, CommonJS-exported): the mission state machine, the multi-phase objective
+     SEQUENCE walker (the cursor lives INSIDE a sequence value — no module-level cursor globals), ONE
+     shared phase/budget clamp rule, and the pure objective PLANNERS that return PLAIN DATA
+     ({mission, spawnRequests, banners}) instead of calling THREE / createEnemy inline. Fully
+     exercisable in Node (tests/missions.test.js, tests/mission-sequence.test.js require the REAL impl).
+   • BROWSER GLUE HALF (not exported): startSectorMission / startMissionPhase / updateMission /
+     onMissionResolved apply that data — THREE math, createEnemy / prop spawns, banners, callouts.
+     ALL THREE / createEnemy / DOM usage lives ONLY here, inside functions (never at load). */
+
+/* Node bridge (require-safe): core.js's pure helpers (campaignClearTarget / nextObjectivePhase /
+   reconWon / stealthWon / …) are load-order globals in the browser (core.js loads first). Under Node
+   they are not globals, so the pure sequence walker, the budget rule, and the recon/stealth win
+   predicates below would not resolve them. Pull them onto globalThis so free-variable lookups match
+   the browser. Inert in the browser (require is undefined there; the globals already exist). core.js
+   is itself pure/require-safe, so this touches no THREE/store/DOM. */
+if (typeof require === 'function' && typeof campaignClearTarget === 'undefined') {
+  try {
+    var _core = require('./core.js');
+    ['campaignClearTarget', 'nextObjectivePhase', 'objectiveTypes', 'reconProgress', 'nextWaypoint',
+      'detectionDelta', 'reconWon', 'stealthWon', 'stealthFailed'].forEach(function (k) {
+      if (typeof globalThis[k] === 'undefined' && _core[k]) globalThis[k] = _core[k];
+    });
+  } catch (e) { /* core.js not resolvable — pure fns needing it simply won't run in this env */ }
+}
+
+/* ========================= PURE HALF (require-safe; exported via footer) ========================= */
+
+// ---- mission state machine ----
 // recon + stealth (2026-06) are the first NON-combat verbs: fly waypoints / sneak to extraction.
 const MISSION_TYPES = ['sweep', 'intercept', 'escort', 'defend', 'strike', 'recon', 'stealth'];
 
@@ -153,11 +179,99 @@ function tickMission(m, dt) {
   if (def && def.winFail) m.status = def.winFail(m);
   return m;
 }
-// ---- END MIRROR ----
 
-/* ---------------- runtime glue (browser only; not mirrored) ---------------- */
-let mission = null;     // active mission state, or null for sweep-only / non-mission sectors
-let setpieceActive = null;   // F14: id of the authored set-piece running this sector (or null for procedural)
+/* ---------------- multi-phase objective SEQUENCE walker (pure) ----------------
+   A multi-phase Operations level (opmap.js) carries an authored `objectives` queue walked phase by
+   phase: phase 0 starts at sector launch and each 'won' advances to the next, completing the level
+   only after the LAST phase. The SEQUENCE VALUE folds the queue together with its cursor, so the old
+   module-level cursor globals (missionPhases / missionPhaseIdx) are gone — the glue holds ONE
+   `missionSeq` value and derives the cursor from it. */
+// build a sequence value from an authored objectives queue; null for a single-objective sector.
+function missionSequence(objectives) {
+  return (Array.isArray(objectives) && objectives.length) ? { phases: objectives.slice(), idx: 0 } : null;
+}
+// the descriptor the cursor currently points at (a phase {type,wp?,spawn?} or a bare type string).
+function sequenceDescriptor(seq) { return seq ? seq.phases[seq.idx] : null; }
+// advance the cursor after a phase resolves 'won'. Returns { seq, done }: done=true means the LAST
+// phase just won (level complete, seq=null); otherwise seq carries the NEXT cursor. Uses core.js
+// nextObjectivePhase for the queue arithmetic.
+function advanceSequence(seq) {
+  const next = nextObjectivePhase(seq.idx, seq.phases.length);
+  if (next < 0) return { seq: null, done: true };
+  return { seq: { phases: seq.phases, idx: next }, done: false };
+}
+
+/* ---------------- shared phase/budget rule (pure) ----------------
+   ONE clamp used by BOTH the single-objective sector and every multi-phase phase: make a freshly
+   started kill mission winnable with EXACTLY the kill-targets that will spawn. Delegates to core.js
+   campaignClearTarget = min(procedural, spawnedKillCount) — the single source of truth also imported
+   by tests/clear-count.test.js (verified: for the authored multi-phase budgets this equals the old
+   inline sweep->spawn.fighters / intercept->spawn.bombers override at every wave). null = non-kill
+   verb / no budget -> leave mission.target as startMission set it. */
+function phaseClearTarget(verb, wave, budget) {
+  return (typeof campaignClearTarget === 'function') ? campaignClearTarget(verb, wave, budget) : null;
+}
+
+/* ---------------- objective PLANNERS (pure — return plain data the glue applies) ----------------
+   A planner starts the objective's mission, applies the shared budget clamp, trims a nav leg, and
+   describes the spawns + banners as PLAIN DATA. NO THREE / createEnemy / pendingSpawns / t() here —
+   the glue half turns spawnRequests into real entities and banners into real callouts. spawnRequests
+   are ordered so the glue reproduces the exact pendingSpawns order: props -> strikeSite -> fighters
+   -> bombers. */
+// plan ONE phase of a multi-phase sequence. desc = 'RECON' | {type,wp?,spawn?}. phase/total/isFirst
+// drive the banner descriptors (1-based phase index, total phases, first-phase intro card).
+function planPhase(desc, wave, phase, total, isFirst) {
+  const sectorType = (desc && typeof desc === 'object') ? desc.type : desc;   // 'RECON'/'STRIKE'/'SWEEP'/…
+  const verb = missionForSector(sectorType);
+  const mission = startMission(verb, wave, Math.random);
+  const wp = (desc && typeof desc === 'object') ? desc.wp : undefined;
+  if (wp != null && mission.params) { mission.params.count = wp; mission.target = wp; }   // trim the nav leg (RECON opener -> 2 waypoints)
+  const spawn = (desc && typeof desc === 'object') ? desc.spawn : null;
+  const clamped = phaseClearTarget(verb, wave, spawn);   // shared budget rule (both paths)
+  if (clamped !== null) mission.target = clamped;
+  const spawnRequests = [{ kind: 'props', verb: verb }];   // escort/defend/recon/stealth props (glue no-ops for other verbs)
+  if (verb === 'strike') spawnRequests.push({ kind: 'strikeSite' });   // ground target this phase
+  if (spawn) {   // per-phase combat budget (designer hints): air targets for sweep/intercept; air threat for escort/defend
+    if (spawn.fighters) spawnRequests.push({ kind: 'fighters', n: spawn.fighters });
+    if (spawn.bombers) spawnRequests.push({ kind: 'bombers', n: spawn.bombers, verb: verb });
+  }
+  return {
+    verb: verb,
+    mission: mission,
+    spawnRequests: spawnRequests,
+    banners: {
+      callout: { phase: phase, total: total },   // Req D: big center callout on EVERY phase transition
+      missionStart: !!isFirst,                    // level's first phase leads with the objective header
+      missionCard: isFirst ? verb : null,         // §2 intro card on the first phase
+      objective: true,                            // persistent objective banner
+    },
+  };
+}
+// plan a single-objective sector (no `objectives` queue). `budget` = the level's spawn plan (main.js
+// owns the level's air/ground budget, so only props spawn here). `setpiece` = an authored encounter id.
+function planObjective(verb, wave, budget, setpiece) {
+  const mission = startMission(verb, wave, Math.random);
+  const clamped = phaseClearTarget(verb, wave, budget);   // SAME shared budget rule
+  if (clamped !== null) mission.target = clamped;
+  return {
+    verb: verb,
+    mission: mission,
+    spawnRequests: [{ kind: 'props', verb: verb }],
+    banners: {
+      setpiece: setpiece || null,     // a set-piece leads with its own authored intro line
+      callout: { phase: 1, total: 1 },
+      objective: true,
+      missionCard: verb,              // §2 intro card
+    },
+  };
+}
+
+/* ========================= BROWSER GLUE HALF (browser only; not exported) ========================= */
+
+let mission = null;          // active mission state, or null (observable — hud.js/combat.js/main.js read it)
+let setpieceActive = null;   // F14: id of the authored set-piece running this sector (observable — ui-flow.js resets it)
+let missionSeq = null;       // multi-phase objective SEQUENCE value {phases, idx} (or null); folds the former
+                             // missionPhases/missionPhaseIdx cursor globals into ONE value (internal to this file)
 
 // objective readout for the HUD/banner; localized. timer mm:ss for timed types.
 function objectiveText(m) {
@@ -182,38 +296,65 @@ function fmtClock(sec) { sec = Math.ceil(sec); return Math.floor(sec / 60) + ':'
 // localized name shown in the start-of-sector objective banner
 function missionName(type) { return t('mission.name.' + type) !== 'mission.name.' + type ? t('mission.name.' + type) : ''; }
 
-/* ---------------- sector start ----------------
-   Called from nextWave() (main.js) for op-mode sectors. `plan.mission` is the descriptor
-   from sectorPlan() — escort/defend are first-class sectors now (no roll).
-   'none' (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. */
 // §2 mission-card lore-blurb key for the level currently being flown (campaign only; null elsewhere).
 function missionCardBlurbKey() {
   if (typeof currentCampaignLevel !== 'function' || typeof levelBlurbKey !== 'function') return null;
   return levelBlurbKey(currentCampaignLevel());
 }
+
+/* ---------------- sector start ----------------
+   Called from nextWave() (main.js) for op-mode sectors. `plan.mission` is the descriptor from
+   levelPlan() (sectorMission(type)) — escort/defend are first-class sectors now (no roll). 'none'
+   (DEPOT/ELITE) and 'boss' (FINAL) clear the mission — those sectors use the legacy flow. A level's
+   optional `objectives` queue is walked as a multi-phase SEQUENCE (startMissionPhase). */
 function startSectorMission(plan, wave) {
   setpieceActive = plan.setpiece || null;   // F14: tag the resolution path when this node is an authored set-piece
-  // Operations objective SEQUENCE (multi-phase level): walk the authored `objectives` queue. The
-  // first phase starts here; onMissionResolved advances to the next on each 'won' (see below).
-  missionPhases = (Array.isArray(plan.objectives) && plan.objectives.length) ? plan.objectives.slice() : null;
-  missionPhaseIdx = 0;
-  if (missionPhases) { startMissionPhase(0, wave, true); return; }
+  // Operations objective SEQUENCE (multi-phase level): walk the authored `objectives` queue. The first
+  // phase starts here; onMissionResolved advances to the next on each 'won' (see below).
+  missionSeq = missionSequence(plan.objectives);
+  if (missionSeq) { startMissionPhase(missionSeq, wave, true); return; }
   const type = plan.mission;
   if (type === 'none' || type === 'boss' || !MISSIONS[type]) { mission = null; return; }
-  mission = startMission(type, wave, Math.random);
-  // BOUNDED campaign: every wave spawns the SAME authored air budget, so clamp a kill-type's clear
-  // target to the kill-targets actually spawned this wave (else a later wave's wave-scaled procedural
-  // target can exceed them and the wave never clears). PURE core.js owns the min; null = non-kill verb
-  // (escort/defend/recon/stealth) -> leave the target startMission set. Endless mode never reaches here.
-  const clamped = (typeof campaignClearTarget === 'function') ? campaignClearTarget(type, wave, plan) : null;
-  if (clamped !== null) mission.target = clamped;
-  spawnMissionProps(type, mission, wave);
+  // BOUNDED campaign: every wave spawns the SAME authored air budget, so planObjective clamps a
+  // kill-type's clear target to the kill-targets actually spawned this wave (shared phaseClearTarget).
+  const p = planObjective(type, wave, plan, setpieceActive);
+  mission = p.mission;
+  applySpawnRequests(p.spawnRequests, mission, wave);
+  const b = p.banners;
   // F14: a set-piece leads with its own authored intro line instead of the generic objective header
-  if (setpieceActive && SETPIECES[setpieceActive]) showBanner(t(SETPIECES[setpieceActive].intro));
+  if (b.setpiece && SETPIECES[b.setpiece]) showBanner(t(SETPIECES[b.setpiece].intro));
   else showBanner(tf('banner.missionStart', { name: missionName(type) }));
-  if (typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), 1, 1);   // Req D: big center flash on objective issue
-  showBanner(objectiveText(mission));
-  if (typeof showMissionCard === 'function') showMissionCard(type, missionCardBlurbKey());   // §2: mission intro card (type name + mechanical desc + lore blurb)
+  if (b.callout && typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), b.callout.phase, b.callout.total);   // Req D: big center flash on objective issue
+  if (b.objective) showBanner(objectiveText(mission));
+  if (b.missionCard && typeof showMissionCard === 'function') showMissionCard(b.missionCard, missionCardBlurbKey());   // §2: mission intro card
+}
+
+/* ---------------- multi-phase objective walker (glue) ----------------
+   Applies the pure planPhase() data for the phase the sequence cursor points at: publishes `mission`,
+   fulfils the spawnRequests, fires the banners/callout. The PURE arithmetic (planPhase / advanceSequence
+   / phaseClearTarget) lives above; this owns the per-phase spawns + banners + callout only. */
+function startMissionPhase(seq, wave, isFirst) {
+  const plan = planPhase(sequenceDescriptor(seq), wave, seq.idx + 1, seq.phases.length, isFirst);
+  mission = plan.mission;   // publish the observable global
+  applySpawnRequests(plan.spawnRequests, mission, wave);
+  const b = plan.banners;
+  // Req D: issue the big center objective callout (3s) on EVERY phase transition, then the persistent banner.
+  if (b.callout && typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), b.callout.phase, b.callout.total);
+  if (b.missionStart) { showBanner(tf('banner.missionStart', { name: missionName(plan.verb) })); if (b.missionCard && typeof showMissionCard === 'function') showMissionCard(b.missionCard, missionCardBlurbKey()); }   // §2: intro card on the level's first phase
+  if (b.objective) showBanner(objectiveText(mission));
+}
+
+// turn the pure spawnRequests descriptors into real entities/props. Ordered props -> strikeSite ->
+// fighters -> bombers (matches the historical pendingSpawns order). This is the ONLY place a phase's
+// air/ground budget touches createEnemy / pendingSpawns / queueStrikeSite.
+function applySpawnRequests(reqs, m, wave) {
+  for (let i = 0; i < reqs.length; i++) {
+    const r = reqs[i];
+    if (r.kind === 'props') spawnMissionProps(r.verb, m, wave);
+    else if (r.kind === 'strikeSite') { if (typeof queueStrikeSite === 'function') queueStrikeSite(wave); }   // ground target this phase
+    else if (r.kind === 'fighters') { for (let k = 0; k < r.n; k++) pendingSpawns.push(spawnFighter); }
+    else if (r.kind === 'bombers') { for (let k = 0; k < r.n; k++) pendingSpawns.push(r.verb === 'intercept' ? spawnInterceptTarget : spawnBomber); }
+  }
 }
 
 // spawn the objective-specific PROPS for a mission verb (recon waypoints / stealth extraction /
@@ -223,36 +364,6 @@ function spawnMissionProps(verb, m, wave) {
   else if (verb === 'defend') spawnDefendAsset(m, wave);
   else if (verb === 'recon') spawnReconWaypoints(m, wave);
   else if (verb === 'stealth') spawnStealthExtraction(m, wave);
-}
-
-/* ---------------- multi-phase objective walker ----------------
-   A flagged level's `objectives` queue (opmap.js) is walked phase-by-phase. The PURE arithmetic
-   (nextObjectivePhase) lives in core.js; this glue owns the per-phase spawns + banners + callout. */
-let missionPhases = null;   // ordered objective queue for the active multi-phase level (or null)
-let missionPhaseIdx = 0;    // index of the active phase within missionPhases
-
-function startMissionPhase(idx, wave, isFirst) {
-  const desc = missionPhases[idx];
-  const sectorType = (desc && typeof desc === 'object') ? desc.type : desc;   // 'RECON'/'STRIKE'/'SWEEP'/…
-  const verb = missionForSector(sectorType);
-  mission = startMission(verb, wave, Math.random);
-  const wp = (desc && typeof desc === 'object') ? desc.wp : undefined;
-  if (wp != null && mission.params) { mission.params.count = wp; mission.target = wp; }   // trim the nav leg (RECON opener -> 2 waypoints)
-  const spawn = (desc && typeof desc === 'object') ? desc.spawn : null;
-  // make the objective winnable with EXACTLY the phase's authored enemy budget (so a sweep/intercept
-  // phase can't stall waiting on kills that were never spawned).
-  if (verb === 'sweep' && spawn && spawn.fighters) { mission.target = spawn.fighters; if (mission.params) mission.params.spawn = spawn.fighters; }
-  if (verb === 'intercept' && spawn && spawn.bombers) { mission.target = spawn.bombers; if (mission.params) mission.params.bombers = spawn.bombers; }
-  spawnMissionProps(verb, mission, wave);
-  if (verb === 'strike' && typeof queueStrikeSite === 'function') queueStrikeSite(wave);   // ground target this phase
-  if (spawn) {   // per-phase combat budget (designer hints): air targets for sweep/intercept; air threat for escort/defend
-    for (let i = 0; i < (spawn.fighters || 0); i++) pendingSpawns.push(spawnFighter);
-    for (let i = 0; i < (spawn.bombers || 0); i++) pendingSpawns.push(verb === 'intercept' ? spawnInterceptTarget : spawnBomber);
-  }
-  // Req D: issue the big center objective callout (3s) on EVERY phase transition, then the persistent banner.
-  if (typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(mission), idx + 1, missionPhases.length);
-  if (isFirst) { showBanner(tf('banner.missionStart', { name: missionName(verb) })); if (typeof showMissionCard === 'function') showMissionCard(verb, missionCardBlurbKey()); }   // §2: intro card on the level's first phase
-  showBanner(objectiveText(mission));
 }
 
 // escort: a friendly convoy the player must keep alive until it reaches the map edge.
@@ -465,21 +576,21 @@ function missionSiteDown() { if (mission && mission.type === 'strike') mission.p
 function onMissionResolved(won) {
   if (won) {
     // multi-phase level: advance to the NEXT objective instead of ending the sector. Only the final
-    // phase falls through to the sector-complete path below (nextObjectivePhase -> -1 = done).
-    if (missionPhases) {
-      const next = nextObjectivePhase(missionPhaseIdx, missionPhases.length);
-      if (next >= 0) {
+    // phase falls through to the sector-complete path below (advanceSequence -> done = level complete).
+    if (missionSeq) {
+      const adv = advanceSequence(missionSeq);
+      if (!adv.done) {
         showBanner(t('banner.objectiveComplete')); audio.power(); empFlash = Math.max(empFlash, 0.3);
         clearMissionLeftovers();        // sweep leftover air + props so the next phase starts on a clean field
-        missionPhaseIdx = next;
-        startMissionPhase(next, wave, false);   // sets `mission` active again -> handleWaves stays blocked
+        missionSeq = adv.seq;
+        startMissionPhase(missionSeq, wave, false);   // sets `mission` active again -> handleWaves stays blocked
         return;
       }
     }
     if (typeof run !== 'undefined' && run) run.missions = (run.missions || 0) + 1;   // feeds spAward / achievement at run end (once per level)
     // F14: an authored set-piece shows its own outro line; procedural objectives use the generic one
     showBanner(setpieceActive ? t(setpieceOutcome(setpieceActive, true)) : t('banner.missionComplete'));
-    setpieceActive = null; missionPhases = null; missionPhaseIdx = 0;
+    setpieceActive = null; missionSeq = null;
     audio.power(); empFlash = Math.max(empFlash, 0.35);
     // pay a small RP/score bonus for completing the objective (meta SP follows from run stats at run end)
     const bonus = Math.round((40 + wave * 4) * (player.rpMul || 1));
@@ -489,7 +600,7 @@ function onMissionResolved(won) {
     if (mission.type !== 'sweep') clearMissionLeftovers();
   } else {
     showBanner(t('banner.missionFailedObj'));
-    setpieceActive = null; missionPhases = null; missionPhaseIdx = 0;   // any phase fail = level fail
+    setpieceActive = null; missionSeq = null;   // any phase fail = level fail
     audio.warn();
     if (typeof gameOver === 'function') { gameOver(); }
   }
@@ -509,7 +620,11 @@ function clearMissionLeftovers() {
   }
 }
 
-/* CommonJS export for Node tests — inert in the browser. */
+/* CommonJS export for Node tests — inert in the browser. Exports the PURE half only: the state
+   machine, the sequence walker, the shared budget rule, and the objective planners. */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { MISSIONS, MISSION_TYPES, missionForSector, startMission, missionKill, tickMission };
+  module.exports = {
+    MISSIONS, MISSION_TYPES, missionForSector, startMission, missionKill, tickMission,
+    missionSequence, sequenceDescriptor, advanceSequence, phaseClearTarget, planPhase, planObjective,
+  };
 }

@@ -3,28 +3,12 @@
    (F2) the MISSION INTRO CARD — DOM, content (type name + mechanical desc + lore blurb), and the
    first-encounter (interactive, persistent) vs repeat (5s auto-dismiss) behaviour.
    Usage: node scripts/verify-units-card.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => { const en = document.querySelector('[data-lang="EN"]'); if (en) en.click(); });
-await page.waitForTimeout(200);
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'langOnly', langSelector: '[data-lang="EN"]', wait: 200 });
 
 const R = await page.evaluate(() => {
   const out = [];
@@ -66,7 +50,9 @@ const R = await page.evaluate(() => {
   ok('card shows on mission start', card && card.classList.contains('show'));
   ok('card title = STRIKE type name', g('missionCardTitle') && g('missionCardTitle').textContent === t('mission.name.strike'));
   ok('card desc = mechanical strike description', g('missionCardDesc') && g('missionCardDesc').textContent === t('mission.desc.strike') && g('missionCardDesc').textContent.length > 6);
-  ok('card blurb = per-level lore blurb', g('missionCardBlurb') && g('missionCardBlurb').textContent === t('op.ironVeil.l7.blurb') && g('missionCardBlurb').textContent.length > 6);
+  // UX pass 2 (2026-06-17): the in-flight card is objective-only — the lore blurb moved to the
+  // briefing screen (#briefLore); showMissionCard empties + hides #missionCardBlurb
+  ok('card blurb hidden (lore lives on the briefing screen)', g('missionCardBlurb') && g('missionCardBlurb').textContent === '' && g('missionCardBlurb').style.display === 'none');
   ok('first encounter is interactive (persists until tap)', card.classList.contains('interactive') && missionCardT === 0);
   ok('first encounter shows the TAP hint', g('missionCardHint') && g('missionCardHint').style.display !== 'none' && g('missionCardHint').textContent === t('card.tapContinue'));
   ok('seen flag persisted after first encounter', !!localStorage.getItem('skystrike_seenMissionType_strike'));
@@ -78,7 +64,7 @@ const R = await page.evaluate(() => {
   ok('repeat encounter is non-interactive (does not block flying)', !card.classList.contains('interactive'));
   ok('repeat encounter arms the 5s auto-dismiss', missionCardT === 5);
   ok('repeat encounter hides the TAP hint', g('missionCardHint') && g('missionCardHint').style.display === 'none');
-  ok('repeat encounter still shows the blurb (context kept)', g('missionCardBlurb') && g('missionCardBlurb').textContent === t('op.ironVeil.l7.blurb'));
+  ok('repeat encounter also keeps the blurb hidden', g('missionCardBlurb') && g('missionCardBlurb').textContent === '' && g('missionCardBlurb').style.display === 'none');
   dismissMissionCard();
 
   // ===== F5 operation-lore panel (tap op -> lore -> Enter proceeds to the level map) =====
@@ -95,8 +81,7 @@ const R = await page.evaluate(() => {
   return out;
 });
 
-await browser.close();
-server.close();
+await close();
 let fail = 0;
 for (const r of R) { console.log((r.pass ? 'ok   - ' : 'FAIL - ') + r.name); if (!r.pass) fail++; }
 if (errs.length) { console.log('\nconsole/page errors:'); errs.forEach(e => console.log('  ' + e)); }

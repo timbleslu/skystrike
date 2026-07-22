@@ -1,28 +1,12 @@
 /* Dev-only: headless assertion of the buy-to-preview skin state machine (Feature 3) — the browser-only
    bits the Node unit tests can't reach (previewSkin / launchBlocked / #launch gate / no gameplay leak).
    Drives the REAL hangar DOM (chip clicks via the delegated handler). Usage: node scripts/verify-skin-gate.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => { const en = document.querySelector('[data-lang="en"]'); if (en) en.click(); });
-await page.waitForTimeout(200);
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'langOnly', langSelector: '[data-lang="en"]', wait: 200 });
 await page.evaluate(() => { const c = document.querySelector('#onboard .btn-primary, #onboard button'); if (c) c.click(); });
 await page.waitForTimeout(300);
 await page.evaluate(() => {
@@ -47,7 +31,7 @@ const R = await page.evaluate(async () => {
   ok('an unowned (locked) chip exists', lockedChip);
   const previewId = lockedChip && lockedChip.dataset.skin;
   if (lockedChip) lockedChip.click();
-  ok('previewSkin set to the tapped unowned skin', previewSkin === previewId);
+  ok('previewSkin set to the tapped unowned skin', hangarPreview.skin === previewId);
   ok('launchBlocked() true while previewing unowned', launchBlocked() === true);
   const launch = document.getElementById('launch');
   ok('#launch disabled + .gated', launch && launch.disabled && launch.classList.contains('gated'));
@@ -80,7 +64,7 @@ const R = await page.evaluate(async () => {
   if (stillLocked) stillLocked.click();
   ok('previewing an unowned skin again', launchBlocked() === true);
   returnToHangar();
-  ok('previewSkin cleared on leaving the hangar', previewSkin === null);
+  ok('previewSkin cleared on leaving the hangar', hangarPreview.skin === null);
   ok('launch un-gated after revert', launchBlocked() === false);
 
   return out;
@@ -107,17 +91,20 @@ const D = await page.evaluate(async () => {
   ok('the preview jet is grabbable on the canvas (raycast finds it)', sx !== null);
   if (sx === null) { sx = cx; sy = cy; }
   const fire = (type, x, y) => window.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
-  // miss → no drag
-  fire('pointerdown', 4, 4); ok('pointerdown off the jet does NOT start a drag', previewDragging === false); fire('pointerup', 4, 4);
-  // hit → drag starts
-  const yaw0 = previewYaw;
-  fire('pointerdown', sx, sy); ok('pointerdown ON the jet starts a drag (raycast hit)', previewDragging === true);
-  fire('pointermove', sx + 100, sy); ok('horizontal drag yaws the jet', Math.abs(previewYaw - (yaw0 + 1.0)) < 0.001);
-  fire('pointermove', sx + 100, sy + 100000); ok('vertical drag pitches, CLAMPED to +60deg', Math.abs(previewPitch - PREVIEW_PITCH_MAX) < 1e-6);
-  fire('pointermove', sx + 100, sy - 100000); ok('opposite drag clamps to -60deg', Math.abs(previewPitch + PREVIEW_PITCH_MAX) < 1e-6);
+  // the drag contract is CANVAS-TARGET (main.js initPreviewDrag: pointerdown must land ON previewCanvas;
+  // no raycast — the whole canvas is grabbable), so the down event is dispatched on the canvas itself
+  const fireOnCanvas = (type, x, y) => previewCanvas.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
+  // off-canvas → no drag
+  fire('pointerdown', 4, 4); ok('pointerdown OFF the canvas does NOT start a drag', hangarPreview.dragging === false); fire('pointerup', 4, 4);
+  // on-canvas → drag starts
+  const yaw0 = hangarPreview.yaw;
+  fireOnCanvas('pointerdown', sx, sy); ok('pointerdown ON the preview canvas starts a drag', hangarPreview.dragging === true);
+  fire('pointermove', sx + 100, sy); ok('horizontal drag yaws the jet', Math.abs(hangarPreview.yaw - (yaw0 + 1.0)) < 0.001);
+  fire('pointermove', sx + 100, sy + 100000); ok('vertical drag pitches, CLAMPED to +60deg', Math.abs(hangarPreview.pitch - PREVIEW_PITCH_MAX) < 1e-6);
+  fire('pointermove', sx + 100, sy - 100000); ok('opposite drag clamps to -60deg', Math.abs(hangarPreview.pitch + PREVIEW_PITCH_MAX) < 1e-6);
   const before = performance.now();
-  fire('pointerup', sx + 100, sy); ok('pointerup ends the drag', previewDragging === false);
-  ok('idle spin/bob paused ~3s after release', previewSpinResumeAt > before + 2000);
+  fire('pointerup', sx + 100, sy); ok('pointerup ends the drag', hangarPreview.dragging === false);
+  ok('idle spin/bob paused ~3s after release', hangarPreview.spinResumeAt > before + 2000);
   return out;
 });
 
@@ -125,5 +112,5 @@ let fail = 0;
 for (const r of R.concat(D)) { console.log((r.pass ? 'ok   ' : 'FAIL ') + r.name); if (!r.pass) fail++; }
 if (errs.length) { console.log('\nPAGE ERRORS:\n' + errs.join('\n')); fail += errs.length; }
 console.log(fail ? `\n${fail} FAILURE(S)` : '\nALL SKIN-GATE CHECKS PASS');
-await browser.close(); server.close();
+await close();
 process.exit(fail ? 1 : 0);

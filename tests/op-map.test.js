@@ -1,53 +1,25 @@
 'use strict';
 const assert = require('assert');
-const { OPERATIONS, levelPlan, levelBlurbKey, sectorMission, sectorPlan, setpieceFor, setpiecePlan, setpieceOutcome } = require('../js/opmap.js');
+const { OPERATIONS, levelPlan, levelBlurbKey, sectorMission, setpiecePlan, setpieceOutcome } = require('../js/opmap.js');
 const { LEVEL_WAVE_CAP } = require('../js/core.js');
 const fs = require('fs');
 const path = require('path');
 
-// ---- sectorPlan: legacy procedural plans still resolve (Endless mode + fallbacks) ----
-assert.strictEqual(sectorPlan('ELITE', 7).rival, true);
-assert.strictEqual(sectorPlan('FURBALL', 12).fighters, 10, 'fighter count caps at 10');
-assert.strictEqual(sectorPlan('DEPOT', 5).depot, true);
-assert.strictEqual(sectorPlan('FINAL', 13).boss, true);
-
-// ---- mission descriptor on every plan (feature #3 seam) ----
-assert.strictEqual(sectorPlan('FURBALL', 3).mission, 'sweep');
-assert.strictEqual(sectorPlan('INTERCEPT', 3).mission, 'intercept');
-assert.strictEqual(sectorPlan('STRIKE', 3).mission, 'strike');
-assert.strictEqual(sectorPlan('ESCORT', 3).mission, 'escort');
-assert.strictEqual(sectorPlan('DEFEND', 3).mission, 'defend');
-assert.strictEqual(sectorPlan('ELITE', 3).mission, 'none');
-assert.strictEqual(sectorPlan('DEPOT', 3).mission, 'none');
-assert.strictEqual(sectorPlan('FINAL', 3).mission, 'boss');
-// ---- feature #4 weather + TOD slots: every plan carries a known condition + a valid TOD index ----
-const WEATHER_KEYS = ['clear', 'fog', 'storm'];
-['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE', 'DEPOT', 'FINAL'].forEach(function (ty) {
-  const p = sectorPlan(ty, 5);
-  assert.ok('weather' in p, 'every plan carries a weather slot (' + ty + ')');
-  assert.ok(WEATHER_KEYS.indexOf(p.weather) !== -1, 'weather is a known condition (' + ty + ')');
-  assert.ok(p.tod >= 0 && p.tod <= 2, 'tod is a valid TOD index 0..2 (' + ty + ')');
-  assert.strictEqual(sectorMission(ty), p.mission, 'sectorMission matches plan.mission (' + ty + ')');
-});
-// the climactic FINAL sector flies a night storm; plain dogfights stay clear daylight
-assert.strictEqual(sectorPlan('FINAL', 13).weather, 'storm', 'FINAL is a storm');
-assert.strictEqual(sectorPlan('FINAL', 13).tod, 2, 'FINAL is at night');
-assert.strictEqual(sectorPlan('FURBALL', 3).weather, 'clear', 'FURBALL stays clear');
-
-// ---- F8: hostileAce flag — combat sectors spawn a named ace; DEPOT + FINAL do not ----
-['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE'].forEach(function (ty) {
-  assert.strictEqual(sectorPlan(ty, 5).hostileAce, true, 'combat sector spawns a hostile ace (' + ty + ')');
-});
-assert.strictEqual(sectorPlan('DEPOT', 5).hostileAce, false, 'DEPOT has no hostile ace');
-assert.strictEqual(sectorPlan('FINAL', 5).hostileAce, false, 'FINAL has no named sector ace (boss is the cap)');
+// ---- sectorMission: sector type -> typed-mission descriptor (LIVE — levelPlan reads it) ----
+assert.strictEqual(sectorMission('FURBALL'), 'sweep', 'FURBALL → sweep');
+assert.strictEqual(sectorMission('INTERCEPT'), 'intercept', 'INTERCEPT → intercept');
+assert.strictEqual(sectorMission('STRIKE'), 'strike', 'STRIKE → strike');
+assert.strictEqual(sectorMission('ESCORT'), 'escort', 'ESCORT → escort');
+assert.strictEqual(sectorMission('DEFEND'), 'defend', 'DEFEND → defend');
+assert.strictEqual(sectorMission('RECON'), 'recon', 'RECON → recon');
+assert.strictEqual(sectorMission('STEALTH'), 'stealth', 'STEALTH → stealth');
+assert.strictEqual(sectorMission('ELITE'), 'none', 'ELITE → none (elite-ace furball, no objective)');
+assert.strictEqual(sectorMission('DEPOT'), 'none', 'DEPOT → none');
+assert.strictEqual(sectorMission('FINAL'), 'boss', 'FINAL → boss');
 
 // ---- set-pieces: data table + pure fold + outcome still hold ----
-// setpieceFor is RETIRED (stage-coord keying removed; set-pieces are opt-in per level row) → always null.
-assert.strictEqual(setpieceFor('STRIKE', 1), null, 'setpieceFor retired → null');
-assert.strictEqual(setpieceFor('ESCORT', 4), null, 'setpieceFor retired → null');
-assert.strictEqual(setpieceFor('FURBALL', 0), null, 'setpieceFor retired → null');
 // fold an authored encounter onto a base plan: NEW object, base untouched, tags `setpiece`.
-const base = sectorPlan('STRIKE', 3);
+const base = { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, hostileAce: true, mission: 'strike', weather: 'storm', tod: 0 };
 const folded = setpiecePlan('samCorridor', base);
 assert.notStrictEqual(folded, base, 'setpiecePlan returns a NEW object');
 assert.strictEqual(folded.setpiece, 'samCorridor', 'folded plan tags the set-piece id');
@@ -208,5 +180,5 @@ op4Keys.forEach(function (k) {
   });
 });
 
-console.log('ok - operation map: OPERATIONS table, levelPlan, sector plans, set-pieces');
+console.log('ok - operation map: OPERATIONS table, levelPlan, sector missions, set-pieces');
 console.log('ok - op4 POLAR VORTEX: table-shape invariants + EN/ZH/KO i18n parity (' + op4Keys.size + ' keys)');

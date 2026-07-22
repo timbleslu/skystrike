@@ -1,48 +1,16 @@
 /* Dev-only screenshot harness: boots the game headless and captures gameplay frames.
    Usage: node scripts/shot.mjs <outPrefix> [timeOfDay 0|1|2]
    Requires playwright (npx playwright). Not part of the shipped game. */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  try {
-    const data = await readFile(join(root, p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
+import { launchGame, bootToHangar } from './lib/boot.mjs';
 
 const prefix = process.argv[2] || 'shot';
 const tod = +(process.argv[3] || 0);
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const { page, port, close } = await launchGame();
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1200);
-
-// drive past the first-run language gate (langSelect → onboard → hangar) so we reach
-// the real hangar instead of the language screen. Falls through harmlessly for returning players.
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => {
-  const cont = document.getElementById('obContinue');
-  if (cont) cont.click();
-});
-await page.waitForTimeout(600);
+// drive past the first-run language gate (langSelect → onboard → hangar) into the real hangar
+await bootToHangar(page, { port });
 
 // hangar shot
 await page.screenshot({ path: `${prefix}-hangar.png` });
@@ -69,6 +37,5 @@ await page.evaluate(() => { if (typeof gameOver === 'function') gameOver(); });
 await page.waitForTimeout(700);
 await page.screenshot({ path: `${prefix}-debrief.png` });
 
-await browser.close();
-server.close();
+await close();
 console.log('done:', prefix);

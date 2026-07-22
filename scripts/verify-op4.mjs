@@ -3,39 +3,16 @@
    the briefing DOM shows RESOLVED strings — NO raw op.* i18n key leaks anywhere on screen), then
    launches 3 distinct levels (l1/l4/l8) far enough to render the arctic arena. Saves op4-check-*.png.
    Exits non-zero on any failed assertion or page error. Usage: node scripts/verify-op4.mjs [outPrefix] */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
+import { launchGame, bootToHangar } from './lib/boot.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
 const prefix = process.argv[2] || 'op4-check';
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream', '.svg': 'image/svg+xml' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1300);
-
 // drive past the first-run language gate (langSelect → onboard → hangar) — mirror shot.mjs
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]'); if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const c = document.getElementById('obContinue'); if (c) c.click(); });
-await page.waitForTimeout(600);
+await bootToHangar(page, { port, gotoWait: 1300 });
 
 const results = [];
 const ok = (name, cond) => results.push({ name, pass: !!cond });
@@ -101,8 +78,7 @@ for (const [idx, tag] of LEVELS) {
   results.push({ name: 'level ' + tag + ' arena (weather=' + r.weather + ' tod=' + r.tod + ') captured', pass: true });
 }
 
-await browser.close();
-await new Promise(r => server.close(r));
+await close();
 
 let fail = 0;
 for (const r of results) { console.log((r.pass ? 'ok   - ' : 'FAIL - ') + r.name); if (!r.pass) fail++; }

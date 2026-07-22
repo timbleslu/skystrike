@@ -1,16 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { SETPIECES, setpieceFor, setpiecePlan, setpieceOutcome } = require('../js/opmap.js');
-
-// --- setpieceFor RETIRED ---
-// The genOpMap stage-coordinate keying is gone: set-pieces are now opt-in per OPERATIONS
-// level row (`lvl.setpiece`, folded by levelPlan). setpieceFor is kept exported for back-compat
-// glue but always returns null — no node auto-triggers an encounter by (type, stage) anymore.
-['STRIKE', 'ESCORT', 'FURBALL', 'INTERCEPT', 'DEFEND', 'DEPOT', 'FINAL'].forEach(function (ty) {
-  for (let stage = 0; stage < 7; stage++) {
-    assert.strictEqual(setpieceFor(ty, stage), null, 'setpieceFor retired → null (' + ty + ' @ ' + stage + ')');
-  }
-});
+const { SETPIECES, setpiecePlan, setpieceOutcome } = require('../js/opmap.js');
 
 // every authored id resolves to a real SETPIECES entry
 ['samCorridor', 'bomberRun'].forEach(function (id) {

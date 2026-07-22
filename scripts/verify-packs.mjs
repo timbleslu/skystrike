@@ -3,32 +3,13 @@
    spawn path (spawnFighterFormation + applyFormationSteer holding template slots over real frames),
    and the weekly runtime drawing from the pack-extended pools. Mirrors verify-formation.mjs.
    Saves pack-check-diamond.png. Usage: node scripts/verify-packs.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.glb': 'model/gltf-binary', '.bin': 'application/octet-stream' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : decodeURIComponent(req.url.split('?')[0]);
-  try { const d = await readFile(join(root, p)); res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' }); res.end(d); }
-  catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+import { launchGame, bootToHangar } from './lib/boot.mjs';
+import { join } from 'path';
+const { page, port, root, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  ['langSelect', 'onboard', 'manual', 'touchControls'].forEach(id => { const e = document.getElementById(id); if (e) { e.classList.remove('show'); e.classList.add('hide'); e.style.display = 'none'; } });
-});
-await page.waitForTimeout(400);
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'hide' });
 
 // ---- load-time merge + weekly pools, all read from the LIVE runtime ----
 const merge = await page.evaluate(() => {
@@ -99,14 +80,7 @@ await page.waitForTimeout(500);
 await page.screenshot({ path: join(root, 'pack-check-diamond.png') });
 
 // ---- fresh reload: the WEEKLY wave plan drives wave 1 end-to-end (startWeekly → nextWave) ----
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1400);
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  ['langSelect', 'onboard', 'manual', 'touchControls'].forEach(id => { const e = document.getElementById(id); if (e) { e.classList.remove('show'); e.classList.add('hide'); e.style.display = 'none'; } });
-});
-await page.waitForTimeout(400);
+await bootToHangar(page, { port, gotoWait: 1400, mode: 'hide' });
 const weekly = await page.evaluate(() => {
   startWeekly();
   if (player) { player.hp = 1e9; player.invuln = 999; }
@@ -118,14 +92,16 @@ const weekly = await page.evaluate(() => {
   return {
     planId: player._weeklyWavePlan && player._weeklyWavePlan.id,
     plannedRow: planned,
-    fighters: enemies.filter(e => e.type === 'fighter').length,
+    // plain fighters only — the wave-plan row governs the formation budget; weekly extraAces
+    // mods (doubleAces/aceSeason) add ELITE fighters on top on any week whose draw includes one,
+    // so counting elites here made the assert week-dependent.
+    fighters: enemies.filter(e => e.type === 'fighter' && !e.elite).length,
     followers: followers.length,
     formationType: followers[0] && followers[0].formation.type,
   };
 });
 
-await browser.close();
-await new Promise(r => server.close(r));
+await close();
 
 let fail = 0;
 const check = (name, cond) => { console.log((cond ? 'ok   - ' : 'FAIL - ') + name); if (!cond) fail++; };

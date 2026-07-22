@@ -5,41 +5,26 @@
      2. runs applyMetaPerks on a fresh player and asserts the turn-rate multiplier is +3% vs baseline.
    Exits non-zero on any failure. Not part of the shipped game.
    Usage: node scripts/verify-vet.mjs */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
-
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  try {
-    const data = await readFile(join(root, p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
+import { launchGame } from './lib/boot.mjs';
 
 const failures = [];
 function check(cond, msg) { if (cond) { console.log('  ok  - ' + msg); } else { failures.push(msg); console.error('  FAIL- ' + msg); } }
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-const pageErrors = [];
-page.on('pageerror', e => { pageErrors.push(e.message); console.error('PAGE ERROR:', e.message); });
-page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
 // Boot as a RETURNING player so we land on a STABLE hangar. First-run onboarding's Continue button calls
 // startGame(0) (an auto tutorial sortie) — seeding skystrike_onboarded makes isReturningPlayer true
 // (globals.js), so onboarding is skipped and the jet card is the visible screen (no flight behind it).
-await page.addInitScript(() => {
-  try {
-    localStorage.setItem('skystrike_onboarded', '1');
-    localStorage.setItem('skystrike_settings', JSON.stringify({ lang: 'EN' }));
-  } catch (e) {}
+const { page, port, close } = await launchGame({
+  viewport: { width: 1280, height: 900 },
+  initScript: () => {
+    try {
+      localStorage.setItem('skystrike_onboarded', '1');
+      localStorage.setItem('skystrike_settings', JSON.stringify({ lang: 'EN' }));
+    } catch (e) {}
+  },
 });
+const pageErrors = [];
+page.on('pageerror', e => { pageErrors.push(e.message); console.error('PAGE ERROR:', e.message); });
+page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForTimeout(1400);
 
@@ -90,8 +75,7 @@ check(Math.abs(perk.ratio - 1.03) < 1e-9, 'rank-3 veterancy gives +3% turn rate 
 
 check(pageErrors.length === 0, 'no uncaught page errors during boot + veterancy render');
 
-await browser.close();
-server.close();
+await close();
 
 if (failures.length) {
   console.error('\nverify-vet: ' + failures.length + ' FAILURE(S)');

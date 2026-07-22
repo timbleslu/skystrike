@@ -54,7 +54,7 @@ await page.waitForTimeout(900);   // let any glTF model finish loading + re-sele
 // optional: preview a skin (owned or not) on the jet — drive the real chip-click path
 if (previewSkinId) {
   await page.evaluate((id) => {
-    previewSkin = id;                                   // transient hangar preview (global lexical binding)
+    hangarPreview.skin = id;                            // transient hangar preview (global lexical binding)
     if (typeof selectJet === 'function') selectJet(selectedJet);   // rebuild preview with previewPaint + refresh chips/gate
   }, previewSkinId);
   await page.waitForTimeout(800);

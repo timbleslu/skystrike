@@ -52,11 +52,11 @@ function buildHangar() {
   g('endlessBack').addEventListener('click', () => { g('endlessSetup').classList.remove('show'); openModeChoice(); });
   g('endlessStart').addEventListener('click', () => { opMode = false; g('endlessSetup').classList.remove('show'); startGame(selectedJet); });
   const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
-  const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { invertY = si.checked; saveSettings(); }); }
-  const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { autoLock = sal.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { startWingman = sw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { applySetting('invertY', si.checked); }); }
+  const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { applySetting('autoLock', sal.checked); if (audio.on) audio.ui(); }); }
+  const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { applySetting('startWingman', sw.checked); if (audio.on) audio.ui(); }); }
   const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; if (audio.on) audio.ui(); saveSettings(); renderJetCard(); }); }
-  const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { devUnlockLevels = sdl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { applySetting('devUnlockLevels', sdl.checked); if (audio.on) audio.ui(); }); }
   // v1.3 dev-panel password gate: 'timbles' unlocks the panel PERMANENTLY (devUnlocked persisted in settings).
   syncDevPanel();
   const dpb = g('devUnlockBtn'), dpf = g('devPass'), dpd = g('devDeny');
@@ -67,25 +67,28 @@ function buildHangar() {
   };
   if (dpb) dpb.addEventListener('click', tryDevUnlock);
   if (dpf) dpf.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tryDevUnlock(); } });
-  const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { rivalEnabled = srv.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { groundWar = sgw.checked; if (audio.on) audio.ui(); saveSettings(); }); }
-  const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { gunLead = sgl.checked; if (audio.on) audio.ui(); saveSettings(); }); }
+  const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { applySetting('rivalEnabled', srv.checked); if (audio.on) audio.ui(); }); }
+  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { applySetting('groundWar', sgw.checked); if (audio.on) audio.ui(); }); }
+  const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { applySetting('gunLead', sgl.checked); if (audio.on) audio.ui(); }); }
   const saa = g('setAimAssist'); if (saa) { saa.checked = aimAssist; saa.addEventListener('change', () => { aimAssist = saa.checked; if (audio.on) audio.ui(); saveSettings(); updateAimStrengthVis(); }); }
-  const sas = g('setAimStrength'); if (sas) { sas.value = aimStrength; sas.addEventListener('input', () => { aimStrength = clamp(sas.value | 0, 1, 5); saveSettings(); }); }
+  const sas = g('setAimStrength'); if (sas) { sas.value = aimStrength; sas.addEventListener('input', () => { applySetting('aimStrength', sas.value); }); }
   updateAimStrengthVis();
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
-  const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { controlSensitivity = clamp(ss.value / 100, 0.5, 2.0); saveSettings(); }); }
-  // mobile control settings (controls.js owns the input layer; these just set state + persist)
-  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => { controlScheme = v; }, () => { if (audio.on) audio.ui(); });
+  const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { applySetting('controlSensitivity', ss.value / 100); }); }
+  // mobile control settings (controls.js owns the input layer; these just set state + persist). Each seg
+  // setter is now a one-liner into the SETTINGS registry (parse+clamp+apply+save centralised in prefs.js);
+  // bindSeg still fires onChange (audio) + its own saveSettings (a harmless redundant write). mobileControl
+  // stays bespoke — the 'motion' branch triggers the permission flow (enableMotionFlow).
+  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => applySetting('controlScheme', v), () => { if (audio.on) audio.ui(); });
   bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
-  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => { motionAggression = v; }, () => { if (audio.on) audio.ui(); });
-  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => { buttonLayout = v; if (typeof applyButtonStyle === 'function') applyButtonStyle(); }, () => { if (audio.on) audio.ui(); });
-  // F11 graphics quality (auto/low/high) — re-resolve the render tier + resize the shadow map on change (visual-only)
-  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => { gfxQuality = v; if (typeof refreshGfxTier === 'function') refreshGfxTier(); if (typeof applyGfxQuality === 'function') applyGfxQuality(); }, () => { if (audio.on) audio.ui(); });
-  // F3 HUD units (imperial mph+ft / metric kph+m) — readout reads unitSystem live; refresh the speed/alt labels on change
-  bindSeg('unitsTog', 'un', () => unitSystem, (v) => { unitSystem = v; if (typeof applyUnitLabels === 'function') applyUnitLabels(); }, () => { if (audio.on) audio.ui(); });
+  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => applySetting('motionAggression', v), () => { if (audio.on) audio.ui(); });
+  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => applySetting('buttonLayout', v), () => { if (audio.on) audio.ui(); });
+  // F11 graphics quality — the render-tier re-resolve + shadow-map resize (refreshGfxTier BEFORE applyGfxQuality) is the 'gfx' row's apply chain now
+  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => applySetting('gfx', v), () => { if (audio.on) audio.ui(); });
+  // F3 HUD units (imperial mph+ft / metric kph+m) — the 'unitSystem' row applies applyUnitLabels on change
+  bindSeg('unitsTog', 'un', () => unitSystem, (v) => applySetting('unitSystem', v), () => { if (audio.on) audio.ui(); });
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
-  const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { buttonOpacity = clamp(sbo.value / 100, 0.4, 1.0); if (typeof applyButtonStyle === 'function') applyButtonStyle(); saveSettings(); }); }
+  const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { applySetting('buttonOpacity', sbo.value / 100); }); }
   const shs = g('setHudScale');
   if (shs) {
     shs.value = String(hudScale);
@@ -322,7 +325,7 @@ function renderJetCard(i) {
       '<div id="jetMeta" class="jetmeta"></div>' +
     '</div>';
   mountPreviewCanvas();   // C2: reparent the persistent isolated preview canvas into this card's #jetPreview3D host
-  wireZoomSlider();       // F2: sync the zoom slider to previewZoom + bind its input
+  wireZoomSlider();       // F2: sync the zoom slider to hangarPreview.zoom + bind its input
   renderSpecial2Picker(i);
   renderJetMeta(i);
 }
@@ -373,6 +376,9 @@ function refreshLaunchSub() {
 // hangar "SELECT <jet>" → mode-choice screen (Endless / Operation). state stays 'hangar' (no player built yet).
 function openModeChoice() {
   if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first
+  // #modeChoice / #endlessSetup are MODALS over the still-visible hangar (they do NOT hide it), tracked in
+  // nav.js SCREENS as entry:'manual' so hideAllScreens() resets them, but entered here by hand — a router
+  // showScreen would wrongly hide the hangar underneath. They toggle each other's .show directly. (nav.js)
   const ov = g('modeChoice'); if (!ov) return;
   g('endlessSetup') && g('endlessSetup').classList.remove('show');
   ov.classList.add('show');
@@ -439,10 +445,10 @@ function statBar(lbl, v) {
   for (let k = 1; k <= 10; k++) s += '<i class="' + (k <= v ? 'on' : '') + '"></i>';
   return s + '</div></div>';
 }
-/* hangar-preview paint: show the TRANSIENT previewSkin (owned OR not) on the live jet; fall back to the
+/* hangar-preview paint: show the TRANSIENT hangarPreview.skin (owned OR not) on the live jet; fall back to the
    owned/equipped paint. UI-ONLY — never reaches createPlayer/gameplay (which uses jetPaint = owned only). */
 function previewPaint(jet) {
-  if (previewSkin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, previewSkin);
+  if (hangarPreview.skin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, hangarPreview.skin);
   return jetPaint(jet);
 }
 /* TRACK C2: the preview no longer lives in a cleared world gutter — it renders to its OWN isolated
@@ -505,39 +511,39 @@ function mountPreviewCanvas() {
   if (host && previewCanvas && previewCanvas.parentNode !== host) host.appendChild(previewCanvas);
   resizePreview();
 }
-/* F2: sync the zoom slider UI to previewZoom and bind it — previewLoop reads previewZoom each frame.
-   Called after each card rebuild; previewZoom is reset to 1.0 in selectJet on a real jet switch. */
+/* F2: sync the zoom slider UI to hangarPreview.zoom and bind it — previewLoop reads it each frame.
+   Called after each card rebuild; hangarPreview.zoom is reset to 1.0 in selectJet on a real jet switch. */
 function wireZoomSlider() {
   const z = g('jetZoom'); if (!z) return;
-  z.value = previewZoom;
-  z.addEventListener('input', () => { previewZoom = parseFloat(z.value) || 1.0; });
+  z.value = hangarPreview.zoom;
+  z.addEventListener('input', () => { hangarPreview.zoom = parseFloat(z.value) || 1.0; });
 }
 /* dedicated rAF — auto-rotate + drag orientation; idles cheaply (no render) when not in the hangar. */
 function previewLoop() {
   requestAnimationFrame(previewLoop);
   if (typeof state !== 'undefined' && state !== 'hangar') return;   // off-hangar: keep the loop alive but skip the draw
   if (!previewRenderer || !previewScene || !previewCamera) return;
-  const z = 1 / (previewZoom || 1);                                          // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
+  const z = 1 / (hangarPreview.zoom || 1);                                   // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
   previewCamera.position.set(0, PREVIEW_CAM_Y * z, PREVIEW_CAM_Z * z);
   if (previewJet) {
     const pn = performance.now();
-    if (!previewDragging && pn > previewSpinResumeAt) previewYaw += 0.012;   // auto-rotate (resumes ~3s after release via previewSpinResumeAt)
-    previewJet.rotation.set(previewPitch, previewYaw, 0);                    // own the full orientation (yaw spins, dragged pitch held)
+    if (!hangarPreview.dragging && pn > hangarPreview.spinResumeAt) hangarPreview.yaw += 0.012;   // auto-rotate (resumes ~3s after release via spinResumeAt)
+    previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);      // own the full orientation (yaw spins, dragged pitch held)
     previewJet.position.y = Math.sin(pn * 0.0012) * 0.6;                     // gentle bob (optional)
   }
   previewRenderer.render(previewScene, previewCamera);
 }
 /* launch is BLOCKED while previewing an UNOWNED skin (must buy it first). */
 function launchBlocked() {
-  return !!(previewSkin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, previewSkin));
+  return !!(hangarPreview.skin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, hangarPreview.skin));
 }
 /* reflect the gate on the LAUNCH control (disabled + dimmed .gated). */
 function refreshLaunchGate() {
   const lb = g('launch'); if (lb) { const b = launchBlocked(); lb.classList.toggle('gated', b); lb.disabled = b; }
 }
-let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts previewSkin + resets drag orientation
+let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts the preview skin + resets drag orientation
 function selectJet(i) {
-  if (i !== _previewJetIdx) { previewSkin = null; previewYaw = 0; previewPitch = 0; previewZoom = 1.0; previewSpinResumeAt = 0; _previewJetIdx = i; }   // jet switch → revert preview, reset orientation + zoom (F2)
+  if (i !== _previewJetIdx) { hangarPreview.clear(); _previewJetIdx = i; }   // jet switch → revert preview, reset orientation + zoom (F2)
   selectedJet = i;
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
@@ -547,7 +553,7 @@ function selectJet(i) {
   const paint = previewPaint(JETS[i]);   // previewing skin (owned OR not) → live look; gameplay still uses jetPaint
   previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true, { skin: paint });
   previewJet.position.set(0, 0, 0);      // C2: centred at origin in the PREVIEW scene (no world gutter)
-  previewJet.rotation.set(previewPitch, previewYaw, 0);
+  previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);
   if (previewScene) previewScene.add(previewJet);   // → isolated preview scene, NEVER the shared game scene
   refreshLaunchSub();   // CTA reads "SELECT <jet>" — keep it in sync with the selected airframe name
   audio.init(); audio.ui();
@@ -565,7 +571,7 @@ function renderJetMeta(i) {
     const skins = SKINS[j.id];
     if (skins && skins.length > 1) {
       // the skin currently being PREVIEWED but NOT owned (the only state that gates launch + shows the BUY CTA)
-      const pvUnowned = (previewSkin && JETS[selectedJet] && j.id === JETS[selectedJet].id && !skinOwned(j.id, previewSkin)) ? previewSkin : null;
+      const pvUnowned = (hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id && !skinOwned(j.id, hangarPreview.skin)) ? hangarPreview.skin : null;
       html += '<div class="jmskins"><span class="jmskinlbl">' + t('meta.skins') + '</span>';
       for (let s = 0; s < skins.length; s++) {
         const sk = skins[s], owned = skinOwned(j.id, sk.id), sel = selectedSkin(j.id) === sk.id;
@@ -577,7 +583,7 @@ function renderJetMeta(i) {
       }
       html += '</div>';
       // F3: livery NAME readout — shows the hovered/focused/selected paint name prominently (any skin id, via metaText)
-      const curId = previewSkin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? previewSkin : selectedSkin(j.id);
+      const curId = hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? hangarPreview.skin : selectedSkin(j.id);
       html += '<div id="jetSkinName" class="jmskinname">' + metaText({ id: 'skin.' + curId }, 'name') + '</div>';
       // buy-to-preview: while previewing an UNOWNED skin, surface an inline BUY · cost right at the preview
       if (pvUnowned) html += '<button id="jetMetaBuy" class="jmpvbuy" data-buyskin="' + pvUnowned + '" data-jet="' + j.id + '">' + tf('meta.buyPaint', { c: skinCost(j.id, pvUnowned) }) + '</button>';
@@ -594,14 +600,14 @@ function onJetMetaClick(e) {
   const buySk = e.target.closest('[data-buyskin]');
   if (buySk) {
     const jet = buySk.dataset.jet, id = buySk.dataset.buyskin;
-    if (buySkin(jet, id)) { setSkin(jet, id); previewSkin = id; updateSpHud(); selectJet(selectedJet); audio.ui(); }
+    if (buySkin(jet, id)) { setSkin(jet, id); hangarPreview.skin = id; updateSpHud(); selectJet(selectedJet); audio.ui(); }
     else showBanner(t('meta.needSp'));
     return;
   }
   const sk = e.target.closest('.jmskin');
   if (sk) {
     const jet = sk.dataset.jet, id = sk.dataset.skin;
-    previewSkin = id;                          // preview ANY chip (owned or not) on the live model — UI only
+    hangarPreview.skin = id;                   // preview ANY chip (owned or not) on the live model — UI only
     if (skinOwned(jet, id)) setSkin(jet, id);  // owned → also equip (persist); unowned → preview only, NO meta/store write
     selectJet(selectedJet);                    // rebuild preview with previewPaint (+ refreshes chips + gate)
     audio.ui();

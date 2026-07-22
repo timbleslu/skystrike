@@ -45,9 +45,9 @@ await page.evaluate(({ j, t, thr, zoom }) => {
   previewRenderer.setSize(window.innerWidth, window.innerHeight, false);
   previewCamera.aspect = window.innerWidth / window.innerHeight;
   previewCamera.updateProjectionMatrix();
-  previewSpinResumeAt = Infinity;   // freeze auto-rotate so the yaw set per-frame below sticks for the screenshot
-  previewPitch = 0;
-  previewZoom = 1 / zoom;           // previewLoop dollies the camera by 1/previewZoom — invert to keep the CLI's <1=closer convention
+  hangarPreview.spinResumeAt = Infinity;   // freeze auto-rotate so the yaw set per-frame below sticks for the screenshot
+  hangarPreview.pitch = 0;
+  hangarPreview.zoom = 1 / zoom;    // previewLoop dollies the camera by 1/hangarPreview.zoom — invert to keep the CLI's <1=closer convention
   animEngines(previewJet, thr);
 }, { j: jetIdx, t: tod, thr, zoom });
 
@@ -59,7 +59,7 @@ const frames = [
 for (const [name, yaw] of frames) {
   await page.evaluate(({ yaw, thr }) => {
     animEngines(previewJet, thr);
-    previewYaw = yaw;
+    hangarPreview.yaw = yaw;
   }, { yaw, thr });
   await page.waitForTimeout(150);
   await page.screenshot({ path: `${prefix}-jet-${name}.png` });

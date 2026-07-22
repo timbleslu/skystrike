@@ -4,41 +4,13 @@
      below the 0.35 hysteresis threshold. Then forces heat ~0.8 and saves overheat-check-gauge.png
      with the HUD gauge partly filled. Exits non-zero on any failed assertion.
    Boot pattern copied from scripts/shot.mjs (ephemeral port). Requires playwright. Not shipped. */
-import { chromium } from 'playwright';
-import http from 'http';
-import { readFile } from 'fs/promises';
-import { extname, join } from 'path';
+import { launchGame, bootToHangar } from './lib/boot.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json' };
-const server = http.createServer(async (req, res) => {
-  const p = req.url === '/' ? '/index.html' : req.url.split('?')[0];
-  try {
-    const data = await readFile(join(root, p));
-    res.writeHead(200, { 'content-type': MIME[extname(p)] || 'application/octet-stream' });
-    res.end(data);
-  } catch { res.writeHead(404); res.end(); }
-});
-await new Promise(r => server.listen(0, r));
-const port = server.address().port;
-
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const { page, port, close } = await launchGame();
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
-await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForTimeout(1200);
-
 // drive past the first-run language gate into the hangar (as shot.mjs does)
-await page.evaluate(() => {
-  const dd = document.getElementById('langDropdown');
-  if (dd) { dd.value = 'EN'; dd.dispatchEvent(new Event('change', { bubbles: true })); }
-  const en = document.querySelector('.ob-lang[data-lang="EN"]');
-  if (en) en.click();
-});
-await page.waitForTimeout(250);
-await page.evaluate(() => { const c = document.getElementById('obContinue'); if (c) c.click(); });
-await page.waitForTimeout(400);
+await bootToHangar(page, { port, continueWait: 400 });
 
 // start a run; keep the player alive + airborne so the flight loop keeps ticking for the whole test
 await page.evaluate(() => {
@@ -106,7 +78,6 @@ await page.screenshot({ path: 'overheat-check-gauge.png' });
 const sgg = await read();
 check(sgg.heat > 0.6 && sgg.heat < 1, 'heat held ~0.8 for the gauge screenshot (bar partly filled)');
 
-await browser.close();
-server.close();
+await close();
 if (failed) { console.error('verify-overheat: FAILED'); process.exit(1); }
 console.log('verify-overheat: PASS — heat rises, locks at 1.0, gun gated, cools + re-arms < 0.35, gauge rendered');

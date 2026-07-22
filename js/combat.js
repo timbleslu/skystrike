@@ -1,5 +1,9 @@
 /* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update. Load 4th. */
 
+/* file-local THREE scratch (moved from globals.js — used only here) */
+const eul = new THREE.Euler();
+const aimT1 = new THREE.Vector3(), aimT2 = new THREE.Vector3(), aimT3 = new THREE.Vector3();  // aim-assist scratch (updatePlayer)
+
 /* ---------------- bullets ---------------- */
 function getBullet() {
   let b = BPOOL.pop();
@@ -556,17 +560,11 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
   else if (byPlayer) haptic(6);   // light buzz on landing a non-fatal hit (kills buzz via killEnemy)
 }
 // Boss crosses an HP threshold -> escalate. Idempotent per phase (the caller guards via
-// nextBossPhase). Bumps aggression (turnRate; fire-rate/specials read e.phase elsewhere) and
-// fires a visual cue + banner + screen shake. Reusable by a future Boss-Rush mode.
+// nextBossPhase). Applies the resolved phase-state (turnRate) + arena weather/tod, then fires a
+// visual cue + banner + screen shake. Reusable by a future Boss-Rush mode.
 function bossEnterPhase(e, ph) {
   e.phase = ph;
-  // Capture the boss's BASE turnRate once so per-phase multipliers compose cleanly off it
-  // (instead of the old compounding ×1.18). Campaign bosses carry e._phaseCfg (set at spawn by
-  // main.js) with an authored turnMul per phase; endless/boss-rush/rivals have no _phaseCfg and
-  // keep the byte-identical ×1.18 ramp below.
-  if (e._baseTurnRate === undefined) e._baseTurnRate = e.turnRate;
-  if (e._phaseCfg) bossApplyPhaseCfg(e, ph);            // data-driven: turnMul + stash fire/pattern/flags for entities.js + main.js
-  else e.turnRate *= 1.18;                              // legacy: each phase is a little twitchier
+  bossApplyPhase(e, ph);                                 // turnRate + e.phaseState + authored weather/tod
   empFlash = Math.max(empFlash, ph >= 3 ? 0.6 : 0.45);  // afterburner-ignition screen flash
   if (e.group.userData.body) e.group.userData.body.emissiveIntensity = ph >= 3 ? 2.4 : 1.8;
   if (e.group.userData.core) e.group.userData.core.material.emissiveIntensity = ph >= 3 ? 5.5 : 3.5;
@@ -576,23 +574,24 @@ function bossEnterPhase(e, ph) {
   haptic([40, 30, 60]);
   if (typeof shakeCam === 'function') shakeCam(ph >= 3 ? 1.0 : 0.8);   // shakeCam may not be merged yet
 }
-// Campaign bosses only: apply phase descriptor `e._phaseCfg[ph-1]` = {turnMul, fireMul, extraMissiles,
-// weather?, tod?, pattern?, flags?}. turnRate is set RELATIVE to the captured base so phases compose;
-// fireMul/extraMissiles are STASHED on the enemy for main.js (updateBossSpecials/fireBossAttack) to read —
-// this file does NOT fire boss weapons. pattern/flags are read by entities.js updateEnemy movement AI.
-// weather/tod (if present) shift the arena via the existing engine hooks (guarded like shakeCam above).
-function bossApplyPhaseCfg(e, ph) {
-  const cfg = e._phaseCfg[ph - 1];
-  if (!cfg) return;
-  if (e._baseTurnRate === undefined) e._baseTurnRate = e.turnRate;
-  e.turnRate = e._baseTurnRate * (cfg.turnMul != null ? cfg.turnMul : 1);
-  e._fireMul = cfg.fireMul != null ? cfg.fireMul : 1;       // consumed by main.js fire-cadence wiring
-  e._extraMissiles = cfg.extraMissiles || 0;                // consumed by main.js extra-salvo wiring
-  e._pattern = cfg.pattern || null;                         // movement pattern (entities.js)
-  e._flags = cfg.flags || [];                               // behavior flags e.g. 'chaff','mirror' (entities.js)
-  e._cfgInit = true;                                        // entities.js: phase cfg now applied for this phase
-  if (cfg.weather && typeof applyWeather === 'function') applyWeather(cfg.weather);   // e.g. WARLORD p2 -> storm
-  if (cfg.tod != null && typeof applyTimeOfDay === 'function') applyTimeOfDay(cfg.tod);
+// IMPURE state applicator (no transition FX — shared by bossEnterPhase AND the lazy phase-1 init in
+// entities.js updateEnemy). Computes the phase-state via the PURE resolveBossPhase (core.js) and stows
+// it as the SINGLE e.phaseState field: {turnRate, fireMul, extraMissiles, pattern, flags, baseTurnRate}.
+// The boss's ORIGINAL turnRate is captured once (first call, when e.phaseState is unset) and carried
+// forward via phaseState.baseTurnRate so per-phase turn multipliers compose off the true base instead
+// of a separate _baseTurnRate field. e.turnRate is set from the resolved state (composes for campaign
+// bosses; byte-identical ×1.18-per-phase ramp for legacy). Campaign descriptors may carry weather/tod
+// which shift the arena via the existing engine hooks (guarded like shakeCam). Endless/boss-rush/rivals
+// have no e._phaseCfg -> resolver returns the legacy defaults and no weather/tod is applied.
+function bossApplyPhase(e, ph) {
+  const base = (e.phaseState && e.phaseState.baseTurnRate != null) ? e.phaseState.baseTurnRate : e.turnRate;
+  e.phaseState = resolveBossPhase(e._phaseCfg || null, ph, base);
+  e.turnRate = e.phaseState.turnRate;
+  const cfg = e._phaseCfg && e._phaseCfg[ph - 1];
+  if (cfg) {
+    if (cfg.weather && typeof applyWeather === 'function') applyWeather(cfg.weather);   // e.g. WARLORD p2 -> storm
+    if (cfg.tod != null && typeof applyTimeOfDay === 'function') applyTimeOfDay(cfg.tod);
+  }
 }
 function tpBaseFor(e) {
   return e.type === 'boss' ? TP.boss : e.type === 'bomber' ? TP.bomber : e.elite ? TP.ace

@@ -35,6 +35,9 @@ function genRival(board) {
     encounters: 0, board: board || []
   };
 }
+// NOT loadHealed: the invalid-blob fallback is genRival(...), which RANDOMLY regenerates the nemesis
+// identity (name/shape) while preserving the kill board — not a typeof per-key fill of freshFn() defaults.
+// The heal semantics genuinely differ, so loadRival stays hand-rolled with its validRival gate.
 function loadRival() {
   try {
     const r = JSON.parse(store.get(RIVAL_KEY) || 'null');
