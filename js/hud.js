@@ -105,6 +105,12 @@ function drawGunPipper(ctx, sol, k) {
 
 // Small secondary-objective (star) checklist on the HUD: three live conditions, each ★ when met.
 // Mirrors evalStars' conditions (kill efficiency / no-damage wave / objectives) against the live run.
+// Layout: y=72 top (below the objective line y=44 + detection bar), 15px rows ×k. On SHORT screens
+// (landscape phones) it collapses to ONE pip row so it doesn't eat the upper third of the view.
+// starObjectivesBottom() is the shared top boundary of the centre "HUD glass" (pitch-ladder window).
+const STAR_Y = 72, STAR_ROW = 15;
+function starObjectivesCompact() { return H < 560; }
+function starObjectivesBottom(k) { return STAR_Y + (starObjectivesCompact() ? 1 : 3) * STAR_ROW * k + 5 * k; }
 function drawStarObjectives(ctx, cx, k) {
   if (typeof run === 'undefined' || !run) return;
   const waves = Math.max(1, wave || 1);
@@ -116,16 +122,25 @@ function drawStarObjectives(ctx, cx, k) {
     [cleanMet, t('stars.obj.noDamage')],
     [rescMet, t('stars.obj.rescue')],
   ];
+  const lines = starObjectivesCompact()
+    ? [[items.some(it => it[0]), items.map(it => it[0] ? '★' : '☆').join(' ') + '  ' + items.filter(it => it[0]).length + '/3']]
+    : items.map(it => [it[0], (it[0] ? '★ ' : '☆ ') + it[1]]);
   ctx.save();
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
   ctx.font = (11 * k) + 'px ' + HUDFONT;
-  let y = 72;   // F2: below the objective line (y=44) + detection bar, clear of the pause button
-  for (let i = 0; i < items.length; i++) {
-    const met = items[i][0], label = (met ? '★ ' : '☆ ') + items[i][1];
+  // dark backing plate so the checklist reads over bright sky (was bare dim text — low contrast)
+  let maxW = 0;
+  for (let i = 0; i < lines.length; i++) maxW = Math.max(maxW, ctx.measureText(lines[i][1]).width);
+  const padX = 8 * k, padY = 3 * k;
+  ctx.fillStyle = 'rgba(4,8,12,0.46)';
+  ctx.fillRect(cx - maxW / 2 - padX, STAR_Y - padY, maxW + padX * 2, lines.length * STAR_ROW * k + padY * 2 - 2 * k);
+  let y = STAR_Y;
+  for (let i = 0; i < lines.length; i++) {
+    const met = lines[i][0], label = lines[i][1];
     const w = ctx.measureText(label).width;
-    ctx.fillStyle = met ? 'rgba(' + HUD.reward + ',0.95)' : 'rgba(' + HUD.dim + ',0.75)';
+    ctx.fillStyle = met ? 'rgba(' + HUD.reward + ',0.98)' : 'rgba(' + HUD.ink + ',0.82)';
     ctx.fillText(label, cx - w / 2, y);
-    y += 15 * k;
+    y += STAR_ROW * k;
   }
   ctx.restore();
 }
@@ -384,7 +399,6 @@ function drawHUD(hudView) {
   }
 
   drawStreakChip(ctx, k);   // === F5 killstreak === kill-streak chip near the top-right score readout (drawn last, on top)
-  drawHeatGauge(ctx, k);   // F1 gun-overheat: gun-heat bar in the bottom-right ammo cluster
 }
 
 function drawWingman(ctx, w, cx, cy, k) {
@@ -480,20 +494,32 @@ function drawDetectionBar(ctx, cx, k) {
   ctx.restore();
 }
 
+// UX pass: the pitch ladder lives in a centred "HUD glass" window — rungs fade out as they approach its
+// edge and are hard-clipped at it, so they never run under the top-centre objective/star readouts.
+// R = half-height of the window in screen px; the window top sits just below starObjectivesBottom().
+const LADDER_FADE = 44;   // px over which a rung fades to 0 before the window edge
+function ladderWindowR(cy, k) {
+  return Math.max(60, cy - starObjectivesBottom(k) - 10);
+}
 function drawHorizon(ctx, cx, cy, k) {
   const fwd = fwdOf(player.group, t1), up = upOf(player.group, t2), rgt = rightOf(player.group, t3);
   const pitch = Math.asin(clamp(fwd.y, -1, 1));
   const roll = Math.atan2(rgt.y, up.y);
   const scale = 6.2;
+  const R = ladderWindowR(cy, k), off = (pitch / DEG) * scale;
+  // per-rung opacity from its screen distance to centre (rotation-invariant): 1 inside, → 0 at the edge
+  const fadeAt = (yLocal) => clamp((R - Math.abs(yLocal + off) * k) / LADDER_FADE, 0, 1);
   ctx.save();
+  ctx.beginPath(); ctx.rect(0, cy - R, W, 2 * R); ctx.clip();
   ctx.translate(cx, cy);
   ctx.scale(k, k);   // UI-size: enlarge the whole pitch ladder uniformly around centre
   ctx.rotate(roll);
-  ctx.translate(0, (pitch / DEG) * scale);
+  ctx.translate(0, off);
   // horizon ladder — primary cyan; storm desaturates to a cold blue-grey
   const storm = (typeof weather !== 'undefined' && weather && weather.type === 'storm');
   const ladderCol = storm ? '150,170,235' : HUD.primary;
   ctx.strokeStyle = 'rgba(' + ladderCol + ',0.5)'; ctx.lineWidth = 2; ctx.font = '11px ' + HUDFONT; ctx.fillStyle = 'rgba(' + ladderCol + ',0.6)';
+  ctx.globalAlpha = fadeAt(0);
   ctx.beginPath(); ctx.moveTo(-260, 0); ctx.lineTo(-70, 0); ctx.moveTo(70, 0); ctx.lineTo(260, 0);
   ctx.moveTo(-70, 0); ctx.lineTo(-70, 9); ctx.moveTo(70, 0); ctx.lineTo(70, 9);
   ctx.stroke();
@@ -501,6 +527,9 @@ function drawHorizon(ctx, cx, cy, k) {
   for (let a = -40; a <= 40; a += 10) {
     if (a === 0) continue;
     const y = -a * scale;
+    const fa = fadeAt(y);
+    if (fa <= 0) continue;
+    ctx.globalAlpha = fa;
     const w = a > 0 ? 60 : 50;
     ctx.beginPath();
     ctx.moveTo(-w, y); ctx.lineTo(-30, y); ctx.moveTo(30, y); ctx.lineTo(w, y);
@@ -849,40 +878,5 @@ function drawStreakChip(ctx, k) {
   ctx.restore();
 }
 // === end F5 ===
-/* === F1 gun-overheat: HUD gun-heat gauge =================================================
-   Persistent canvas bar in the bottom-right gun cluster (just left of the radar / ammo readout).
-   Fill tracks player.gunHeat 0..1 amber->gold->orange; a tick marks the HEAT.rearm re-arm point;
-   on lockout the bar pulses red under an OVERHEAT label. Dim when cold, brightens as it heats.
-   hudK()-scaled, HUD colour vars — reads global game state, writes the 2D canvas, no DOM. */
-function drawHeatGauge(ctx, k) {
-  if (player.noCannon) return;                                 // gun-less airframes (J-20) never heat
-  const heat = clamp(player.gunHeat || 0, 0, 1);
-  const locked = !!player.gunLocked;
-  const bw = 150 * k, bh = 9 * k;
-  const bx = W - 200 * k - bw;                                 // right edge sits just left of the radar
-  const by = H - 150 * k;
-  const warm = heat > 0.55, hot = heat > 0.82;
-  const col = locked ? HUD.danger : hot ? HUD.warn : warm ? HUD.reward : HUD.primary;
-  ctx.save();
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-  // label — OVERHEAT while locked, else GUN HEAT (brightens with heat)
-  ctx.font = 'bold ' + (10 * k) + 'px ' + HUDFONT;
-  ctx.fillStyle = 'rgba(' + col + ',' + (locked ? 0.98 : 0.55 + 0.4 * heat) + ')';
-  ctx.fillText(locked ? t('hud.overheat') : t('hud.gunHeat'), bx, by - 5 * k);
-  // track
-  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, bw, bh);
-  // fill (pulses while locked)
-  let a = 0.9 * (0.4 + 0.6 * heat);
-  if (locked) a = 0.55 + 0.4 * Math.abs(Math.sin(performance.now() * 0.008));
-  ctx.fillStyle = 'rgba(' + col + ',' + a + ')';
-  ctx.fillRect(bx, by, bw * heat, bh);
-  // re-arm threshold tick — the gun re-arms once heat cools left of this mark
-  const tx = bx + bw * HEAT.rearm;
-  ctx.strokeStyle = 'rgba(' + HUD.ink + ',0.6)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(tx, by - 2 * k); ctx.lineTo(tx, by + bh + 2 * k); ctx.stroke();
-  // border
-  ctx.strokeStyle = 'rgba(' + (locked ? HUD.danger : HUD.dim) + ',' + (0.5 + 0.4 * heat) + ')'; ctx.lineWidth = 1;
-  ctx.strokeRect(bx, by, bw, bh);
-  ctx.restore();
-}
-/* === end F1 gun-overheat === */
+/* F1 gun-overheat gauge: moved to the DOM (#heatBar inside the .panel.br gun/ammo cluster, updated in
+   ui-hud.js updateDom) in the UX pass — it floated disconnected mid-right and collided with the tutorial card. */

@@ -3,7 +3,7 @@
 // nav.js is require-safe: the table is pure data and DOM/state application lives inside functions that
 // are never called at load, so requiring it here touches no browser globals.
 const assert = require('assert');
-const { SCREENS, navPlan } = require('../js/nav.js');
+const { SCREENS, navPlan, MENU_BACK, menuBackTarget } = require('../js/nav.js');
 
 const STATES = new Set(['hangar', 'playing', 'dead']);
 const TOUCH = new Set(['show', 'hide']);
@@ -124,6 +124,20 @@ assert.strictEqual(SCREENS.hangar.touch, 'hide', 'hangar hides touch controls');
   navPlan(SCREENS.hangar, SCREENS.playing);
   navPlan(SCREENS.opsSelect, SCREENS.briefing);
   assert.strictEqual(JSON.stringify(SCREENS), before, 'navPlan does not mutate the SCREENS table');
+})();
+
+// menu Esc = BACK (UX pass): each open overlay maps to its own on-screen BACK button; topmost wins; none → null
+(function () {
+  assert.strictEqual(menuBackTarget([]), null, 'no open overlay -> Esc does nothing here (main.js keeps the manual toggle)');
+  assert.strictEqual(menuBackTarget(['modeChoice']), 'modeBack', 'mode choice -> its BACK');
+  assert.strictEqual(menuBackTarget(['meta']), 'metaClose', 'command/progression -> BACK TO HANGAR');
+  assert.strictEqual(menuBackTarget(['gameover']), 'goHangar', 'debrief -> HANGAR');
+  assert.strictEqual(menuBackTarget(['modeChoice', 'endlessSetup']), 'endlessBack', 'deeper overlay wins');
+  assert.strictEqual(menuBackTarget(['levelMap', 'briefing']), 'briefBack', 'briefing over the map backs to the map');
+  const ids = MENU_BACK.map(r => r[0]);
+  assert.strictEqual(new Set(ids).size, ids.length, 'MENU_BACK panels are unique');
+  // every router/manual SCREENS overlay panel (not the hangar / panel-less flight) has an Esc target
+  for (const k in SCREENS) { const r = SCREENS[k]; if (r.panel && !r.inverted) assert.ok(ids.indexOf(r.panel) !== -1, 'Esc target for ' + r.panel); }
 })();
 
 console.log('ok - nav: SCREENS table integrity + navPlan transition logic (hide/show/state/touch, inverted hangar, same-panel, null rows)');

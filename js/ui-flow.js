@@ -105,6 +105,14 @@ function startGame(i, daily, rush, weekly) {
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
 }
+// set by endRun: can the debrief's REDEPLOY button relaunch this run as-is (plain Endless only)?
+let lastRunRestartable = false;
+function redeployRun() {
+  if (!lastRunRestartable) { returnToHangar(); return; }
+  returnToHangar();            // full arena reset (synchronous) → state 'hangar'
+  opMode = false;              // Endless
+  startGame(selectedJet);      // same jet, same difficulty/environment
+}
 function gameOver() {
   if (state !== 'playing') return;
   if (campaignMode) { campaignLevelFailed(); return; }   // Operations campaign: roll back to the pre-level checkpoint + return to the map (NOT run-end)
@@ -159,26 +167,25 @@ function endRun(title, win) {
     else { countUp(spd, total, 560, v => '+' + Math.round(v).toLocaleString()); }
   }
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
-  // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low)
-  const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
-  if (gw) gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A'));
-  // ---- star objectives vs endless rating ----
-  // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI and
-  // show a performance rating instead; Operation victory (win) keeps stars. campaignMode is already
+  // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low). A C earns no bonus,
+  // so the bonus line is blanked (hidden via :empty) and .grade-none drops the celebratory snap-in (UX pass).
+  const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = grade.mult > 1 ? t('grade.bonus') + ' x' + grade.mult.toFixed(2) : ''; }
+  if (gw) { gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A')); gw.classList.toggle('grade-none', grade.mult <= 1); }
+  // ---- star objectives (Ops) vs endless ----
+  // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI — the single
+  // stats grid (score/wave/kills/accuracy/missiles/time) is the performance readout (the old separate
+  // PERFORMANCE block duplicated it). Operation victory (win) keeps stars. campaignMode is already
   // off here (gameOver routes campaign deaths to campaignLevelFailed before reaching endRun).
   const endless = !win && !MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].bounded;   // Candidate 8: !opMode && !campaignMode ≡ !MODE_POLICY[key].bounded
+  // REDEPLOY (primary) = fly the same jet again straight away — only for a plain Endless run; daily/weekly/
+  // boss-rush/operation outcomes have their own entry flows, so they get the HANGAR exit only.
+  lastRunRestartable = endless && !dailyMode && !weeklyMode && !bossRush;
+  const rdb = g('redeploy'); if (rdb) rdb.style.display = lastRunRestartable ? '' : 'none';
+  const hgb = g('goHangar'); if (hgb) hgb.classList.toggle('go-solo', !lastRunRestartable);
   const sd = g('go_stars');
-  const rd = g('go_rating');
   if (endless) {
     if (sd) sd.classList.add('hide');
-    if (rd) {
-      rd.classList.remove('hide');
-      const rk = g('go_ratKills'); if (rk) rk.textContent = (run.kills + run.ground + run.boss);
-      const ra = g('go_ratAcc');   if (ra) ra.textContent = acc + '%';
-      const rw = g('go_ratWaves'); if (rw) rw.textContent = wave;
-    }
   } else {
-    if (rd) rd.classList.add('hide');
     if (sd) sd.classList.remove('hide');
     // SINGLE STAR-TRUTH: a campaign/op victory carries the per-level result computed ONCE in
     // campaignLevelComplete (delta vs level base, composed levelConds) via lastLevelResult — render
@@ -219,6 +226,7 @@ function endRun(title, win) {
   }
   updateBest();
   showScreen('gameover');   // hide touch controls + show #gameover + state='dead' (nav.js; callers already set 'dead')
+  { const pb = lastRunRestartable ? g('redeploy') : g('goHangar'); if (pb && pb.focus) pb.focus({ preventScroll: true }); }   // keyboard: Enter/Space = the primary action, Esc = HANGAR (nav.js)
   // JUICE: retrigger the staged reward reveal (grade snap → stars → SP rise) each time the debrief opens.
   if (gw && !prefersReducedMotion()) { gw.classList.remove('reveal'); void gw.offsetWidth; gw.classList.add('reveal'); }
   else if (gw) gw.classList.add('reveal');

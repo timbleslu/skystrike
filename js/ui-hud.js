@@ -162,7 +162,7 @@ function cacheEl() {
     wPull: g('w_pull'), wMissile: g('w_missile'), wHighG: g('w_highg'), wStealth: g('w_stealth'), wLock: g('w_lock'), wDrone: g('w_drone'),
     vignette: g('vignette'), dmg: g('dmg'), flash: g('flash'),
     bossbar: g('bossbar'), bossfill: g('bossfill'),
-    abIndicator: g('abIndicator'),
+    abIndicator: g('abIndicator'), heatBar: g('heatBar'), heatLbl: g('lblHeat'),
     tut: g('tutorial'), tutCard: g('tutCard'), tutArrow: g('tutArrow'),
     tutStep: g('tutStep'), tutText: g('tutText'), tutSkip: g('tutSkip'),
   };
@@ -406,6 +406,22 @@ function updateDom(dt, hudView) {
   if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
   else { el.bullets.textContent = player.bullets; el.bullets.style.color = player.bullets <= 80 ? '#ff8c2b' : ''; }
   el.missiles.style.color = player.missiles <= 0 ? '#ff394b' : '';
+  // F1 gun-heat gauge — DOM bar inside the gun/ammo cluster (UX pass; was a free-floating canvas bar).
+  // Tone classes: warm >0.55 / hot >0.82 / locked (OVERHEAT). The rearm tick sits at HEAT.rearm.
+  if (el.heatBar) {
+    if (player.noCannon) el.heatBar.style.display = 'none';   // gun-less airframes (J-20) never heat
+    else {
+      const heat = clamp(player.gunHeat || 0, 0, 1), locked = !!player.gunLocked;
+      el.heatBar.style.display = '';
+      el.heatBar.style.setProperty('--heat', heat.toFixed(3));
+      el.heatBar.style.setProperty('--rearm', HEAT.rearm);
+      el.heatBar.classList.toggle('warm', heat > 0.55 && heat <= 0.82);
+      el.heatBar.classList.toggle('hot', heat > 0.82);
+      el.heatBar.classList.toggle('locked', locked);
+      const lbl = t(locked ? 'hud.overheat' : 'hud.gunHeat');
+      if (el.heatLbl && el.heatLbl.textContent !== lbl) el.heatLbl.textContent = lbl;
+    }
+  }
   if (!hasSpecial(player.jet)) { el.special.textContent = t('hud.noSpecial'); el.special.classList.remove('ready'); }
   else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + t('hud.ready'); el.special.classList.add('ready'); }
   else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + t('hud.sec'); el.special.classList.remove('ready'); }

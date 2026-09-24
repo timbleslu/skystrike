@@ -87,10 +87,7 @@ function applyLang() {
   setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
   setTxt('goLblGrade', t('grade.title'));
   setTxt('goLblStars', t('stars.title'));
-  // endless death rating (shown in place of stars in endless/daily; see ui-flow.js endRun)
-  setTxt('goLblRating', t('rating.title'));
-  setTxt('goLblRatKills', t('rating.kills')); setTxt('goLblRatAcc', t('rating.acc')); setTxt('goLblRatWaves', t('rating.waves'));
-  setTxt('redeploy', t('go.redeploy'));
+  setTxt('redeploy', t('go.redeploy')); setTxt('goHangar', t('go.hangar'));
   // meta-progression screen labels
   setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));
   setTxt('metaTab_perks', t('meta.tabPerks')); setTxt('metaTab_ach', t('meta.tabAch'));

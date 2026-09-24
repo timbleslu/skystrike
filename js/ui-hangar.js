@@ -21,7 +21,9 @@ function buildHangar() {
   g('wpCancel').addEventListener('click', () => { closeWingPicker(); audio.ui(); });
   g('opLaunch').addEventListener('click', launchSector);
   g('jetNext').addEventListener('click', () => cycleJet(1));
-  g('jetCard').addEventListener('dblclick', () => startGame(selectedJet));
+  // double-click the aircraft PREVIEW = shortcut for the SELECT CTA (same gated path, opens mode choice).
+  // Scoped to the preview host so double-clicking a skin chip / buy button / select never launches.
+  g('jetCard').addEventListener('dblclick', (e) => { if (e.target.closest('#jetPreview3D') && !e.target.closest('input')) openModeChoice(); });
 
   g('launch').addEventListener('click', () => openModeChoice());
   g('manualBtn').addEventListener('click', openManual);
@@ -29,7 +31,8 @@ function buildHangar() {
   g('manualAbort').addEventListener('click', abortMission);
   const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
   const ssn = g('ssetNav'); if (ssn) ssn.addEventListener('click', e => { const b = e.target.closest('.ssetbtn'); if (b) { showSettingsSubtab(b.dataset.sset); if (audio.on) audio.ui(); } });
-  g('redeploy').addEventListener('click', returnToHangar);
+  g('redeploy').addEventListener('click', redeployRun);   // plain Endless: fly again (ui-flow.js); else → hangar
+  const goH = g('goHangar'); if (goH) goH.addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
   const trr = g('techReroll'); if (trr) trr.addEventListener('click', rerollDraft);   // FRONTIER DRAFT: reroll the 3 offers (once/visit)
   const tg = g('techgrid');
@@ -319,10 +322,12 @@ function renderJetCard(i) {
         '<div class="cabilitydesc">' + jetText(j, 'abilityDesc') + '</div>' : '<div class="cspeclbl">' + t('card.noSpecialAbility') + '</div>') +
         (j.passive ? '<div class="cpassivelbl">' + t('card.passive') + ' \u2014 ' + jetText(j, 'passive').split('\u2014')[0].trim() + '</div><div class="cpassivetext">' + jetText(j, 'passive') + '</div>' : '') +
       '</div>' +
-      '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
-      '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
+      // decision content (slot-2 equip + paint/lock/BUY) BEFORE the flavour text, so a locked jet's BUY
+      // and the paint chips sit near the top of the data column instead of under two prose blocks
       '<div id="special2Row" class="special2row"></div>' +
       '<div id="jetMeta" class="jetmeta"></div>' +
+      '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
+      '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
     '</div>';
   mountPreviewCanvas();   // C2: reparent the persistent isolated preview canvas into this card's #jetPreview3D host
   wireZoomSlider();       // F2: sync the zoom slider to hangarPreview.zoom + bind its input
