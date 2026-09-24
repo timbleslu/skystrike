@@ -1373,11 +1373,39 @@ function makeMarker(type) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, blending: THREE.AdditiveBlending, depthTest: true, depthWrite: false, transparent: true, opacity: 0.85 }));
   sp.scale.setScalar(60); return sp;
 }
+/* Particle recycling. Each particle keeps its OWN material (updateParticles fades opacity / spins rotation
+   per instance), so materials can't be shared; instead an expired sprite/spark goes back to a free list keyed
+   by texture/blend/fog and is re-armed on the next spawn. Lists are bounded by the live-particle cap (~620). */
+const PARTICLE_POOL = {};
+function particleSprite(tex, additive, fog, color, op, rot) {
+  const key = tex.id + (additive ? ':add' : ':nrm') + (fog ? ':fog' : '');
+  const free = PARTICLE_POOL[key];
+  let s = free && free.pop();
+  if (!s) {
+    s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    s.userData.pool = key;
+  }
+  s.material.color.setHex(color); s.material.opacity = op; s.material.rotation = rot || 0;
+  return s;
+}
+function particleSpark(color) {
+  const free = PARTICLE_POOL.spark;
+  let s = free && free.pop();
+  if (!s) { s = new THREE.Mesh(ASSET.sparkGeo, new THREE.MeshBasicMaterial({ transparent: true, fog: false })); s.userData.pool = 'spark'; }
+  s.material.color.setHex(color); s.material.opacity = 1;
+  return s;
+}
+// detach an expired particle's mesh; pooled ones return to their free list (debris/rings are just removed)
+function releaseParticle(mesh) {
+  scene.remove(mesh);
+  const k = mesh.userData.pool;
+  if (k) (PARTICLE_POOL[k] || (PARTICLE_POOL[k] = [])).push(mesh);
+}
 // `sz` scales the puff (default 1); debris embers pass a small one so near-camera fragments stay sparks.
 function spawnTrail(pos, color, op, sz) {
   if (particles.length > 540) return;
   const k = sz || 1;
-  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, transparent: true, opacity: op || 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: true }));
+  const m = particleSprite(glowTex(), true, true, color, op || 0.4);
   m.position.copy(pos); m.scale.setScalar(rand(6, 10) * k); scene.add(m);
   particles.push({ mesh: m, vel: null, life: 0.85 * k, max: 0.85 * k, type: 'trail', grow: 9 * k });
 }
@@ -1392,7 +1420,7 @@ function spawnShockwave(pos, k, op) {
    `color` tints the smoke (subtle cool-/warm-grey per side), never neon. */
 function spawnMissileTrail(pos, color) {
   if (particles.length > 620) return;
-  const puff = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: color || 0xdfe2e6, transparent: true, opacity: 0.26, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
+  const puff = particleSprite(cloudPuffTex(), false, true, color || 0xdfe2e6, 0.26, rand(0, TWO_PI));
   puff.position.copy(pos); puff.scale.setScalar(rand(4, 7)); scene.add(puff);
   particles.push({ mesh: puff, vel: new THREE.Vector3(rand(-2, 2), rand(-1, 2), rand(-2, 2)), life: rand(0.7, 1.1), max: 1.1, type: 'smoke', grow: 16, rot: rand(-1.2, 1.2) });
 }

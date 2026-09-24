@@ -454,7 +454,7 @@ function updateDom(dt, hudView) {
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
   tog(el.wPull, player.gpws);
-  tog(el.wMissile, missiles.some(m => m.enemy));
+  tog(el.wMissile, player.incoming);
   tog(el.wDrone, enemies.some(e => e.alive && e.type === 'drone'));
   const lockedNow = !!(player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1);
   const acquiringNow = !lockedNow && player.lockTarget && player.lockTarget.alive && player.lockProgress > 0.02;

@@ -318,8 +318,9 @@ function saveSettings() {
 // shared by clearArena (→ hangar), clearCampaignArena (between levels) and startGame. Keeps the player.
 function clearArenaEntities() {
   for (let i = 0; i < enemies.length; i++) { if (player) clearLocks(enemies[i]); despawnEnemy(enemies[i]); }
-  const lists = [bullets, missiles, flares, loots, particles];
+  const lists = [bullets, missiles, flares, loots];
   for (let l = 0; l < lists.length; l++) for (let i = 0; i < lists[l].length; i++) scene.remove(lists[l][i].mesh);
+  for (let i = 0; i < particles.length; i++) releaseParticle(particles[i].mesh);   // pooled sprites stay warm for the next arena
   for (let i = 0; i < decoys.length; i++) despawnObject(decoys[i].mesh);   // per-decoy holo material clones
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;

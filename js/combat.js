@@ -380,17 +380,17 @@ function updateLoot(dt) {
 function explode(pos, big) {
   audio.explode(big);
   // white-hot core flash
-  const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff2cc, blending: THREE.AdditiveBlending, transparent: true, opacity: 1, depthWrite: false, fog: false }));
+  const f = particleSprite(glowTex(), true, false, 0xfff2cc, 1);
   f.position.copy(pos); f.scale.setScalar(big ? 110 : 55); scene.add(f);
   particles.push({ mesh: f, life: 0.22, max: 0.22, type: 'flash', grow: big ? 320 : 180 });
   // additive fireball bloom — sells the blast at any distance
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a30, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5, depthWrite: false, fog: false }));
+  const glow = particleSprite(glowTex(), true, false, 0xff8a30, 0.5);
   glow.position.copy(pos); glow.scale.setScalar(big ? 190 : 100); scene.add(glow);
   particles.push({ mesh: glow, life: 0.5, max: 0.5, type: 'flash', grow: big ? 110 : 60, op: 0.5 });
   // churning fireball: textured flame sprites tumbling outward
   const nf = big ? 7 : 4;
   for (let i = 0; i < nf; i++) {
-    const fb = new THREE.Sprite(new THREE.SpriteMaterial({ map: fireTex(), blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false, rotation: rand(0, TWO_PI) }));
+    const fb = particleSprite(fireTex(), true, false, 0xffffff, 0.95, rand(0, TWO_PI));
     fb.position.copy(pos).add(t1.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(big ? 16 : 7));
     fb.scale.setScalar(rand(0.7, 1.3) * (big ? 95 : 48)); scene.add(fb);
     particles.push({ mesh: fb, vel: new THREE.Vector3(rand(-26, 26), rand(-6, 44), rand(-26, 26)), life: rand(0.45, 0.8), max: 0.8, type: 'fire', grow: (big ? 70 : 42), rot: rand(-2.4, 2.4) });
@@ -399,7 +399,7 @@ function explode(pos, big) {
   const rich = particles.length < 620;
   const n = rich ? (big ? 24 : 13) : 0;
   for (let i = 0; i < n; i++) {
-    const s = new THREE.Mesh(ASSET.sparkGeo, new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffaa33 : 0xff6633, transparent: true, fog: false }));
+    const s = particleSpark(i % 2 ? 0xffaa33 : 0xff6633);
     s.position.copy(pos);
     const v = new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(90, 260) * (big ? 1.6 : 1));
     s.quaternion.copy(dirToQuat(v.clone().normalize(), q1)); scene.add(s);
@@ -423,7 +423,7 @@ function explode(pos, big) {
   if (rich && pos.y - gh < 30) {
     for (let i = 0; i < (big ? 8 : 5); i++) {
       const a = rand(0, TWO_PI), r = rand(10, big ? 60 : 34);
-      const d = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: 0x8a7a62, transparent: true, opacity: 0.55, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
+      const d = particleSprite(cloudPuffTex(), false, true, 0x8a7a62, 0.55, rand(0, TWO_PI));
       d.position.set(pos.x + Math.cos(a) * r, gh + rand(4, 14), pos.z + Math.sin(a) * r);
       d.scale.setScalar(rand(26, 54)); scene.add(d);
       particles.push({ mesh: d, vel: new THREE.Vector3(Math.cos(a) * 28, rand(6, 16), Math.sin(a) * 28), life: rand(1.2, 2.0), max: 2.0, type: 'smokeS', grow: 30, rot: rand(-0.8, 0.8) });
@@ -433,7 +433,7 @@ function explode(pos, big) {
 }
 function spawnSmoke(pos, color, scl) {
   if (particles.length > 620) return;
-  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: color || 0x888888, transparent: true, opacity: 0.55, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
+  const m = particleSprite(cloudPuffTex(), false, true, color || 0x888888, 0.55, rand(0, TWO_PI));
   m.position.copy(pos).add(t1.set(rand(-4, 4), rand(-4, 4), rand(-4, 4)));
   m.scale.setScalar((scl || 1) * rand(16, 26)); scene.add(m);
   particles.push({ mesh: m, vel: new THREE.Vector3(rand(-8, 8), rand(8, 22), rand(-8, 8)), life: rand(1.0, 1.9), max: 1.9, type: 'smokeS', grow: 26, rot: rand(-1.2, 1.2) });
@@ -470,7 +470,7 @@ function updateParticles(dt) {
     }
     else { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.5; if (p.vel) p.vel.multiplyScalar(1 - 1.5 * dt); }
     
-    if (p.life <= 0) { detachFromScene(p.mesh); particles.splice(i, 1); }
+    if (p.life <= 0) { releaseParticle(p.mesh); particles.splice(i, 1); }
   }
 }
 
@@ -1183,8 +1183,8 @@ function updatePlayer(dt) {
 
   animEngines(player.group, player.throttle);
   player._gpwsT -= dt; if (player.gpws && player._gpwsT <= 0) { audio.warn(); player._gpwsT = 0.5; }
-  const incoming = missiles.some(m => m.enemy);
-  player._missT -= dt; if (incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
+  player.incoming = missiles.some(m => m.enemy);   // once per frame; the HUD MISSILE warning reads it too
+  player._missT -= dt; if (player.incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
 }
 
 /* POINT-DEFENSE LASER visuals — brief additive bolts fired from the airframe (or an escort) to a missile it swats */
