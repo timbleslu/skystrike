@@ -456,10 +456,6 @@ function previewPaint(jet) {
   if (hangarPreview.skin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, hangarPreview.skin);
   return jetPaint(jet);
 }
-/* TRACK C2: the preview no longer lives in a cleared world gutter — it renders to its OWN isolated
-   WebGLRenderer/canvas hosted INSIDE the jet card (ensurePreviewRenderer below). This stub keeps the
-   one historical call-site safe (selectJet) while the model just sits at origin in the preview scene. */
-function layoutPreviewJet() { /* no-op — preview model is centred at origin in previewScene */ }
 
 /* ---------------- TRACK C2: isolated hangar-preview renderer ----------------
    One singleton WebGLRenderer bound to a dedicated <canvas> that is REPARENTED into the live jet card's
@@ -468,7 +464,7 @@ function layoutPreviewJet() { /* no-op — preview model is centred at origin in
    lights; matches the main renderer's colour pipeline (sRGB + ACES, exposure 1.0) so liveries read true.
    Own rAF loop, idle-cheap off the hangar. NO game entities / HUD ever enter this scene. */
 let previewRenderer = null, previewScene = null, previewCamera = null, previewCanvas = null, previewRO = null;
-const PREVIEW_CAM_Z = 62, PREVIEW_CAM_Y = 6, PREVIEW_FOV = 38;   // frames a len≈26 fighter (BOMBER 44) nicely
+const PREVIEW_CAM_Z = 40, PREVIEW_CAM_Y = 14, PREVIEW_FOV = 38;   // elevated 3/4 framing: a len≈26 fighter fills ~half the box (BOMBER 44 still fits)
 
 function ensurePreviewRenderer() {
   if (previewRenderer || typeof THREE === 'undefined') return previewRenderer;
@@ -488,11 +484,15 @@ function ensurePreviewRenderer() {
   previewCamera.position.set(0, PREVIEW_CAM_Y, PREVIEW_CAM_Z);
   previewCamera.lookAt(0, 0, 0);
 
-  // own lighting (do NOT couple to the game's envmap) — read the liveries clearly: fill + hemi + key + rim.
-  previewScene.add(new THREE.AmbientLight(0x5a6e88, 0.9));
-  previewScene.add(new THREE.HemisphereLight(0x9fc0ff, 0x21303f, 0.7));
-  const key = new THREE.DirectionalLight(0xfff0d6, 1.35); key.position.set(40, 60, 50); previewScene.add(key);
-  const rim = new THREE.DirectionalLight(0x88a8ff, 0.6); rim.position.set(-50, 20, -40); previewScene.add(rim);
+  // own lighting (do NOT couple to the game's envmap): a studio environment gives the PBR glTF metals
+  // something to reflect (without one they render near-black), plus key + cool rim + low fill.
+  const pm = new THREE.PMREMGenerator(previewRenderer);
+  previewScene.environment = pm.fromScene(buildStudioEnv(), 0.04).texture;
+  pm.dispose();
+  previewScene.add(new THREE.HemisphereLight(0xb8d0ff, 0x1a2430, 0.45));
+  const key = new THREE.DirectionalLight(0xfff0d6, 1.9); key.position.set(40, 60, 50); previewScene.add(key);
+  const rim = new THREE.DirectionalLight(0x9fc0ff, 1.6); rim.position.set(-50, 25, -45); previewScene.add(rim);
+  previewScene.add(buildContactShadow());
 
   // track the host box (card-relative) so the canvas always matches its container, sharp on resize.
   previewRO = new ResizeObserver(resizePreview);
@@ -500,6 +500,36 @@ function ensurePreviewRenderer() {
 
   requestAnimationFrame(previewLoop);
   return previewRenderer;
+}
+// Throwaway scene the PMREM pre-filters into the preview's environment: a dark-to-light gradient dome
+// with two soft-box panels (overhead + side) for crisp highlights along the hull.
+function buildStudioEnv() {
+  const s = new THREE.Scene();
+  const dome = new THREE.SphereGeometry(50, 32, 16), col = [], p = dome.attributes.position, c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / 50;
+    c.setRGB(0.05, 0.06, 0.08).lerp(new THREE.Color(0.55, 0.6, 0.68), THREE.MathUtils.smoothstep(y, -0.3, 0.9));
+    col.push(c.r, c.g, c.b);
+  }
+  dome.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  s.add(new THREE.Mesh(dome, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const box = (w, h, x, y, z, k) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k), side: THREE.DoubleSide }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m);
+  };
+  box(40, 14, 0, 45, 10, 5);     // overhead strip
+  box(16, 24, 42, 12, 20, 2.5);  // side soft-box
+  return s;
+}
+// Soft radial contact shadow under the preview jet so it reads as sitting in a space, not floating.
+function buildContactShadow() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(46, 46), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.position.y = -7;
+  return m;
 }
 function resizePreview() {
   if (!previewRenderer || !previewCanvas) return;

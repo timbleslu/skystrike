@@ -2,6 +2,7 @@
 /* ui-hud.js: camera, projection, gunsight, HUD/radar canvas, DOM HUD, tutorial, banners. */
 /* file-local THREE scratch (moved from globals.js — used only here, projectPoint) */
 const pp1 = new THREE.Vector3(), pp2 = new THREE.Vector3(), pp3 = new THREE.Vector3();
+const _hudIp = new THREE.Vector3();   // hudViewState's gun lead point (read by drawHUD later the same frame)
 /* ---------------- camera ---------------- */
 function updateCamera(dt) {
   const p = player.group, fwd = fwdOf(p, t1);
@@ -60,12 +61,14 @@ function updateCamera(dt) {
 function cycleCamera() { camMode = (camMode + 1) % 3; audio.ui(); showBanner(tf('banner.cam', { name: t('cam.' + CAM_NAMES[camMode]) })); }
 
 /* ---------------- projection helper ---------------- */
-function projectPoint(pos) {
+// `out` (optional) is filled and returned instead of a fresh {x,y,behind} — hot per-frame loops pass one.
+function projectPoint(pos, out) {
   pp1.copy(pos).project(camera);
   pp2.copy(pos).sub(camera.position);
   pp3.set(0, 0, -1).applyQuaternion(camera.quaternion);
-  const behind = pp2.dot(pp3) < 0;
-  return { x: (pp1.x * 0.5 + 0.5) * W, y: (-pp1.y * 0.5 + 0.5) * H, behind };
+  const o = out || {};
+  o.x = (pp1.x * 0.5 + 0.5) * W; o.y = (-pp1.y * 0.5 + 0.5) * H; o.behind = pp2.dot(pp3) < 0;
+  return o;
 }
 
 /* ---------------- lead-computing gunsight (deflection pipper) ----------------
@@ -140,8 +143,8 @@ function hudViewState() {
     if (e) {
       const S = 1400 * (player.bulletSpeedMul || 1);                 // round speed (bullet-speed tech aware)
       const relV = t1.copy(e.vel || ZERO).addScaledVector(player.vel, -0.9);   // rounds inherit 0.9 of jet vel
-      const ip = interceptPoint(player.group.position, e.group.position, relV, S) || e.group.position;
-      gun = { target: e, interceptPoint: ip.clone() };   // clone: detach from scratch / the live mesh position
+      const ip = interceptPoint(player.group.position, e.group.position, relV, S, _hudIp) || _hudIp.copy(e.group.position);
+      gun = { target: e, interceptPoint: ip };   // module scratch, detached from the live mesh position
     }
   }
   // shared flight instruments — the SAME kt/altFt/throttle the DOM readouts + CSS gauges publish.
@@ -168,6 +171,11 @@ function cacheEl() {
   };
 }
 function tog(e, on) { e.classList.toggle('show', !!on); }
+// Change-guarded DOM writes for the per-frame HUD: most values repeat frame to frame, and an unguarded
+// textContent/style write still invalidates style/layout. The last written value is cached on the node.
+function putText(e, v) { v = '' + v; if (e._t !== v) { e._t = v; e.textContent = v; } }
+function putStyle(e, p, v) { const k = '_s_' + p; if (e[k] !== v) { e[k] = v; e.style[p] = v; } }
+function putVar(e, p, v) { const k = '_v' + p; if (e[k] !== v) { e[k] = v; e.style.setProperty(p, v); } }
 
 /* ---------------- first-run guided tutorial (F5) ----------------
    Lightweight stepped prompts that gate on the player's own actions during their first wave.
@@ -349,51 +357,54 @@ function updateWingmanSidebar() {
 function updateAwacsHud() {
   const el = g('awacsHud'); if (!el) return;
   const show = state === 'playing' && !paused;
-  el.style.display = show ? 'flex' : 'none';
+  putStyle(el, 'display', show ? 'flex' : 'none');
   if (!show) return;
   const now = performance.now() / 1000;
-  const chip = (key, cntId, costId) => {
+  awacsChip('strike', 'awacsUsesStrike', 'awacsCostStrike', now);
+  awacsChip('resupply', 'awacsUsesResupply', 'awacsCostResupply', now);
+  awacsChip('jam', 'awacsUsesJam', 'awacsCostJam', now);
+}
+function awacsChip(key, cntId, costId, now) {
     const rem = Math.max(0, (AWACS_USES_MAX[key] || 0) - ((awacsUses && awacsUses[key]) || 0));
-    const c = g(cntId); if (c) c.textContent = '×' + rem;
+    const c = g(cntId); if (c) putText(c, '×' + rem);
     // AWACS is cooldown-gated, not RP-costed (balance 2026-06): the `<i>` shows the live cooldown
     // remaining (Ns) when on cooldown, else the call's cooldown length as a hint (e.g. "30s").
     const cd = AWACS_COOLDOWNS[key] || 0;
     const last = (awacsLast && awacsLast[key]) || 0;
     const left = last > 0 ? Math.max(0, cd - (now - last)) : 0;
-    const k = g(costId); if (k) k.textContent = left > 0 ? Math.ceil(left) + 's' : cd + 's';
-  };
-  chip('strike', 'awacsUsesStrike', 'awacsCostStrike');
-  chip('resupply', 'awacsUsesResupply', 'awacsCostResupply');
-  chip('jam', 'awacsUsesJam', 'awacsCostJam');
+    const k = g(costId); if (k) putText(k, left > 0 ? Math.ceil(left) + 's' : cd + 's');
+}
+// "<ABILITY> ▸ READY" / "<ABILITY> ▸ 12s" (or NO SPECIAL) — shared by the slot-1 and slot-2 chips.
+function specialChipText(jet, st) {
+  if (!hasSpecial(jet)) return t('hud.noSpecial');
+  return jetText(jet, 'ability') + ' \u25B8 ' + (st.cd <= 0 ? t('hud.ready') : Math.ceil(st.cd) + t('hud.sec'));
 }
 function updateDom(dt, hudView) {
-  el.hp.style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
-  el.shd.style.width = clamp(player.shield / player.maxShield * 100, 0, 100) + '%';
-  el.thr.style.width = clamp(player.throttle * 100, 0, 100) + '%';
-  el.abIndicator.style.display = (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none';
+  putStyle(el.hp, 'width', clamp(player.hp / player.maxHp * 100, 0, 100).toFixed(1) + '%');
+  putStyle(el.shd, 'width', clamp(player.shield / player.maxShield * 100, 0, 100).toFixed(1) + '%');
+  putStyle(el.thr, 'width', clamp(player.throttle * 100, 0, 100).toFixed(1) + '%');
+  putStyle(el.abIndicator, 'display', (player.throttle > 0.85 || player.overdrive > 0) ? 'inline-block' : 'none');
   const kt = hudView.kt, altFt = hudView.altFt;   // shared flight numbers from the per-frame view-model (not recomputed here)
   const sd = speedDisplay(kt, unitSystem), ad = altDisplay(altFt, unitSystem);   // imperial(mph+ft) / metric(kph+m); labels via applyUnitLabels
-  el.spd.textContent = sd.value;
-  el.alt.textContent = ad.value;
+  putText(el.spd, sd.value);
+  putText(el.alt, ad.value);
   // INSTRUMENT SEAM: publish normalized flight state so per-skin CSS gauges (analog needles,
   // blueprint dials, flat arcs) render the same numbers the bl-panel readouts show. CSS derives
   // sweep angles from the *-frac via calc(); altimeter hands need real periodic angles, so we
   // hand those over precomputed. Set on the #hud root so it cascades to every instrument widget.
   if (el.hudRoot) {
-    const s = el.hudRoot.style, m = hudView.inst;   // instrumentState from the view-model — one source for the readouts + per-skin gauges
-    s.setProperty('--spd-kt', sd.value);   // legacy prop name; now carries the displayed speed in the active unit
-    s.setProperty('--alt-ft', ad.value);   // legacy prop name; displayed altitude in the active unit
-    s.setProperty('--spd-frac', m.spdFrac.toFixed(4));
-    s.setProperty('--alt-frac', m.altFrac.toFixed(4));
-    s.setProperty('--thr-frac', m.thrFrac.toFixed(4));
-    s.setProperty('--spd-deg', m.spdDeg.toFixed(1) + 'deg');     // airspeed dial sweep ±120°
-    s.setProperty('--thr-deg', m.thrDeg.toFixed(1) + 'deg');     // throttle arc ±135°
-    s.setProperty('--alt-deg', m.altDeg.toFixed(1) + 'deg');     // altimeter hundreds hand
-    s.setProperty('--alt-deg-k', m.altDegK.toFixed(1) + 'deg');  // altimeter thousands hand
+    const m = hudView.inst;   // instrumentState from the view-model — one source for the readouts + per-skin gauges
+    const r = el.hudRoot;
+    putVar(r, '--spd-frac', m.spdFrac.toFixed(3));
+    putVar(r, '--alt-frac', m.altFrac.toFixed(3));
+    putVar(r, '--spd-deg', m.spdDeg.toFixed(1) + 'deg');     // airspeed dial sweep ±120°
+    putVar(r, '--thr-deg', m.thrDeg.toFixed(1) + 'deg');     // throttle arc ±135°
+    putVar(r, '--alt-deg', m.altDeg.toFixed(1) + 'deg');     // altimeter hundreds hand
+    putVar(r, '--alt-deg-k', m.altDegK.toFixed(1) + 'deg');  // altimeter thousands hand
   }
-  el.score.textContent = player.score.toLocaleString();
-  if (el.tp) { el.tp.textContent = Math.floor(player.tp).toLocaleString(); el.tp.style.color = player.tp >= 120 ? '#ffe14d' : ''; }
-  el.wave.textContent = wave;
+  putText(el.score, player.score.toLocaleString());
+  if (el.tp) { putText(el.tp, Math.floor(player.tp).toLocaleString()); putStyle(el.tp, 'color', player.tp >= 120 ? '#ffe14d' : ''); }
+  putText(el.wave, wave);
   // JUICE: combo chip scale-pops on each increment (reflow-retrigger pattern, like showBanner). _comboShown tracks the last drawn value.
   const comboTxt = player.combo > 1 ? 'x' + player.combo : '';
   if (comboTxt !== el.combo.textContent) {
@@ -401,20 +412,20 @@ function updateDom(dt, hudView) {
     if (player.combo > 1 && player.combo > (el._comboShown || 0)) { el.combo.classList.remove('pop'); void el.combo.offsetWidth; el.combo.classList.add('pop'); }
     el._comboShown = player.combo;
   }
-  el.flares.textContent = player.flares;
-  el.missiles.textContent = player.missiles;
-  if (player.noCannon) { el.bullets.textContent = '\u2014'; el.bullets.style.color = '#6cf2c8'; }
-  else { el.bullets.textContent = player.bullets; el.bullets.style.color = player.bullets <= 80 ? '#ff8c2b' : ''; }
-  el.missiles.style.color = player.missiles <= 0 ? '#ff394b' : '';
+  putText(el.flares, player.flares);
+  putText(el.missiles, player.missiles);
+  if (player.noCannon) { putText(el.bullets, '\u2014'); putStyle(el.bullets, 'color', '#6cf2c8'); }
+  else { putText(el.bullets, player.bullets); putStyle(el.bullets, 'color', player.bullets <= 80 ? '#ff8c2b' : ''); }
+  putStyle(el.missiles, 'color', player.missiles <= 0 ? '#ff394b' : '');
   // F1 gun-heat gauge — DOM bar inside the gun/ammo cluster (UX pass; was a free-floating canvas bar).
   // Tone classes: warm >0.55 / hot >0.82 / locked (OVERHEAT). The rearm tick sits at HEAT.rearm.
   if (el.heatBar) {
-    if (player.noCannon) el.heatBar.style.display = 'none';   // gun-less airframes (J-20) never heat
+    if (player.noCannon) putStyle(el.heatBar, 'display', 'none');   // gun-less airframes (J-20) never heat
     else {
       const heat = clamp(player.gunHeat || 0, 0, 1), locked = !!player.gunLocked;
-      el.heatBar.style.display = '';
-      el.heatBar.style.setProperty('--heat', heat.toFixed(3));
-      el.heatBar.style.setProperty('--rearm', HEAT.rearm);
+      putStyle(el.heatBar, 'display', '');
+      putVar(el.heatBar, '--heat', heat.toFixed(3));
+      putVar(el.heatBar, '--rearm', '' + HEAT.rearm);
       el.heatBar.classList.toggle('warm', heat > 0.55 && heat <= 0.82);
       el.heatBar.classList.toggle('hot', heat > 0.82);
       el.heatBar.classList.toggle('locked', locked);
@@ -422,27 +433,24 @@ function updateDom(dt, hudView) {
       if (el.heatLbl && el.heatLbl.textContent !== lbl) el.heatLbl.textContent = lbl;
     }
   }
-  if (!hasSpecial(player.jet)) { el.special.textContent = t('hud.noSpecial'); el.special.classList.remove('ready'); }
-  else if (player.special.cd <= 0) { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + t('hud.ready'); el.special.classList.add('ready'); }
-  else { el.special.textContent = jetText(player.jet, 'ability') + ' \u25B8 ' + Math.ceil(player.special.cd) + t('hud.sec'); el.special.classList.remove('ready'); }
+  putText(el.special, specialChipText(player.jet, player.special));
+  el.special.classList.toggle('ready', hasSpecial(player.jet) && player.special.cd <= 0);
   { const tbS = g('tb-spc'); if (tbS) tbS.classList.toggle('ready', hasSpecial(player.jet) && player.special.cd <= 0); }  // touch: SPC button carries READY (desktop chip hidden on touch)
   // SLOT 2 chip (feature #3): hidden when nothing equipped, else mirrors the slot-1 name + READY/countdown.
   // The mobile SPC2 button mirrors the chip's visibility (only shown when something is equipped).
   if (el.special2) {
     const s2 = player.special2;
     const equipped = !!(s2 && s2.id);
-    if (!equipped) { el.special2.style.display = 'none'; }
-    else {
-      el.special2.style.display = '';
-      const j2 = JETS.find(j => j.id === s2.id);
-      const nm = j2 ? jetText(j2, 'ability') : s2.id;
-      if (s2.cd <= 0) { el.special2.textContent = nm + ' \u25B8 ' + t('hud.ready'); el.special2.classList.add('ready'); }
-      else { el.special2.textContent = nm + ' \u25B8 ' + Math.ceil(s2.cd) + t('hud.sec'); el.special2.classList.remove('ready'); }
+    putStyle(el.special2, 'display', equipped ? '' : 'none');
+    if (equipped) {
+      putText(el.special2, specialChipText(JETS.find(j => j.id === s2.id) || { ability: s2.id }, s2));
+      el.special2.classList.toggle('ready', s2.cd <= 0);
     }
     const tb2 = g('tb-spc2');
-    if (tb2) { tb2.style.display = (equipped && isTouchEnabled) ? '' : 'none'; tb2.classList.toggle('ready', equipped && s2.cd <= 0); }
+    if (tb2) { putStyle(tb2, 'display', (equipped && isTouchEnabled) ? '' : 'none'); tb2.classList.toggle('ready', equipped && s2.cd <= 0); }
   }
   updateWingmanSidebar();
+  { const tc = g('touchControls'); if (tc) tc.classList.toggle('no-wing', !wingmen.some(w => w.alive)); }   // F3 order buttons only with wingmen aloft
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
   tog(el.wPull, player.gpws);
@@ -451,13 +459,13 @@ function updateDom(dt, hudView) {
   const lockedNow = !!(player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1);
   const acquiringNow = !lockedNow && player.lockTarget && player.lockTarget.alive && player.lockProgress > 0.02;
   tog(el.wLock, lockedNow || acquiringNow);
-  if (lockedNow) { el.wLock.textContent = t('hud.targetLocked'); el.wLock.style.color = '#ff394b'; }   /* --danger: LOCKED payoff */
-  else if (acquiringNow) { el.wLock.textContent = t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'; el.wLock.style.color = '#ffe14d'; }   /* --reward: lock building */
+  if (lockedNow) { putText(el.wLock, t('hud.targetLocked')); putStyle(el.wLock, 'color', '#ff394b'); }   /* --danger: LOCKED payoff */
+  else if (acquiringNow) { putText(el.wLock, t('hud.acquiring') + ' ' + Math.round(player.lockProgress * 100) + '%'); putStyle(el.wLock, 'color', '#ffe14d'); }   /* --reward: lock building */
   el.hpbar.classList.toggle('low', player.hp / player.maxHp < 0.3);
 
   let boss = null;
   for (let i = 0; i < enemies.length; i++) { if (enemies[i].alive && enemies[i].type === 'boss') { boss = enemies[i]; break; } }
-  if (boss) { el.bossbar.classList.add('show'); el.bossfill.style.width = clamp(boss.hp / boss.maxHp * 100, 0, 100) + '%'; }
+  if (boss) { el.bossbar.classList.add('show'); putStyle(el.bossfill, 'width', clamp(boss.hp / boss.maxHp * 100, 0, 100).toFixed(1) + '%'); }
   else el.bossbar.classList.remove('show');
 
   if (bannerT > 0) { bannerT -= dt; if (bannerT <= 0) el.banner.classList.remove('show'); }
@@ -466,12 +474,12 @@ function updateDom(dt, hudView) {
   const gforce = clamp((Math.abs(player.pitchRate) + Math.abs(player.rollRate) * 0.4) / (player.stats.turnRate * 2.1), 0, 1);
   let vig = gforce * 0.7; if (player.highG) vig = Math.max(vig, 0.92);
   if (player.slow > 0) vig = Math.max(vig, 0.55);   // bullet-time vignette
-  el.vignette.style.opacity = vig.toFixed(3);
-  el.dmg.style.opacity = clamp(player.damageFlash / 0.5, 0, 1).toFixed(3);
-  if (empFlash > 0) { empFlash -= dt; el.flash.style.opacity = (empFlash * 0.5).toFixed(3); } else el.flash.style.opacity = '0';
+  putStyle(el.vignette, 'opacity', vig.toFixed(2));
+  putStyle(el.dmg, 'opacity', clamp(player.damageFlash / 0.5, 0, 1).toFixed(2));
+  if (empFlash > 0) { empFlash -= dt; putStyle(el.flash, 'opacity', (empFlash * 0.5).toFixed(2)); } else putStyle(el.flash, 'opacity', '0');
   updateAwacsHud();
   const _pt = g('pilotTag');
   // show the pilot nameplate + emblem badge while flying; the emblem always shows (callsign text self-hides when empty via :empty)
-  if (_pt) _pt.style.display = (state === 'playing' && !paused && meta) ? 'flex' : 'none';
+  if (_pt) putStyle(_pt, 'display', (state === 'playing' && !paused && meta) ? 'flex' : 'none');
 }
 

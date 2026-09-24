@@ -76,18 +76,14 @@ function startGame(i, daily, rush, weekly) {
   if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
   equipSpecial2(player, special2Id, JETS[i].id);   // feature #3: load the equipped SLOT-2 special (or leave empty/inert if none/stale); slot 1 untouched
   if (weeklyMode && weeklyMods) applyWeeklyMods(player, weeklyMods);   // F8 weekly: stack this week's 2 modifiers on the finished loadout (AFTER meta perks); main.js spawn guards read player._weeklyEffects/_weeklyAces/_weeklyWavePlan
-  for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
-  clearWingmen();
-  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
-  pendingSpawns.length = 0;
-  hitMarkers.length = dmgNumbers.length = 0;
+  clearArenaEntities();
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
   bossWaveNext = 0; bossWaveActive = false; lastWaveWasBoss = false;   // Endless boss schedule (balance 2026-06); seeded lazily in nextWave
   player._cheatUsed = false;   // APEX PREDATOR cheat-death is now ONCE PER RUN (balance 2026-06); reset here, NOT per wave
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
-  weatherT = 0; weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);   // daily/weekly fix the weather seed off their date seed; otherwise fresh per-run (F8: stormFront overrides the roll per-wave in main.js)
+  weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);   // daily/weekly fix the weather seed off their date seed; otherwise fresh per-run (F8: stormFront overrides the roll per-wave in main.js)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
@@ -272,17 +268,7 @@ function renderStarChecklist(el, conds, lr) {
 
 // clear the live arena between levels but KEEP the player (clearArena nulls the player; we don't want that)
 function clearCampaignArena() {
-  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
-  for (let i = 0; i < bullets.length; i++) scene.remove(bullets[i].mesh);
-  for (let i = 0; i < missiles.length; i++) scene.remove(missiles[i].mesh);
-  for (let i = 0; i < flares.length; i++) scene.remove(flares[i].mesh);
-  for (let i = 0; i < loots.length; i++) scene.remove(loots[i].mesh);
-  for (let i = 0; i < particles.length; i++) scene.remove(particles[i].mesh);
-  for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
-  clearWingmen();
-  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
-  pendingSpawns.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
-  if (typeof BPOOL !== 'undefined') BPOOL.length = 0;
+  clearArenaEntities();   // now also disposes enemy groups (they used to leak across levels) + clears locks
   mission = null; setpieceActive = null;
 }
 
@@ -470,7 +456,7 @@ function enterOperationRun(opId) {
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   campaignPlayerOpId = opId;
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
-  weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;
+  weatherSeed = (Math.random() * 0x7fffffff) | 0;
   if (typeof applyWeather === 'function') applyWeather('clear');
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed
   resetDraftState();

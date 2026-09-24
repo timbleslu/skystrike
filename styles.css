@@ -289,6 +289,13 @@ canvas{display:block}
 #tb-ars{left:calc(50% - 24px);}
 #tb-ajm{left:calc(50% + 28px);}
 #touchControls.layout-left #tb-spc2{right:auto; left:18px;}
+/* F3 wingman orders: a second centred row just above the AWACS row (they had no position rule and piled
+   up over the HP bars); hidden while no wingman is aloft */
+#tb-weng, #tb-wcov, #tb-wrgp{bottom:58px; width:48px; height:30px; font-size:9px; border-color:var(--ok); color:var(--ok);}
+#tb-weng{left:calc(50% - 76px);}
+#tb-wcov{left:calc(50% - 24px);}
+#tb-wrgp{left:calc(50% + 28px);}
+#touchControls.no-wing #tb-weng, #touchControls.no-wing #tb-wcov, #touchControls.no-wing #tb-wrgp{display:none;}
 /* on a touch session, lift radar+ammo to the top-right and drop the redundant chip clutter
    (SPC/SPC2 buttons carry the special state via .ready; AWACS chips → the buttons above) */
 :root.is-touch #hud .panel.br{top:34px; bottom:auto; right:56px; transform-origin:top right; gap:4px;}
@@ -299,6 +306,13 @@ canvas{display:block}
 /* short phone landscape: the ally roster has no room — allies still show as radar markers */
 @media screen and (max-height:540px) and (orientation:landscape){
   :root.is-touch #wingSidebar{display:none !important;}
+  /* short phone landscape: the action buttons own the right side below ~160px, so the read-outs pack into
+     the top band (stats row, then radar beside ammo/heat); speed/alt tuck under the HP bars, right of the
+     THR slider, leaving the bottom to the stick, the command rows and the tutorial card */
+  :root.is-touch #hud .panel.tr{right:60px; transform:scale(calc(var(--hud-scale,1) * .78))}
+  :root.is-touch #hud .panel.br{top:44px; right:60px; display:grid; grid-template-columns:auto auto; column-gap:10px; row-gap:4px; align-items:center}
+  :root.is-touch #radar{width:64px; height:64px; grid-row:span 2}
+  :root.is-touch #hud .panel.bl{left:96px; top:74px; bottom:auto; transform-origin:top left; transform:scale(calc(var(--hud-scale,1) * .62))}
 }
 
 /* ---------- HANGAR ---------- */
@@ -1374,7 +1388,7 @@ canvas{display:block}
 #pilotPanel .dlab{margin:0;font-size:10px}
 #pilotPanel #callsignHint{display:none}
 .pilotRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(var(--primary-rgb),.35);color:var(--cy);font-family:var(--mono);font-size:12px;letter-spacing:1px;padding:6px 10px;width:17ch;min-width:0;min-height:34px;text-transform:uppercase;outline:none;transition:.15s}
+#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(var(--primary-rgb),.35);color:var(--cy);font-family:var(--mono);font-size:12px;letter-spacing:1px;padding:6px 10px;width:calc(14ch + 38px);min-width:0;min-height:34px;text-transform:uppercase;outline:none;transition:.15s}
 #callsignInput::placeholder{color:var(--ink-dim);opacity:1}
 #callsignInput:focus{border-color:var(--cy);background:rgba(4,9,14,.9)}
 #emblemGrid{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
@@ -1474,7 +1488,7 @@ canvas{display:block}
 /* ---- VISUAL LANGUAGES (data-skin) — futuristic == :root defaults ----
    Each skin restyles BOTH layers: menu/hangar chrome AND the in-play HUD
    instruments (speed/alt/thrust), driven by the #hud custom-prop seam
-   (ui-hud.js updateDom): --spd-kt --alt-ft · --spd-frac --alt-frac --thr-frac
+   (ui-hud.js updateDom): --spd-frac --alt-frac
    · --spd-deg --thr-deg --alt-deg --alt-deg-k. */
 
 /* gauge layers are opt-in — the dial face / ticks / needle stay hidden until a skin reveals them */
@@ -2268,8 +2282,9 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
 @media (max-width:899px){
   .hangar-ctabar{position:sticky;bottom:0;z-index:6;margin:var(--sp-3) calc(-1 * var(--sp-4)) 0;
     padding:var(--sp-4) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom));
-    background:linear-gradient(180deg,rgba(var(--base-rgb),0),rgba(var(--base-rgb),.94) 30%,var(--base))}
+    background:linear-gradient(180deg,rgba(var(--base-rgb),0),rgba(var(--base-rgb),.97) 18%,var(--base))}
   .hangar-ctabar #launch{flex:1 1 auto;min-width:0}
+  .version-tag{display:none}   /* sits on the sticky CTA / bottom buttons; the language screen keeps its own readout */
 }
 /* phones */
 @media (max-width:560px){

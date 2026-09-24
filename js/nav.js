@@ -131,8 +131,9 @@ function installMenuKeys() {
       if (b && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); b.click(); }
       return;
     }
-    if (typeof state === 'undefined' || state !== 'hangar') return;               // flight keys: untouched
     const actKey = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
+    if (shown('gameover') && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }   // debrief (state 'dead'): focused REDEPLOY/HANGAR activate natively
+    if (typeof state === 'undefined' || state !== 'hangar') return;               // flight keys: untouched
     if (open.length) {
       // an overlay is up: the hangar carousel shortcuts (←/→ browse, Enter launch) must not fire beneath it,
       // and Space/Enter on a focused button must reach the button (native activation) — not the game handler.

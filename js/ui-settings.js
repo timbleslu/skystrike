@@ -189,7 +189,7 @@ function applyLang() {
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
   // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
-  setTxt('w_highg', t('hud.highG')); setTxt('w_stealth', t('hud.stealthActive')); setTxt('w_lock', t('hud.targetLocked'));
+  setTxt('w_highg', t('hud.highG')); setTxt('w_stealth', t('hud.stealthActive')); { const wl = g('w_lock'); if (wl) putText(wl, t('hud.targetLocked')); }   // updateDom's guarded-write cache owns this node
   setTxt('wingStatus', t('hud.escort'));
   const hintEl = g('hint'); if (hintEl) hintEl.textContent = t('hud.hint');
   const pauseEl = g('btnPause'); if (pauseEl) pauseEl.textContent = t('hud.pause');
@@ -314,27 +314,28 @@ function saveSettings() {
     }));
   } catch (e) {}
 }
-function clearArena() {
-  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); disposeGroup(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
-  for (let i = 0; i < bullets.length; i++) scene.remove(bullets[i].mesh);
-  for (let i = 0; i < missiles.length; i++) scene.remove(missiles[i].mesh);
-  for (let i = 0; i < flares.length; i++) scene.remove(flares[i].mesh);
-  for (let i = 0; i < loots.length; i++) scene.remove(loots[i].mesh);
-  for (let i = 0; i < particles.length; i++) scene.remove(particles[i].mesh);
-  for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
+// THE per-arena entity teardown (enemies, projectiles, particles, decoys, wingmen + spawn/HUD queues),
+// shared by clearArena (→ hangar), clearCampaignArena (between levels) and startGame. Keeps the player.
+function clearArenaEntities() {
+  for (let i = 0; i < enemies.length; i++) { if (player) clearLocks(enemies[i]); despawnEnemy(enemies[i]); }
+  const lists = [bullets, missiles, flares, loots, particles];
+  for (let l = 0; l < lists.length; l++) for (let i = 0; i < lists[l].length; i++) scene.remove(lists[l][i].mesh);
+  for (let i = 0; i < decoys.length; i++) despawnObject(decoys[i].mesh);   // per-decoy holo material clones
   clearWingmen();
-  if (typeof clearGroundObjects === 'function') clearGroundObjects();   // Track B: free per-arena InstancedMesh ground scatter (shared templates spared)
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
-  pendingSpawns.length = 0;
-  BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
+  pendingSpawns.length = 0; BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
+}
+function clearArena() {
+  clearArenaEntities();
+  if (typeof clearGroundObjects === 'function') clearGroundObjects();   // Track B: free per-arena InstancedMesh ground scatter (shared templates spared)
   if (player && player.group) { scene.remove(player.group); disposeGroup(player.group); }
   player = null;
   if (h2d) h2d.clearRect(0, 0, W, H);
   if (radarCtx) radarCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
   ['wPull', 'wMissile', 'wHighG', 'wStealth', 'wLock'].forEach(k => { if (el[k]) el[k].classList.remove('show'); });
-  if (el.vignette) el.vignette.style.opacity = '0';
-  if (el.dmg) el.dmg.style.opacity = '0';
-  if (el.flash) el.flash.style.opacity = '0';
+  if (el.vignette) putStyle(el.vignette, 'opacity', '0');   // via putStyle so updateDom's write cache stays true
+  if (el.dmg) putStyle(el.dmg, 'opacity', '0');
+  if (el.flash) putStyle(el.flash, 'opacity', '0');
   if (el.bossbar) el.bossbar.classList.remove('show');
   if (el.banner) el.banner.classList.remove('show');
   choosingUpgrade = false; pendingUpgrades = null;

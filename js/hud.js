@@ -193,7 +193,7 @@ function drawStealthThreats(ctx) {
     ctx.setLineDash([10, 8]); ctx.beginPath(); let started = false, anyFront = false;
     for (let s = 0; s <= 36; s++) {
       const a = s / 36 * TWO_PI;
-      const sp = projectPoint(t2.set(cxp + Math.cos(a) * e.detectR, gy, czp + Math.sin(a) * e.detectR));
+      const sp = projectPoint(t2.set(cxp + Math.cos(a) * e.detectR, gy, czp + Math.sin(a) * e.detectR), _spRing);
       if (sp.behind) { started = false; continue; }
       anyFront = true;
       if (!started) { ctx.moveTo(sp.x, sp.y); started = true; } else ctx.lineTo(sp.x, sp.y);
@@ -566,7 +566,7 @@ function drawLockReticle(ctx, tgt, progress, locked, k) {
     ctx.strokeStyle = 'rgba(' + HUD.danger + ',1)'; ctx.lineWidth = 2.5;
     ctx.strokeRect(x - bs, y - bs, bs * 2, bs * 2);
     ctx.lineWidth = 2;
-    for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    for (const c of BRACKET_CORNERS) {
       ctx.beginPath(); ctx.moveTo(x + c[0] * bs, y + c[1] * bs); ctx.lineTo(x + c[0] * (bs + 8), y + c[1] * bs);
       ctx.moveTo(x + c[0] * bs, y + c[1] * bs); ctx.lineTo(x + c[0] * bs, y + c[1] * (bs + 8)); ctx.stroke();
     }
@@ -585,7 +585,7 @@ function drawLockReticle(ctx, tgt, progress, locked, k) {
     const o = base * (1.35 - progress * 0.9); // brackets converge as progress→1
     const a = 0.5 + progress * 0.5;
     ctx.strokeStyle = 'rgba(' + HUD.warn + ',' + a + ')'; ctx.lineWidth = 2;
-    for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    for (const c of BRACKET_CORNERS) {
       const px = x + c[0] * (s + o), py = y + c[1] * (s + o);
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - c[0] * 11, py); ctx.moveTo(px, py); ctx.lineTo(px, py - c[1] * 11); ctx.stroke();
     }
@@ -621,7 +621,7 @@ function drawThreatReticle(ctx, cx, cy, k, reduce) {
   ctx.save();
   ctx.strokeStyle = 'rgba(' + HUD.warn + ',' + pulse.toFixed(3) + ')';
   ctx.lineWidth = 2 * k;
-  for (const c of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {   // four corner brackets framing the centre
+  for (const c of BRACKET_CORNERS) {   // four corner brackets framing the centre
     const px = cx + c[0] * r, py = cy + c[1] * r;
     ctx.beginPath();
     ctx.moveTo(px - c[0] * len, py); ctx.lineTo(px, py); ctx.lineTo(px, py - c[1] * len);
@@ -684,7 +684,7 @@ function drawMissileWarning(ctx, cx, cy, k, reduce) {
     const m = missiles[i];
     if (!m.enemy || m.decoyed) continue;
     drawn++;
-    const mp = projectPoint(m.mesh.position);
+    const mp = projectPoint(m.mesh.position, _spMsl);
     let dx = mp.x - cx, dy = mp.y - cy;
     if (mp.behind) { dx = -dx; dy = -dy; }
     const mlen = Math.hypot(dx, dy); if (mlen < 1) continue;
@@ -714,9 +714,11 @@ function drawMissileWarning(ctx, cx, cy, k, reduce) {
   ctx.restore();
 }
 
+const BRACKET_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+const _spRing = {}, _spEnemy = {}, _spMsl = {};   // projectPoint outs for the per-frame loops (no per-call alloc)
 function drawEnemy(ctx, e, cx, cy, isNear, k) {
   const pos = e.group.position;
-  const p = projectPoint(pos);
+  const p = projectPoint(pos, _spEnemy);
   const dist = player.group.position.distanceTo(pos);
   const boss = e.type === 'boss', grd = e.type === 'ground', drone = e.type === 'drone';
   const locked = player.lockedTarget === e;
