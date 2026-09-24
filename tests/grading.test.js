@@ -73,4 +73,13 @@ assert.ok(validLetters.has(gMid.letter), 'mid run letter is valid: ' + gMid.lett
 assert.ok(g1.score >= 0 && g1.score <= 1, 'score should be in [0,1]');
 assert.ok(g2.score >= 0 && g2.score <= 1, 'score should be in [0,1]');
 
+// TEST 8: a zero-engagement run (no kills, no objectives) is a C even when it was fast and undamaged —
+// regression for the debrief showing "B" on a 0-kill / 0% / 0-wave death (time+damage credit was free).
+var zero = gradeRun({ waveReached: 0, kills: 0, ground: 0, boss: 0, timeSecs: 26, damageTaken: 0, missions: 0 }, { score: 0 });
+assert.strictEqual(zero.letter, 'C', 'zero-kill zero-objective run must be C (got ' + zero.letter + ', score=' + zero.score + ')');
+assert.strictEqual(zero.mult, 1.0, 'zero run earns no SP bonus');
+// ...but an objective-only run (recon/stealth: 0 kills, objectives done, clean + fast) still earns survival credit
+var objOnly = gradeRun({ waveReached: 2, kills: 0, ground: 0, boss: 0, timeSecs: 40, damageTaken: 0, missions: 1 }, {});
+assert.ok(objOnly.letter === 'A' || objOnly.letter === 'B', 'objective-only clean run grades B/A (got ' + objOnly.letter + ')');
+
 console.log('ok - gradeRun: near-perfect→S, poor→C, null→C, monotonic mults, only S/A/B/C, score in [0,1], byte-identity guard passed');

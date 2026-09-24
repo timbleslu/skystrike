@@ -47,7 +47,10 @@ function gradeRun(run, player) {
   var maxDmg = 300 + waves * 60;
   var dmgScore = Math.max(0, 1 - (run.damageTaken || 0) / maxDmg);
   var missionScore = Math.min(1, (run.missions || 0) / Math.max(1, Math.floor(waves / 2)));
-  var total = killScore * 0.40 + timeScore * 0.20 + dmgScore * 0.25 + missionScore * 0.15;
+  // Survival credit (fast + undamaged) only counts in proportion to what the run actually achieved —
+  // otherwise a run that did nothing (0 kills, 0 objectives, died fast and clean) scored 0.45 = a "B".
+  var engaged = Math.max(killScore, missionScore);
+  var total = killScore * 0.40 + (timeScore * 0.20 + dmgScore * 0.25) * engaged + missionScore * 0.15;
   var letter, mult;
   if (total >= 0.85)      { letter = 'S'; mult = 1.5; }
   else if (total >= 0.65) { letter = 'A'; mult = 1.3; }
