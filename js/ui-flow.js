@@ -76,18 +76,14 @@ function startGame(i, daily, rush, weekly) {
   if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
   equipSpecial2(player, special2Id, JETS[i].id);   // feature #3: load the equipped SLOT-2 special (or leave empty/inert if none/stale); slot 1 untouched
   if (weeklyMode && weeklyMods) applyWeeklyMods(player, weeklyMods);   // F8 weekly: stack this week's 2 modifiers on the finished loadout (AFTER meta perks); main.js spawn guards read player._weeklyEffects/_weeklyAces/_weeklyWavePlan
-  for (let k = 0; k < decoys.length; k++) scene.remove(decoys[k].mesh);
-  clearWingmen();
-  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
-  pendingSpawns.length = 0;
-  hitMarkers.length = dmgNumbers.length = 0;
+  clearArenaEntities();
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
   bossWaveNext = 0; bossWaveActive = false; lastWaveWasBoss = false;   // Endless boss schedule (balance 2026-06); seeded lazily in nextWave
   player._cheatUsed = false;   // APEX PREDATOR cheat-death is now ONCE PER RUN (balance 2026-06); reset here, NOT per wave
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
-  weatherT = 0; weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);   // daily/weekly fix the weather seed off their date seed; otherwise fresh per-run (F8: stormFront overrides the roll per-wave in main.js)
+  weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);   // daily/weekly fix the weather seed off their date seed; otherwise fresh per-run (F8: stormFront overrides the roll per-wave in main.js)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
   // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
@@ -104,6 +100,14 @@ function startGame(i, daily, rush, weekly) {
   else if (el.tut) el.tut.classList.remove('show');
   if (startWingman) spawnWingman(false, 'STD');   // initial escort flies the plain trainer
   showBanner(t('banner.getReady'));
+}
+// set by endRun: can the debrief's REDEPLOY button relaunch this run as-is (plain Endless only)?
+let lastRunRestartable = false;
+function redeployRun() {
+  if (!lastRunRestartable) { returnToHangar(); return; }
+  returnToHangar();            // full arena reset (synchronous) → state 'hangar'
+  opMode = false;              // Endless
+  startGame(selectedJet);      // same jet, same difficulty/environment
 }
 function gameOver() {
   if (state !== 'playing') return;
@@ -159,26 +163,25 @@ function endRun(title, win) {
     else { countUp(spd, total, 560, v => '+' + Math.round(v).toLocaleString()); }
   }
   const spt = g('go_spTotal'); if (spt) spt.textContent = spBalance().toLocaleString();
-  // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low)
-  const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = t('grade.bonus') + ' x' + grade.mult.toFixed(2); }
-  if (gw) gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A'));
-  // ---- star objectives vs endless rating ----
-  // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI and
-  // show a performance rating instead; Operation victory (win) keeps stars. campaignMode is already
+  // render grade letter + bonus; A/S glow reward-gold, B/C glow primary-cyan (.grade-low). A C earns no bonus,
+  // so the bonus line is blanked (hidden via :empty) and .grade-none drops the celebratory snap-in (UX pass).
+  const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = grade.mult > 1 ? t('grade.bonus') + ' x' + grade.mult.toFixed(2) : ''; }
+  if (gw) { gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A')); gw.classList.toggle('grade-none', grade.mult <= 1); }
+  // ---- star objectives (Ops) vs endless ----
+  // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI — the single
+  // stats grid (score/wave/kills/accuracy/missiles/time) is the performance readout (the old separate
+  // PERFORMANCE block duplicated it). Operation victory (win) keeps stars. campaignMode is already
   // off here (gameOver routes campaign deaths to campaignLevelFailed before reaching endRun).
   const endless = !win && !MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].bounded;   // Candidate 8: !opMode && !campaignMode ≡ !MODE_POLICY[key].bounded
+  // REDEPLOY (primary) = fly the same jet again straight away — only for a plain Endless run; daily/weekly/
+  // boss-rush/operation outcomes have their own entry flows, so they get the HANGAR exit only.
+  lastRunRestartable = endless && !dailyMode && !weeklyMode && !bossRush;
+  const rdb = g('redeploy'); if (rdb) rdb.style.display = lastRunRestartable ? '' : 'none';
+  const hgb = g('goHangar'); if (hgb) hgb.classList.toggle('go-solo', !lastRunRestartable);
   const sd = g('go_stars');
-  const rd = g('go_rating');
   if (endless) {
     if (sd) sd.classList.add('hide');
-    if (rd) {
-      rd.classList.remove('hide');
-      const rk = g('go_ratKills'); if (rk) rk.textContent = (run.kills + run.ground + run.boss);
-      const ra = g('go_ratAcc');   if (ra) ra.textContent = acc + '%';
-      const rw = g('go_ratWaves'); if (rw) rw.textContent = wave;
-    }
   } else {
-    if (rd) rd.classList.add('hide');
     if (sd) sd.classList.remove('hide');
     // SINGLE STAR-TRUTH: a campaign/op victory carries the per-level result computed ONCE in
     // campaignLevelComplete (delta vs level base, composed levelConds) via lastLevelResult — render
@@ -219,6 +222,7 @@ function endRun(title, win) {
   }
   updateBest();
   showScreen('gameover');   // hide touch controls + show #gameover + state='dead' (nav.js; callers already set 'dead')
+  { const pb = lastRunRestartable ? g('redeploy') : g('goHangar'); if (pb && pb.focus) pb.focus({ preventScroll: true }); }   // keyboard: Enter/Space = the primary action, Esc = HANGAR (nav.js)
   // JUICE: retrigger the staged reward reveal (grade snap → stars → SP rise) each time the debrief opens.
   if (gw && !prefersReducedMotion()) { gw.classList.remove('reveal'); void gw.offsetWidth; gw.classList.add('reveal'); }
   else if (gw) gw.classList.add('reveal');
@@ -264,17 +268,7 @@ function renderStarChecklist(el, conds, lr) {
 
 // clear the live arena between levels but KEEP the player (clearArena nulls the player; we don't want that)
 function clearCampaignArena() {
-  for (let i = 0; i < enemies.length; i++) { scene.remove(enemies[i].group); if (enemies[i].marker) scene.remove(enemies[i].marker); }
-  for (let i = 0; i < bullets.length; i++) scene.remove(bullets[i].mesh);
-  for (let i = 0; i < missiles.length; i++) scene.remove(missiles[i].mesh);
-  for (let i = 0; i < flares.length; i++) scene.remove(flares[i].mesh);
-  for (let i = 0; i < loots.length; i++) scene.remove(loots[i].mesh);
-  for (let i = 0; i < particles.length; i++) scene.remove(particles[i].mesh);
-  for (let i = 0; i < decoys.length; i++) scene.remove(decoys[i].mesh);
-  clearWingmen();
-  enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
-  pendingSpawns.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
-  if (typeof BPOOL !== 'undefined') BPOOL.length = 0;
+  clearArenaEntities();   // now also disposes enemy groups (they used to leak across levels) + clears locks
   mission = null; setpieceActive = null;
 }
 
@@ -462,7 +456,7 @@ function enterOperationRun(opId) {
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   campaignPlayerOpId = opId;
   run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
-  weatherT = 0; weatherSeed = (Math.random() * 0x7fffffff) | 0;
+  weatherSeed = (Math.random() * 0x7fffffff) | 0;
   if (typeof applyWeather === 'function') applyWeather('clear');
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed
   resetDraftState();

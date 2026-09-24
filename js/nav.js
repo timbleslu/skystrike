@@ -92,5 +92,61 @@ function hideAllScreens() {
   if (tc) tc.classList.remove('show');
 }
 
+/* ---------------- menu keyboard: consistent Esc = BACK (UX pass) ----------------
+   Before: Esc on EVERY menu toggled the flight manual (main.js), so it never meant "back"; Enter on the hangar
+   launched straight into Endless (bypassing the mode choice the SELECT button opens) — even from underneath an
+   open overlay; and Space/Enter on a focused hangar button were swallowed by the game-key handler.
+   MENU_BACK: overlay panel id → the id of the button whose click handler already implements that screen's
+   BACK (so Esc is exactly the on-screen BACK — no second code path). Topmost-first precedence. */
+const MENU_BACK = [
+  ['gameover',     'goHangar'],
+  ['levelCleared', 'lvlcContinue'],
+  ['briefing',     'briefBack'],
+  ['opLore',       'opLoreBack'],
+  ['levelMap',     'levelMapBack'],
+  ['opsSelect',    'opsBack'],
+  ['endlessSetup', 'endlessBack'],
+  ['modeChoice',   'modeBack'],
+  ['meta',         'metaClose'],
+];
+// PURE: given the ids of the currently-open overlays, the back-button id Esc should press (or null).
+function menuBackTarget(openPanels) {
+  for (let i = 0; i < MENU_BACK.length; i++) if (openPanels.indexOf(MENU_BACK[i][0]) !== -1) return MENU_BACK[i][1];
+  return null;
+}
+// IMPURE glue: one capture-phase keydown listener that runs BEFORE main.js's bubble handler and only
+// claims keys on menus (flight input, the open manual, the tech tree and text fields are left untouched).
+function installMenuKeys() {
+  const $ = (id) => document.getElementById(id);
+  const shown = (id) => { const el = $(id); return !!(el && el.classList.contains('show')); };
+  const activatable = (el) => !!(el && el !== document.body && el.closest && el.closest('button,a,select,[role="button"],[role="radio"],[tabindex]'));
+  window.addEventListener('keydown', function (e) {
+    const ae = document.activeElement, tag = ae && ae.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;          // typing / native widgets
+    if (shown('manual') || shown('upgrade') || shown('wingpick')) return;         // those own their keys (main.js)
+    if (typeof onboarding !== 'undefined' && onboarding) return;
+    const open = MENU_BACK.map(r => r[0]).filter(shown);
+    if (e.code === 'Escape') {
+      const b = $(menuBackTarget(open) || '');
+      if (b && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); b.click(); }
+      return;
+    }
+    const actKey = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
+    if (shown('gameover') && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }   // debrief (state 'dead'): focused REDEPLOY/HANGAR activate natively
+    if (typeof state === 'undefined' || state !== 'hangar') return;               // flight keys: untouched
+    if (open.length) {
+      // an overlay is up: the hangar carousel shortcuts (←/→ browse, Enter launch) must not fire beneath it,
+      // and Space/Enter on a focused button must reach the button (native activation) — not the game handler.
+      if (actKey || e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.stopImmediatePropagation();
+      return;
+    }
+    if (actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }     // let the focused control activate
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && typeof openModeChoice === 'function') {
+      e.preventDefault(); e.stopImmediatePropagation(); openModeChoice();         // same path as the SELECT button
+    }
+  }, true);
+}
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.addEventListener) installMenuKeys();
+
 // require-safe footer (inert in the browser): export the pure table + transition fn for tests.
-if (typeof module !== 'undefined' && module.exports) module.exports = { SCREENS: SCREENS, navPlan: navPlan };
+if (typeof module !== 'undefined' && module.exports) module.exports = { SCREENS: SCREENS, navPlan: navPlan, MENU_BACK: MENU_BACK, menuBackTarget: menuBackTarget };

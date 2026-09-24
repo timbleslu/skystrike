@@ -78,13 +78,14 @@ let selectedJet = 0, previewJet = null, platform = null;   // default to the FT-
 // UI-only skin shown on the preview jet (owned OR not); NEVER persisted, NEVER read by gameplay
 // (createPlayer uses jetPaint = owned only), so an unowned preview can't reach a launched jet.
 const PREVIEW_PITCH_MAX = Math.PI / 3;   // ±60° pitch clamp
+const PREVIEW_YAW0 = 2.45;               // resting yaw: nose toward the camera at a 3/4 angle (π = head-on)
 const hangarPreview = {
   skin: null,          // transient UI-only skin id on the preview jet (never leaks into a launched jet)
-  yaw: 0, pitch: 0,    // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
+  yaw: PREVIEW_YAW0, pitch: 0,   // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
   zoom: 1.0,           // F2 preview zoom: dollies previewCamera toward origin (0.8×–2.5×), reset to 1 on jet switch
   dragging: false,     // pointer is dragging the preview jet (raycast-gated on pointerdown)
   spinResumeAt: 0,     // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
-  clear() { this.skin = null; this.yaw = 0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },   // the "no preview leaks into a launched jet" reset (skin→null, zoom→1, orientation→0)
+  clear() { this.skin = null; this.yaw = PREVIEW_YAW0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },   // the "no preview leaks into a launched jet" reset (skin→null, zoom→1, orientation→rest)
 };
 let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
 let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet

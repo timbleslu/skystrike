@@ -35,6 +35,8 @@
       <div><span class="lab" id="lblFlares">Flares</span><b id="flares">10</b></div>
       <div><span class="lab" id="lblMsl">Msl</span><b id="missiles">30</b></div>
     </div>
+    <!-- F1 gun-heat gauge, anchored IN the gun/ammo cluster (was a free-floating canvas bar mid-right) -->
+    <div id="heatBar" class="heatbar" aria-hidden="true"><span class="lab" id="lblHeat">GUN HEAT</span><div class="heat-track"><i id="heatFill"></i><i class="heat-rearm"></i></div></div>
     <div id="awacsHud" class="awacs-hud" style="display:none">
       <span class="awacs-chip"><span id="awacsLblStrike"></span><b id="awacsUsesStrike">×1</b><i id="awacsCostStrike">30s</i></span>
       <span class="awacs-chip"><span id="awacsLblResupply"></span><b id="awacsUsesResupply">×1</b><i id="awacsCostResupply">26s</i></span>
@@ -117,33 +119,40 @@
 
 <div id="hangar">
   <div class="hwrap">
-    <h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1>
-    <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
-    <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
-    <div id="hangarSp"><span id="hangarSpLbl">STRATEGIC POINTS</span> <b id="hangarSpVal">0</b></div>
-
-    <!-- Pilot identity: compact strip ABOVE the jet selector (callsign + emblem) — small, subordinate to the jet. -->
-    <div id="pilotPanel">
-      <span id="lblCallsign" class="dlab">CALLSIGN</span>
-      <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
-      <span id="lblEmblem" class="dlab">EMBLEM</span>
-      <div id="emblemGrid"></div>
-      <p id="callsignHint" class="techhint"></p>
+    <!-- UX pass: compact LEFT-aligned masthead (the right side stays clear for the fixed #manualBtn gear) -->
+    <div class="hmast"><h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1></div>
+    <!-- status bar: screen sub + pilot identity (callsign + emblem) + SP/best chips on ONE row -->
+    <div class="hbar">
+      <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
+      <div id="pilotPanel">
+        <span id="lblCallsign" class="dlab">CALLSIGN</span>
+        <input id="callsignInput" type="text" maxlength="8" placeholder="ENTER CALLSIGN" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+        <span id="lblEmblem" class="dlab">EMBLEM</span>
+        <div id="emblemGrid"></div>
+        <p id="callsignHint" class="techhint"></p>
+      </div>
+      <div class="hbar-stats">
+        <div id="hangarBest" style="display:none"><span id="hangarBestLbl">BEST SCORE</span> <b id="hangarBestVal">0</b></div>
+        <div id="hangarSp"><span id="hangarSpLbl">STRATEGIC POINTS</span> <b id="hangarSpVal">0</b></div>
+      </div>
     </div>
 
-    <!-- HERO ZONE (§5c): the chosen aircraft is the centerpiece -->
+    <!-- HERO ZONE (§5c): the chosen aircraft is the centerpiece — desktop: preview | data columns in one card -->
     <div id="carousel">
       <button id="jetPrev" class="navarrow" aria-label="Previous aircraft">&#10094;</button>
       <div id="jetStage"><div id="jetCard" class="card cardbig"></div></div>
       <button id="jetNext" class="navarrow" aria-label="Next aircraft">&#10095;</button>
     </div>
-    <div id="jetNav">
-      <span id="jetCounter"></span>
-      <div id="jetDots"></div>
-    </div>
 
-    <!-- THE primary action: one dominant SELECT-JET CTA directly under the jet; opens the mode-choice screen -->
-    <button id="launch">SELECT<span id="launchSub" class="btn-sub"></span></button>
+    <!-- CTA bar: jet counter/dots + THE primary action (SELECT <jet> → mode choice). Sticky to the viewport
+         bottom on single-column layouts so the CTA is always one tap away without scrolling. -->
+    <div class="hangar-ctabar">
+      <div id="jetNav">
+        <span id="jetCounter"></span>
+        <div id="jetDots"></div>
+      </div>
+      <button id="launch">SELECT<span id="launchSub" class="btn-sub"></span></button>
+    </div>
 
     <!-- F7: CONTROLS & MANUAL moved out to the body-level global #manualBtn overlay (top of file). -->
     <div class="hbtns hbtns-secondary">
@@ -169,20 +178,26 @@
 <div id="gameover">
   <div class="gowrap">
     <div class="go-core ui-dense">
+    <!-- UX pass debrief hierarchy: outcome headline → grade → objectives (Ops) → ONE stats grid → SP → actions.
+         (The old separate PERFORMANCE block repeated kills/accuracy/waves from the stats row — removed.) -->
     <h1>MISSION FAILED</h1>
     <div id="go_pilot" class="gopilot"></div>
-    <div class="gostats"><span id="goLblScore">SCORE</span> <b id="go_score">0</b> &middot; <span id="goLblWave">WAVE</span> <b id="go_wave">0</b> &middot; <span id="goLblBest">BEST</span> <b id="go_best">0</b></div>
+    <div id="go_grade" class="gograde"><span class="grade-title" id="goLblGrade">MISSION RATING</span><span class="grade-letter">C</span><span class="grade-bonus">SP BONUS x1.00</span></div>
+    <div id="go_stars" class="gostars"><span class="stars-title" id="goLblStars">OBJECTIVES</span><span class="stars-pips">☆☆☆</span><span class="stars-note">0 / 3</span></div>
     <div class="debrief">
+      <div><span id="goLblScore">SCORE</span><b id="go_score">0</b></div>
+      <div><span id="goLblWave">WAVE</span><b id="go_wave">0</b></div>
       <div><span id="goLblKills">Kills</span><b id="go_kills">0</b></div>
       <div><span id="goLblAcc">Accuracy</span><b id="go_acc">0%</b></div>
       <div><span id="goLblMsl">Missiles</span><b id="go_msl">0</b></div>
       <div><span id="goLblTime">Time</span><b id="go_time">0:00</b></div>
     </div>
-    <div id="go_grade" class="gograde"><span class="grade-title" id="goLblGrade">MISSION RATING</span><span class="grade-letter">C</span><span class="grade-bonus">SP BONUS x1.00</span></div>
-    <div id="go_stars" class="gostars"><span class="stars-title" id="goLblStars">OBJECTIVES</span><span class="stars-pips">☆☆☆</span><span class="stars-note">0 / 3</span></div>
-    <div id="go_rating" class="gorating"><span class="rating-title" id="goLblRating">PERFORMANCE</span><span class="rating-row"><span id="goLblRatKills">ENEMIES KILLED</span><b id="go_ratKills">0</b></span><span class="rating-row"><span id="goLblRatAcc">ACCURACY</span><b id="go_ratAcc">0%</b></span><span class="rating-row"><span id="goLblRatWaves">WAVES SURVIVED</span><b id="go_ratWaves">0</b></span></div>
+    <div class="gobest"><span id="goLblBest">BEST</span> <b id="go_best">0</b></div>
     <div class="gospbox"><span id="goLblSp">STRATEGIC POINTS EARNED</span> <b id="go_sp">+0</b> <span class="gospsep">&middot;</span> <span id="goLblSpTotal">BANKED</span> <b id="go_spTotal">0</b></div>
-    <button id="redeploy">&#9654; REDEPLOY</button>
+    <div class="goactions">
+      <button id="redeploy" class="btn-primary">&#9654; REDEPLOY</button>
+      <button id="goHangar" class="ghostbtn">HANGAR</button>
+    </div>
     </div>
   </div>
 </div>
@@ -592,7 +607,7 @@
     </div>
     <div class="techfoot">
       <div id="metaHint" class="techhint">Spend Strategic Points on persistent upgrades that apply at the start of every sortie. Locked aircraft and paint schemes are bought on each aircraft's card in the hangar.</div>
-      <button id="metaClose">&#9654; BACK TO HANGAR</button>
+      <button id="metaClose">&#9664; BACK TO HANGAR</button>
     </div>
   </div>
 </div>
