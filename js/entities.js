@@ -1103,7 +1103,7 @@ function createPlayer(idx) {
     special2: { id: null, cd: 0, max: 15 },            // SLOT 2 = equipped secondary special; startGame fills id+max from the saved equip
 
     damageFlash: 0, shake: 0, hurtDir: null, hurtT: 0,
-    _gpwsT: 0, _missT: 0, _lockT: 0, _trailT: 0, _look: null, _lbPrev: false, _wakeT: 0,
+    incoming: false, _gpwsT: 0, _missT: 0, _lockT: 0, _trailT: 0, _look: null, _lbPrev: false, _wakeT: 0,
   };
   // ---------- per-jet passive identity (trade-offs beyond raw stats) ----------
   applyJetPassives(player, j);
