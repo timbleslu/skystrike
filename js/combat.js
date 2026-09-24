@@ -76,7 +76,7 @@ function updateBullets(dt, ts) {
         }
       }
     }
-    if (!dead && b.mesh.position.y < terrainH(b.mesh.position.x, b.mesh.position.z)) dead = true;
+    if (!dead && b.mesh.position.y < TERRAIN_MAX_H && b.mesh.position.y < terrainH(b.mesh.position.x, b.mesh.position.z)) dead = true;
     if (dead) { recycleBullet(b); bullets.splice(i, 1); }
   }
 }
@@ -216,7 +216,7 @@ function updateMissiles(dt, ts) {
     }
     if (!hit && m.holo && m.holo.life > 0 && m.mesh.position.distanceToSquared(m.holo.mesh.position) < 2500) { explode(m.mesh.position, false); m.holo.life -= 1.2; hit = true; }
     if (!hit && m.decoy && m.decoy.life > 0 && m.mesh.position.distanceToSquared(m.decoy.mesh.position) < 1600) { explode(m.mesh.position, false); hit = true; }
-    if (!hit && m.mesh.position.y < terrainH(m.mesh.position.x, m.mesh.position.z) + 4) { explode(m.mesh.position, true); hit = true; }
+    if (!hit && m.mesh.position.y < TERRAIN_MAX_H && m.mesh.position.y < terrainH(m.mesh.position.x, m.mesh.position.z) + 4) { explode(m.mesh.position, true); hit = true; }
     if (hit || m.life <= 0) { detachFromScene(m.mesh); missiles.splice(i, 1); }
   }
 }
@@ -252,7 +252,8 @@ function updateFlares(dt) {
   for (let i = flares.length - 1; i >= 0; i--) {
     const f = flares[i]; f.life -= dt; f.vel.y -= 120 * dt; f.vel.multiplyScalar(1 - 0.5 * dt);
     f.mesh.position.addScaledVector(f.vel, dt);
-    if (Math.random() < 0.6) spawnSmoke(f.mesh.position, 0xffcc66, 0.45);
+    f.smokeT = (f.smokeT || 0) - dt;   // time-based (was 60%-per-frame → frame-rate dependent density)
+    if (f.smokeT <= 0) { spawnSmoke(f.mesh.position, 0xffcc66, 0.45); f.smokeT = 0.028; }
     if (f.life <= 0) {
       if (f.owner === 'player' && player.flakFlares) missileSplash(f.mesh.position, player.flakFlares, 260, null);   // FLAK BLOOM — flares burn out as HE bursts
       detachFromScene(f.mesh); flares.splice(i, 1);
@@ -288,7 +289,7 @@ function updateDecoys(dt) {
     d.mesh.rotation.z += d.spin * dt;
     const op = 0.42 * Math.min(1, d.life / 1.0) * (0.72 + 0.28 * Math.sin(now * 0.02 + i));
     d.mesh.traverse(o => { if (o.isMesh && o.material) o.material.opacity = op; });
-    if (d.life <= 0) { detachFromScene(d.mesh); decoys.splice(i, 1); }
+    if (d.life <= 0) { despawnObject(d.mesh); decoys.splice(i, 1); }   // frees the per-decoy holo material clones
   }
 }
 
@@ -298,7 +299,7 @@ const MAX_CRATES = 3;
 
 /* small pickup dropped when an enemy dies */
 function spawnLoot(pos) {
-  const m = new THREE.Mesh(ASSET.lootGeo, new THREE.MeshStandardMaterial({ color: 0x33ffcc, emissive: 0x119977, emissiveIntensity: 1.0, flatShading: true }));
+  const m = new THREE.Mesh(ASSET.lootGeo, ASSET.lootMat);
   m.position.copy(pos); scene.add(m);
   loots.push({ mesh: m, kind: 'drop', life: 20, t: rand(0, TWO_PI), radius: 70,
     give: { bullets: 120, missiles: 4, flares: 4, hp: 14 } });
@@ -383,9 +384,9 @@ function explode(pos, big) {
   f.position.copy(pos); f.scale.setScalar(big ? 110 : 55); scene.add(f);
   particles.push({ mesh: f, life: 0.22, max: 0.22, type: 'flash', grow: big ? 320 : 180 });
   // additive fireball bloom — sells the blast at any distance
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a30, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false, fog: false }));
-  glow.position.copy(pos); glow.scale.setScalar(big ? 240 : 120); scene.add(glow);
-  particles.push({ mesh: glow, life: 0.55, max: 0.55, type: 'flash', grow: big ? 140 : 70 });
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a30, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5, depthWrite: false, fog: false }));
+  glow.position.copy(pos); glow.scale.setScalar(big ? 190 : 100); scene.add(glow);
+  particles.push({ mesh: glow, life: 0.5, max: 0.5, type: 'flash', grow: big ? 110 : 60, op: 0.5 });
   // churning fireball: textured flame sprites tumbling outward
   const nf = big ? 7 : 4;
   for (let i = 0; i < nf; i++) {
@@ -394,7 +395,9 @@ function explode(pos, big) {
     fb.scale.setScalar(rand(0.7, 1.3) * (big ? 95 : 48)); scene.add(fb);
     particles.push({ mesh: fb, vel: new THREE.Vector3(rand(-26, 26), rand(-6, 44), rand(-26, 26)), life: rand(0.45, 0.8), max: 0.8, type: 'fire', grow: (big ? 70 : 42), rot: rand(-2.4, 2.4) });
   }
-  const n = big ? 24 : 13;
+  // over the particle budget: keep the flash + fireball (the feedback), skip the secondary dressing
+  const rich = particles.length < 620;
+  const n = rich ? (big ? 24 : 13) : 0;
   for (let i = 0; i < n; i++) {
     const s = new THREE.Mesh(ASSET.sparkGeo, new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffaa33 : 0xff6633, transparent: true, fog: false }));
     s.position.copy(pos);
@@ -404,7 +407,7 @@ function explode(pos, big) {
   }
 
   // Physical debris chunks, trailing embers while hot
-  const numDebris = big ? randInt(7, 14) : randInt(3, 7);
+  const numDebris = !rich ? 0 : big ? randInt(7, 14) : randInt(3, 7);
   for (let i = 0; i < numDebris; i++) {
     const m = new THREE.Mesh(ASSET.fragGeo, ASSET.fragMat);
     m.position.copy(pos).add(new THREE.Vector3(rand(-3,3), rand(-3,3), rand(-3,3)));
@@ -414,10 +417,10 @@ function explode(pos, big) {
     particles.push({ mesh: m, vel, life: rand(1.5, 3.5), max: 3.5, type: 'debris', emberT: 0 });
   }
 
-  for (let i = 0; i < (big ? 9 : 5); i++) spawnSmoke(pos, 0x20242a, big ? 2.6 : 1.5);
+  if (rich) for (let i = 0; i < (big ? 9 : 5); i++) spawnSmoke(pos, 0x20242a, big ? 2.6 : 1.5);
   // ground strikes throw up a ring of dust hugging the deck
   const gh = Math.max(terrainH(pos.x, pos.z), -10);
-  if (pos.y - gh < 30) {
+  if (rich && pos.y - gh < 30) {
     for (let i = 0; i < (big ? 8 : 5); i++) {
       const a = rand(0, TWO_PI), r = rand(10, big ? 60 : 34);
       const d = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: 0x8a7a62, transparent: true, opacity: 0.55, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
@@ -426,9 +429,10 @@ function explode(pos, big) {
       particles.push({ mesh: d, vel: new THREE.Vector3(Math.cos(a) * 28, rand(6, 16), Math.sin(a) * 28), life: rand(1.2, 2.0), max: 2.0, type: 'smokeS', grow: 30, rot: rand(-0.8, 0.8) });
     }
   }
-  if (big) spawnShockwave(pos);
+  if (big) spawnShockwave(pos, 15, 0.5);   // blast front: a crisp ring around the fireball
 }
 function spawnSmoke(pos, color, scl) {
+  if (particles.length > 620) return;
   const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudPuffTex(), color: color || 0x888888, transparent: true, opacity: 0.55, depthWrite: false, fog: true, rotation: rand(0, TWO_PI) }));
   m.position.copy(pos).add(t1.set(rand(-4, 4), rand(-4, 4), rand(-4, 4)));
   m.scale.setScalar((scl || 1) * rand(16, 26)); scene.add(m);
@@ -439,11 +443,10 @@ function updateParticles(dt) {
     const p = particles[i]; p.life -= dt; const t = clamp(p.life / p.max, 0, 1);
     if (p.vel) p.mesh.position.addScaledVector(p.vel, dt);
     
-    if (p.type === 'flash') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.9; }
+    if (p.type === 'flash') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * (p.op || 0.9); }
     else if (p.type === 'spark') { p.vel.multiplyScalar(1 - 2 * dt); p.mesh.material.opacity = t; }
-    else if (p.type === 'ring') { const k = 1 + (1 - t) * (p.ringK || 46); p.mesh.scale.setScalar(k); p.mesh.material.opacity = t * 0.85; if (camera) p.mesh.lookAt(camera.position); }
+    else if (p.type === 'ring') { const k = 1 + (1 - t) * (p.ringK || 46); p.mesh.scale.setScalar(k); p.mesh.material.opacity = t * t * (p.ringOp || 0.85); if (camera) p.mesh.lookAt(camera.position); }
     else if (p.type === 'trail') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.4; }
-    else if (p.type === 'mcore') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.85; }
     else if (p.type === 'fire') {   // textured fireball: churn, swell, burn out fast
         p.mesh.scale.addScalar(p.grow * dt);
         p.mesh.material.rotation += p.rot * dt;
@@ -463,7 +466,7 @@ function updateParticles(dt) {
         p.mesh.rotation.y += dt * 4;
         p.mesh.scale.setScalar(t * 1.2);
         p.emberT -= dt;     // hot fragments shed a glowing trail for the first half of their life
-        if (p.emberT <= 0 && t > 0.5) { spawnTrail(p.mesh.position, 0xff9540, 0.45); p.emberT = 0.07; }
+        if (p.emberT <= 0 && t > 0.5) { spawnTrail(p.mesh.position, 0xff9540, 0.5, 0.45); p.emberT = 0.07; }
     }
     else { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.5; if (p.vel) p.vel.multiplyScalar(1 - 1.5 * dt); }
     
@@ -499,24 +502,24 @@ function damagePlayer(amt, src) {
 let chaining = false;
 function critBlast(pos) {
   // ANNIHILATION ROUNDS — an exploding crit throws a small concussive blast at the impact point
-  explode(pos.clone ? pos.clone() : pos, false);
+  explode(pos, false);
   const r2 = 155 * 155, d = player.stats.gunDmg * player.gunDmgMul * 1.3;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (pos.distanceToSquared(e.group.position) < r2) damageEnemy(e, d, e.group.position, true); }
 }
 function chainBlast(origin) {
-  spawnShockwave(origin.clone ? origin.clone() : origin);
+  spawnShockwave(origin);
   const r2 = player.chainRadius * player.chainRadius;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (origin.distanceToSquared(e.group.position) < r2) damageEnemy(e, player.chainDmg, e.group.position, true); }
 }
 function missileSplash(pos, dmg, radius, primary) {
   if (!dmg || !radius) return;
-  spawnShockwave(pos.clone ? pos.clone() : pos);
+  spawnShockwave(pos);
   const r2 = radius * radius;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive || e === primary) continue; if (pos.distanceToSquared(e.group.position) < r2) damageEnemy(e, dmg, e.group.position, true); }
 }
 function reactivePulse() {
   // REACTIVE ARMOUR — a broken shield detonates: concuss nearby foes and blind incoming missiles
-  empFlash = Math.max(empFlash, 0.45); spawnShockwave(player.group.position.clone());
+  empFlash = Math.max(empFlash, 0.45); spawnShockwave(player.group.position);
   const pp = player.group.position, r2 = 640 * 640;
   for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (e.type !== 'boss' && pp.distanceToSquared(e.group.position) < r2) damageEnemy(e, player.reactive, e.group.position, true); }
   for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && pp.distanceToSquared(m.mesh.position) < r2) m.decoyed = true; }
@@ -631,7 +634,7 @@ function killEnemy(e, byPlayer, byCCA) {
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
   if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
   if (byPlayer && player.empKill) {   // EMP SUBMUNITIONS — the kill bursts a stunning shock over nearby foes
-    spawnShockwave(e.group.position.clone());
+    spawnShockwave(e.group.position);
     const er2 = player.empKill * player.empKill;
     for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (!o.alive || o === e) continue; if (e.group.position.distanceToSquared(o.group.position) < er2) o.stun = Math.max(o.stun || 0, 2.0); }
     empFlash = Math.max(empFlash, 0.3);
@@ -781,14 +784,15 @@ function updateLockOn(dt) {
     if (aligned < 0.55 || dist > 6500) player.lockTarget = null;
   }
 }
-function interceptPoint(shooter, tp, tv, bs) {
+// `out` (optional) receives the lead point; omit it to get a fresh vector. Never pass tA (used internally).
+function interceptPoint(shooter, tp, tv, bs, out) {
   const D = tA.copy(tp).sub(shooter);
   const a = tv.dot(tv) - bs * bs, b = 2 * D.dot(tv), c = D.dot(D);
   let t;
   if (Math.abs(a) < 1e-3) { if (Math.abs(b) < 1e-6) return null; t = -c / b; }
   else { const disc = b * b - 4 * a * c; if (disc < 0) return null; const sq = Math.sqrt(disc); const r1 = (-b - sq) / (2 * a), r2 = (-b + sq) / (2 * a); t = Math.min(r1, r2); if (t < 0) t = Math.max(r1, r2); }
   if (!(t > 0) || t > 6) return null;
-  return new THREE.Vector3().copy(tp).addScaledVector(tv, t);
+  return (out || new THREE.Vector3()).copy(tp).addScaledVector(tv, t);
 }
 
 /* ---------------- special abilities ---------------- */
@@ -901,8 +905,8 @@ function applySpecialEffect(id) {
         if (spawnCCA(pt)) launched++;
       }
     }
-    spawnShockwave(pp.clone());
-    explode(pp.clone(), false);
+    spawnShockwave(pp);
+    explode(pp, false);
     empFlash = Math.max(empFlash, 0.5);
     audio.power();
     showBanner(tf('banner.ccaSwarm', { n: launched }));
@@ -1059,7 +1063,7 @@ function updatePlayer(dt) {
       const cfg = aimAssistCfg(aimStrength, manualAim);
       const pp = player.group.position;
       const relV = aimT1.copy(at.vel || ZERO).addScaledVector(player.vel, -0.9);   // rounds inherit 0.9 of jet vel
-      const ip = interceptPoint(pp, at.group.position, relV, 1400 * (player.bulletSpeedMul || 1));
+      const ip = interceptPoint(pp, at.group.position, relV, 1400 * (player.bulletSpeedMul || 1), tLead);
       if (ip) {
         const desired = aimT2.copy(ip).sub(pp);
         const dist = desired.length();

@@ -11,7 +11,7 @@ let opSector = null;    // currently-flying sector type (string) or null
    Meta is keyed on `${opId}.${id}` — ids are stable and MUST NOT be renumbered. */
 const OPERATIONS = [
   {
-    id: 'ironVeil', nameKey: 'op.ironVeil.name', theaterKey: 'op.ironVeil.theater', loreKey: 'op.ironVeil.lore',
+    id: 'ironVeil', biome: 'tropical', nameKey: 'op.ironVeil.name', theaterKey: 'op.ironVeil.theater', loreKey: 'op.ironVeil.lore',
     levels: [
       { id: 'firstLight',  coords: { x: 18, y: 82 }, nameKey: 'op.ironVeil.l1.name', type: 'RECON',     objectives: [{ type: 'RECON', wp: 2 }, { type: 'STRIKE', spawn: { ground: true } }], loreKey: 'op.ironVeil.l1.lore', objectivesKey: 'op.ironVeil.l1.obj', enemyIntelKey: 'op.ironVeil.l1.intel', starUnique: { type: 'fastClear', n: 150 }, waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: false } },
       { id: 'openSkies',   coords: { x: 40, y: 70 }, nameKey: 'op.ironVeil.l2.name', type: 'FURBALL',   loreKey: 'op.ironVeil.l2.lore', objectivesKey: 'op.ironVeil.l2.obj', enemyIntelKey: 'op.ironVeil.l2.intel', starUnique: { type: 'gunOnly' }, waves: 2, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
@@ -29,7 +29,7 @@ const OPERATIONS = [
     ],
   },
   {
-    id: 'midnightMeridian', nameKey: 'op.midnightMeridian.name', theaterKey: 'op.midnightMeridian.theater', loreKey: 'op.midnightMeridian.lore',
+    id: 'midnightMeridian', biome: 'alpine', nameKey: 'op.midnightMeridian.name', theaterKey: 'op.midnightMeridian.theater', loreKey: 'op.midnightMeridian.lore',
     levels: [
       { id: 'deadChannel',  coords: { x: 30, y: 84 }, nameKey: 'op.midnightMeridian.l1.name', type: 'STEALTH',   objectives: [{ type: 'STEALTH', wp: 1 }, { type: 'STRIKE', spawn: { ground: true } }, { type: 'SWEEP', spawn: { fighters: 3 } }], loreKey: 'op.midnightMeridian.l1.lore', objectivesKey: 'op.midnightMeridian.l1.obj', enemyIntelKey: 'op.midnightMeridian.l1.intel', starUnique: { type: 'noFlares' }, waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: true,  weather: 'fog',   tod: 2, hostileAce: false } },
       { id: 'ghostSignal',  coords: { x: 52, y: 72 }, nameKey: 'op.midnightMeridian.l2.name', type: 'RECON',     objectives: [{ type: 'RECON', wp: 2 }, { type: 'STRIKE', spawn: { ground: true } }, { type: 'INTERCEPT', spawn: { bombers: 3 } }], loreKey: 'op.midnightMeridian.l2.lore', objectivesKey: 'op.midnightMeridian.l2.obj', enemyIntelKey: 'op.midnightMeridian.l2.intel', starUnique: { type: 'accuracy', n: 60 }, waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'fog',   tod: 2, hostileAce: false } },
@@ -47,7 +47,7 @@ const OPERATIONS = [
     ],
   },
   {
-    id: 'sunfireHorizon', nameKey: 'op.sunfireHorizon.name', theaterKey: 'op.sunfireHorizon.theater', loreKey: 'op.sunfireHorizon.lore',
+    id: 'sunfireHorizon', biome: 'desert', nameKey: 'op.sunfireHorizon.name', theaterKey: 'op.sunfireHorizon.theater', loreKey: 'op.sunfireHorizon.lore',
     levels: [
       { id: 'openWater',     coords: { x: 22, y: 86 }, nameKey: 'op.sunfireHorizon.l1.name', type: 'FURBALL',   loreKey: 'op.sunfireHorizon.l1.lore', objectivesKey: 'op.sunfireHorizon.l1.obj', enemyIntelKey: 'op.sunfireHorizon.l1.intel', starUnique: { type: 'noFlares' }, waves: 2, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
       { id: 'sunscreen',     coords: { x: 78, y: 74 }, nameKey: 'op.sunfireHorizon.l2.name', type: 'INTERCEPT', loreKey: 'op.sunfireHorizon.l2.lore', objectivesKey: 'op.sunfireHorizon.l2.obj', enemyIntelKey: 'op.sunfireHorizon.l2.intel', starUnique: { type: 'gunOnly' }, waves: 2, spawn: { fighters: 3, aces: 1, bombers: 2, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
@@ -66,7 +66,7 @@ const OPERATIONS = [
     ],
   },
   {
-    id: 'polarVortex', nameKey: 'op.polarVortex.name', theaterKey: 'op.polarVortex.theater', loreKey: 'op.polarVortex.lore',
+    id: 'polarVortex', biome: 'arctic', nameKey: 'op.polarVortex.name', theaterKey: 'op.polarVortex.theater', loreKey: 'op.polarVortex.lore',
     levels: [
       { id: 'iceBreaker',  coords: { x: 20, y: 84 }, nameKey: 'op.polarVortex.l1.name', type: 'RECON',     objectives: [{ type: 'RECON', wp: 2 }, { type: 'STRIKE', spawn: { ground: true } }], loreKey: 'op.polarVortex.l1.lore', objectivesKey: 'op.polarVortex.l1.obj', enemyIntelKey: 'op.polarVortex.l1.intel', starUnique: { type: 'fastClear', n: 150 }, waves: 1, spawn: { fighters: 2, aces: 0, bombers: 0, ground: false, weather: 'fog',   tod: 0, hostileAce: false } },
       { id: 'coldStart',   coords: { x: 44, y: 74 }, nameKey: 'op.polarVortex.l2.name', type: 'FURBALL',   loreKey: 'op.polarVortex.l2.lore', objectivesKey: 'op.polarVortex.l2.obj', enemyIntelKey: 'op.polarVortex.l2.intel', starUnique: { type: 'gunOnly' }, waves: 2, spawn: { fighters: 4, aces: 0, bombers: 0, ground: false, weather: 'clear', tod: 0, hostileAce: true } },
