@@ -124,11 +124,10 @@ Object.keys(SHAPES).forEach(k => {
   if (s.tipRails) s.tipRail = true;                            // one wingtip-rail block
 });
 
-/* enemy shape pools — fodder all fly STD; aces fly the named real jets */
+/* enemy shape pool — fodder all fly STD (aces pick named real jets via roster.js aceShapePool) */
 const FIGHTER_SHAPES = ['STD'];   // regular fodder all fly the plain trainer; aces fly the named real jets
-const ACE_SHAPES     = ['J20', 'F22', 'SU57', 'EFT'];
 
 /* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { SHAPES, FIGHTER_SHAPES, ACE_SHAPES };
+  module.exports = { SHAPES, FIGHTER_SHAPES };
 }

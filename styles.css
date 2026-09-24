@@ -8,7 +8,7 @@
   --surface-3:          #15211d;      /* hover / active panel */
   --ink-hi:             #f6fff4;      /* headings / hero numerals (warm white) */
   --ink-rgb:            207,230,214;  /* body */
-  --ink-dim-rgb:        111,145,128;  /* labels / secondary */
+  --ink-dim-rgb:        132,164,148;  /* labels / secondary (UX pass: raised from 111,145,128 for AA headroom on small text) */
   --ink-on-primary:     #1a1200;      /* text on a primary fill */
   --hairline-rgb:       120,170,140;  /* faint structural grid line */
   --primary-rgb:        255,185,56;   /* brand / active / attention signal */
@@ -165,8 +165,8 @@ canvas{display:block}
 
 .bl{bottom:0;left:0}
 .big{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
-.big b{font-family:var(--disp);font-weight:900;font-size:var(--fs-stat-hero);color:var(--primary);text-shadow:var(--glow-primary);line-height:1;min-width:120px;display:inline-block}
-.big .unit{font-family:var(--disp);font-size:11px;letter-spacing:3px;color:var(--ink-dim)}
+.big b{font-family:var(--disp);font-weight:900;font-size:var(--fs-stat-hero);color:var(--primary);text-shadow:var(--glow-primary);line-height:1;min-width:4ch;text-align:right;font-variant-numeric:tabular-nums;display:inline-block}   /* UX: right-aligned in a 4-digit column so MPH/FT sit beside the number (was min-width:120px left-aligned → units floated ~40px away) */
+.big .unit{font-family:var(--disp);font-size:11px;letter-spacing:2px;color:var(--ink);opacity:.8}
 
 .br{bottom:0;right:0;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 #radar{border-radius:50%;border:1px solid rgba(var(--primary-rgb),.4);background:radial-gradient(circle,rgba(8,20,16,.75),rgba(4,10,8,.85));box-shadow:0 0 22px rgba(var(--primary-rgb),.18) inset, 0 0 14px rgba(0,0,0,.6)}
@@ -289,6 +289,13 @@ canvas{display:block}
 #tb-ars{left:calc(50% - 24px);}
 #tb-ajm{left:calc(50% + 28px);}
 #touchControls.layout-left #tb-spc2{right:auto; left:18px;}
+/* F3 wingman orders: a second centred row just above the AWACS row (they had no position rule and piled
+   up over the HP bars); hidden while no wingman is aloft */
+#tb-weng, #tb-wcov, #tb-wrgp{bottom:58px; width:48px; height:30px; font-size:9px; border-color:var(--ok); color:var(--ok);}
+#tb-weng{left:calc(50% - 76px);}
+#tb-wcov{left:calc(50% - 24px);}
+#tb-wrgp{left:calc(50% + 28px);}
+#touchControls.no-wing #tb-weng, #touchControls.no-wing #tb-wcov, #touchControls.no-wing #tb-wrgp{display:none;}
 /* on a touch session, lift radar+ammo to the top-right and drop the redundant chip clutter
    (SPC/SPC2 buttons carry the special state via .ready; AWACS chips → the buttons above) */
 :root.is-touch #hud .panel.br{top:34px; bottom:auto; right:56px; transform-origin:top right; gap:4px;}
@@ -299,6 +306,13 @@ canvas{display:block}
 /* short phone landscape: the ally roster has no room — allies still show as radar markers */
 @media screen and (max-height:540px) and (orientation:landscape){
   :root.is-touch #wingSidebar{display:none !important;}
+  /* short phone landscape: the action buttons own the right side below ~160px, so the read-outs pack into
+     the top band (stats row, then radar beside ammo/heat); speed/alt tuck under the HP bars, right of the
+     THR slider, leaving the bottom to the stick, the command rows and the tutorial card */
+  :root.is-touch #hud .panel.tr{right:60px; transform:scale(calc(var(--hud-scale,1) * .78))}
+  :root.is-touch #hud .panel.br{top:44px; right:60px; display:grid; grid-template-columns:auto auto; column-gap:10px; row-gap:4px; align-items:center}
+  :root.is-touch #radar{width:64px; height:64px; grid-row:span 2}
+  :root.is-touch #hud .panel.bl{left:96px; top:74px; bottom:auto; transform-origin:top left; transform:scale(calc(var(--hud-scale,1) * .62))}
 }
 
 /* ---------- HANGAR ---------- */
@@ -610,13 +624,8 @@ canvas{display:block}
 .gospbox{order:2;font-family:var(--disp);letter-spacing:3px;font-size:14px;margin:var(--sp-3) 0 var(--sp-5);color:var(--ink-dim)}
 .gospbox b{color:var(--reward);font-size:22px;margin:0 6px;text-shadow:var(--glow-reward)}
 .gospsep{margin:0 4px;color:var(--ink-dim)}
-/* stats grid + pilot demoted to quiet supporting data below the reward payload */
-.gopilot{order:3}
-.gostats{order:4;font-family:var(--disp);letter-spacing:4px;font-size:16px;margin:var(--sp-2) 0;color:var(--ink-dim)}
-.gostats b{color:var(--ink);font-size:22px;margin:0 8px}
-.debrief{order:5}
+/* stats grid demoted to quiet supporting data below the reward payload (UX pass: DOM order = hierarchy) */
 .debrief b{color:var(--ink)}
-#redeploy{order:6}
 /* REDEPLOY = primary action (§3a), not the old red gradient */
 #gameover button{font-family:var(--disp);font-weight:900;font-size:18px;letter-spacing:6px;color:var(--ink-on-primary);padding:var(--sp-4) var(--sp-7);border:none;cursor:pointer;margin-top:var(--sp-3);
   background:linear-gradient(100deg,var(--primary-bright),var(--primary));clip-path:polygon(var(--bevel) 0,100% 0,calc(100% - var(--bevel)) 100%,0 100%);box-shadow:var(--glow-primary);transition:var(--dur-fast) var(--ease-out)}
@@ -703,7 +712,7 @@ canvas{display:block}
 #techDeploy:hover{box-shadow:0 0 40px rgba(var(--primary-rgb),.85);transform:scale(1.03)}
 
 @media(max-width:820px){
-  .big b{font-size:30px;min-width:90px}
+  .big b{font-size:30px;min-width:4ch}
   .tr{gap:14px}
   #hint{display:none;}
   .panel{padding: 8px 10px;}
@@ -1308,8 +1317,9 @@ canvas{display:block}
 #meta .mnavbtn{background:transparent;border:none;border-bottom:2px solid var(--hairline);color:var(--ink-dim);font-family:var(--disp);letter-spacing:3px;font-size:12px;text-transform:uppercase;padding:8px 20px;cursor:pointer;transition:var(--dur-fast) var(--ease-out)}
 #meta .mnavbtn:hover{border-bottom-color:var(--hairline-lit);color:var(--ink-hi)}
 #meta .mnavbtn.on{border-bottom-color:var(--primary);color:var(--primary);box-shadow:0 2px 8px -2px rgba(var(--primary-rgb),.45)}
-#metaClose{font-family:var(--disp);font-weight:900;font-size:15px;letter-spacing:4px;color:var(--ink);padding:13px 34px;border:none;cursor:pointer;background:linear-gradient(90deg,var(--cy),#7df)}
-#metaClose:hover{box-shadow:0 0 40px rgba(var(--primary-rgb),.85);transform:scale(1.03)}
+#metaClose{font-family:var(--disp);font-weight:700;font-size:13px;letter-spacing:3px;color:var(--ink-hi);padding:12px 28px;min-height:44px;border:1px solid var(--primary);cursor:pointer;background:rgba(var(--primary-rgb),.08);transition:var(--dur-fast) var(--ease-out)}   /* UX: secondary nav = ghost button (was an amber→cyan gradient w/ low-contrast ink) */
+#metaClose:hover{background:rgba(var(--primary-rgb),.18);box-shadow:var(--glow-primary)}
+#metaClose:active{transform:scale(.97)}
 .perkgrid,.achgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:18px}
 .perknode{border:1px solid rgba(var(--hairline-rgb),.3);background:linear-gradient(160deg,rgba(10,22,30,.7),rgba(4,9,14,.6));padding:14px 16px;display:flex;flex-direction:column;gap:6px}
 .perknode.maxed{border-color:rgba(var(--reward-rgb),.6)}
@@ -1378,15 +1388,16 @@ canvas{display:block}
 #pilotPanel .dlab{margin:0;font-size:10px}
 #pilotPanel #callsignHint{display:none}
 .pilotRow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(var(--primary-rgb),.3);color:var(--cy);font-family:var(--mono);font-size:11px;letter-spacing:2px;padding:4px 8px;width:116px;text-transform:uppercase;outline:none;transition:.15s}
+#callsignInput{background:rgba(4,9,14,.7);border:1px solid rgba(var(--primary-rgb),.35);color:var(--cy);font-family:var(--mono);font-size:12px;letter-spacing:1px;padding:6px 10px;width:calc(14ch + 38px);min-width:0;min-height:34px;text-transform:uppercase;outline:none;transition:.15s}
+#callsignInput::placeholder{color:var(--ink-dim);opacity:1}
 #callsignInput:focus{border-color:var(--cy);background:rgba(4,9,14,.9)}
 #emblemGrid{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
-.emblembtn{width:28px;height:28px;border:1px solid rgba(var(--hairline-rgb),.4);background:rgba(4,9,14,.6);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;padding:0}
+.emblembtn{width:34px;height:34px;border:1px solid rgba(var(--hairline-rgb),.45);background:rgba(4,9,14,.6);color:var(--ink-hi);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:.15s;position:relative;padding:0}
 .emblembtn:hover{border-color:var(--cy)}
 .emblembtn.active{border-color:var(--cy);background:rgba(var(--primary-rgb),.1);box-shadow:0 0 8px rgba(var(--primary-rgb),.4)}
-.emblembtn.elocked{opacity:.55;cursor:default}
+.emblembtn.elocked{color:var(--ink-dim);border-style:dashed;background:repeating-linear-gradient(45deg,transparent 0 5px,rgba(var(--hairline-rgb),.10) 5px 7px);cursor:pointer}   /* UX: locked = hatched + dashed, glyph still legible (was .55 opacity on default-black glyph → invisible) */
 .emblembtn.elocked:hover{border-color:rgba(var(--hairline-rgb),.4)}
-.emblemcost{position:absolute;bottom:1px;right:2px;font-size:8px;font-family:var(--mono);color:var(--yel);line-height:1}
+.emblemcost{position:absolute;bottom:1px;right:2px;font-size:9px;font-weight:700;font-family:var(--mono);color:var(--yel);line-height:1;text-shadow:0 0 3px #000,0 0 2px #000}
 /* gameover pilot line */
 .gopilot{font-family:var(--disp);font-size:15px;letter-spacing:3px;color:var(--cy);text-align:center;min-height:22px;margin-bottom:4px}
 /* ---- AWACS support HUD chips (F10) ---- */
@@ -1440,7 +1451,7 @@ canvas{display:block}
 /* CYAN / TEAL — the original pre-overhaul look */
 :root[data-palette="cyan"]{
   --base-rgb:4,7,14; --surface-1:#0a1018; --surface-2:#0e1722; --surface-3:#13202e;
-  --ink-hi:#eafffb; --ink-rgb:189,238,230; --ink-dim-rgb:91,138,134; --ink-on-primary:#04070e;
+  --ink-hi:#eafffb; --ink-rgb:189,238,230; --ink-dim-rgb:112,158,153; --ink-on-primary:#04070e;
   --hairline-rgb:91,138,134;
   --primary-rgb:25,240,212; --primary-bright-rgb:11,213,255; --primary-deep:#0a8e84;
   --danger-rgb:255,57,75; --warn-rgb:255,140,43; --ok-rgb:70,255,140;
@@ -1449,7 +1460,7 @@ canvas{display:block}
 /* GREEN PHOSPHOR — monochrome NVG / old-radar green */
 :root[data-palette="phosphor"]{
   --base-rgb:2,8,4; --surface-1:#06140a; --surface-2:#0a1c0e; --surface-3:#0f2614;
-  --ink-hi:#d8ffd8; --ink-rgb:130,235,160; --ink-dim-rgb:78,150,96; --ink-on-primary:#021006;
+  --ink-hi:#d8ffd8; --ink-rgb:130,235,160; --ink-dim-rgb:96,168,114; --ink-on-primary:#021006;
   --hairline-rgb:60,150,90;
   --primary-rgb:70,255,140; --primary-bright-rgb:150,255,185; --primary-deep:#1a7a3c;
   --danger-rgb:255,120,110; --warn-rgb:205,255,120; --ok-rgb:120,255,165;
@@ -1458,7 +1469,7 @@ canvas{display:block}
 /* ICE BLUE / WHITE — modern F-35 PCD, cool white-blue on charcoal */
 :root[data-palette="ice"]{
   --base-rgb:10,14,18; --surface-1:#141a22; --surface-2:#1a222c; --surface-3:#232e3a;
-  --ink-hi:#f0f6ff; --ink-rgb:204,222,242; --ink-dim-rgb:122,142,168; --ink-on-primary:#06121e;
+  --ink-hi:#f0f6ff; --ink-rgb:204,222,242; --ink-dim-rgb:140,160,186; --ink-on-primary:#06121e;
   --hairline-rgb:120,150,185;
   --primary-rgb:150,210,255; --primary-bright-rgb:212,236,255; --primary-deep:#3a6a9a;
   --danger-rgb:255,92,92; --warn-rgb:255,190,90; --ok-rgb:120,232,182;
@@ -1467,7 +1478,7 @@ canvas{display:block}
 /* NIGHT RED — red/amber low-light cockpit (dark-adapted) */
 :root[data-palette="red"]{
   --base-rgb:10,5,5; --surface-1:#190b0b; --surface-2:#211010; --surface-3:#2c1515;
-  --ink-hi:#ffe8e0; --ink-rgb:240,182,162; --ink-dim-rgb:152,96,82; --ink-on-primary:#1a0500;
+  --ink-hi:#ffe8e0; --ink-rgb:240,182,162; --ink-dim-rgb:172,116,100; --ink-on-primary:#1a0500;
   --hairline-rgb:150,82,72;
   --primary-rgb:255,92,72; --primary-bright-rgb:255,152,92; --primary-deep:#9a2a1a;
   --danger-rgb:255,40,40; --warn-rgb:255,122,40; --ok-rgb:255,172,62;
@@ -1477,7 +1488,7 @@ canvas{display:block}
 /* ---- VISUAL LANGUAGES (data-skin) — futuristic == :root defaults ----
    Each skin restyles BOTH layers: menu/hangar chrome AND the in-play HUD
    instruments (speed/alt/thrust), driven by the #hud custom-prop seam
-   (ui-hud.js updateDom): --spd-kt --alt-ft · --spd-frac --alt-frac --thr-frac
+   (ui-hud.js updateDom): --spd-frac --alt-frac
    · --spd-deg --thr-deg --alt-deg --alt-deg-k. */
 
 /* gauge layers are opt-in — the dial face / ticks / needle stay hidden until a skin reveals them */
@@ -1775,8 +1786,8 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
   html[data-weather="storm"] #vignette{box-shadow:none;}
 }
 /* ===== STARS/RATING ===== */
-/* hidden member of the stars/rating pair (only ONE shows per debrief: stars in Ops/win, rating in Endless death) */
-.gostars.hide,.gorating.hide,.stars-conds.hide{display:none}
+/* stars are hidden on an Endless death (the debrief stats grid is the performance readout there) */
+.gostars.hide,.stars-conds.hide{display:none}
 /* per-mission star-condition checklist (Ops debrief): one line per authored condition, earned ones lit */
 .stars-conds{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:4px}
 .stars-conds span{font-family:var(--disp);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-dim)}
@@ -1789,13 +1800,6 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
 .lvlc-box #lvlcConds{margin:var(--sp-2) 0}
 .lvlc-rewards{display:flex;align-items:baseline;justify-content:center;gap:10px;margin-top:var(--sp-2);font-family:var(--disp);font-size:14px;letter-spacing:2px;color:var(--reward);text-shadow:var(--glow-reward)}
 .lvlc-rewards .lvlc-rwsep{color:var(--ink-dim);text-shadow:none}
-/* endless death rating — sits in the stars' slot, mirrors the debrief stat-stack look */
-.gorating{order:1;display:flex;flex-direction:column;align-items:center;margin:var(--sp-2) 0;gap:4px}
-.rating-title{font-family:var(--disp);font-size:var(--fs-label);letter-spacing:var(--ls-caps);color:var(--ink-dim);text-transform:uppercase}
-.rating-row{display:flex;align-items:baseline;gap:10px}
-.rating-row span{font-family:var(--disp);font-size:10px;letter-spacing:2px;color:var(--ink-dim);text-transform:uppercase}
-.rating-row b{font-family:var(--disp);font-size:18px;color:var(--reward);text-shadow:var(--glow-reward)}
-.gowrap.reveal .gorating{animation:revealRise var(--dur-base) var(--ease-out) .32s both}
 
 /* ============================================================================
    MENU SKINS — distinct FORM identities for the shared console skeleton.
@@ -2201,3 +2205,191 @@ html[data-weather="storm"] #vignette{box-shadow:inset 0 0 240px 60px var(--storm
 .dev-deny{color:var(--warn);font-size:11px;margin:0;letter-spacing:.5px;}
 .deny-shake{animation:denyShake .32s ease-in-out;}
 @keyframes denyShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+
+/* ============================================================================
+   UX PASS (2026-09) — layout + hierarchy + a11y fixes. Token-only colours so every
+   palette × skin keeps working. Sections: (1) menu top-clear + compact gear,
+   (2) hangar 2-column + CTA bar, (3) debrief, (4) HUD heat bar, (5) level-map
+   labels, (6) contrast/size floor, (7) focus-visible + touch targets.
+   ============================================================================ */
+
+/* ---- (1) the fixed top-right #manualBtn owns a band at the top of every menu ---- */
+:root{--menu-top-clear:calc(64px + env(safe-area-inset-top))}
+@media (max-width:560px),(orientation:landscape) and (max-height:560px){
+  :root{--menu-top-clear:calc(62px + env(safe-area-inset-top))}
+  /* phones: the gear collapses to a 44px icon button (label stays in the DOM for screen readers) */
+  .manual-fixed{display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;font-size:0;letter-spacing:0}
+  .manual-fixed::before{content:"\2699";font-size:21px;line-height:1}
+}
+/* overlay scrims reserve the band, and their box may use the rest (never slides under the gear) */
+#modeChoice,#endlessSetup,#opsSelect,#levelMap,#briefing,#opLore,#levelCleared{padding:var(--menu-top-clear) var(--sp-4) var(--sp-4)}
+#modeChoice .cmp-box,#endlessSetup .cmp-box,#opsSelect .cmp-box,#levelMap .cmp-box,#levelCleared .cmp-box,
+#briefing .brief-box,#opLore .brief-box{max-height:100%}
+/* phones (portrait + short landscape): full-bleed boxes; the box's own top padding clears the gear.
+   ID-qualified so it beats the per-skin box padding (:root[data-skin] .cmp-box is 0,3,0). */
+@media (max-width:560px),(orientation:landscape) and (max-height:560px){
+  #modeChoice,#endlessSetup,#opsSelect,#levelMap,#briefing,#opLore,#levelCleared{padding:0}
+  #modeChoice .cmp-box,#endlessSetup .cmp-box,#opsSelect .cmp-box,#levelMap .cmp-box,#levelCleared .cmp-box,
+  #briefing .brief-box,#opLore .brief-box{
+    width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;display:flex;flex-direction:column;
+    padding:var(--menu-top-clear) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom))}
+  #briefing .brief-box-2col{height:100%;max-height:100%}
+}
+/* BACK-only boxes: centre the lone button like every other action bar */
+#opsSelect .cmp-box > .cmp-back,#levelCleared .cmp-box > .cmp-btn{display:block;margin:var(--sp-5) auto 0}
+/* META: header clears the gear; no forced min-height (it left a big dead band under the grid) */
+#meta{padding-top:var(--menu-top-clear)}
+#meta .mwrap{min-height:0}
+#meta .techfoot{margin-top:var(--sp-2)}
+
+/* ---- (2) HANGAR ---- */
+.hwrap{width:min(1200px,96vw);padding:var(--sp-3) var(--sp-4) var(--sp-5)}
+/* compact left masthead: SKYSTRIKE + ACE PROTOCOL on one line; the right band is the gear's */
+.hmast{display:flex;align-items:center;min-height:52px;padding-right:250px;text-align:left}
+.hmast h1{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 var(--sp-3);margin:0;line-height:1.05;font-size:clamp(26px,3.3vw,40px)}
+.hmast h1 span{display:inline-block;margin:0;font-size:.42em}
+/* status bar: sub · pilot identity · SP/best chips */
+.hbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--sp-2) var(--sp-4);margin:var(--sp-2) 0 var(--sp-3);text-align:left}
+.hbar #hangarSub.sub{margin:0;font-size:12px}
+.hbar #pilotPanel{margin:0;max-width:none;opacity:1;flex-wrap:nowrap;gap:var(--sp-2);padding:4px 10px;background:rgba(var(--base-rgb),.4);border-color:rgba(var(--hairline-rgb),.3)}
+.hbar #emblemGrid{flex-wrap:nowrap}
+.hbar-stats{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.hbar #hangarSp,.hbar #hangarBest{display:inline-block;margin:0;padding:6px 14px;border:1px solid rgba(var(--primary-rgb),.32);border-radius:999px;font-size:12px;letter-spacing:2px;white-space:nowrap}
+/* the jet card + CTA bar */
+.hangar-ctabar{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);margin-top:var(--sp-3)}
+.hangar-ctabar #jetNav{flex-direction:row;align-items:center;gap:var(--sp-3);margin:0;min-width:0}
+.hangar-ctabar #launch{margin:0;flex:0 0 auto;min-width:min(340px,100%);padding:var(--sp-4) var(--sp-6);font-size:17px;letter-spacing:4px}
+#jetDots i{width:10px;height:10px}
+.hbtns-secondary{margin-top:var(--sp-4)}
+.hbtns-secondary .ghostbtn{min-height:40px}
+#hangar .cardbig .jetpreview3d{margin-bottom:var(--sp-3)}
+/* desktop: ONE card, two columns — preview | data (data column scrolls internally); the whole
+   decision (jet identity + preview + stats + SELECT) fits one screen at 1280x720+ */
+@media (min-width:900px){
+  .hwrap{--hcard-h:clamp(340px,calc(100vh - 292px),580px)}
+  #carousel{align-items:center}
+  #jetStage{flex:1 1 auto;max-width:none;min-width:0}
+  #hangar .card.cardbig{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,1fr);gap:0 var(--sp-5);
+    height:var(--hcard-h);padding:var(--sp-4)}
+  #hangar .cardbig .jetpreview3d{height:100%;margin:0}
+  #hangar .cardbig .cbgrid{grid-template-columns:1fr;align-content:start;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:var(--sp-2);gap:6px}
+  #hangar .cardbig .cbgrid::-webkit-scrollbar{width:5px}
+  #hangar .cardbig .cbgrid::-webkit-scrollbar-thumb{background:rgba(var(--primary-rgb),.35);border-radius:3px}
+  #hangar .cardbig .cbgrid{scrollbar-width:thin;scrollbar-color:rgba(var(--primary-rgb),.35) transparent}
+  .hangar-ctabar{padding:0 calc(54px + var(--sp-4))}   /* align with the card edges (arrow + gap) */
+}
+/* single-column layouts: the CTA bar sticks to the viewport bottom — SELECT is never below the fold */
+@media (max-width:899px){
+  .hangar-ctabar{position:sticky;bottom:0;z-index:6;margin:var(--sp-3) calc(-1 * var(--sp-4)) 0;
+    padding:var(--sp-4) var(--sp-4) calc(var(--sp-3) + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(var(--base-rgb),0),rgba(var(--base-rgb),.97) 18%,var(--base))}
+  .hangar-ctabar #launch{flex:1 1 auto;min-width:0}
+  .version-tag{display:none}   /* sits on the sticky CTA / bottom buttons; the language screen keeps its own readout */
+}
+/* phones */
+@media (max-width:560px){
+  .hwrap{width:100%;padding:var(--sp-2) var(--sp-3) 0}
+  .hmast{min-height:56px;padding-right:56px}
+  .hmast h1{font-size:clamp(24px,8vw,32px)}
+  .hbar{margin:var(--sp-1) 0 var(--sp-3);gap:var(--sp-2)}
+  .hbar #hangarSub{display:none}
+  .hbar #pilotPanel{width:100%;flex-wrap:wrap;justify-content:flex-start;row-gap:var(--sp-2);padding:6px 8px}
+  .hbar #callsignInput{flex:1 1 150px;width:auto;min-height:40px;font-size:14px}
+  .hbar #emblemGrid{flex-wrap:wrap}
+  .hbar-stats{width:100%}
+  .hangar-ctabar{margin-left:calc(-1 * var(--sp-3));margin-right:calc(-1 * var(--sp-3));padding-left:var(--sp-3);padding-right:var(--sp-3)}
+  .hangar-ctabar #launch{padding:var(--sp-4) var(--sp-3);font-size:15px;letter-spacing:2px}
+  #jetDots{display:none}
+  /* carousel arrows ride the preview's bottom corners (clear of the right-edge zoom slider) */
+  #carousel{position:relative;display:block;--pv-h:clamp(230px,34vh,300px)}
+  #hangar .card.cardbig{padding:12px}
+  #hangar .cardbig .jetpreview3d{height:var(--pv-h)}
+  .navarrow{position:absolute;z-index:4;top:calc(12px + var(--pv-h) - 52px);width:44px;height:44px;background:rgba(var(--base-rgb),.78)}
+  #jetPrev{left:20px}
+  #jetNext{right:20px}
+}
+
+/* ---- (3) DEBRIEF: outcome → grade → objectives → one stats grid → SP → actions ---- */
+.gowrap{padding:var(--sp-6) var(--sp-6) var(--sp-5)}
+.go-core > *{order:0}   /* DOM order IS the hierarchy now (the old per-child order shuffles are retired) */
+.gowrap h1{font-size:clamp(20px,2.6vw,28px);font-weight:900;letter-spacing:.2em;color:var(--danger);
+  margin:0 0 var(--sp-3);padding-bottom:var(--sp-3);width:100%;border-bottom:1px solid rgba(var(--danger-rgb),.35)}
+.gowrap.win h1{color:var(--ok);border-bottom-color:rgba(var(--ok-rgb),.35)}
+.gopilot{min-height:0;margin:0 0 var(--sp-2);font-size:13px}
+.gopilot:empty{display:none}
+.grade-letter{font-size:clamp(48px,8vw,80px)}
+.grade-bonus:empty{display:none}
+/* a C earns no bonus: muted letter, calm fade-in (no celebratory snap/overshoot) */
+.gowrap.grade-none .grade-letter{color:var(--ink-dim);text-shadow:none}
+.gowrap.reveal.grade-none .gograde{animation:revealRise var(--dur-base) var(--ease-out) both}
+.debrief{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--sp-3) var(--sp-4);width:100%;
+  margin:var(--sp-3) 0 var(--sp-2);padding:var(--sp-3) 0;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+.debrief span{font-size:10px}
+.debrief b{font-size:22px;color:var(--ink-hi)}
+.gobest{font-family:var(--disp);font-size:11px;letter-spacing:2px;color:var(--ink-dim);text-transform:uppercase}
+.gobest b{color:var(--ink);font-weight:700;margin-left:4px}
+.gospbox{margin:var(--sp-3) 0 0}
+.goactions{display:flex;gap:var(--sp-3);justify-content:center;align-items:center;flex-wrap:wrap;width:100%;margin-top:var(--sp-5)}
+#gameover .goactions button{margin:0;min-height:48px}
+#gameover #goHangar{background:transparent;border:1px solid var(--primary);color:var(--ink-hi);box-shadow:none;font-size:14px;letter-spacing:3px;font-weight:700;padding:var(--sp-3) var(--sp-5)}
+#gameover #goHangar:hover{background:rgba(var(--primary-rgb),.12);box-shadow:var(--glow-primary);transform:none}
+/* HANGAR is the only exit (daily/weekly/rush/op outcomes) → it takes the primary treatment */
+#gameover #goHangar.go-solo{background:linear-gradient(100deg,var(--primary-bright),var(--primary));color:var(--ink-on-primary);border:none;box-shadow:var(--glow-primary);font-size:18px;letter-spacing:6px;padding:var(--sp-4) var(--sp-7)}
+@media (max-width:560px){
+  .gowrap{padding:calc(var(--sp-6) + env(safe-area-inset-top)) var(--sp-4) calc(var(--sp-5) + env(safe-area-inset-bottom))}
+  .goactions{flex-direction:column;align-items:stretch}
+}
+
+/* ---- (4) HUD: gun-heat bar inside the gun/ammo cluster (was a free-floating canvas bar) ---- */
+.heatbar{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-2)}
+.heatbar .lab{margin:0;white-space:nowrap;font-size:10px;letter-spacing:1.5px;color:var(--ink-dim)}
+.heat-track{position:relative;width:118px;height:7px;background:rgba(0,0,0,.45);border:1px solid rgba(var(--hairline-rgb),.55)}
+.heat-track #heatFill{position:absolute;left:0;top:0;bottom:0;width:calc(var(--heat,0) * 100%);background:var(--primary);opacity:calc(.45 + .55 * var(--heat,0))}
+.heat-rearm{position:absolute;top:-3px;bottom:-3px;left:calc(var(--rearm,.35) * 100%);width:1px;background:rgba(var(--ink-rgb),.65)}
+.heatbar.warm #heatFill{background:var(--reward)}
+.heatbar.hot #heatFill{background:var(--warn)}
+.heatbar.hot .lab{color:var(--warn)}
+.heatbar.locked #heatFill{background:var(--danger);opacity:1;animation:lowblink .5s var(--ease-in-out) infinite}
+.heatbar.locked .lab{color:var(--danger)}
+.heatbar.locked .heat-track{border-color:var(--danger)}
+:root.is-touch .heat-track{width:84px}
+@media (prefers-reduced-motion:reduce){.heatbar.locked #heatFill{animation:none}}
+
+/* ---- (5) LEVEL MAP: legible node labels ---- */
+.opmap-tag{background:rgba(2,6,10,.86);border-color:rgba(var(--primary-rgb),.38);opacity:1;padding:2px 7px}
+.opmap-n{font-size:12px}
+.opmap-name{font-size:10px;color:var(--ink);max-width:128px}
+.opmap-stars{font-size:10px}
+.opmap-dot.locked{opacity:.75;filter:grayscale(.5)}
+.opmap-dot.locked .opmap-name,.opmap-dot.locked .opmap-n{color:var(--ink-dim)}
+.opmap-dot.unlocked .opmap-name,.opmap-dot.cleared .opmap-name{color:var(--ink-hi)}
+
+/* ---- (6) contrast + size floor for secondary text (≈WCAG AA on the dark surfaces) ---- */
+.cgen{font-size:10px;padding:2px 8px}
+.crole,.cardbig .cspeclbl,.cardbig .cpassivelbl,.cctlbl,.jpzoomlbl{font-size:10px;opacity:1}
+.sb>span,.cspecs span{font-size:10px}
+.cardbig .cpassivetext,.cabilitydesc{font-size:11px}
+.lock-cond{font-size:10px}
+.card.sel::before{font-size:9px}
+#rivalBoard{opacity:1}
+#rivalBoard .rb-empty{color:var(--ink-dim);opacity:1}
+#rivalBoard .rb-row{color:var(--ink)}
+.version-tag{opacity:.75}
+.stars-conds span.miss{opacity:1}
+.achnode.lockedach{opacity:1}
+.achnode.lockedach .achname,.achnode.lockedach .achdesc,.achnode.lockedach .achsp{color:var(--ink-dim)}
+.perknode.locked{opacity:1}
+.perknode.locked .pntitle{color:var(--ink-dim)}
+
+/* ---- (7) keyboard focus + touch targets ---- */
+:where(button,a,select,input,[role="button"],[role="radio"],[tabindex]):focus-visible{outline:2px solid var(--primary-bright);outline-offset:2px}
+/* clip-path bevels clip an outer outline — draw the ring INSIDE those shapes */
+:is(.ghostbtn,#launch,.btn-primary,#gameover button,#techDeploy,.draft-reroll,#manualClose,.ls-dropdown,.ob-lang,.jmpvbuy,.card):focus-visible{outline:2px solid var(--ink-hi);outline-offset:-5px}
+.navarrow:focus-visible,.jmskin:focus-visible,.emblembtn:focus-visible{outline-offset:2px}
+@media (pointer:coarse){
+  .ghostbtn,.cmp-btn,.dbtn,.segbtn,.langbtn,.mnavbtn,.tech-tab,.pnbuy,.jmbuy,.jmpvbuy,.tut-skip,#wpCancel,#metaClose,.special2sel{min-height:44px}
+  .emblembtn{width:44px;height:44px}
+  .jmskin{width:40px;height:40px}
+  .jmskins{gap:10px}
+  #jetDots i{width:14px;height:14px}
+}

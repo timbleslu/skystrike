@@ -25,9 +25,9 @@ const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens rad
 // storm/fog hit a fixed effective density); fogMul stays the descriptive gameplay-facing field and is
 // what visuals/tests key off. radar/lock fields unchanged — only fog distance changes.
 const WEATHER = {
-  clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  turbulence: 0.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.6, lockRangeMul: 0.65, lockSpeedMul: 1.15, turbulence: 0.0,  fogMul: 11.4 },   // radar 0.8→0.6: fog cuts enemy detection ~40% (weather-FX pass)
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, turbulence: 0.0, fogMul: 5.7 },     // radar 0.7: storm cuts enemy detection ~20%
+  clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  fogMul: 1.0 },
+  fog:   { radarMul: 0.6, lockRangeMul: 0.65, lockSpeedMul: 1.15, fogMul: 11.4 },   // radar 0.8→0.6: fog cuts enemy detection ~40% (weather-FX pass)
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, fogMul: 5.7 },     // radar 0.7: storm cuts enemy detection ~20%
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
 // factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
@@ -39,14 +39,8 @@ function resolveWeather(type, tod) {
     radarMul: w.radarMul * night,
     lockRangeMul: w.lockRangeMul,
     lockSpeedMul: w.lockSpeedMul,
-    turbulence: w.turbulence,
     fogMul: w.fogMul,
   };
-}
-// PURE — bounded (|x| <= amp), smooth, exactly zero-mean-over-2π attitude wobble. Two
-// commensurate sines (1 + 2 cycles over [0,2π]) so the integral over a full cycle is exactly 0.
-function turbSample(t, amp) {
-  return amp * (0.6 * Math.sin(t) + 0.4 * Math.sin(2 * t + 1.3));
 }
 // PURE — deterministic standalone-play weather roll, weighted toward clear (hash -> [0,1)).
 function rollWeather(seed) {
@@ -500,8 +494,8 @@ function resolveQuality(setting, dpr, isTouch) {
 // the single source of truth read by engine.js buildTerrain / buildScenery, and unit-tested here.
 const TERRAIN_TIER = {
   low:    { seg: 220, detailAmp: 0,  detailOct: 0 },   // current look — no visual detail layer
-  medium: { seg: 300, detailAmp: 28, detailOct: 2 },
-  high:   { seg: 400, detailAmp: 60, detailOct: 3 },
+  medium: { seg: 300, detailAmp: 8,  detailOct: 2 },    // small: props/units sit on terrainH, so visual relief
+  high:   { seg: 400, detailAmp: 14, detailOct: 3 },    // must stay within a few units of the gameplay surface
 };
 const SEA_TIER = {
   low:    { seg: 200, waveOct: 3, normOct: 0, foam: 0, reflect: 0 },   // current shader
@@ -515,14 +509,84 @@ const SEA_TIER = {
 // objects placed from the unmodified terrainH never visibly float more than ~detailAmp units.
 function terrainDetailH(x, z, cfg) {
   if (!cfg || !(cfg.detailAmp > 0) || !(cfg.detailOct > 0)) return 0;
-  let h = 0, amp = 1, ampSum = 0, fx = 0.0034, fz = 0.0029;
+  // rotated value-noise octaves (the old sin×cos product tiled into a visible egg-carton)
+  let h = 0, amp = 1, ampSum = 0, f = 0.0032, u = x, v = z;
   for (let o = 0; o < cfg.detailOct; o++) {
-    h += amp * Math.sin(x * fx + o * 1.7) * Math.cos(z * fz + o * 0.9);
+    h += amp * valueNoise2(u * f + o * 7.3, v * f - o * 3.1);
     ampSum += amp;
-    amp *= 0.5; fx *= 2.13; fz *= 2.07;
+    const ru = u * 0.8 - v * 0.6, rv = u * 0.6 + v * 0.8; u = ru; v = rv;   // rotate ~37° per octave
+    amp *= 0.5; f *= 2.1;
   }
   return (h / ampSum) * cfg.detailAmp;   // normalized to [-detailAmp, +detailAmp]
 }
+
+/* ---------------- gameplay heightfield (terrainH) ---------------- */
+// PURE, deterministic 2D value noise in [-1,1] (integer-hash lattice, quintic fade). No RNG/clock, so
+// every load builds the identical world.
+function _latticeHash(ix, iz) {
+  let h = Math.imul(ix, 374761393) ^ Math.imul(iz, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function valueNoise2(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+  const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10), uz = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
+  const a = _latticeHash(ix, iz), b = _latticeHash(ix + 1, iz), c = _latticeHash(ix, iz + 1), d = _latticeHash(ix + 1, iz + 1);
+  return (a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz) * 2 - 1;
+}
+// Ceiling of terrainHeight (+ visual detail) — anything above it can skip the ground query.
+const TERRAIN_MAX_H = 1000;
+// PURE — the ONE gameplay ground surface (engine.js terrainH delegates here): collision, spawns, AGL,
+// shadows and ground-object Y all read it. Domain-warped fbm continents → an island chain with channels
+// and fjords (sea surface sits at y≈-10), ridged ranges on the high ground, and a flattened band around
+// sea level so coasts read as beaches/shelves. Range ≈ -700..+930, ~55% land inside the ±13 km play area.
+function terrainHeight(x, z) {
+  const u = x * 0.00024, v = z * 0.00024;
+  const wu = u + 0.55 * valueNoise2(u * 0.8 + 17.3, v * 0.8 - 4.1);
+  const wv = v + 0.55 * valueNoise2(u * 0.8 - 7.7, v * 0.8 + 12.9);
+  // continental fbm; each octave rotated so the noise lattice never lines up into grid artefacts
+  const n = 0.58 * valueNoise2(wu, wv)
+          + 0.27 * valueNoise2(wu * 1.6 - wv * 1.2 + 3.1, wu * 1.2 + wv * 1.6 - 8.4)
+          + 0.15 * valueNoise2(wu * 1.9 + wv * 3.4 - 1.3, -wu * 3.4 + wv * 1.9 + 5.7);
+  let h = n * 900 + 40;
+  if (h > 0) {
+    const ra = wu * 2.2 + wv * 1.5 + 9.1, rb = -wu * 1.5 + wv * 2.2 - 2.2;
+    const r1 = 1 - Math.abs(valueNoise2(ra, rb));
+    const r2 = 1 - Math.abs(valueNoise2(ra * 2.1 - rb * 0.9 + 4.4, ra * 0.9 + rb * 2.1 + 1.7));
+    h += Math.min(h / 300, 1) * (r1 * r1 * 0.7 + r2 * r2 * 0.3) * 300;   // ridged ranges, only on land
+  }
+  h += valueNoise2(x * 0.0031 + z * 0.0017, -x * 0.0017 + z * 0.0031) * 12;
+  // open ocean ring beyond ~10.5 km so the terrain mesh edge (±13 km) is never a visible cliff
+  const edge = Math.max(Math.abs(x), Math.abs(z));
+  if (edge > 10500) { const t = Math.min((edge - 10500) / 2300, 1); h += (-320 - h) * t * t * (3 - 2 * t); }
+  // flatten the coastline band into beaches, centred ~18 above the sea surface (y≈-10) so shores clear
+  // the swell (peaks ≈ +12) instead of reading as flooded flats
+  const c = h - 8;
+  return h - 0.55 * c * Math.exp(-(c * c) / 3600);
+}
+
+/* ---------------- biomes (per-operation look) ---------------- */
+// PURE visual data: terrain palette (sRGB hex), snow line, sea tint, scatter density + style. Picked per
+// arena by engine.js syncArenaBiome from the flying operation's `biome` (opmap.js), else 'temperate'.
+// Visual-only — terrainH (gameplay) is identical in every biome.
+const BIOMES = {
+  temperate: { sand: 0xb9a57a, low: 0x4f7a34, mid: 0x355b2a, high: 0x6d6a58, rock: 0x6a6660, snow: 0xe9eef2, snowLine: 780,
+               sea: 0x0f4460, shallow: 0x2f8a8c, canopy: 0x2f5a2c, tree: 'conifer', treeMul: 1, bldMul: 1,
+               walls: [0xe8e2d4, 0xd6cbb4, 0xbfc3c4, 0xe3d3b0], roofs: [0x8a3b2a, 0x5c5f66, 0x7a4a2e, 0x3f4a55], flatRoofs: false },
+  tropical:  { sand: 0xe0cf9e, low: 0x4f8f2e, mid: 0x2e6b27, high: 0x55653a, rock: 0x6f6a5c, snow: 0xe9eef2, snowLine: 99999,
+               sea: 0x0b4f6e, shallow: 0x2fb3a8, canopy: 0x2f7a2a, tree: 'broadleaf', treeMul: 1.1, bldMul: 1,
+               walls: [0xf2ede2, 0xe9dcc0, 0xd8e0da, 0xf0d9b8], roofs: [0xa64b2f, 0x8a3b2a, 0x3c6e6a, 0x6b4a3a], flatRoofs: false },
+  alpine:    { sand: 0x8f8a7a, low: 0x3d5a36, mid: 0x2b4630, high: 0x6b6a66, rock: 0x5e5f63, snow: 0xeef3f8, snowLine: 330,
+               sea: 0x0c2f45, shallow: 0x28606e, canopy: 0x22402c, tree: 'conifer', treeMul: 1, bldMul: 0.7,
+               walls: [0x6b4a32, 0x7a5a3e, 0xb8b4aa, 0x5a4636], roofs: [0x3a3f47, 0x4a3a30, 0x2f3338, 0x5c5f66], flatRoofs: false },
+  desert:    { sand: 0xd9c08c, low: 0xc9a870, mid: 0xb58d5a, high: 0x9a7452, rock: 0x86654a, snow: 0xf2eee6, snowLine: 99999,
+               sea: 0x0d4a66, shallow: 0x3fb0b0, canopy: 0x5a7a34, tree: 'broadleaf', treeMul: 0.12, bldMul: 1.2,
+               walls: [0xe6d3aa, 0xd9c18e, 0xcdb48a, 0xefe2c4], roofs: [0xd9c18e, 0xcdb48a, 0xe6d3aa, 0xbfa57a], flatRoofs: true },
+  arctic:    { sand: 0xc9d2d8, low: 0xdfe7ee, mid: 0xcfd9e2, high: 0x9aa3ab, rock: 0x5c636b, snow: 0xf4f8fb, snowLine: 25,
+               sea: 0x0b2a3e, shallow: 0x3a7d96, canopy: 0x26402f, tree: 'conifer', treeMul: 0.35, bldMul: 0.5,
+               walls: [0x7a2e26, 0x3f4a55, 0xb8b4aa, 0x5a4636], roofs: [0xe9eef2, 0xdfe7ee, 0xe9eef2, 0xcfd9e2], flatRoofs: false },
+};
+function biomeFor(id) { return BIOMES[id] || BIOMES.temperate; }
 
 /* ---------------- ground objects (Track B §4, NET-NEW) ---------------- */
 // Per-tier SPAWN CAPS (hard ceilings the planner never exceeds, even with placement retries). LOW
@@ -543,14 +607,25 @@ const GROUNDOBJ_BUILD_MAX_SLOPE = 0.35; // reject buildings on faces steeper tha
 // radial density falloff (denser near origin), platform exclusion. Same seed+tier+terrainHFn → same plan
 // (test-reproducible). Bounded retry budget per object so a hostile heightfield can't loop forever (the
 // per-type result may fall short of the cap if placement keeps failing — caps are ceilings, not quotas).
-function planGroundObjects(seed, tier, terrainHFn) {
+// Optional `biome` (a BIOMES row) scales tree/building density (treeMul/bldMul, caps still hold) and sets
+// the tree line (snowLine). Trees grow in noise-driven FOREST PATCHES and buildings in VILLAGE CLUSTERS
+// around flat low-lying centres, instead of a uniform sprinkle.
+function planGroundObjects(seed, tier, terrainHFn, biome) {
   const caps = GROUNDOBJ_TIER[tier] || GROUNDOBJ_TIER.low;
   const out = [];
   if (typeof terrainHFn !== 'function') return out;
   const rng = makeRng(seed);
   const R = GROUNDOBJ_RADIUS, platSq = GROUNDOBJ_PLATFORM_CLEAR * GROUNDOBJ_PLATFORM_CLEAR, E = 14;
+  const treeCap = Math.min(caps.trees, Math.round(caps.trees * (biome ? biome.treeMul : 1)));
+  const bldCap = Math.min(caps.buildings, Math.round(caps.buildings * (biome ? biome.bldMul : 1)));
+  const treeLine = biome ? Math.min(biome.snowLine + 60, 700) : 700;
+  const slopeOk = (x, z, cap) => {
+    const dhx = (terrainHFn(x + E, z) - terrainHFn(x - E, z)) / (2 * E);
+    const dhz = (terrainHFn(x, z + E) - terrainHFn(x, z - E)) / (2 * E);
+    return Math.hypot(dhx, dhz) <= cap;
+  };
   // radial-falloff sampler: bias toward origin, accept by p = 1 - clamp(r/R)*0.6 (§4.3).
-  function place(type, count, minH, slopeCap) {
+  function place(type, count, minH, slopeCap, accept) {
     let made = 0, tries = 0, budget = count * 12 + 64;
     while (made < count && tries < budget) {
       tries++;
@@ -561,19 +636,42 @@ function planGroundObjects(seed, tier, terrainHFn) {
       const h = terrainHFn(x, z);
       if (h < minH) continue;                               // water margin
       if (1 - clamp(rad / R, 0, 1) * 0.6 < rng()) continue; // radial density falloff
-      if (slopeCap != null) {                               // building slope rejection (central diff)
-        const dhx = (terrainHFn(x + E, z) - terrainHFn(x - E, z)) / (2 * E);
-        const dhz = (terrainHFn(x, z + E) - terrainHFn(x, z - E)) / (2 * E);
-        if (Math.hypot(dhx, dhz) > slopeCap) continue;
-      }
+      if (accept && !accept(x, z, h)) continue;
+      if (slopeCap != null && !slopeOk(x, z, slopeCap)) continue;   // building slope rejection (central diff)
       out.push({ type: type, x: x, z: z, rot: rng() * TWO_PI, scale: 0.7 + rng() * 0.9 });
       made++;
     }
+    return made;
   }
   place('rock', caps.rocks, 0, null);                                  // beach rocks allowed down to h>=0
-  place('tree', caps.trees, GROUNDOBJ_WATER_MARGIN, null);
-  place('building', caps.buildings, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_BUILD_MAX_SLOPE);
-  // roads: short straight ribbons; one record per road, the builder lays its strip. Reuse same gates.
+  // forest patches: a broad noise field gates where trees may root (plus a tree line)
+  const forest = (x, z, h) => h < treeLine && valueNoise2(x * 0.0011 + 3.3, z * 0.0011 - 8.1) > -0.15;
+  place('tree', treeCap, GROUNDOBJ_WATER_MARGIN, null, forest);
+  // villages: pick flat low-lying centres, then scatter buildings tightly around them
+  if (bldCap > 0) {
+    const centres = [];
+    const nC = Math.max(1, Math.ceil(bldCap / 22));
+    let tries = 0;
+    while (centres.length < nC && tries++ < nC * 60) {
+      const ang = rng() * TWO_PI, rad = rng() * R * 0.85;
+      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+      if (x * x + z * z < platSq * 2) continue;
+      const h = terrainHFn(x, z);
+      if (h < GROUNDOBJ_WATER_MARGIN + 6 || h > 260 || !slopeOk(x, z, GROUNDOBJ_BUILD_MAX_SLOPE * 0.6)) continue;
+      centres.push({ x: x, z: z });
+    }
+    let made = 0; tries = 0;
+    while (centres.length && made < bldCap && tries++ < bldCap * 14) {
+      const c = centres[Math.floor(rng() * centres.length)];
+      const a = rng() * TWO_PI, r = (rng() + rng()) * 0.5 * 420;   // triangular falloff → dense core
+      const x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+      if (x * x + z * z < platSq || Math.hypot(x, z) > R) continue;
+      if (terrainHFn(x, z) < GROUNDOBJ_WATER_MARGIN || !slopeOk(x, z, GROUNDOBJ_BUILD_MAX_SLOPE)) continue;
+      out.push({ type: 'building', x: x, z: z, rot: Math.floor(rng() * 4) * (Math.PI / 2) + (rng() - 0.5) * 0.3, scale: 0.7 + rng() * 0.9 });
+      made++;
+    }
+  }
+  // roads: short straight ribbons; one record per road, the builder drapes its strip over the terrain.
   place('road', caps.roads, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_BUILD_MAX_SLOPE);
   return out;
 }
@@ -1219,7 +1317,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     reqSatisfied,
     TWO_PI, DEG, clamp, lerp, rand, randInt, damp,
-    NIGHT_RADAR_MUL, WEATHER, resolveWeather, turbSample, rollWeather,
+    NIGHT_RADAR_MUL, WEATHER, resolveWeather, rollWeather,
     BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase, resolveBossPhase,
     resolveDamage,
     BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime,
@@ -1234,7 +1332,7 @@ if (typeof module !== 'undefined' && module.exports) {
     STEER, steerCommand,
     AIM_ASSIST, AIM_ASSIST_LEVELS, AIM_MAGNET_K, aimAssistCfg, aimAssistStep,
     GFX_TIERS, resolveQuality,
-    TERRAIN_TIER, SEA_TIER, terrainDetailH,
+    TERRAIN_TIER, SEA_TIER, terrainDetailH, valueNoise2, terrainHeight, TERRAIN_MAX_H, BIOMES, biomeFor,
     FOG_CLEAR_DENSITY, FOG_ACTIVE_DENSITY, fogDensityFor,
     GROUNDOBJ_TIER, GROUNDOBJ_RADIUS, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_PLATFORM_CLEAR, GROUNDOBJ_BUILD_MAX_SLOPE, planGroundObjects,
     shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,

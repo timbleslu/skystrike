@@ -760,11 +760,11 @@ function buildJet(color, accent, cfg, hero) {
         const petals = 22;
         for (let k = 0; k < petals; k++) {
           const a = (k / petals) * Math.PI * 2;
-          const pet = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.46, 1.25), steel);
+          const pet = new THREE.Mesh(cacheGeo('nozpetal', () => new THREE.BoxGeometry(0.13, 0.46, 1.25)), steel);
           pet.position.set(ex + Math.cos(a) * rR * 0.82, Math.sin(a) * rR * 0.82 * flat, exZ + 0.2);
           pet.rotation.z = a + Math.PI / 2; pet.scale.y = flat; g.add(pet);
         }
-        const can2 = new THREE.Mesh(new THREE.CylinderGeometry(rR * 0.5, rR * 0.55, 0.6, segN), new THREE.MeshBasicMaterial({ color: 0x331008, fog: false }));
+        const can2 = new THREE.Mesh(cacheGeo(gk('excan2'), () => new THREE.CylinderGeometry(rR * 0.5, rR * 0.55, 0.6, segN)), new THREE.MeshBasicMaterial({ color: 0x331008, fog: false }));
         can2.rotation.x = Math.PI / 2; can2.scale.y = flat; can2.position.set(ex, 0, exZ + 0.7); g.add(can2);
       }
       // throttle-heated nozzle interior on every jet (animEngines drives the emissive)
@@ -1152,7 +1152,7 @@ function applyJetPassives(p, j) {
 }
 
 /* ---------------- enemies ---------------- */
-// FIGHTER_SHAPES / ACE_SHAPES → js/airframes.js (require-safe).
+// FIGHTER_SHAPES → js/airframes.js (require-safe).
 const CALLPFX = ['BANDIT','BOGEY','TANGO','VENOM','GHOST','REAPER','TALON','VIPER','RAVEN','SPECTRE'];
 function genCallsign(pfx) { return (pfx || CALLPFX[randInt(0, CALLPFX.length - 1)]) + '-' + randInt(1, 99).toString().padStart(2, '0'); }
 
@@ -1178,6 +1178,7 @@ function createEnemy(type, pos, opts) {
     hp = 46 + wave * 4;
   }
   scene.add(mesh); mesh.position.copy(pos);
+  if (type === 'ground') mesh.position.y = Math.max(pos.y, surfaceH(pos.x, pos.z));   // seat on the visible mesh, never below the gameplay surface
   if (mesh.userData.body) { mesh.userData.body.emissive = new THREE.Color(type === 'boss' ? 0x550033 : 0x3a0606); mesh.userData.body.emissiveIntensity = 0.7; }
   // Fighter threat variety (balance pass 2026-06, cheap version): roll a coarse temperament so not every
   // fighter flies the same "circle-then-strafe" routine. ~40% are AGGRESSIVE knife-fighters (sharper turn,
@@ -1451,7 +1452,7 @@ function updateEnemy(e, dt) {
     t4.copy(toP).multiplyScalar(tracking ? Math.max(rangeErr, -0.15) : rangeErr);
     t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * (tracking ? 0.3 : 1));
     desired.copy(t4).add(t5).normalize();
-    const lead = interceptPoint(e.group.position, player.group.position, player.vel, 1400);
+    const lead = interceptPoint(e.group.position, player.group.position, player.vel, 1400, tLead);
     if (lead) { tA.copy(lead).sub(e.group.position).normalize(); desired.lerp(tA, tracking ? 0.8 : 0.25).normalize(); }
     e.speed = lerp(e.speed, tracking ? (e.type === 'boss' ? 200 : 226) : (e.type === 'boss' ? 178 : 198), dt);
   }
@@ -1550,7 +1551,7 @@ function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
     if (dist < 2400) { desired.copy(e.group.position).sub(player.group.position).normalize(); desired.y += 0.05; desired.normalize(); }
   } else if (pat === 'headOn') {
     // WARLORD p3 / CORSAIR p3 — commit to a high-closure head-on merge at the player's predicted position.
-    const lead = interceptPoint(e.group.position, player.group.position, player.vel, 1400);
+    const lead = interceptPoint(e.group.position, player.group.position, player.vel, 1400, tLead);
     if (lead) { tA.copy(lead).sub(e.group.position).normalize(); desired.lerp(tA, 0.85).normalize(); }
     else { desired.lerp(toP, 0.85).normalize(); }
     e.speed = lerp(e.speed, 300, dt);                    // bore in hard
@@ -1635,7 +1636,7 @@ function updateGround(e, dt) {
   } else if (e.gkind === 'truck') {
     if (!e.truckDir) { e.truckDir = new THREE.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(); }
     e.group.position.addScaledVector(e.truckDir, dt * (e.convoy ? (e.convoySpeed || 46) : 28));
-    e.group.position.y = terrainH(e.group.position.x, e.group.position.z);
+    e.group.position.y = Math.max(terrainH(e.group.position.x, e.group.position.z), surfaceH(e.group.position.x, e.group.position.z));
     if (e.convoy && d > 7800) {   // convoy truck outruns the radar — gone for good
       e.alive = false; despawnEnemy(e);
       clearLocks(e);
@@ -1728,9 +1729,9 @@ function enemyFireGun(e, aimObj) {
   if (e.bulletAmmo <= 0) return;
   e.bulletAmmo--;
   let aimPos;
-  if (aimObj && aimObj.alive) { aimPos = interceptPoint(e.group.position, aimObj.group.position, aimObj.vel, 1100) || aimObj.group.position; }
+  if (aimObj && aimObj.alive) { aimPos = interceptPoint(e.group.position, aimObj.group.position, aimObj.vel, 1100, tLead) || aimObj.group.position; }
   else if (decoys.length && Math.random() < 0.6) { aimPos = decoys[(Math.random() * decoys.length) | 0].mesh.position; }
-  else { aimPos = interceptPoint(e.group.position, player.group.position, player.vel, 1100) || player.group.position; }
+  else { aimPos = interceptPoint(e.group.position, player.group.position, player.vel, 1100, tLead) || player.group.position; }
   const dir = t1.copy(aimPos).sub(e.group.position).normalize();
   dir.x += rand(-0.03, 0.03); dir.y += rand(-0.03, 0.03); dir.normalize();
   const b = getBullet(); b.enemy = true; b.dmg = e.type === 'boss' ? 6 : 4; b.life = 2.2; b.mesh.material = ASSET.ebulletMat; b.mesh.scale.setScalar(1.8);

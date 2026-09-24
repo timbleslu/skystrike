@@ -53,15 +53,14 @@ function readFlightInput() {
   }
   motionPrevState = state;
   let pitch = 0, roll = 0;
+  const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
   if (mobileControl === 'motion' && motionInput.ready) {
-    const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
     // beta -> pitch (push nose down by tilting forward by default; invertY flips), gamma -> roll
     const rawPitch = motionAxis(motionInput.beta, motionOffset.beta, a.maxAngle);
     const rawRoll = motionAxis(motionInput.gamma, motionOffset.gamma, a.maxAngle);
     pitch = mapFlightInput(rawPitch, a, !invertY) * a.pitchClamp;  // default push-up=climb -> invert raw beta
     roll = mapFlightInput(rawRoll, a, false);
   } else if (isTouchEnabled && joyActive) {
-    const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
     // DIRECTIONAL joystick: the jet flies TOWARD the stick — up = climb, down = dive, left/right = bank that way.
     // (combat.js applies pitchIn = -pitchCmd and +pitchRate = nose up, so +touchInput.y / pull-down -> dive.)
     // MOBILE invert flips the WHOLE stick: s negates BOTH pitch and roll, so the jet flies OPPOSITE the stick.
@@ -73,7 +72,6 @@ function readFlightInput() {
     // DIRECTIONAL mouse pointer (desktop): the jet flies TOWARD the pointer's offset from screen
     // center — same shaping + sign convention as the touch joystick (+y = dive, since combat.js
     // applies pitchIn = -pitchCmd). invertY flips the WHOLE pointer like the touch stick.
-    const a = AGGRESSION[motionAggression] || AGGRESSION.balanced;
     const s = invertY ? -1 : 1;
     pitch = mapFlightInput(s * mouseInput.y, a, false) * a.pitchClamp;
     roll  = mapFlightInput(s * mouseInput.x, a, false);
@@ -89,12 +87,17 @@ function readFlightInput() {
 // stay false there); the slider writes player.throttle and readFlightInput repaints it each frame.
 // Keyboard Shift/Ctrl throttle is unchanged (desktop unaffected).
 let thrTouchId = null;
+let _thrPainted = -1;   // last painted throttle; skips the per-frame layout read when nothing changed
 function paintThrSlider() {
+  if (!isTouchEnabled) return;
+  const frac = clamp(player ? player.throttle : 0, 0, 1);
+  if (frac === _thrPainted) return;
   const sl = g('tb-thr'); if (!sl) return;
   const fill = g('tb-thr-fill'), thumb = g('tb-thr-thumb');
-  const frac = clamp(player ? player.throttle : 0, 0, 1);
+  const travel = Math.max(0, sl.clientHeight - (thumb ? thumb.offsetHeight : 0));   // read layout before any write
   if (fill) fill.style.height = (frac * 100) + '%';
-  if (thumb) thumb.style.bottom = (frac * Math.max(0, sl.clientHeight - thumb.offsetHeight)) + 'px';
+  if (thumb) thumb.style.bottom = (frac * travel) + 'px';
+  if (travel > 0) _thrPainted = frac;   // hidden track (0 height) → repaint once it's laid out
 }
 function bindThrSlider() {
   const sl = g('tb-thr'); if (!sl) return;

@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const {
-  TERRAIN_TIER, SEA_TIER, terrainDetailH,
+  TERRAIN_TIER, SEA_TIER, terrainDetailH, terrainHeight, TERRAIN_MAX_H, BIOMES, biomeFor,
   FOG_CLEAR_DENSITY, FOG_ACTIVE_DENSITY, fogDensityFor,
   GROUNDOBJ_TIER, GROUNDOBJ_RADIUS, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_PLATFORM_CLEAR, GROUNDOBJ_BUILD_MAX_SLOPE, planGroundObjects,
 } = require('../js/core.js');
@@ -128,5 +128,42 @@ const sea = (x, z) => (Math.hypot(x, z) < 500 ? 50 : -100);
 const wet = planGroundObjects(3, 'high', sea);
 assert.ok(wet.every(o => sea(o.x, o.z) >= (o.type === 'rock' ? 0 : GROUNDOBJ_WATER_MARGIN)), 'all-water field: no object below margin');
 assert.ok(wet.length <= GROUNDOBJ_TIER.high.rocks + GROUNDOBJ_TIER.high.trees + GROUNDOBJ_TIER.high.buildings + GROUNDOBJ_TIER.high.roads, 'caps still hold on hostile field');
+
+/* ---------------- gameplay heightfield + biomes ---------------- */
+// terrainHeight is deterministic (no RNG/clock) and bounded; the play area is a mixed island chain and the
+// mesh edge sits in deep ocean so it never reads as a cliff.
+assert.strictEqual(terrainHeight(1234.5, -987.25), terrainHeight(1234.5, -987.25), 'terrainHeight deterministic');
+{
+  let mn = Infinity, mx = -Infinity, land = 0, n = 0;
+  for (let x = -13000; x <= 13000; x += 200) for (let z = -13000; z <= 13000; z += 200) {
+    const h = terrainHeight(x, z);
+    assert.ok(Number.isFinite(h), 'terrainHeight finite');
+    mn = Math.min(mn, h); mx = Math.max(mx, h);
+    if (Math.abs(x) < 10000 && Math.abs(z) < 10000) { n++; if (h > -10) land++; }
+  }
+  assert.ok(mx + TERRAIN_TIER.high.detailAmp < TERRAIN_MAX_H, 'TERRAIN_MAX_H bounds the visible surface');
+  assert.ok(mn > -800 && mx < 1000, 'terrainHeight range ≈ -700..930 (' + mn.toFixed(0) + '..' + mx.toFixed(0) + ')');
+  const frac = land / n;
+  assert.ok(frac > 0.35 && frac < 0.75, 'play area is a land/sea mix (land ' + frac.toFixed(2) + ')');
+  for (let t = -13000; t <= 13000; t += 500) {
+    assert.ok(terrainHeight(13000, t) < -250 && terrainHeight(t, -13000) < -250, 'mesh edge is deep ocean');
+  }
+}
+// biomeFor falls back to temperate for unknown/missing ids; every biome carries the fields engine.js reads.
+assert.strictEqual(biomeFor('nope'), BIOMES.temperate, 'unknown biome → temperate');
+assert.strictEqual(biomeFor(undefined), BIOMES.temperate, 'missing biome → temperate');
+for (const [id, b] of Object.entries(BIOMES)) {
+  for (const k of ['sand', 'low', 'mid', 'high', 'rock', 'snow', 'snowLine', 'sea', 'shallow', 'canopy', 'tree', 'treeMul', 'bldMul', 'walls', 'roofs']) {
+    assert.ok(b[k] !== undefined, id + ' has ' + k);
+  }
+  assert.strictEqual(b.walls.length, b.roofs.length, id + ' walls/roofs paired');
+}
+// biome density multipliers never push the planner past the tier caps
+for (const id of Object.keys(BIOMES)) {
+  const plan = planGroundObjects(9, 'high', terrainHeight, BIOMES[id]);
+  const cnt = t => plan.filter(o => o.type === t).length;
+  assert.ok(cnt('tree') <= GROUNDOBJ_TIER.high.trees && cnt('building') <= GROUNDOBJ_TIER.high.buildings, id + ' respects caps');
+  assert.ok(plan.every(o => terrainHeight(o.x, o.z) >= (o.type === 'rock' ? 0 : GROUNDOBJ_WATER_MARGIN)), id + ' nothing in the sea');
+}
 
 console.log('ok - terrain/sea/fog/ground-object tier cores (Track B)');

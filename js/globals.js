@@ -35,19 +35,20 @@ let skyMat, sunDisc, ambientLight, hemiLight, starsMat, rimLight, haloA, haloB;
 let timeOfDay = 0;
 const TODS = [
   // intensities are physical-light scaled (useLegacyLights = false ≈ legacy × π)
-  { key: 'DAY',  top: 0x0a1c44, hor: 0x2a6a7a, bot: 0x1d4a63, fog: 0x0a1424, sun: 0xfff0d6, sunI: 4.2, amb: 0.95, hemi: 0.75, rim: 1.25, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0 },
-  { key: 'DUSK', top: 0x1a2150, hor: 0xe08a44, bot: 0x5a3340, fog: 0x2a1a28, sun: 0xffb060, sunI: 3.6, amb: 0.7, hemi: 0.6, rim: 1.1, stars: 0.35, disc: 0xffcf88, sunY: 0.32 },
-  { key: 'NIGHT', top: 0x02030f, hor: 0x0c1832, bot: 0x070d1c, fog: 0x05070f, sun: 0x9fb6ff, sunI: 1.7, amb: 0.55, hemi: 0.5, rim: 0.95, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6 },
+  // fog matches each sky's horizon haze so distant land + sea dissolve into the sky (no dark seam);
+  // seaK dims the biome's water colour for the light level
+  { key: 'DAY',  top: 0x2a5fa8, hor: 0xa4c6d8, bot: 0x6e98ae, fog: 0x98b9cb, sun: 0xfff0d6, sunI: 4.2, amb: 0.95, hemi: 0.75, rim: 1.25, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0, seaK: 1.0 },
+  { key: 'DUSK', top: 0x243268, hor: 0xf09a5a, bot: 0x6a4458, fog: 0x9a6a66, sun: 0xffb060, sunI: 3.6, amb: 0.7, hemi: 0.6, rim: 1.1, stars: 0.35, disc: 0xffcf88, sunY: 0.32, seaK: 0.55 },
+  { key: 'NIGHT', top: 0x02040f, hor: 0x142440, bot: 0x070d1c, fog: 0x0f1a2e, sun: 0x9fb6ff, sunI: 1.7, amb: 0.55, hemi: 0.5, rim: 0.95, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6, seaK: 0.15 },
 ];
 
 /* ---------------- weather (feature #4: weather + TOD gameplay) ---------------- */
-// Live weather modifiers — engine.js applyWeather writes these; combat.js (lock + turbulence),
+// Live weather modifiers — engine.js applyWeather writes these; combat.js (lock),
 // ui.js (radar + HUD chip) and engine.js (fog/sky) read them. Default clear = neutral (no-op).
-let weather = { type: 'clear', radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, turbulence: 0.0, fogMul: 1.0 };
-let weatherT = 0;            // turbulence phase clock, advanced each frame by updateWeather(dt)
+let weather = { type: 'clear', radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, fogMul: 1.0 };
 let weatherSeed = 1;         // per-run seed for standalone (non-op) weather rolls; reseeded in startGame
 const FOG_BASE = 0.000058;   // neutral FogExp2 density; weather.fogMul scales from this (matches scene init)
-// weather core (NIGHT_RADAR_MUL, WEATHER, resolveWeather, turbSample, rollWeather) → core.js.
+// weather core (NIGHT_RADAR_MUL, WEATHER, resolveWeather, rollWeather) → core.js.
 // boss-phase core (BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase) → core.js.
 // Boss-rush mode (F15): unlockable gauntlet — fight every boss in sequence, fixed loadout,
 // ONE life, no tech tree. Runtime mode flag + progress; best time persists in meta.
@@ -77,13 +78,14 @@ let selectedJet = 0, previewJet = null, platform = null;   // default to the FT-
 // UI-only skin shown on the preview jet (owned OR not); NEVER persisted, NEVER read by gameplay
 // (createPlayer uses jetPaint = owned only), so an unowned preview can't reach a launched jet.
 const PREVIEW_PITCH_MAX = Math.PI / 3;   // ±60° pitch clamp
+const PREVIEW_YAW0 = 2.45;               // resting yaw: nose toward the camera at a 3/4 angle (π = head-on)
 const hangarPreview = {
   skin: null,          // transient UI-only skin id on the preview jet (never leaks into a launched jet)
-  yaw: 0, pitch: 0,    // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
+  yaw: PREVIEW_YAW0, pitch: 0,   // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
   zoom: 1.0,           // F2 preview zoom: dollies previewCamera toward origin (0.8×–2.5×), reset to 1 on jet switch
   dragging: false,     // pointer is dragging the preview jet (raycast-gated on pointerdown)
   spinResumeAt: 0,     // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
-  clear() { this.skin = null; this.yaw = 0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },   // the "no preview leaks into a launched jet" reset (skin→null, zoom→1, orientation→0)
+  clear() { this.skin = null; this.yaw = PREVIEW_YAW0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },   // the "no preview leaks into a launched jet" reset (skin→null, zoom→1, orientation→rest)
 };
 let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
 let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
@@ -445,7 +447,6 @@ let stealthExtraSpawns = 0;      // running count of go-loud reinforcements spaw
 // v1.4 STEALTH patrol tunables (ADR-0006 "go loud") — patrols sweep a vision cone + investigate on suspicion.
 // Centralized here so the feel is easy to retune. Cone half-angle/range, suspicion thresholds, timeouts.
 const STEALTH_CONE_HALF = 0.62;          // rad (~36°) half-angle of a patrol's forward scan cone
-const STEALTH_CONE_MUL = 1.8;            // cone-LOS rise multiplier (fastest detection term, ∝ how centred you are)
 const STEALTH_SUSPICION_RISE = 0.9;      // per-second suspicion gain while a patrol holds you in cone-LOS
 const STEALTH_SUSPICION_DECAY = 0.4;     // per-second suspicion bleed-off when not seen
 const STEALTH_SUSPICION_THRESHOLD = 1.0; // suspicion ≥ this → the nearest suspicious patrol peels off to investigate
@@ -502,6 +503,7 @@ function refreshGfxTier() {
    Single-file scratch was evicted to its owning file: eul + aimT1..3 → combat.js, pp1..3 → ui-hud.js. */
 const t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), t3 = new THREE.Vector3(),
       t4 = new THREE.Vector3(), t5 = new THREE.Vector3(), tA = new THREE.Vector3();
+const tLead = new THREE.Vector3();   // interceptPoint `out` for hot per-frame callers (result consumed immediately)
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
 const ZERO = new THREE.Vector3(0, 0, 0), UPV = new THREE.Vector3(0, 1, 0), ZAX = new THREE.Vector3(0, 0, 1);
 const m4 = new THREE.Matrix4();   // globals-only: consumed by dirToQuat below

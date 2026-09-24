@@ -342,7 +342,7 @@ function fireBossAttack(e, dist) {
 }
 
 function spawnBigRing(pos, color, maxK) {
-  const ring = new THREE.Mesh(new THREE.RingGeometry(4, 7, 40),
+  const ring = new THREE.Mesh(ASSET.bigRingGeo,
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
   ring.position.copy(pos); if (camera) ring.lookAt(camera.position); scene.add(ring);
   particles.push({ mesh: ring, vel: null, life: 0.9, max: 0.9, type: 'ring', ringK: maxK || 80 });
@@ -415,7 +415,7 @@ function damageWingman(w, amt) {
   if (!w.alive) return;
   w.hp -= amt; w.hitFlash = 0.1;
   if (w.hp <= 0) {
-    w.alive = false; explode(w.group.position, true); detachFromScene(w.group);
+    w.alive = false; explode(w.group.position, true); despawnObject(w.group);   // revive builds a fresh mesh
     w.rtb = 13;   // regroup / replacement timer
     showBanner(tf('banner.down', { name: w.name })); audio.warn();
   }
@@ -480,10 +480,10 @@ function updateCCA(w, dt) {
         desired.copy(tp).sub(w.group.position).normalize();
         if (td < 28) {
           damageEnemy(w.target, 80, w.group.position, false, true);
-          w.alive = false; explode(w.group.position, false); return;
+          w.alive = false; explode(w.group.position, false); despawnObject(w.group); return;   // rammed: gone for good
         }
       } else {
-        const lead = interceptPoint(w.group.position, tp, w.target.vel || ZERO, 1400);
+        const lead = interceptPoint(w.group.position, tp, w.target.vel || ZERO, 1400, tLead);
         desired.copy(lead || tp).sub(w.group.position).normalize();
       }
     } else { w.target = null; }
@@ -557,7 +557,7 @@ function updateWingmen(dt) {
     if (w.temp) {
       w.expire -= dt;
       if (!w.alive || w.expire <= 0) {            // CCA expended or recalled to base — no respawn
-        if (w.alive && w.group) { explode(w.group.position, false); detachFromScene(w.group); }
+        if (w.alive && w.group) { explode(w.group.position, false); despawnObject(w.group); }   // downed/rammed CCAs despawned themselves
         wingmen.splice(i, 1);
         continue;
       }
@@ -584,7 +584,7 @@ function updateWingman(w, dt) {
     td = w.group.position.distanceTo(tp);
     if (td < 4400) {
       engaging = true;
-      const lead = interceptPoint(w.group.position, tp, w.target.vel || ZERO, 1400);
+      const lead = interceptPoint(w.group.position, tp, w.target.vel || ZERO, 1400, tLead);
       desired.copy(lead || tp).sub(w.group.position).normalize();
       const nf0 = fwdQ(w.logicQuat, t4);
       aimGood = td < 2600 && nf0.angleTo(t5.copy(tp).sub(w.group.position).normalize()) < 0.13;
@@ -664,7 +664,7 @@ function wingmanFireGun(w) {
   const fwd = fwdQ(w.logicQuat, t1);
   let dir;
   if (w.target && w.target.alive) {
-    const lead = interceptPoint(w.group.position, w.target.group.position, w.target.vel || ZERO, 1500);
+    const lead = interceptPoint(w.group.position, w.target.group.position, w.target.vel || ZERO, 1500, tLead);
     dir = t2.copy(lead || w.target.group.position).sub(w.group.position).normalize();
   } else dir = t2.copy(fwd);
   dir.x += rand(-0.012, 0.012); dir.y += rand(-0.012, 0.012); dir.normalize();
@@ -716,7 +716,7 @@ function wingmanSpecial(w) {
 
   if (id === 'SU-57') {
     // COBRA: area shockwave + AOE damage
-    spawnShockwave(pos.clone()); explode(pos.clone(), true);
+    spawnShockwave(pos); explode(pos, true);
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       if (e.alive && e.type !== 'boss' && pos.distanceToSquared(e.group.position) < 340 * 340)
@@ -733,17 +733,12 @@ function wingmanSpecial(w) {
     for (let i = 0; i < missiles.length; i++) {
       const m = missiles[i];
       if (m.enemy && !m.decoyed && pos.distanceToSquared(m.mesh.position) < 650 * 650) {
-        explode(m.mesh.position.clone(), false); m.life = 0;
+        explode(m.mesh.position, false); m.life = 0;
       }
     }
     burstMissiles(2);
   } else if (id === 'F-35') {
-    // STEALTH: shed missiles tracking this wingman, then fire
-    for (let i = 0; i < missiles.length; i++) {
-      const m = missiles[i];
-      if (m.enemy && m.target === w.group) m.decoyed = true;
-    }
-    burstMissiles(3);
+    burstMissiles(3);   // (a "shed missiles tracking this wingman" pass lived here — dead: enemy missiles only ever home on the player)
   } else if (id === 'EFT') {
     burstMissiles(4);
   } else if (id === 'RAFALE') {
@@ -764,12 +759,7 @@ function wingmanSpecial(w) {
     spawnCCA(pt);
     burstMissiles(2);
   } else if (id === 'J-50') {
-    // VECTOR SURGE: shed tracking missiles + burst
-    for (let i = 0; i < missiles.length; i++) {
-      const m = missiles[i];
-      if (m.enemy && m.target === w.group) m.decoyed = true;
-    }
-    burstMissiles(3);
+    burstMissiles(3);   // VECTOR SURGE burst (its missile-shed pass was dead: enemy missiles never target wingmen)
   } else {
     // F-22, FA18, STD, and anything else: missile burst
     burstMissiles(id === 'F-22' ? 3 : 2);
@@ -926,6 +916,7 @@ window.addEventListener('touchstart', function firstTouch() {
 
 
 /* ---------------- main loop ---------------- */
+let hangarCoverT = 0;   // when the opaque hangar last started covering the viewport (0 = not covering)
 function animate() {
   requestAnimationFrame(animate);
   if (typeof syncManualBtn === 'function') syncManualBtn();   // global gear button visibility (menus vs flight)
@@ -936,7 +927,12 @@ function animate() {
   // bed ducks to silence while paused / in menus / on weather change (tickWeather reads state+paused
   // +weather.type itself; muted/volume apply upstream via the master gain). See AudioEngine.tickWeather.
   if (typeof audio !== 'undefined' && audio.on) audio.tickWeather();
-  if (paused) { renderer.render(scene, camera); return; }
+  // the hangar is an opaque full-viewport panel — once its 0.5s fade-in is done nothing behind it is visible,
+  // so skip the world sim + draw (the first frames still draw, which also compiles the scene's shaders at boot)
+  const covered = state === 'hangar' && currentScreen === 'hangar' && !g('hangar').classList.contains('hide');
+  if (!covered) hangarCoverT = 0; else if (!hangarCoverT) hangarCoverT = performance.now();
+  if (covered && performance.now() - hangarCoverT > 600) return;
+  if (paused) { renderFrame(); return; }
   updateClouds(dt);
 
   if (state === 'hangar') {
@@ -946,7 +942,7 @@ function animate() {
   } else if (state === 'playing') {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
     readFlightInput();   // compose touch/motion into flightInput before the player update consumes it
-    updateWeather(dt * ts);   // advance turbulence phase + storm lightning before the player update reads it
+    updateWeather(dt * ts);   // fog tracer dimming + storm lightning
     updatePlayer(dt);
     tickTutorial();   // first-run guided tutorial: gate stepped prompts on the player's own actions
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
@@ -968,7 +964,7 @@ function animate() {
     updateParticles(dt);
     camera.updateMatrixWorld();
   }
-  renderer.render(scene, camera);
+  renderFrame();
 }
 
 /* ---------------- hangar 3D-preview drag-to-rotate (touch + mouse) ----------------

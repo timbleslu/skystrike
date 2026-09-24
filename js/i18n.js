@@ -223,11 +223,6 @@ const I18N = {
     'stars.cond.noFlares': 'NO FLARES',
     'stars.cond.fastClear': 'CLEAR UNDER {n}s',
     'stars.cond.killsN': '{n}+ KILLS',
-    /* ---- endless death rating (stars hidden in endless; this replaces them) ---- */
-    'rating.title': 'PERFORMANCE',
-    'rating.kills': 'ENEMIES KILLED',
-    'rating.acc': 'ACCURACY',
-    'rating.waves': 'WAVES SURVIVED',
 
     /* ---- tech tree ui ---- */
     'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A', 'tech.rp': 'RP',
@@ -504,7 +499,7 @@ const I18N = {
     /* ---- game over ---- */
     'go.score': 'SCORE', 'go.wave': 'WAVE', 'go.best': 'BEST',
     'go.kills': 'Kills', 'go.accuracy': 'Accuracy', 'go.missiles': 'Missiles', 'go.time': 'Time',
-    'go.redeploy': '▶ REDEPLOY',
+    'go.redeploy': '▶ REDEPLOY', 'go.hangar': 'HANGAR',
 
     /* ---- manual ---- */
     'manual.title': 'FLIGHT MANUAL',
@@ -610,7 +605,7 @@ const I18N = {
     'meta.banked': 'BANKED',
     'meta.tabPerks': 'Upgrades',
     'meta.tabAch': 'Achievements',
-    'meta.back': '▶ BACK TO HANGAR',
+    'meta.back': '◀ BACK TO HANGAR',
     'meta.hint': 'Spend Strategic Points on persistent upgrades that apply at the start of every sortie. Locked aircraft and paint schemes are bought on each aircraft’s card in the hangar.',
     'meta.locked': '🔒 LOCKED',
     'meta.buyJet': 'UNLOCK — {c} SP',
@@ -874,11 +869,6 @@ const I18N = {
     'stars.cond.noFlares': '不用干扰弹',
     'stars.cond.fastClear': '{n} 秒内通关',
     'stars.cond.killsN': '击杀 {n} 个以上',
-    /* ---- endless death rating (stars hidden in endless; this replaces them) ---- */
-    'rating.title': '战绩',
-    'rating.kills': '击落数',
-    'rating.acc': '命中率',
-    'rating.waves': '存活波次',
 
     'tech.core': '核心', 'tech.owned': '已拥有', 'tech.na': '不可用', 'tech.rp': '点',
     'tech.researchPoints': '研究点数',
@@ -1149,7 +1139,7 @@ const I18N = {
 
     'go.score': '分数', 'go.wave': '波次', 'go.best': '最高',
     'go.kills': '击杀', 'go.accuracy': '命中率', 'go.missiles': '导弹', 'go.time': '时间',
-    'go.redeploy': '▶ 重新部署',
+    'go.redeploy': '▶ 重新部署', 'go.hangar': '返回机库',
 
     'manual.title': '飞行手册',
     'manual.sub': '// 战术参考 //',
@@ -1403,7 +1393,7 @@ const I18N = {
     'meta.banked': '储备',
     'meta.tabPerks': '升级',
     'meta.tabAch': '成就',
-    'meta.back': '▶ 返回机库',
+    'meta.back': '◀ 返回机库',
     'meta.hint': '消耗战略点数购买永久升级，每次出击开始时自动生效。锁定的机型与涂装在机库各机型卡片上购买。',
     'meta.locked': '🔒 已锁定',
     'meta.buyJet': '解锁 — {c} 点',
@@ -1673,11 +1663,6 @@ const I18N = {
     'stars.cond.noFlares': '플레어 미사용',
     'stars.cond.fastClear': '{n}초 내 클리어',
     'stars.cond.killsN': '{n}킬 이상',
-    /* ---- endless death rating (stars hidden in endless; this replaces them) ---- */
-    'rating.title': '성과',
-    'rating.kills': '격추한 적',
-    'rating.acc': '명중률',
-    'rating.waves': '생존 웨이브',
 
     /* ---- tech tree ui ---- */
     'tech.core': '코어', 'tech.owned': '보유', 'tech.na': '해당 없음', 'tech.rp': 'RP',
@@ -1954,7 +1939,7 @@ const I18N = {
     /* ---- game over ---- */
     'go.score': '점수', 'go.wave': '웨이브', 'go.best': '최고',
     'go.kills': '격추', 'go.accuracy': '명중률', 'go.missiles': '미사일', 'go.time': '시간',
-    'go.redeploy': '▶ 재출격',
+    'go.redeploy': '▶ 재출격', 'go.hangar': '격납고',
 
     /* ---- manual ---- */
     'manual.title': '비행 매뉴얼',
@@ -2060,7 +2045,7 @@ const I18N = {
     'meta.banked': '비축',
     'meta.tabPerks': '업그레이드',
     'meta.tabAch': '업적',
-    'meta.back': '▶ 격납고로 돌아가기',
+    'meta.back': '◀ 격납고로 돌아가기',
     'meta.hint': '매 출격 시작 시 적용되는 영구 업그레이드에 전략 점수를 소비하세요. 잠긴 기체와 도장 구성은 격납고의 각 기체 카드에서 구매합니다.',
     'meta.locked': '🔒 잠김',
     'meta.buyJet': '잠금 해제 — {c} SP',
