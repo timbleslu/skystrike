@@ -19,7 +19,6 @@ function buildHangar() {
   });
   g('jetPrev').addEventListener('click', () => cycleJet(-1));
   g('wpCancel').addEventListener('click', () => { closeWingPicker(); audio.ui(); });
-  g('opLaunch').addEventListener('click', launchSector);
   g('jetNext').addEventListener('click', () => cycleJet(1));
   // double-click the aircraft PREVIEW = shortcut for the SELECT CTA (same gated path, opens mode choice).
   // Scoped to the preview host so double-clicking a skin chip / buy button / select never launches.
@@ -216,13 +215,12 @@ function onEmblemClick(id) {
     renderPilotPanel();
   } else {
     // try to buy if SP-gated
-    const def = EMBLEMS.filter(function(e) { return e.id === id; })[0];
+    const def = EMBLEMS.find(e => e.id === id);
     if (def && def.gate === 'sp') {
       if (buyPatch(id)) { setEmblem(id); updateSpHud(); renderPilotPanel(); if (typeof audio !== 'undefined' && audio.on) audio.ui(); }
       else showBanner(t('meta.needSp'));
     } else if (def && def.gate === 'ach') {
-      const achDef = EMBLEMS.filter(function(e) { return e.id === id; })[0];
-      showBanner(tf('pilot.needAch', { a: achDef.ach }));
+      showBanner(tf('pilot.needAch', { a: def.ach }));
     }
   }
 }
@@ -373,8 +371,7 @@ function renderSpecial2Picker(i) {
   const sel = g('special2Sel');
   if (sel) sel.addEventListener('change', e => setSpecial2(e.target.value));
 }
-// Pre-launch reflow: the hangar CTA now reads "SELECT <jet>" and opens the mode-choice screen.
-// Difficulty/env/mode moved off the hangar, so the old diff·tod·mode subtitle is retired (kept blank).
+// The hangar CTA reads "SELECT <jet>" and opens the mode-choice screen; #launchSub is kept blank.
 function refreshLaunchSub() {
   const lb = g('launch'); if (lb) { const sub = g('launchSub'); lb.textContent = tf('hangar.selectJet', { n: jetText(JETS[selectedJet], 'name') }); if (sub) { sub.textContent = ''; lb.appendChild(sub); } }
 }
@@ -399,7 +396,7 @@ function openEndlessSetup() {
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === difficulty));
-  const dd = g('diffdesc'); if (dd) dd.textContent = DIFFS[difficulty].desc;
+  setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));   // localized (was the English DIFFS[].desc)
   refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
@@ -411,8 +408,6 @@ function setTimeOfDay(t) {
   if (audio.on) audio.ui();
   saveSettings();
 }
-// (setOpMode + the hangar #modesel toggle were retired in the pre-launch reflow; opMode is now
-//  set directly by the #modeChoice buttons — Endless sets it false, Operation sets it true.)
 function showManualTab(name) {
   document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
   document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));

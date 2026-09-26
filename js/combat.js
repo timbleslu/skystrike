@@ -1,4 +1,4 @@
-/* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update. Load 4th. */
+/* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update. Loads after missions.js, before hud.js. */
 
 /* file-local THREE scratch (moved from globals.js — used only here) */
 const eul = new THREE.Euler();
@@ -17,6 +17,7 @@ function recycleBullet(b) { detachFromScene(b.mesh); BPOOL.push(b); }
 function berserkMul() { return player.berserk ? 1 + player.berserk * (1 - clamp(player.hp / player.maxHp, 0, 1)) : 1; }
 // KILL FRENZY — current intensity 0..1 from the decaying frenzy timer
 function frenzyAmt() { return player.frenzyMax ? clamp(player.frenzy / player.frenzyMax, 0, 1) : 0; }
+const GUN_OFFS = [-2.6, 2.6], GUN_OFFS_OD = [-3.6, -1.2, 1.2, 3.6];   // barrel lateral offsets (overdrive widens to a 4-round burst)
 function fireGun() {
   if (player.noCannon) { player.gunCd = 0.3; return; }   // J-20 carries no internal gun
   if (player.gunCd > 0) return;
@@ -26,7 +27,7 @@ function fireGun() {
   player.gunCd = (od ? 0.05 : 0.07) * (player.fireRateMul || 1) * (1 - 0.4 * fz);   // FRENZY spins the cannon up
   const fwd = fwdOf(player.group, t1), rgt = rightOf(player.group, t2);
   const dmg = player.stats.gunDmg * player.gunDmgMul * (od ? 1.5 : 1) * berserkMul() * (1 + 0.3 * fz);
-  const offs = od ? [-3.6, -1.2, 1.2, 3.6] : [-2.6, 2.6];   // overdrive widens to a 4-round burst
+  const offs = od ? GUN_OFFS_OD : GUN_OFFS;
   for (const off of offs) {
     const b = getBullet(); b.enemy = false; b.dmg = dmg; b.life = 2.0; b.mesh.material = ASSET.bulletMat; b.mesh.scale.setScalar(1);
     b.pierce = player.pierce || 0; b.passed = null;
@@ -112,13 +113,13 @@ function fireMissile() {
   haptic(25);
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
-  // shared-asset airframe with tracking halo + motor exhaust baked in (see buildMissileMesh)
+  // shared-asset airframe with its small rear motor flame baked in (see buildMissileMesh)
   const mesh = buildMissileMesh(enemy);
   mesh.position.copy(pos).addScaledVector(dir, 11);
   scene.add(mesh);
   const smokeColor = enemy ? 0xd9d2cc : 0xdfe2e6;   // thin warm-grey (foe) / cool-grey (yours) contrail — no neon
   const obj = {
-    mesh, halo: mesh.userData.halo, exhaust: mesh.userData.exhaust,
+    mesh, exhaust: mesh.userData.exhaust,
     vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
     maxSpeed: enemy ? 880 : 1050, target, enemy, life: 7, dmg: (enemy ? 16 : 34) * (dmgMul || 1),
     armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: smokeColor, hardHome: false, ambush: false,
@@ -128,7 +129,6 @@ function spawnMissile(pos, dir, target, enemy, dmgMul) {
 }
 function updateMissiles(dt, ts) {
   ts = ts || 1;
-  const now = performance.now();
   for (let i = missiles.length - 1; i >= 0; i--) {
     const m = missiles[i];
     const sdt = m.enemy ? dt * ts : dt;        // enemy ordnance slows in bullet-time; yours doesn't
@@ -169,7 +169,7 @@ function updateMissiles(dt, ts) {
     dirToQuat(cur, m.mesh.quaternion);
 
     if (m.exhaust) m.exhaust.scale.setScalar(5.5 + 1.6 * (m.speed / m.maxSpeed) + rand(-0.5, 0.5));   // small rear flame, gentle flicker
-    m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor || (m.enemy ? 0xd9d2cc : 0xdfe2e6)); m.smokeT = 0.02; }
+    m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor); m.smokeT = 0.02; }
 
     let hit = false;
     if (m.enemy) {
@@ -252,7 +252,7 @@ function updateFlares(dt) {
   for (let i = flares.length - 1; i >= 0; i--) {
     const f = flares[i]; f.life -= dt; f.vel.y -= 120 * dt; f.vel.multiplyScalar(1 - 0.5 * dt);
     f.mesh.position.addScaledVector(f.vel, dt);
-    f.smokeT = (f.smokeT || 0) - dt;   // time-based (was 60%-per-frame → frame-rate dependent density)
+    f.smokeT = (f.smokeT || 0) - dt;   // time-based so smoke density is frame-rate independent
     if (f.smokeT <= 0) { spawnSmoke(f.mesh.position, 0xffcc66, 0.45); f.smokeT = 0.028; }
     if (f.life <= 0) {
       if (f.owner === 'player' && player.flakFlares) missileSplash(f.mesh.position, player.flakFlares, 260, null);   // FLAK BLOOM — flares burn out as HE bursts
@@ -377,6 +377,7 @@ function updateLoot(dt) {
 }
 
 /* ---------------- particles ---------------- */
+const _xpV = new THREE.Vector3();   // explode()-only scratch — callers may pass the shared t1 as `pos` (flakBurst)
 function explode(pos, big) {
   audio.explode(big);
   // white-hot core flash
@@ -391,7 +392,7 @@ function explode(pos, big) {
   const nf = big ? 7 : 4;
   for (let i = 0; i < nf; i++) {
     const fb = particleSprite(fireTex(), true, false, 0xffffff, 0.95, rand(0, TWO_PI));
-    fb.position.copy(pos).add(t1.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(big ? 16 : 7));
+    fb.position.copy(pos).add(_xpV.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(big ? 16 : 7));
     fb.scale.setScalar(rand(0.7, 1.3) * (big ? 95 : 48)); scene.add(fb);
     particles.push({ mesh: fb, vel: new THREE.Vector3(rand(-26, 26), rand(-6, 44), rand(-26, 26)), life: rand(0.45, 0.8), max: 0.8, type: 'fire', grow: (big ? 70 : 42), rot: rand(-2.4, 2.4) });
   }
@@ -402,7 +403,7 @@ function explode(pos, big) {
     const s = particleSpark(i % 2 ? 0xffaa33 : 0xff6633);
     s.position.copy(pos);
     const v = new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(90, 260) * (big ? 1.6 : 1));
-    s.quaternion.copy(dirToQuat(v.clone().normalize(), q1)); scene.add(s);
+    dirToQuat(_xpV.copy(v).normalize(), s.quaternion); scene.add(s);
     particles.push({ mesh: s, vel: v, life: rand(0.5, 1.1), max: 1.1, type: 'spark' });
   }
 
@@ -410,7 +411,7 @@ function explode(pos, big) {
   const numDebris = !rich ? 0 : big ? randInt(7, 14) : randInt(3, 7);
   for (let i = 0; i < numDebris; i++) {
     const m = new THREE.Mesh(ASSET.fragGeo, ASSET.fragMat);
-    m.position.copy(pos).add(new THREE.Vector3(rand(-3,3), rand(-3,3), rand(-3,3)));
+    m.position.copy(pos).add(_xpV.set(rand(-3, 3), rand(-3, 3), rand(-3, 3)));
     const vel = new THREE.Vector3(rand(-1, 1), rand(-0.2, 1.5), rand(-1, 1)).normalize().multiplyScalar(rand(80, 220));
     m.rotation.set(rand(0, TWO_PI), rand(0, TWO_PI), rand(0, TWO_PI));
     scene.add(m);
@@ -485,7 +486,7 @@ function damagePlayer(amt, src) {
   const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, amt); player.shield -= s; amt -= s; }
   player.hp -= amt; player.damageFlash = 0.5; player.shake = Math.max(player.shake, 0.4); shakeCam(0.5);
-  if (src) { player.hurtDir = new THREE.Vector3().copy(src).sub(player.group.position).normalize(); player.hurtT = 1.0; }
+  if (src) { (player.hurtDir || (player.hurtDir = new THREE.Vector3())).copy(src).sub(player.group.position).normalize(); player.hurtT = 1.0; }
   audio.hurt();
   haptic(60);
   if (player.reactive && hadShield && player.shield <= 0) reactivePulse();   // REACTIVE ARMOUR — the shield going down detonates
@@ -544,7 +545,7 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
   // Pure hit-reward (core.js awardHit): combo bump + timer reset + combo-scaled hit score.
   const hr = awardHit({ combo: player.combo }, { amt: amt, scoreMul: player.scoreMul || 1 });
   player.combo = hr.combo; player.comboTimer = hr.comboTimer; player.score += hr.score;
-  if (byPlayer) { e.playerDmg = dr.playerDmg; player.tp += dr.rp; }   // RP from damage YOU deal
+  if (byPlayer) { e.playerDmg = dr.playerDmg; player.tp += dr.rp; e.lastHitT = performance.now(); }   // RP from damage YOU deal; lastHitT: a raider you hit turns to fight you (updateRaider)
   audio.hit();
   if (lastCrit) audio.blip(1700, 0.05, 'sine', 0.09, 1250);
   // EXECUTIONER — finish a wounded non-boss outright
@@ -552,8 +553,8 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
     spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
     if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
   }
-  if (e.type === 'boss' && e.hp > 0) {
-    // HP thresholds drive a once-per-phase state machine (bossPhaseFor/nextBossPhase, globals.js).
+  if ((e.type === 'boss' || e.campaignBoss) && e.hp > 0) {
+    // HP thresholds drive a once-per-phase state machine (bossPhaseFor/nextBossPhase, core.js).
     // nextBossPhase never regresses and only advances, so a transition fires exactly once even if
     // HP oscillates near a boundary (lifesteal etc.) — and a big hit can skip straight to phase 3.
     const np = nextBossPhase(e.phase, e.hp / e.maxHp);
@@ -564,7 +565,7 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
 }
 // Boss crosses an HP threshold -> escalate. Idempotent per phase (the caller guards via
 // nextBossPhase). Applies the resolved phase-state (turnRate) + arena weather/tod, then fires a
-// visual cue + banner + screen shake. Reusable by a future Boss-Rush mode.
+// visual cue + banner + screen shake.
 function bossEnterPhase(e, ph) {
   e.phase = ph;
   bossApplyPhase(e, ph);                                 // turnRate + e.phaseState + authored weather/tod
@@ -573,9 +574,10 @@ function bossEnterPhase(e, ph) {
   if (e.group.userData.core) e.group.userData.core.material.emissiveIntensity = ph >= 3 ? 5.5 : 3.5;
   if (ph >= 3) for (let i = 0; i < 6; i++) spawnSmoke(e.group.position, 0xff5a8a, 2.2);   // armor shed
   showBanner(t(ph >= 3 ? 'banner.bossPhase3' : 'banner.bossPhase2'));
+  { const pc = e._phaseCfg && e._phaseCfg[ph - 1]; if (pc && pc.say) radioKey('boss', 'comms.' + pc.say); }   // campaign boss taunt on each phase shift
   audio.power(); audio.warn();
   haptic([40, 30, 60]);
-  if (typeof shakeCam === 'function') shakeCam(ph >= 3 ? 1.0 : 0.8);   // shakeCam may not be merged yet
+  shakeCam(ph >= 3 ? 1.0 : 0.8);
 }
 // IMPURE state applicator (no transition FX — shared by bossEnterPhase AND the lazy phase-1 init in
 // entities.js updateEnemy). Computes the phase-state via the PURE resolveBossPhase (core.js) and stows
@@ -584,16 +586,16 @@ function bossEnterPhase(e, ph) {
 // forward via phaseState.baseTurnRate so per-phase turn multipliers compose off the true base instead
 // of a separate _baseTurnRate field. e.turnRate is set from the resolved state (composes for campaign
 // bosses; byte-identical ×1.18-per-phase ramp for legacy). Campaign descriptors may carry weather/tod
-// which shift the arena via the existing engine hooks (guarded like shakeCam). Endless/boss-rush/rivals
-// have no e._phaseCfg -> resolver returns the legacy defaults and no weather/tod is applied.
+// which shift the arena via the engine.js hooks. Endless/boss-rush/rivals have no e._phaseCfg ->
+// resolver returns the legacy defaults and no weather/tod is applied.
 function bossApplyPhase(e, ph) {
   const base = (e.phaseState && e.phaseState.baseTurnRate != null) ? e.phaseState.baseTurnRate : e.turnRate;
   e.phaseState = resolveBossPhase(e._phaseCfg || null, ph, base);
   e.turnRate = e.phaseState.turnRate;
   const cfg = e._phaseCfg && e._phaseCfg[ph - 1];
   if (cfg) {
-    if (cfg.weather && typeof applyWeather === 'function') applyWeather(cfg.weather);   // e.g. WARLORD p2 -> storm
-    if (cfg.tod != null && typeof applyTimeOfDay === 'function') applyTimeOfDay(cfg.tod);
+    if (cfg.weather) applyWeather(cfg.weather);   // e.g. WARLORD p2 -> storm
+    if (cfg.tod != null) applyTimeOfDay(cfg.tod);
   }
 }
 function tpBaseFor(e) {
@@ -603,13 +605,12 @@ function tpBaseFor(e) {
 function killEnemy(e, byPlayer, byCCA) {
   if (byPlayer === undefined) byPlayer = true;
   missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
-  if (byPlayer && typeof onStealthKill === 'function' && mission && mission.type === 'stealth') onStealthKill(e);   // v1.3: a kill blows cover → aggro + reinforcements
+  if (byPlayer && mission && mission.type === 'stealth') onStealthKill(e);   // v1.3: a kill blows cover → aggro + reinforcements
   e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
-  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); if (typeof killFlash !== 'undefined') killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
+  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
   let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
-  // === F5 killstreak === extend the chain (window/tiers in core.js streakStep); the resulting mult scales THIS kill's score below.
+  // F5 kill-streak: extend the chain (window/tiers in core.js streakStep); the resulting mult scales THIS kill's score below.
   player.streak = streakStep(player.streak, 'kill', performance.now() / 1000);
-  // === end F5 ===
   // Pure kill-reward (core.js awardKill): kill score (combo-scaled) + RP by source + killstreak.
   const kr = awardKill(
     { combo: player.combo, killStreak: player.killStreak },
@@ -644,17 +645,19 @@ function killEnemy(e, byPlayer, byCCA) {
     for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (!o.alive || o === e) continue; if (e.group.position.distanceToSquared(o.group.position) < br2) { o.burnT = player.burnTime; o.burnDps = player.burnDps; } }
   }
   if (byPlayer && player.frenzyOnKill) player.frenzy = Math.min(player.frenzyMax, player.frenzy + player.frenzyOnKill);   // KILL FRENZY stacks up
-  if (e.type === 'boss') { run.boss++; showBanner(t('banner.bossDestroyed')); empFlash = 0.5; }
-  if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner(tf('banner.rivalDown', { rp: pay })); run.kills++; }
+  if (e.type === 'boss' || e.campaignBoss) { run.boss++; showBanner(e.campaignBoss ? tf('banner.aceDown', { name: e.callsign }) : t('banner.bossDestroyed')); empFlash = 0.5; }
+  if (e.campaignBoss) { /* counted as a boss above */ }
+  else if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner(tf('banner.rivalDown', { rp: pay })); run.kills++; }
   else if (e.type === 'ground') {
     run.ground++;
     if (strikeSiteResolves(strikeWaveActive, mission ? mission.type : null)) {
       if (e.gkind === 'radar') showBanner(t('banner.radarDown'));
-      if (!enemies.some(o => o.alive && o.type === 'ground' && !o.escortUnit && !o.defendAsset)) {   // last site element down → payout
+      // campaign strike phases resolve on the site CORE every frame (missions.js siteFlattened); this
+      // "last ground unit" payout is the Endless strike-wave path only.
+      if (!campaignMode && !enemies.some(o => o.alive && o.type === 'ground')) {   // last site element down → payout
         const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
         player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
         showBanner(tf('banner.siteFlattened', { rp: pay })); audio.power(); empFlash = Math.max(empFlash, 0.4);
-        missionSiteDown();   // strike mission: the fortified site is down → objective met
       }
     }
   }
@@ -670,7 +673,7 @@ function killEnemy(e, byPlayer, byCCA) {
 }
 function killStreakReward() {
   const n = player.killStreak;
-  const label = t('ks.' + n) !== 'ks.' + n ? t('ks.' + n) : t('ks.5');
+  const ks = t('ks.' + n), label = ks !== 'ks.' + n ? ks : t('ks.5');
   player.flares = player.maxFlares;
   player.missiles = Math.min(player.maxMissiles, player.missiles + 4 + Math.floor(n / 5));
   player.bullets = Math.min(player.maxBullets, player.bullets + 150);
@@ -696,7 +699,7 @@ function nearestNonBossEnemy() {
   let best = null, bd = Infinity;
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive || e.type === 'boss') continue;
-    const d = t4.copy(e.group.position).sub(player.group.position).length();
+    const d = e.group.position.distanceToSquared(player.group.position);
     if (d < bd) { bd = d; best = e; }
   }
   return best;
@@ -754,8 +757,7 @@ function cycleLock() {
 function updateLockOn(dt) {
   // auto-designate the nearest target only when Auto-Lock is enabled; otherwise the player must press F
   if (!player.lockTarget || !player.lockTarget.alive) {
-    if (autoLock) { player.lockTarget = nearestEnemyInFront(0.94); }
-    else if (!player.lockTarget) player.lockTarget = null;
+    if (autoLock) player.lockTarget = nearestEnemyInFront(0.94);
     player.lockProgress = 0; player.lockedTarget = null;
   }
   const tgt = player.lockTarget;
@@ -811,8 +813,7 @@ function useSpecial(slot) {
 }
 
 // applySpecialEffect(id): fires a special's EFFECT keyed purely on the ability/jet id, INDEPENDENT of
-// player.jet — this is what lets slot 2 run another jet's ability. (Was the inline switch body of the
-// old useSpecial; the per-slot cooldown gate moved up into useSpecial.)
+// player.jet — this is what lets slot 2 run another jet's ability (the per-slot cooldown gate lives in useSpecial).
 function applySpecialEffect(id) {
   const pp = player.group.position;
 
@@ -826,7 +827,7 @@ function applySpecialEffect(id) {
     spawnShockwave(pp); explode(pp, true);
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.type !== 'boss' && e.group.position.distanceToSquared(pp) < 102400) damageEnemy(e, 120, e.group.position); }
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && m.mesh.position.distanceToSquared(pp) < 490000) { m.decoyed = true; if (Math.random() < 0.85) m.life = 0.05; } }
-    showBanner('COBRA'); audio.explosion && audio.explosion();
+    showBanner('COBRA');
 
   } else if (id === 'J-20') {
     // EMP PULSE — wide-area systems kill + free instant lock on the nearest contact (it has no gun)
@@ -886,7 +887,6 @@ function applySpecialEffect(id) {
     // CCA SWARM — launch vivid electric-blue drones far ahead where you can see them
     // SWARM RACK / HYDRA scale the swarm just like a missile salvo (3 / 6 / 9), extra ranks fanned out so they stay visible
     const fwd = fwdOf(player.group, new THREE.Vector3()), right = rightOf(player.group, new THREE.Vector3());
-    const pp = player.group.position;
     const mult = 1 + (player.mslSwarm || 0);
     const base = [                                // staggered fan per rank: centre + left + right
       { ahead: 320, lateral:   0, vert: 10 },
@@ -975,7 +975,7 @@ function updatePlayer(dt) {
     else player._brQuat0.copy(player.group.quaternion);
     player.invuln = Math.max(player.invuln, BARREL_ROLL_INVULN);
     haptic(80);
-    if (typeof showBanner === 'function') showBanner(t('banner.evade'), 1.2);
+    showBanner(t('banner.evade'), 1.2);
   }
 
   const brake = down('ControlLeft') || down('ControlRight') || touchBtns.brk;
@@ -993,10 +993,8 @@ function updatePlayer(dt) {
   // ANALOG DIRECTIONAL MODE: when a joystick / mouse-flight / motion source is driving, the jet flies
   // TOWARD the stick in screen space and auto-levels. Pitch is referenced to the WORLD horizon and the
   // turn is a WORLD-up yaw, so steering is identical regardless of bank/inversion (never flips upside-down).
-  const _motionDriving = (typeof mobileControl !== 'undefined' && mobileControl === 'motion' && typeof motionInput !== 'undefined' && motionInput && motionInput.ready);
-  const _mouseDriving  = (typeof mouseFlight !== 'undefined' && mouseFlight);
-  const _touchDriving  = (typeof isTouchEnabled !== 'undefined' && isTouchEnabled && !(typeof mobileControl !== 'undefined' && mobileControl === 'motion'));
-  const directional = _motionDriving || _mouseDriving || _touchDriving;
+  const motionOn = mobileControl === 'motion';
+  const directional = (motionOn && motionInput.ready) || mouseFlight || (isTouchEnabled && !motionOn);
 
   if (barrelRollAnim > 0) {
     // Barrel roll: a PURE body-Z roll ANCHORED to the orientation captured at trigger (player._brQuat0).
@@ -1055,7 +1053,7 @@ function updatePlayer(dt) {
   // interceptPoint drawGunPipper draws). Optional, ON by default. A bounded world-axis nudge: it only acts
   // inside a forward cone within gun range, eases out with distance, is rate-capped (never a hard snap), and
   // yields entirely during a barrel roll — player input always dominates. Mirrors the autoYaw premultiply above.
-  if (aimAssist && !player.noCannon && barrelRollAnim <= 0 && typeof pickGunTarget === 'function') {
+  if (aimAssist && !player.noCannon && barrelRollAnim <= 0) {
     const at = pickGunTarget();
     if (at && at.alive) {
       // strongest tier "forces" toward the lead UNLESS the player is actively orienting elsewhere
@@ -1183,7 +1181,8 @@ function updatePlayer(dt) {
 
   animEngines(player.group, player.throttle);
   player._gpwsT -= dt; if (player.gpws && player._gpwsT <= 0) { audio.warn(); player._gpwsT = 0.5; }
-  player.incoming = missiles.some(m => m.enemy);   // once per frame; the HUD MISSILE warning reads it too
+  player.incoming = false;   // once per frame; the HUD MISSILE warning reads it too
+  for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) { player.incoming = true; break; }
   player._missT -= dt; if (player.incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
 }
 

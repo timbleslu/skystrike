@@ -1,5 +1,6 @@
 /* SKYSTRIKE — rival.js: persistent nemesis rival ace. State, persistence, traits.
-   Loaded after entities.js (needs aceShapePool/jetNameForShape) and before ui/main. */
+   Loaded after entities.js and before ui/main; aceShapePool/jetNameForShape are roster.js globals
+   and the store seam is read only inside fns (require-safe). */
 
 const RIVAL_NAMES = ['VULTURE', 'HAVOC', 'WIDOWMAKER', 'CERBERUS', 'MANTIS', 'JACKAL', 'BARON', 'WRAITH', 'KESTREL', 'OMEN'];
 const RIVAL_KEY = 'skystrike_rival';
@@ -67,9 +68,8 @@ function rivalSpecialFor(shape) {
   return 'OVERDRIVE';
 }
 
-// MIRROR START — hostileAceFor / hostileAceDeltas
 // Named hostile ace pool: one named antagonist per sector type.
-// Pure + deterministic given sectorType + index (no random, no globals).
+// Pure + deterministic given sectorType (no random, no globals).
 // Stat deltas are intentionally small — just enough to feel distinct.
 const HOSTILE_ACES = {
   FURBALL:   { callsign: 'TALON',   hpMul: 1.10, turnRate: 1.55, speed: 1.08 },
@@ -87,7 +87,6 @@ function hostileAceDeltas(entry) {
   if (!entry) return null;
   return { hpMul: entry.hpMul, turnRate: entry.turnRate, speed: entry.speed };
 }
-// MIRROR END
 
 /* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {

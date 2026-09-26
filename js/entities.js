@@ -1,4 +1,4 @@
-/* SKYSTRIKE — entities.js: jet/boss/ground/drone mesh construction, player & enemy creation, enemy AI updates & weapons. Load 3rd. */
+/* SKYSTRIKE — entities.js: jet/boss/ground/drone mesh construction, player & enemy creation, enemy AI updates & weapons. Loads after airframes.js (SHAPES). */
 
 /* ---------------- geometry cache ----------------
    Jet geometry is deterministic per (shape, hero). Triangulating LatheGeometry +
@@ -125,10 +125,13 @@ function buildTipMissile(x, y, z, mat, glowColor) {
 
 /* per-airframe SHAPES spec table + flag-normalization → js/airframes.js (require-safe, loaded before this file). */
 
+/* outermost planform point (max span; first one wins a tie) — the wingtip */
+function wingTip(pts) { let tip = pts[0]; for (const p of pts) if (p[0] > tip[0]) tip = p; return tip; }
+
 /* thin dark control-surface seam laid along a wing planform's trailing edge (both sides) */
 function buildHingeSeam(pts, y, thick, mat) {
   const rootTE = pts[pts.length - 1];
-  let tip = pts[0]; for (const p of pts) if (p[0] > tip[0]) tip = p;
+  const tip = wingTip(pts);
   const x0 = Math.min(rootTE[0] + 0.6, tip[0] * 0.55), z0 = rootTE[1] - 0.35;
   const x1 = tip[0] * 0.9, z1 = tip[1] - 0.35;
   const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
@@ -144,10 +147,9 @@ function buildHingeSeam(pts, y, thick, mat) {
 }
 
 /* ---- lofted fuselage: superellipse cross-sections swept nose→tail ----
-   Replaces the old lathe body. Per-station the hull blends: rounder forebody →
-   squarer engine section; stealth shapes pick up a soft forebody chine; twin/tri
-   jets widen aft into a flat engine deck that swallows the nozzles (no more
-   floating engines). Height is pre-flattened, so no mesh-level Y scale. */
+   Per-station the hull blends: rounder forebody → squarer engine section; stealth
+   shapes pick up a soft forebody chine; twin/tri jets widen aft into a flat engine
+   deck that swallows the nozzles. Height is pre-flattened, so no mesh-level Y scale. */
 function loftFuselage(cfg, hero) {
   const L = cfg.len, half = L / 2, fR = cfg.frontR, rR = cfg.rearR, flat = cfg.flat || 0.62;
   const z0 = -half - cfg.noseLen + 0.5, zNose = -half + 0.5, zBody = half - 0.3, z1 = half + 2.3;
@@ -194,8 +196,8 @@ function loftFuselage(cfg, hero) {
   return geo;
 }
 
-/* beveled caret intake duct (replaces the old plain box): outward-leaning
-   parallelogram cross-section extruded into a duct, depth along -Z…+Z */
+/* beveled caret intake duct: outward-leaning parallelogram cross-section
+   extruded into a duct, depth along -Z…+Z */
 function intakeDuctGeo(wd, ht, depth) {
   const sh = new THREE.Shape();
   sh.moveTo(-wd / 2, 0); sh.lineTo(wd / 2, -ht * 0.14); sh.lineTo(wd / 2, ht * 0.86); sh.lineTo(-wd / 2, ht); sh.closePath();
@@ -229,7 +231,7 @@ function buildJet(color, accent, cfg, hero) {
   const wy = (cfg.wingY != null ? cfg.wingY : -0.2);
 
   // ---- fuselage: lofted superellipse hull (ogive nose → chined/area-ruled body → engine deck) ----
-  const z0 = -half - cfg.noseLen + 0.5;   // nose tip (open exhaust end covered by nozzles)
+  const z0 = -half - cfg.noseLen + 0.5;   // nose tip (same station loftFuselage starts at)
   const fgeo = cacheGeo(gk('fuse'), () => loftFuselage(cfg, hero));
   const fuse = new THREE.Mesh(fgeo, body); g.add(fuse);
 
@@ -377,7 +379,7 @@ function buildJet(color, accent, cfg, hero) {
 
   // wingtip navigation lights (port = red, starboard = green) — hero only
   if (hero) {
-    let tx = cfg.wing[0][0], tz = cfg.wing[0][1]; for (const p of cfg.wing) if (p[0] > tx) { tx = p[0]; tz = p[1]; }
+    const [tx, tz] = wingTip(cfg.wing);
     const lp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b3b, fog: false }));
     lp.position.set(-tx, wy, tz - 0.6); g.add(lp);
     const ls = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0x46ff8c, fog: false }));
@@ -397,7 +399,7 @@ function buildJet(color, accent, cfg, hero) {
       g.add(f);
       if (hero) {   // rudder hinge line on the trailing edge of the fin
         const rud = new THREE.Mesh(new THREE.BoxGeometry((vt.thick || 0.3) + 0.06, vt.h * 0.92, 0.14), panel);
-        const rx = (vt.type === 'single' ? 0 : s * vt.x) + (vt.type === 'single' ? 0 : 0);
+        const rx = vt.type === 'single' ? 0 : s * vt.x;
         rud.position.set(rx, baseY + vt.h * 0.5, fz + Math.min(vt.base, vt.sweep) * 0.5 + 0.2);
         if (vt.type !== 'single') rud.rotation.z = -s * (vt.cant || 0.3);
         g.add(rud);
@@ -447,7 +449,7 @@ function buildJet(color, accent, cfg, hero) {
         }
         continue;
       }
-      const ik = new THREE.Mesh(cacheGeo(gk('intake'), () => intakeDuctGeo(1.5, 1.7 * (cfg.flat || 0.62) + 0.5, 4.2)), dark);
+      const ik = new THREE.Mesh(cacheGeo(gk('intake'), () => intakeDuctGeo(1.5, 1.7 * flat + 0.5, 4.2)), dark);
       ik.scale.x = sx;   // mirror so the caret leans outward on both sides
       ik.position.set(sx * (fR + 0.45), -fR * flat * 0.35, -half + 3.6); ik.rotation.z = sx * 0.08; g.add(ik);
       if (hero) {
@@ -542,8 +544,7 @@ function buildJet(color, accent, cfg, hero) {
     const cross2 = cross1.clone(); cross2.position.z = doorZ + doorLen * 0.5; g.add(cross2);
   }
   if (hero && !cfg.clean && !cfg.flyingWing && cfg.wing) {
-    let tx = 0, tz = 0;
-    for (const p of cfg.wing) { if (p[0] > tx) { tx = p[0]; tz = p[1]; } }
+    const [tx, tz] = wingTip(cfg.wing);
     for (const sx of [-1, 1]) {
       g.add(buildTipMissile(sx * tx, wy, tz + 1.5, dark, accent));
       // an inboard underwing pylon
@@ -683,9 +684,9 @@ function buildJet(color, accent, cfg, hero) {
       hinge.position.set(sx * 5.2, wy + (cfg.wingThick || 0.5) * 0.5 + 0.2, 2.9); g.add(hinge);
     }
   }
-  // wingtip launch rails (FA-18 tipRails / generic tipRail)
-  if (cfg.tipRails || cfg.tipRail) {
-    let tx = 0, tz = 0; for (const p of cfg.wing) if (p[0] > tx) { tx = p[0]; tz = p[1]; }
+  // wingtip launch rails (generic tipRail; airframes.js aliases FA-18 tipRails onto it, `big` keeps the heavier rail)
+  if (cfg.tipRail) {
+    const [tx, tz] = wingTip(cfg.wing);
     const big = !!cfg.tipRails;
     for (const sx of [-1, 1]) {
       const rail = new THREE.Mesh(cacheGeo(gk('tiprail'), () => new THREE.BoxGeometry(big ? 0.22 : 0.14, big ? 0.3 : 0.18, big ? 3.2 : 2.2)), dark);
@@ -746,7 +747,7 @@ function buildJet(color, accent, cfg, hero) {
       const ramps = hero ? 5 : 1;
       for (const sy of [-1, 1]) {
         for (let r = 0; r < ramps; r++) {
-          const ramp = new THREE.Mesh(cacheGeo(gk('exramp2d'), () => new THREE.BoxGeometry(w * 0.96, 0.12, 2.0 / ramps)), hero ? steel : steel);
+          const ramp = new THREE.Mesh(cacheGeo(gk('exramp2d'), () => new THREE.BoxGeometry(w * 0.96, 0.12, 2.0 / ramps)), steel);
           ramp.position.set(ex, sy * h * 0.5, exZ - 1.0 + (r + 0.5) * (2.0 / ramps)); g.add(ramp);
         }
       }
@@ -824,12 +825,12 @@ const JET_MODELS = {
    against the model nozzles (scripts/verify-jets.mjs top+rear). */
 const BURN_OVERRIDE = {
   SU57:   { xw: 2.0, dy: 0.6, dz: -1.5 }, // wide nozzles; raised + pulled forward
-  EFT:    { dy: -0.8, dz: -1.6 },         // was too high + too far aft
+  EFT:    { dy: -0.8, dz: -1.6 },         // lowered + pulled forward
   RAFALE: { dy: -0.8, dz: -1.6 },
-  FA18:   { dz: -1.2 },                    // a touch too far aft
+  FA18:   { dz: -1.2 },                    // pulled forward a touch
   F47:    { xw: 2.0, dy: 1.4 },           // wider + raised
-  J36:    { xw: 0.95, dy: 1.6 },          // trijet: widen splay back a bit + raise more
-  J50:    { dy: 1.3, dz: -1.5 },          // raised a touch more
+  J36:    { xw: 0.95, dy: 1.6 },          // trijet: slightly narrow splay + raised
+  J50:    { dy: 1.3, dz: -1.5 },          // raised + pulled forward
 };
 /* shapes that render colourless in-game (geometry-only OR flat-albedo exports) → recolour them in-code
    via the SKINS paint (applyPaint). The other airframes carry real baked liveries and must NOT be repainted. */
@@ -864,8 +865,9 @@ function loadJetModels() {
       // afterburner anchors derived from the oriented template: nozzles at the tail (+Z), spread by engine count
       const bb = new THREE.Box3().setFromObject(wrap);
       const bs = bb.getSize(new THREE.Vector3()), bc = bb.getCenter(new THREE.Vector3());
-      const cnt = (typeof SHAPES !== 'undefined' && SHAPES[id] && SHAPES[id].engines) || 2;
-      const buried = !!(typeof SHAPES !== 'undefined' && SHAPES[id] && (SHAPES[id].buriedExhaust || SHAPES[id].flyingWing));
+      const sp = SHAPES[id] || {};                               // airframes.js loads before this file
+      const cnt = sp.engines || 2;
+      const buried = !!(sp.buriedExhaust || sp.flyingWing);
       const tw = BURN_OVERRIDE[id] || {};
       const xw = tw.xw != null ? tw.xw : 1.1;                    // half the twin-nozzle spacing (≈ the F-22's ±1.0)
       wrap.userData.burn = {
@@ -1161,11 +1163,11 @@ function createEnemy(type, pos, opts) {
   let mesh, hp, shapeKey;
   if (type === 'boss') { mesh = buildBoss(); hp = 1000 + wave * 70; }
   else if (type === 'ground') {
-    const gk = (opts && opts.gkind) || 'sam';
+    const gk = opts.gkind || 'sam';
     mesh = gk === 'aaa' ? buildAAA() : gk === 'radar' ? buildRadar() : gk === 'truck' ? buildTruck() : buildGround();
     hp = gk === 'radar' ? 110 : gk === 'truck' ? 45 : gk === 'aaa' ? 90 : 75;
   }
-  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // balance 2026-06: was *1.4 — keeps late-run swarms threatening (drones were one-tapped past ~wave 10)
+  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // steep per-wave growth keeps late-run swarms threatening (not one-tapped past ~wave 10)
   else if (type === 'bomber') {
     mesh = buildJetOrGLTF(0x8a9468, 0xffb060, SHAPES.BOMBER, true, { enemy: true });   // always glTF-eligible on High tier
     if (!mesh.userData.gltf) mesh.scale.setScalar(1.7);   // procedural fallback still needs the ×1.7 bump; glTF is pre-scaled
@@ -1180,15 +1182,12 @@ function createEnemy(type, pos, opts) {
   scene.add(mesh); mesh.position.copy(pos);
   if (type === 'ground') mesh.position.y = Math.max(pos.y, surfaceH(pos.x, pos.z));   // seat on the visible mesh, never below the gameplay surface
   if (mesh.userData.body) { mesh.userData.body.emissive = new THREE.Color(type === 'boss' ? 0x550033 : 0x3a0606); mesh.userData.body.emissiveIntensity = 0.7; }
-  // Fighter threat variety (balance pass 2026-06, cheap version): roll a coarse temperament so not every
-  // fighter flies the same "circle-then-strafe" routine. ~40% are AGGRESSIVE knife-fighters (sharper turn,
-  // tighter fire cadence); the rest are STANDOFF (wider, looser). turnRate range widened from rand(0.95,1.32)
-  // to a per-temperament split; fire cooldown tightened for the aggressive side. Full multi-archetype AI
-  // (evaders, decoy-users, coordinated pincers) is deferred — see balance-implementation-report.md.
+  // Fighter temperament: ~40% are AGGRESSIVE knife-fighters (sharper turn, tighter fire cadence); the rest
+  // are STANDOFF (wider, looser). Orthogonal to the behavioural `archetype` rolled below.
   const aggressive = type === 'fighter' && Math.random() < 0.4;
   const fighterTurn = type === 'fighter'
     ? (aggressive ? rand(1.18, 1.5) : rand(0.85, 1.15))   // aggressive out-turns the player harder; standoff is lazier
-    : rand(0.95, 1.32);                                   // bombers etc. keep the legacy roll
+    : rand(0.95, 1.32);                                   // non-fighters: one flat roll
   const fighterFireCd = aggressive ? rand(0.45, 1.1) : rand(0.6, 2);   // aggressive fighters re-engage faster
   const e = {
     group: mesh, type, hp, maxHp: hp, aggressive, aimingPlayer: false,
@@ -1198,17 +1197,17 @@ function createEnemy(type, pos, opts) {
     fireCd: fighterFireCd, missileCd: rand(3, 7), flareCd: 0, trailT: 0,
     gunRun: 0, gunRunCd: rand(2.5, 5.5),
     orbitSign: Math.random() < 0.5 ? -1 : 1,
-    // fighter behavioral archetype (2026-06): duelist (baseline, keeps the `aggressive` sub-roll)
+    // fighter behavioral archetype: duelist (baseline, keeps the `aggressive` sub-roll)
     // / baiter (jukes to break player lock) / decoy (proactive flares + standoff) / pincer (pairs up
     // to flank). Non-fighters always fly the duelist routine. jinkCd/pincerPartner are per-archetype
     // scratch used by updateEnemy; pickArchetype is the PURE selector in core.js.
-    archetype: type === 'fighter' ? pickArchetype(Math.random, wave, { elite: !!(opts && opts.elite) }) : 'duelist',
+    archetype: type === 'fighter' ? pickArchetype(Math.random, wave, { elite: !!opts.elite }) : 'duelist',
     jinkCd: 0, pincerPartner: null,
     state: 'engage', alive: true, isInCloud: false, hitFlash: 0,
     marker: type === 'drone' ? null : makeMarker(type),
     callsign: type === 'fighter' ? genCallsign() : null,
     shapeKey: shapeKey || null,
-    gkind: (type === 'ground' && opts && opts.gkind) || (type === 'ground' ? 'sam' : null),
+    gkind: type === 'ground' ? (opts.gkind || 'sam') : null,
   };
   // ----- per-type ammunition loadouts -----
   //  regular fighter : limited cannon, 1 missile, no flares
@@ -1217,11 +1216,12 @@ function createEnemy(type, pos, opts) {
   //  ground turret   : missile-only SAM site
   if (type === 'boss')        { e.bulletAmmo = 600; e.missileAmmo = 24; e.flareAmmo = 10; e.phase = 1; }
   else if (type === 'bomber') { e.bulletAmmo = 90;  e.missileAmmo = 2;  e.flareAmmo = 4;  }
-  else if (type === 'ground') { e.bulletAmmo = 0; e.missileAmmo = (!opts || !opts.gkind || opts.gkind === 'sam') ? 4 : 0; e.flareAmmo = 0; }
+  else if (type === 'ground') { e.bulletAmmo = 0; e.missileAmmo = e.gkind === 'sam' ? 4 : 0; e.flareAmmo = 0; }
   else if (type === 'drone')  { e.bulletAmmo = 0;   e.missileAmmo = 0;  e.flareAmmo = 0;  }
   else                        { e.bulletAmmo = 42;  e.missileAmmo = 1;  e.flareAmmo = 0;  }
   e.flares = type === 'boss' ? 0 : type === 'fighter' ? (opts.useGLTF ? randInt(2, 3) : 1) : 0;   // === F4 defensive-ai: finite evade flares (ace 2-3 / mook 1 / boss 0 — bosses break-turn only) ===
   if (e.marker) scene.add(e.marker);
+  if (typeof run !== 'undefined' && run) run.spawned = (run.spawned || 0) + 1;   // campaign kill-efficiency star measures against what actually spawned
   enemies.push(e); return e;
 }
 function updateMarker(e) {
@@ -1234,7 +1234,15 @@ function updateMarker(e) {
   e.marker.material.opacity = e.isInCloud ? 0.22 : (locked ? 1.0 : 0.8);
 }
 
+/* hit feedback: brief scale "pop" while hitFlash counts down */
+function tickHitFlash(e, dt, pop) { if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? pop : 0))); } }
+
 function activeEnemyMissiles() { let n = 0; for (let i = 0; i < missiles.length; i++) if (missiles[i].enemy) n++; return n; }
+/* is a player missile chasing `e` within sqrt(r2)? */
+function playerMissileNear(e, r2) {
+  for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < r2) return true; }
+  return false;
+}
 
 function clearLocks(e) {
   // Enemy death SIGNALS; it does not reach into player lock internals. The pure core
@@ -1273,9 +1281,7 @@ function updateRivalFlee(e, dt) {
   e.vel.copy(nf).multiplyScalar(e.speed);
   e.group.position.addScaledVector(e.vel, dt);
   e.flareCd -= dt;
-  if (e.flareCd <= 0 && e.flareAmmo > 0) {
-    for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e) { enemyFlares(e); e.flareCd = 1.6; break; } }
-  }
+  if (e.flareCd <= 0 && e.flareAmmo > 0 && playerMissileNear(e, Infinity)) { enemyFlares(e); e.flareCd = 1.6; }
   updateMarker(e);
   if (dist > 5000) {
     e.alive = false;
@@ -1320,7 +1326,7 @@ function stealthConeLOS(e) {
   const dist = Math.hypot(dx, dz);
   const range = e.detectR || 800;
   if (dist < 1 || dist > range) return 0;
-  const fwd = fwdQ(e.logicQuat || e.group.quaternion, t3);
+  const fwd = fwdQ(e.logicQuat, t3);
   const fl = Math.hypot(fwd.x, fwd.z); if (fl < 1e-4) return 0;
   const dot = (fwd.x * dx + fwd.z * dz) / (fl * dist);       // cos(angle between facing and player)
   const ang = Math.acos(clamp(dot, -1, 1));
@@ -1330,9 +1336,77 @@ function stealthConeLOS(e) {
   const close = 1 - dist / range;
   return clamp(centred * (0.4 + 0.6 * close), 0, 1);
 }
+/* Campaign overhaul — RAIDER AI. A fighter with e.raid (a friendly ally: convoy truck / outpost) flies
+   attack runs on it: INBOUND (low approach) → STRAFE (shallow dive, cannon on the target) → EXTEND (pull
+   off, climb) → INBOUND again. The pure raidMode (core.js) drops it to 'engage' the moment the player
+   closes in or lands a hit, and only resumes the run once the player is well clear — so the counterplay
+   is simply "go put your nose on the raiders". Returns true while it's raiding (normal AI skipped). */
+const RAID_DMG = { truck: 2.3, transport: 1.45, outpost: 0.75, ship: 0.85 };   // per strafe tick (0.2s) — a full pass costs a truck ~35%, a transport ~23%, the outpost ~12%
+function updateRaider(e, dt) {
+  let tg = e.raid;
+  if (!tg || !tg.alive || tg.delivered) { tg = e.raid = (typeof pickRaidTarget === 'function') ? pickRaidTarget(e.group.position) : null; }
+  if (!tg) { e.raid = null; e.raidMode = null; return false; }
+  const tp = tg.group.position, ep = e.group.position;
+  const dx = tp.x - ep.x, dz = tp.z - ep.z, dT = Math.hypot(dx, dz);
+  const dP = ep.distanceTo(player.group.position);
+  const hitAgo = e.lastHitT ? (performance.now() - e.lastHitT) / 1000 : 99;
+  const pf = fwdOf(player.group, t4);   // is the player's nose on this raider? (~22° cone)
+  const threatened = dP > 1 && ((ep.x - player.group.position.x) * pf.x + (ep.y - player.group.position.y) * pf.y + (ep.z - player.group.position.z) * pf.z) / dP > 0.93;
+  const r = raidMode(e.raidMode || 'inbound', { dTarget: dT, dPlayer: dP, hitAgo: hitAgo, threatened: threatened, extendT: e.raidExtendT, dt: dt });
+  e.raidMode = r.mode; e.raidExtendT = r.extendT;
+  if (r.mode === 'engage') return false;
+  e.aimingPlayer = false;
+  const groundY = tg.air ? tp.y - 30 : Math.max(terrainH(tp.x, tp.z), SEA_LEVEL_Y);   // strafe height: the ground under it, or the airframe itself
+  const desired = t2;
+  if (r.mode === 'extend') {                       // pull off: away from the target + climb
+    desired.set(-dx / (dT || 1), 0.45, -dz / (dT || 1));
+    e.speed = lerp(e.speed, 250, dt);
+  } else if (r.mode === 'strafe') {                // shallow dive straight down the target's throat
+    desired.set(dx, (groundY + 30) - ep.y, dz).normalize();
+    e.speed = lerp(e.speed, 235, dt);
+  } else {                                          // inbound: low approach toward a point above the target
+    desired.set(dx, (groundY + 380) - ep.y, dz).normalize();
+    e.speed = lerp(e.speed, 245, dt);
+  }
+  const agl = ep.y - terrainH(ep.x, ep.z);
+  if (agl < 160) desired.y = Math.max(desired.y, 0.5);
+  desired.normalize();
+  dirToQuat(desired, q1);
+  const fwd = fwdQ(e.logicQuat, t3);
+  e.logicQuat.rotateTowards(q1, e.turnRate * 1.15 * dt * (e.stun > 0 ? 0.35 : 1));
+  const nf = fwdQ(e.logicQuat, t4);
+  const cross = t5.copy(fwd).cross(nf);
+  e.bank = damp(e.bank, clamp(-cross.y * 6, -1, 1), 6, dt);
+  q2.setFromAxisAngle(ZAX, e.bank);
+  e.group.quaternion.copy(e.logicQuat).multiply(q2);
+  e.vel.copy(nf).multiplyScalar(e.speed);
+  ep.addScaledVector(e.vel, dt);
+  e.isInCloud = inCloud(ep);
+  animEngines(e.group, 0.85);
+  e.trailT -= dt;
+  if (e.trailT <= 0 && !e.isInCloud) { spawnTrail(ep, 0xffb4b4, 0.4); e.trailT = 0.06; }
+  // strafe: real tracers down at the target (visual) + deterministic damage while lined up and in range
+  if (r.mode === 'strafe' && dT < 950) {
+    const toT = t5.set(dx, groundY + 4 - ep.y, dz).normalize();
+    if (nf.dot(toT) > 0.93) {
+      e.raidFireCd = (e.raidFireCd || 0) - dt;
+      if (e.raidFireCd <= 0) {
+        e.raidFireCd = 0.2;
+        const b = getBullet(); b.enemy = true; b.dmg = 4; b.life = 1.1; b.mesh.material = ASSET.ebulletMat; b.mesh.scale.setScalar(1.8);
+        b.mesh.position.copy(ep).addScaledVector(nf, 12);
+        b.vel.copy(toT).multiplyScalar(1150); bullets.push(b);
+        if (typeof damageAlly === 'function') damageAlly(tg, (RAID_DMG[tg.kind] || 2) * ((DIFFS[difficulty] && DIFFS[difficulty].dmg) || 1));   // difficulty scales raids like it scales hits on you
+        if (Math.random() < 0.35) spawnSmoke(t1.set(tp.x + rand(-14, 14), tp.y + 4, tp.z + rand(-14, 14)), 0x3a3a3a, 0.8);
+        audio.enemyGun();
+      }
+    }
+  }
+  updateMarker(e);
+  tickHitFlash(e, dt, 0.14);
+  return true;
+}
 function updateStealthPatrol(e, dt) {
   e.aimingPlayer = false;
-  if (!e.logicQuat) e.logicQuat = e.group.quaternion.clone();
   if (e.suspicion == null) e.suspicion = 0;
 
   // 1) sweep: how clearly does this patrol see the player right now?
@@ -1340,7 +1414,8 @@ function updateStealthPatrol(e, dt) {
   e.coneLOS = los;   // missions.js detection meter reads the max coneLOS across all live patrols
   if (los > 0) {
     e.suspicion = Math.min(2, e.suspicion + STEALTH_SUSPICION_RISE * dt);
-    e.lastSeen = { x: player.group.position.x, y: player.group.position.y, z: player.group.position.z };
+    const ls = e.lastSeen || (e.lastSeen = { x: 0, y: 0, z: 0 });   // reused per patrol — no per-frame alloc
+    ls.x = player.group.position.x; ls.y = player.group.position.y; ls.z = player.group.position.z;
   } else {
     e.suspicion = Math.max(0, e.suspicion - STEALTH_SUSPICION_DECAY * dt);
   }
@@ -1375,11 +1450,17 @@ function updateStealthPatrol(e, dt) {
   animEngines(e.group, e.investigating ? 0.85 : 0.55);
   updateMarker(e);
 }
+/* reused input objects for the pure core.js deciders called per enemy per frame (none retain their input) */
+const _tacIn = { dist: 0, incoming: false, archetype: 'duelist', lockedByPlayer: false, prefRange: 0, nearRange: 0 };
+const _jinkIn = { lockedByPlayer: false, jinkCd: 0 };
+const _aimIn = { ang: 0, dist: 0, gunCone: 0, gunRange: 0, engaged: true, canSee: false };
+const _evadeState = { lastEvade: undefined, flares: 0 }, _evadeThreat = { lockProgress: 0, missileDist: Infinity };
 function updateEnemy(e, dt) {
   if (e.type === 'ground') { updateGround(e, dt); return; }
   if (e.type === 'drone') { updateDrone(e, dt); return; }
   if (e.type === 'bomber') { updateBomber(e, dt); return; }
   if (e.patrol && typeof stealthBlown !== 'undefined' && !stealthBlown) { updateStealthPatrol(e, dt); return; }
+  if (e.raid && updateRaider(e, dt)) return;   // campaign overhaul: attack run on a friendly convoy/outpost (drops to dogfight when engaged)
   // === F2 enemy-formations hook: a formation FOLLOWER holds its leader-relative slot. applyFormationSteer
   // runs the marker/ring/hit-flash housekeeping itself, so this early return skips ONLY the normal-AI
   // steering + fire below (leaders and broken followers return false and fall through unchanged). ===
@@ -1391,8 +1472,7 @@ function updateEnemy(e, dt) {
   animEngines(e.group, clamp((e.speed || 480) / 700, 0.35, 1));
 
   const prev = e.state;
-  let incoming = false;
-  for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { incoming = true; break; } }
+  const incoming = playerMissileNear(e, 640000);
   if (e.elite && !e.desprintUsed && e.hp / e.maxHp < 0.3) { e.desprintUsed = true; e.sprintTimer = 2.5; e.orbitSign *= -1; }
   if (e.rival && !e.noFlee && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }   // FINAL-cap rivals (noFlee) fight to the death
   if (e.rival && e.fleeing) { if (updateRivalFlee(e, dt)) return; }
@@ -1410,10 +1490,10 @@ function updateEnemy(e, dt) {
     if (e._ghostT > 0) { e._ghostT -= dt; if (e.marker) e.marker.visible = e._ghostT <= 0; }
     else if (e.marker && !e.marker.visible) e.marker.visible = true;
   }
-  if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0) { for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 1440000) { enemyFlares(e); e.flareCd = 2.0; break; } } }
+  if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0 && playerMissileNear(e, 1440000)) { enemyFlares(e); e.flareCd = 2.0; }
   applyEvade(e, dt);   // === F4 defensive-ai: cooldown-gated break-turn / finite-flare evasion (see tail fn) ===
-  // ----- archetype scratch (2026-06): all behavior below is gated on e.archetype, so duelists run the
-  // unchanged routine. lockedByPlayer = the player is acquiring or fully locked onto THIS enemy. -----
+  // ----- archetype scratch: all behavior below is gated on e.archetype, so duelists run the
+  // plain routine. lockedByPlayer = the player is acquiring or fully locked onto THIS enemy. -----
   e.jinkCd -= dt;
   const lockedByPlayer = (player.lockTarget === e) || (player.lockedTarget === e);
   if (e.archetype === 'pincer') {
@@ -1432,7 +1512,8 @@ function updateEnemy(e, dt) {
   }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;
-  e.state = enemyTacticalState(prev, { dist, incoming, archetype: e.archetype, lockedByPlayer, prefRange: PREF, nearRange: NEAR });   // pure evade/extend/engage decision (core.js)
+  const ti = _tacIn; ti.dist = dist; ti.incoming = incoming; ti.archetype = e.archetype; ti.lockedByPlayer = lockedByPlayer; ti.prefRange = PREF; ti.nearRange = NEAR;
+  e.state = enemyTacticalState(prev, ti);   // pure evade/extend/engage decision (core.js)
 
   let desired = t2;
   if (e.state === 'evade') {
@@ -1467,11 +1548,12 @@ function updateEnemy(e, dt) {
     if (e.phase === 1 && !e.phaseState && typeof bossApplyPhase === 'function') bossApplyPhase(e, 1);
     bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer);
   }
-  // ----- baiter break-turn (2026-06): when the player is locking this enemy, juke HARD sideways on a
+  // ----- baiter break-turn: when the player is locking this enemy, juke HARD sideways on a
   // short cooldown to break the lock, then settle back. Adds a big lateral offset to the heading +
   // a transient turn-rate boost so the juke actually snaps. Counter: stay on it / lead the juke. -----
   let turnMul = 1;
-  if (e.archetype === 'baiter' && shouldJink({ lockedByPlayer, jinkCd: e.jinkCd })) {
+  _jinkIn.lockedByPlayer = lockedByPlayer; _jinkIn.jinkCd = e.jinkCd;
+  if (e.archetype === 'baiter' && shouldJink(_jinkIn)) {
     e.jinkCd = rand(1.4, 2.2);            // re-engage window between jukes (player gets a beat to re-acquire)
     e.orbitSign = -e.orbitSign;           // flip the break direction each juke (unpredictable)
     e._jinkT = 0.5;                       // hold the boosted turn for the snap
@@ -1502,7 +1584,7 @@ function updateEnemy(e, dt) {
   updateMarker(e);
 
   if (e.group.userData.ring) e.group.userData.ring.rotation.z += dt * 2;
-  if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.14 : 0))); }
+  tickHitFlash(e, dt, 0.14);
 
   const scrambled = (player.empBurst > 0 && e.group.position.distanceToSquared(player.group.position) < 1960000) || (e.stun > 0);
   if (scrambled) { e.fireCd = Math.max(e.fireCd, 1.4); e.missileCd = Math.max(e.missileCd, 3); }
@@ -1519,13 +1601,14 @@ function updateEnemy(e, dt) {
     const gunCone = e.gunRun > 0 ? 0.34 : 0.24;
     const gunRange = e.type === 'boss' ? 2200 : 1750;
     // threat reticle (§4b): flag when this fighter/boss is aligned + in gun range — i.e. aiming at the player NOW
-    e.aimingPlayer = enemyIsAimingPlayer({ ang, dist, gunCone, gunRange, engaged: true, canSee: visible });
+    const ai = _aimIn; ai.ang = ang; ai.dist = dist; ai.gunCone = gunCone; ai.gunRange = gunRange; ai.canSee = visible;
+    e.aimingPlayer = enemyIsAimingPlayer(ai);
     if (ang < gunCone && dist < gunRange && e.fireCd <= 0 && e.bulletAmmo > 0) {
       const wm = (wingmen.length && Math.random() < 0.34) ? firstAliveWingman() : null;
       enemyFireGun(e, wm);
       if (e.type === 'boss') { enemyFireGun(e); enemyFireGun(e); }
       else if (e.elite && e.gunRun > 0 && dist < 900) { enemyFireGun(e); }
-      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr * (e.aggressive ? 0.78 : 1);   // aggressive fighters keep up a tighter cadence (balance 2026-06)
+      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr * (e.aggressive ? 0.78 : 1);   // aggressive fighters keep up a tighter cadence
     }
     // ----- missiles (jamming shuts down launches) -----
     e.missileCd -= dt;
@@ -1534,6 +1617,7 @@ function updateEnemy(e, dt) {
     if (!jammed && dist < mslRange && dist > 360 && ang < 0.6 && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < cap) {
       enemyFireMissile(e);
       if (e.type === 'boss') { enemyFireMissile(e); if (e.phase >= 2) enemyFireMissile(e); if (e.phase >= 3) enemyFireMissile(e); }
+      else if (e.campaignBoss) { if (e.phase >= 2) enemyFireMissile(e); for (let k = 0; k < ((e.phaseState && e.phaseState.extraMissiles) || 0) / 2; k++) enemyFireMissile(e); }   // campaign ace: phase + authored salvo bonus
       e.missileCd = (e.type === 'boss' ? rand(3.5, 6) : rand(5, 9)) * dms * enr;
     }
   }
@@ -1588,6 +1672,17 @@ function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
 }
 
 function updateBomber(e, dt) {
+  if (e.raid) {   // campaign overhaul: raiding bomber — bore in on the ally, release a stick over it, then egress
+    const tg = (e.raid.alive && !e.raid.delivered) ? e.raid : (typeof pickRaidTarget === 'function' ? pickRaidTarget(e.group.position) : null);
+    e.raid = tg || null;
+    if (tg && !e.bombed) {
+      const dx = tg.group.position.x - e.group.position.x, dz = tg.group.position.z - e.group.position.z;
+      const dh = Math.hypot(dx, dz);
+      e.escapeDir.set(dx / (dh || 1), 0, dz / (dh || 1));
+      e.raidDist = dh;
+      if (dh < 230 + e.speed * 0.9) { e.bombed = true; if (typeof dropBombs === 'function') dropBombs(e, tg); }   // lead the release by ~0.9s of travel
+    }
+  }
   const desired = t2.copy(e.escapeDir);
   const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
   if (agl < 320) desired.y = Math.max(desired.y, 0.18);
@@ -1605,7 +1700,7 @@ function updateBomber(e, dt) {
   e.trailT -= dt;
   if (e.trailT <= 0 && !e.isInCloud) { spawnTrail(e.group.position, 0xffd0a0, 0.45); e.trailT = 0.05; }
   updateMarker(e);
-  if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.08 : 0))); }
+  tickHitFlash(e, dt, 0.08);
   const d = e.group.position.distanceTo(player.group.position);
   const canShoot = !player.stealth && player.empBurst <= 0 && !(e.stun > 0);
   // guns (medium magazine)
@@ -1618,13 +1713,11 @@ function updateBomber(e, dt) {
     e.missileCd = rand(4, 7) * DIFFS[difficulty].missile;
   }
   // pop a few flares when a player missile is chasing it
-  let bInc = false;
-  for (let k = 0; k < missiles.length; k++) { const m = missiles[k]; if (!m.enemy && m.target === e && m.mesh.position.distanceToSquared(e.group.position) < 640000) { bInc = true; break; } }
-  if (bInc) { e.flareCd -= dt; if (e.flareCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e.flareCd = 2.2; } }
+  if (playerMissileNear(e, 640000)) { e.flareCd -= dt; if (e.flareCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e.flareCd = 2.2; } }
   if (e.group.position.distanceToSquared(e.spawnPos) > 144000000) {
     e.alive = false; despawnEnemy(e);
     clearLocks(e);
-    showBanner('BOMBER ESCAPED');
+    if (!e.bombed) showBanner(t('banner.bomberEscaped'));   // a raid bomber egressing after its drop just leaves quietly
   }
 }
 function radarUp() { for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.type === 'ground' && e.gkind === 'radar') return true; } return false; }
@@ -1649,7 +1742,7 @@ function updateGround(e, dt) {
       e.missileCd = rand(1.1, 1.8);
       flakBurst(e);
     }
-  } else {   // 'sam' — original behavior, radar-boosted when a radar station is alive
+  } else {   // 'sam' — radar-boosted when a radar station is alive
     const boosted = radarUp();
     const range = boosted ? 4800 : 3200;
     e.missileCd -= dt;
@@ -1660,7 +1753,7 @@ function updateGround(e, dt) {
       e.missileAmmo--; e.missileCd = rand(5, 9) * (boosted ? 0.7 : 1); audio.missile();
     }
   }
-  if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.1 : 0))); }
+  tickHitFlash(e, dt, 0.1);
   updateMarker(e);
 }
 function flakBurst(e) {
@@ -1706,10 +1799,10 @@ function updateDrone(e, dt) {
   e.trailT -= dt;
   if (e.trailT <= 0 && !e.isInCloud) { spawnTrail(e.group.position, 0xff5a3a, 0.5); e.trailT = 0.04; }
   if (u.shell) u.shell.rotation.y += dt * 5;
-  const pulse = 1.2 + 0.6 * Math.sin(performance.now() * 0.02 + (e.wob || 0));
-  if (u.core) u.core.material.emissiveIntensity = pulse;
-  if (u.glow) u.glow.material.opacity = 0.6 + 0.35 * Math.sin(performance.now() * 0.02 + (e.wob || 0));
-  if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.2 : 0))); }
+  const pulse = Math.sin(performance.now() * 0.02 + (e.wob || 0));   // core + glow throb in phase
+  if (u.core) u.core.material.emissiveIntensity = 1.2 + 0.6 * pulse;
+  if (u.glow) u.glow.material.opacity = 0.6 + 0.35 * pulse;
+  tickHitFlash(e, dt, 0.2);
 
   // contact detonation
   if (canSee && player.invuln <= 0 && dist < 36) {
@@ -1768,7 +1861,9 @@ function applyEvade(e, dt) {
     const d = Math.sqrt(m.mesh.position.distanceToSquared(e.group.position));
     if (d < missileDist) missileDist = d;
   }
-  const res = evadeDecision({ lastEvade: e._evadeLast, flares: e.flares }, { lockProgress, missileDist }, performance.now() / 1000);
+  _evadeState.lastEvade = e._evadeLast; _evadeState.flares = e.flares;
+  _evadeThreat.lockProgress = lockProgress; _evadeThreat.missileDist = missileDist;
+  const res = evadeDecision(_evadeState, _evadeThreat, performance.now() / 1000);
   e._evadeLast = res.state.lastEvade;
   e.flares = res.state.flares;
   if (res.action === 'break') {
@@ -1825,7 +1920,7 @@ function applyFormationSteer(e, dt) {
   e.isInCloud = inCloud(e.group.position);
   // ---- housekeeping updateEnemy normally runs AFTER movement (markers/ring/hit-flash) must still tick ----
   if (e.group.userData.ring) e.group.userData.ring.rotation.z += dt * 2;
-  if (e.hitFlash > 0) { e.hitFlash -= dt; e.group.scale.setScalar(e.baseScale * (1 + (e.hitFlash > 0 ? 0.14 : 0))); }
+  tickHitFlash(e, dt, 0.14);
   animEngines(e.group, 0.7);
   updateMarker(e);
   e.aimingPlayer = false;                                   // a follower holding station is not a gun threat

@@ -4,7 +4,7 @@
 let metaTab = 'perks';
 // #meta is a MODAL over the still-visible hangar (state stays 'hangar'), NOT a screen swap — so it is
 // deliberately NOT routed through nav.js showScreen (which would hide the hangar underneath). Direct
-// .show toggle. Same rationale for #manual / #upgrade / #wingpick / #opmap below.
+// .show toggle. Same rationale for #manual / #upgrade / #wingpick below.
 function openMetaScreen() { if (state !== 'hangar') return; metaTab = 'perks'; g('meta').classList.add('show'); renderMetaScreen(); if (audio.on) audio.ui(); }
 function closeMetaScreen() { g('meta').classList.remove('show'); if (audio.on) audio.ui(); }
 function showMetaTab(name) { metaTab = name; renderMetaScreen(); if (audio.on) audio.ui(); }
@@ -67,9 +67,6 @@ function startGame(i, daily, rush, weekly) {
   closeManual();
   if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }   // C2: preview lives in the ISOLATED previewScene now, not the shared scene
   if (platform) { scene.remove(platform); platform = null; }
-  // screen nav (hide hangar + show touch controls + state='playing') is applied together below via
-  // showScreen('playing') — see the state transition further down; ordering within this sync fn is
-  // invisible (no frame renders mid-call), so consolidating the panel/touch/state writes is identical.
 
   wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
   createPlayer(i);
@@ -82,15 +79,14 @@ function startGame(i, daily, rush, weekly) {
   player._cheatUsed = false;   // APEX PREDATOR cheat-death is now ONCE PER RUN (balance 2026-06); reset here, NOT per wave
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
-  opMap = null; opStage = 0; opSector = null; mission = null; setpieceActive = null;
+  opSector = null; mission = null;
   weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);   // daily/weekly fix the weather seed off their date seed; otherwise fresh per-run (F8: stormFront overrides the roll per-wave in main.js)
   if (typeof applyWeather === 'function') applyWeather('clear');   // reset condition visuals; nextWave sets the per-sector/rolled weather
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed (clearArena tore down the previous arena's)
-  // (Operations campaign navigation is entered at the top of startGame via openOperationsSelect — genOpMap retired)
-  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  choosingUpgrade = false; g('upgrade').classList.remove('show');
   resetDraftState();   // FRONTIER DRAFT (feature 4): fresh run seed + clear pin/pity/visit counter
   resetAwacs();   // AWACS use cap + cooldown fresh each run (F10); nextWave also refreshes per sector
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
+  run = freshRun(performance.now());
   noDamageWave = false;   // armed per-wave by nextWave; reset here so a fresh run starts clean
   bossRushIndex = 0; bossRushT0 = performance.now();   // F15: leg counter + run clock (only consulted while bossRush)
   showScreen('playing');   // hide hangar + show touch controls (if touch) + state='playing' (nav.js)
@@ -104,17 +100,22 @@ function startGame(i, daily, rush, weekly) {
 // set by endRun: can the debrief's REDEPLOY button relaunch this run as-is (plain Endless only)?
 let lastRunRestartable = false;
 function redeployRun() {
-  if (!lastRunRestartable) { returnToHangar(); return; }
   returnToHangar();            // full arena reset (synchronous) → state 'hangar'
+  if (!lastRunRestartable) return;
   opMode = false;              // Endless
   startGame(selectedJet);      // same jet, same difficulty/environment
 }
 function gameOver() {
   if (state !== 'playing') return;
-  if (campaignMode) { campaignLevelFailed(); return; }   // Operations campaign: roll back to the pre-level checkpoint + return to the map (NOT run-end)
+  if (campaignMode) {   // Operations campaign: shot down → a short "MISSION FAILED" beat over the wreck, then the failure debrief (NOT run-end)
+    if (campaignEnd) return;
+    explode(player.group.position, true); player.group.visible = false;
+    beginCampaignEnd('fail', 'shotDown', true);
+    return;
+  }
   state = 'dead';
   if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // flight exit → silence the engine hum
-  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  choosingUpgrade = false; g('upgrade').classList.remove('show');
   explode(player.group.position, true);
   player.group.visible = false;
   clearWingmen();
@@ -143,7 +144,7 @@ function endRun(title, win) {
   const dk = g('go_kills'); if (dk) dk.textContent = (run.kills + run.ground + run.boss);
   const da = g('go_acc'); if (da) da.textContent = acc + '%';
   const dm = g('go_msl'); if (dm) dm.textContent = run.missiles;
-  const dt2 = g('go_time'); if (dt2) dt2.textContent = (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2);
+  const dt2 = g('go_time'); if (dt2) dt2.textContent = fmtClock(secs);
   // ---- meta-progression: bank SP + evaluate achievements from this run's stats ----
   // stamp derived stats onto run so spAward / gradeRun / achievement predicates stay pure
   run.waveReached = wave;
@@ -168,11 +169,10 @@ function endRun(title, win) {
   const dg = g('go_grade'); if (dg) { dg.querySelector('.grade-letter').textContent = grade.letter; dg.querySelector('.grade-bonus').textContent = grade.mult > 1 ? t('grade.bonus') + ' x' + grade.mult.toFixed(2) : ''; }
   if (gw) { gw.classList.toggle('grade-low', !(grade.letter === 'S' || grade.letter === 'A')); gw.classList.toggle('grade-none', grade.mult <= 1); }
   // ---- star objectives (Ops) vs endless ----
-  // Endless/Daily deaths (win falsy AND not an operation/campaign outcome) HIDE the star UI — the single
-  // stats grid (score/wave/kills/accuracy/missiles/time) is the performance readout (the old separate
-  // PERFORMANCE block duplicated it). Operation victory (win) keeps stars. campaignMode is already
-  // off here (gameOver routes campaign deaths to campaignLevelFailed before reaching endRun).
-  const endless = !win && !MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].bounded;   // Candidate 8: !opMode && !campaignMode ≡ !MODE_POLICY[key].bounded
+  // Endless/Daily deaths (win falsy AND not a bounded-mode outcome) HIDE the star UI — the stats grid is
+  // the performance readout. Operation victory (win) keeps stars. Campaign deaths never reach endRun
+  // (gameOver routes them to the campaign failure debrief).
+  const endless = !win && !MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].bounded;
   // REDEPLOY (primary) = fly the same jet again straight away — only for a plain Endless run; daily/weekly/
   // boss-rush/operation outcomes have their own entry flows, so they get the HANGAR exit only.
   lastRunRestartable = endless && !dailyMode && !weeklyMode && !bossRush;
@@ -185,9 +185,7 @@ function endRun(title, win) {
     if (sd) sd.classList.remove('hide');
     // SINGLE STAR-TRUTH: a campaign/op victory carries the per-level result computed ONCE in
     // campaignLevelComplete (delta vs level base, composed levelConds) via lastLevelResult — render
-    // THAT, so the boss/op debrief matches the map pips. (The old path read a dead `lvl.stars` field —
-    // rows carry `starUnique`, not `stars` — so conds was always null and it fell back to generic
-    // evalStars on the cumulative run.) Endless/Daily (no stash) keep the conds=null → evalStars fallback.
+    // THAT, so the boss/op debrief matches the map pips. No stash → conds=null → evalStars fallback.
     const lr = (lastLevelResult && lastLevelResult.lr) || run;       // per-level delta on op victory, else cumulative run
     const conds = (lastLevelResult && lastLevelResult.conds) || null;
     const stars = (lastLevelResult && typeof lastLevelResult.stars === 'number') ? lastLevelResult.stars : evalStarsFor(run, player, conds);
@@ -231,7 +229,7 @@ function operationComplete() {
   if (state !== 'playing') return;
   state = 'dead';
   if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // flight exit → silence the engine hum
-  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  choosingUpgrade = false; g('upgrade').classList.remove('show');
   player.score += 5000;
   // F15: clearing the campaign once unlocks Boss Rush mode (persisted; healed for legacy saves)
   if (meta && !meta.bossRushUnlocked) { meta.bossRushUnlocked = true; saveMeta(); }
@@ -247,29 +245,51 @@ function operationComplete() {
    between levels from the map), so a failed attempt only loses in-level RP/score — tech bought
    between levels lives in the next level's snapshot and is preserved. Beating the operation's boss
    level completes the operation (unlocks the next) via operationComplete. */
-let campaignBriefOp = null, campaignBriefIdx = -1;   // briefing-screen target
 // SINGLE STAR-TRUTH stash: campaignLevelComplete computes the per-level stars ONCE (delta vs level base,
 // composed levelConds). Both the #levelCleared panel and the boss/op endRun debrief render from THIS —
 // never a separate recompute. Holds {stars, conds, lr}; endRun consumes + clears it on op victory.
 let lastLevelResult = null;
-// render the met/missed condition checklist into a container from a computed {conds, lr} result.
-// One row per condition: ★/☆ + label (tf 'stars.cond.<type>') + (met)/(miss). Single source of truth.
-function renderStarChecklist(el, conds, lr) {
-  if (!el) return;
-  if (!conds || !conds.length) { el.innerHTML = ''; el.classList.add('hide'); return; }
-  el.innerHTML = conds.slice(0, 3).map(c => {
-    const met = starCondMet(c, lr);
-    return '<span class="' + (met ? 'met' : 'miss') + '">' +
-      (met ? '★ ' : '☆ ') + tf('stars.cond.' + c.type, { n: c.n || 0 }) +
-      ' ' + t(met ? 'campaign.met' : 'campaign.miss') + '</span>';
-  }).join('');
-  el.classList.remove('hide');
-}
-
 // clear the live arena between levels but KEEP the player (clearArena nulls the player; we don't want that)
 function clearCampaignArena() {
-  clearArenaEntities();   // now also disposes enemy groups (they used to leak across levels) + clears locks
-  mission = null; setpieceActive = null;
+  clearArenaEntities();   // now also disposes enemy groups (they used to leak across levels) + clears locks + allies
+  mission = null;
+  if (typeof clearComms === 'function') clearComms();
+}
+
+/* ---- campaign OUTRO (campaign overhaul): the beat between "the objective resolved" and the debrief ----
+   WIN → "MISSION ACCOMPLISHED" stamp + OVERLORD's call while you're still flying (invulnerable); FAIL →
+   "MISSION FAILED" + the reason (asset lost / convoy lost / shot down / …). `frozen` = the player died: the
+   camera holds on the wreck instead of flying on with an invisible jet. The bounded wave scheduler is held
+   so nothing re-spawns underneath. tickCampaignEnd (main.js animate) hands off to the real debrief. */
+let campaignEnd = null;   // { kind:'win'|'fail', reason, t, frozen } while an outro is playing
+const FAIL_REASONS = ['shotDown', 'assetLost', 'convoyLost', 'timeUp', 'bomberEscaped', 'objective'];
+function failReasonKey(reason) { return 'fail.' + (FAIL_REASONS.indexOf(reason) >= 0 ? reason : 'objective'); }
+function beginCampaignEnd(kind, reason, frozen) {
+  if (campaignEnd || !campaignMode) return;
+  campaignEnd = { kind: kind, reason: reason || null, t: kind === 'win' ? 2.8 : 2.6, frozen: !!frozen };
+  if (player) player.invuln = 99;
+  waveTimer = 99; betweenWaves = true;   // hold the bounded scheduler for the outro
+  if (typeof dismissMissionCard === 'function') dismissMissionCard();
+  if (typeof showOutroStamp === 'function') showOutroStamp(kind === 'win', kind === 'win' ? null : failReasonKey(reason));
+  if (typeof radioKey === 'function') {
+    if (typeof clearComms === 'function') clearComms();
+    radioKey('ovl', kind === 'win' ? 'comms.gen.missionComplete' : (reason === 'shotDown' ? 'comms.gen.pilotDown' : 'comms.gen.missionFailed'));
+  }
+}
+function tickCampaignEnd(dt) {
+  if (!campaignEnd) return;
+  campaignEnd.t -= dt;
+  if (campaignEnd.t > 0) return;
+  const c = campaignEnd; campaignEnd = null;
+  if (typeof hideOutroStamp === 'function') hideOutroStamp();
+  if (c.kind === 'win') campaignLevelComplete(); else campaignLevelFailed(c.reason);
+}
+// per-level debrief numbers from the level's run delta (shared by the cleared + failed panels)
+function levelDebriefStats(lr) {
+  const kills = (lr.kills || 0) + (lr.ground || 0) + (lr.boss || 0);
+  const acc = (lr.shots || 0) > 0 ? Math.round((lr.hits || 0) / lr.shots * 100) : 0;
+  const secs = Math.max(0, Math.round(lr.timeSecs || 0));
+  return { kills: kills, acc: acc, time: fmtClock(secs), dmg: Math.round(lr.damageTaken || 0) };
 }
 
 /* v1.3 — make every flight a CLEAN START. The op player object persists across levels (so RP/tech/economy
@@ -312,123 +332,208 @@ function resetArenaForLevel(lvl) {
   freshSortie(player);
 }
 
-// hangar "Operations" launch entry → the operations-select screen (player NOT built yet)
+/* ===================== campaign screens (campaign overhaul 2026-09) =====================
+   One "sortie board" system: THEATERS (ops select, each op's chart as the tile) → DOSSIER (op lore beside its
+   chart) → SORTIE MAP (the chart is the hero; tap a sector to dock its sortie card, BRIEF from there) →
+   FLIGHT PLAN (briefing: situation + the level's numbered beats + star targets) → debriefs. */
+const CW_ICON = {   // 24×24 line glyphs per headline mission type (map pins, sortie card, plan steps)
+  RECON: '<circle cx="12" cy="12" r="4"/><path d="M2 12c3-5 7-7 10-7s7 2 10 7c-3 5-7 7-10 7s-7-2-10-7z"/>',
+  STEALTH: '<path d="M15 3a9 9 0 1 0 6 15A8 8 0 0 1 15 3z"/>',
+  STRIKE: '<circle cx="12" cy="12" r="8"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/>',
+  SWEEP: '<path d="M3 15l5-5 4 4 9-9"/><path d="M15 5h6v6"/>',
+  FURBALL: '<path d="M3 15l5-5 4 4 9-9"/><path d="M15 5h6v6"/>',
+  INTERCEPT: '<path d="M2 12h14"/><path d="M11 6l6 6-6 6"/><path d="M21 4v16"/>',
+  ESCORT: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/>',
+  DEFEND: '<path d="M4 21V9l8-6 8 6v12z"/><path d="M9 21v-6h6v6"/>',
+  BOSS: '<path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/>',
+  FINAL: '<path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/>',
+  LOCK: '<rect x="5" y="11" width="14" height="10" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  CHECK: '<path d="M4 12l5 5L20 6"/>',
+};
+function cwIcon(k) { return '<svg class="cw-ico" viewBox="0 0 24 24" aria-hidden="true">' + (CW_ICON[k] || CW_ICON.STRIKE) + '</svg>'; }
+function cwEsc(str) { return String(str == null ? '' : str).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
+function opStars(op) {
+  const rec = meta && meta.campaign && meta.campaign[op.id];
+  let got = 0, cleared = 0;
+  op.levels.forEach(l => { const r = rec && rec.levels && rec.levels[l.id]; if (r && r.cleared) { cleared++; got += r.bestStars || 0; } });
+  return { got: got, max: op.levels.length * 3, cleared: cleared, total: op.levels.length };
+}
+function levelBest(opId, lvl) {
+  const r = meta && meta.campaign && meta.campaign[opId] && meta.campaign[opId].levels && meta.campaign[opId].levels[lvl.id];
+  return (r && r.bestStars) || 0;
+}
+function starRow(n) { return '<span class="cw-pips">' + '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i></span>'; }
+function condLabel(lvl) { const sp = lvl.spawn || {}; return [t('tod.' + (['DAY', 'DUSK', 'NIGHT'][sp.tod || 0])), t('weather.' + (sp.weather || 'clear'))]; }
+// the level's scripted beats as readable steps: "Destroy the ground site · 1:40"
+function levelBeats(lvl) {
+  return (lvl.objectives || []).map(o => {
+    let key = 'beat.' + o.type;
+    if (o.type === 'ESCORT') key += o.escort === 'transport' ? '.air' : '.convoy';
+    if (o.type === 'DEFEND' && o.asset === 'ship') key += '.ship';
+    const name = o.label ? t('ally.name.' + o.label) : (o.type === 'BOSS' && lvl.boss ? t(lvl.boss.callsignKey) : '');
+    const clock = o.timer || o.hold;
+    const sp = o.spawn || {};
+    let n = o.convoy || 0;
+    if (o.type === 'SWEEP') {   // count the reinforcements its timed events add too — the phase needs them all
+      n = sweepKills(sp);
+      for (const ev of o.events || []) if (ev.spawn) n += sweepKills(ev.spawn);
+      if (sp.aces || sp.hostileAce) key = 'beat.SWEEP.ace';
+    }
+    if (o.type === 'INTERCEPT') n = sp.bombers || 0;
+    return { type: o.type, text: tf(key, { name: name, n: n }), clock: clock ? fmtClock(clock) : '' };
+  });
+}
+
+// hangar "Operations" launch entry → the theater board (player NOT built yet)
 function openOperationsSelect() {
   campaignMode = false; campaignOpId = null; opSector = null; paused = true;
   const ov = g('opsSelect'); if (!ov) return;
   renderOperationsSelect();
-  showScreen('opsSelect');   // hide current screen (hangar on entry, or opLore on back) + show #opsSelect (nav.js)
+  showScreen('opsSelect');
   setTxt('opsTitle', t('campaign.operations'));
   const back = g('opsBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); campaignPlayerOpId = null; returnToHangar(); }; }
   if (audio.on) audio.ui();
 }
 function renderOperationsSelect() {
   const wrap = g('opsList'); if (!wrap) return;
+  let allGot = 0, allMax = 0;
   wrap.innerHTML = OPERATIONS.map((op, oi) => {
     const unlocked = campaignOpUnlocked(op.id);
+    const st = opStars(op); allGot += st.got; allMax += st.max;
     const beaten = campaignLevelState(op.id, op.levels.length - 1) === 'cleared';
-    const cls = 'op-card' + (unlocked ? '' : ' locked') + (beaten ? ' done' : '');
-    const sub = !unlocked ? t('campaign.locked') : beaten ? t('campaign.cleared') : t(op.theaterKey);
-    return '<div class="' + cls + '" data-op="' + op.id + '"><div class="op-card-n">' + (oi + 1) +
-      '</div><div class="op-card-name">' + t(op.nameKey) + '</div><div class="op-card-sub">' + sub + '</div></div>';
+    const status = !unlocked ? tf('campaign.lockedAfter', { op: t(OPERATIONS[Math.max(0, oi - 1)].nameKey) })
+      : beaten ? t('campaign.complete') : st.cleared ? tf('campaign.inProgress', { n: st.cleared, of: st.total }) : t('campaign.notStarted');
+    const segs = op.levels.map((l, i) => '<i class="' + (campaignLevelState(op.id, i) === 'cleared' ? 'on' : '') + (l.isBoss ? ' boss' : '') + '"></i>').join('');
+    return '<button class="cw-theater' + (unlocked ? '' : ' locked') + (beaten ? ' done' : '') + '" data-op="' + op.id + '"' + (unlocked ? '' : ' aria-disabled="true"') + '>' +
+      '<span class="cw-theater-chart" style="background-image:url(\'assets/maps/' + op.id + '.svg\')"></span>' +
+      '<span class="cw-theater-top"><b>' + tf('campaign.opN', { n: oi + 1 }) + '</b><span>' + cwEsc(t(op.theaterKey)) + '</span></span>' +
+      '<span class="cw-theater-name">' + cwEsc(t(op.nameKey)) + '</span>' +
+      '<span class="cw-theater-track">' + segs + '</span>' +
+      '<span class="cw-theater-foot"><span>' + (unlocked ? '' : cwIcon('LOCK')) + cwEsc(status) + '</span><span class="cw-theater-stars">★ ' + st.got + '/' + st.max + '</span></span>' +
+      '</button>';
   }).join('');
-  wrap.querySelectorAll('.op-card:not(.locked)').forEach(c => c.addEventListener('click', () => {
-    openOperationLore(c.getAttribute('data-op'));   // openOperationLore → showScreen('opLore') hides #opsSelect (nav.js)
-  }));
+  setTxt('opsMeta', '★ ' + allGot + ' / ' + allMax);
+  wrap.querySelectorAll('.cw-theater:not(.locked)').forEach(c => c.addEventListener('click', () => openOperationLore(c.getAttribute('data-op'))));
 }
 
-// op-lore panel (§5): tapping an operation surfaces its multi-paragraph backstory BEFORE the level
-// map. "Enter" proceeds into the operation's level map; "Back" returns to the operations list.
-function openOperationLore(opId) {
+// dossier (§5): the operation's backstory beside its chart BEFORE the sortie map. Returning players with
+// progress in the op skip straight to the map (the dossier stays one BACK away from the map's title).
+function openOperationLore(opId, force) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
   campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
-  const ov = g('opLore'); if (!ov) { openLevelMap(opId); return; }   // graceful fallback if markup is absent
+  const ov = g('opLore'); if (!ov) { openLevelMap(opId); return; }
   setTxt('opLoreTitle', t(op.nameKey));
+  setTxt('opLoreTheater', t(op.theaterKey));
   setTxt('opLoreH', t('campaign.background'));
   setTxt('opLoreBody', t(op.loreKey));
-  showScreen('opLore');   // hide #opsSelect + show #opLore (nav.js)
-  const go = g('opLoreGo'); if (go) { go.textContent = '▶ ' + t('campaign.enter'); go.onclick = () => { openLevelMap(opId); }; }   // openLevelMap → showScreen('levelMap') hides #opLore
-  const back = g('opLoreBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }   // openOperationsSelect → showScreen('opsSelect') hides #opLore
+  const ch = g('opLoreChart'); if (ch) ch.style.backgroundImage = "url('assets/maps/" + op.id + ".svg')";
+  showScreen('opLore');
+  const st = opStars(op);
+  const go = g('opLoreGo'); if (go) { go.textContent = '▶ ' + t(st.cleared ? 'campaign.resume' : 'campaign.enter'); go.onclick = () => { openLevelMap(opId); }; }
+  const back = g('opLoreBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }
   if (audio.on) audio.ui();
 }
 
-// the linear level map for one operation (paused overlay; player persists if mid-operation)
-function openLevelMap(opId) {
+// the sortie map for one operation (paused overlay; player persists if mid-operation)
+let sortieSel = -1;
+function openLevelMap(opId, selIdx) {
   campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
   const ov = g('levelMap'); if (!ov) return;
+  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  // default selection: the next sector to fly (first unlocked-but-uncleared), else the last one
+  if (selIdx == null) { selIdx = op.levels.findIndex((l, i) => campaignLevelState(opId, i) === 'unlocked'); if (selIdx < 0) selIdx = op.levels.length - 1; }
+  sortieSel = selIdx;
   renderLevelMap(opId);
-  showScreen('levelMap');   // hide current screen (opLore/briefing/levelCleared) + show #levelMap (nav.js)
+  showScreen('levelMap');
   const rd = g('levelMapTech'); if (rd) { rd.textContent = '⚒ ' + t('campaign.rd'); rd.onclick = () => { if (campaignPlayerOpId === opId && player && typeof openTechScreen === 'function') { ov.classList.remove('show'); openTechScreen(); } }; }
-  const back = g('levelMapBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }   // openOperationsSelect → showScreen('opsSelect') hides #levelMap
+  const back = g('levelMapBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }
   if (audio.on) audio.ui();
 }
 function renderLevelMap(opId) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
-  const title = g('levelMapTitle'); if (title) title.textContent = t(op.nameKey);
+  setTxt('levelMapTitle', t(op.nameKey));
+  const st = opStars(op);
+  setTxt('levelMapMeta', tf('campaign.clearedOf', { n: st.cleared, of: st.total }) + '   ★ ' + st.got + '/' + st.max);
   const rd = g('levelMapTech'); if (rd) rd.style.display = (campaignPlayerOpId === opId && player) ? '' : 'none';   // R&D only mid-operation
   const wrap = g('levelNodes'); if (!wrap) return;
-  // GEOGRAPHIC MAP: a per-op tactical SVG backdrop (CSS background-image — works from file://,
-  // unlike fetch) with one absolutely-positioned mission dot per level at its lvl.coords %.
-  // Progression logic is BYTE-FOR-BYTE the old behaviour: campaignLevelState → locked/unlocked/cleared,
-  // boss adds a class, cleared shows star pips; locked dots get NO click listener, unlocked/cleared
-  // dots → openBriefing(opId, idx). A faint route line traces the levels in order behind the dots.
-  const route = op.levels.map((lvl, i) => (i ? 'L' : 'M') + lvl.coords.x + ' ' + lvl.coords.y).join(' ');
+  const states = op.levels.map((l, i) => campaignLevelState(opId, i));
+  const nextIdx = states.indexOf('unlocked');
+  // route: flown legs solid in --ok, the leg to the next sector in --primary, the rest faint + dashed
+  let legs = '';
+  for (let i = 1; i < op.levels.length; i++) {
+    const a = op.levels[i - 1].coords, b = op.levels[i].coords;
+    const cls = states[i] === 'cleared' ? 'flown' : i === nextIdx ? 'next' : 'future';
+    legs += '<line class="' + cls + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" vector-effect="non-scaling-stroke"/>';
+  }
   const dots = op.levels.map((lvl, i) => {
-    const st = campaignLevelState(opId, i);   // 'locked' | 'unlocked' | 'cleared'
-    const rec = meta && meta.campaign && meta.campaign[opId] && meta.campaign[opId].levels[lvl.id];
-    const stars = (rec && rec.bestStars) || 0;
-    const pips = st === 'cleared' ? '<span class="opmap-stars">' + '★'.repeat(stars) + '☆'.repeat(3 - stars) + '</span>' : '';
-    return '<button class="opmap-dot ' + st + (lvl.isBoss ? ' boss' : '') + '" data-idx="' + i + '"' +
-      (st === 'locked' ? ' disabled' : '') +
-      ' style="left:' + lvl.coords.x + '%;top:' + lvl.coords.y + '%">' +
-      '<span class="opmap-pin"></span>' +
-      '<span class="opmap-tag"><span class="opmap-n">' + (i + 1) + '</span>' +
-      '<span class="opmap-name">' + t(lvl.nameKey) + '</span>' + pips + '</span></button>';
+    const stt = states[i];
+    const cls = 'cw-node ' + stt + (i === nextIdx ? ' next' : '') + (lvl.isBoss ? ' boss' : '') + (i === sortieSel ? ' sel' : '');
+    const ico = stt === 'locked' ? cwIcon('LOCK') : stt === 'cleared' ? cwIcon('CHECK') : cwIcon(lvl.type);
+    return '<button class="' + cls + '" data-idx="' + i + '" style="left:' + lvl.coords.x + '%;top:' + lvl.coords.y + '%" aria-label="' + cwEsc((i + 1) + ' ' + t(lvl.nameKey)) + '">' +
+      '<span class="cw-pin">' + ico + '</span>' +
+      '<span class="cw-tag"><b>' + ('0' + (i + 1)).slice(-2) + '</b> ' + cwEsc(t(lvl.nameKey)) + (stt === 'cleared' ? ' ' + starRow(levelBest(opId, lvl)) : '') + '</span></button>';
   }).join('');
-  // hierarchy strip: progress readout above the big map (sectors / cleared count)
-  const total = op.levels.length;
-  const clearedN = op.levels.filter((lvl, i) => campaignLevelState(opId, i) === 'cleared').length;
-  const metaStrip = '<div class="opmap-meta">' +
-    '<span>' + t('campaign.sectors') + ' <b>' + total + '</b></span>' +
-    '<span>' + t('campaign.clearedLbl') + ' <b>' + clearedN + ' / ' + total + '</b></span>' +
-    '</div>';
-  wrap.innerHTML = metaStrip +
-    '<div class="opmap-canvas" data-op="' + opId + '" style="background-image:url(\'assets/maps/' + opId + '.svg\')">' +
-      '<svg class="opmap-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' +
-        '<path d="' + route + '" fill="none" stroke="rgba(120,200,230,0.30)" stroke-width="0.5" stroke-dasharray="1.6 1.8" vector-effect="non-scaling-stroke"/>' +
-      '</svg>' + dots +
-    '</div>';
-  // unlocked/cleared dots are clickable → briefing (IDENTICAL to the old list); locked dots are
-  // disabled buttons with no listener.
-  wrap.querySelectorAll('.opmap-dot.unlocked, .opmap-dot.cleared').forEach(n =>
-    n.addEventListener('click', () => openBriefing(opId, +n.getAttribute('data-idx'))));
+  wrap.innerHTML = '<div class="cw-chart-art" style="background-image:url(\'assets/maps/' + opId + '.svg\')"></div>' +
+    '<svg class="cw-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' + legs + '</svg>' + dots;
+  wrap.querySelectorAll('.cw-node').forEach(n => {
+    n.addEventListener('click', () => {
+      const i = +n.getAttribute('data-idx');
+      if (i === sortieSel && states[i] !== 'locked') { openBriefing(opId, i); return; }   // second tap on the selected sector = brief it
+      sortieSel = i; renderLevelMap(opId); if (audio.on) audio.ui();
+    });
+  });
+  renderSortieCard(op, sortieSel, states);
+}
+// the docked card for the selected sector: what you'll fly, in what conditions, for which stars
+function renderSortieCard(op, idx, states) {
+  const card = g('sortieCard'); if (!card) return;
+  const lvl = op.levels[idx]; if (!lvl) { card.innerHTML = ''; return; }
+  const stt = states[idx];
+  const beats = levelBeats(lvl);
+  const conds = levelConds(lvl);
+  const best = levelBest(op.id, lvl);
+  const prev = idx > 0 ? t(op.levels[idx - 1].nameKey) : '';
+  card.innerHTML =
+    '<div class="cw-sortie-head">' + cwIcon(lvl.type) + '<span>' + tf('campaign.sectorN', { n: ('0' + (idx + 1)).slice(-2) }) + ' · ' + cwEsc(t('campaign.type.' + lvl.type)) + '</span></div>' +
+    '<h3 class="cw-sortie-name">' + cwEsc(t(lvl.nameKey)) + '</h3>' +
+    '<div class="cw-chips">' + condLabel(lvl).map(c => '<span>' + cwEsc(c) + '</span>').join('') + '</div>' +
+    '<ol class="cw-plan cw-plan-mini">' + beats.map(b => '<li>' + cwIcon(b.type) + '<span>' + cwEsc(b.text) + '</span>' + (b.clock ? '<em>' + b.clock + '</em>' : '') + '</li>').join('') + '</ol>' +
+    '<div class="cw-sortie-stars">' + starRow(best) + '<span>' + cwEsc(conds.map(c => tf('stars.cond.' + c.type, { n: c.n || 0 })).join(' / ')) + '</span></div>' +
+    (stt === 'locked'
+      ? '<div class="cw-sortie-lock">' + cwIcon('LOCK') + cwEsc(tf('campaign.clearFirst', { name: prev })) + '</div>'
+      : '<button class="cw-go cw-sortie-go" id="sortieBrief">' + t(stt === 'cleared' ? 'campaign.replayBrief' : 'campaign.brief') + ' ▶</button>');
+  const b = g('sortieBrief'); if (b) b.onclick = () => openBriefing(op.id, idx);
 }
 
-// full-screen mission briefing (a navigation layer visited BEFORE launch — not the in-game modal)
+// flight plan (briefing): situation + intel on the left, the level's beats + star targets on the right
 function openBriefing(opId, idx) {
   const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
   const lvl = op.levels[idx]; if (!lvl) return;
-  campaignBriefOp = opId; campaignBriefIdx = idx;
   const ov = g('briefing'); if (!ov) return;
-  setTxt('briefTitle', t(op.nameKey) + ' — ' + t('campaign.level') + ' ' + (idx + 1) + ': ' + t(lvl.nameKey));
-  // §1: the expanded 2-paragraph mission blurb IS the situational text on this pre-launch screen. The old
-  // one-line loreKey/bossIntro duplicated the blurb's own opening (same intro read twice), so show the blurb
-  // ALONE; fall back to lore/intro only when a level has no blurb. (The in-flight card shows only objective + how-to.)
+  setTxt('briefTitle', ('0' + (idx + 1)).slice(-2) + '  ' + t(lvl.nameKey));
+  const bc = g('briefCond'); if (bc) bc.innerHTML = '<span>' + cwEsc(t(op.nameKey)) + '</span>' + condLabel(lvl).map(c => '<span>' + cwEsc(c) + '</span>').join('');
+  // §1: the 2-paragraph mission blurb IS the situation text (lore/boss intro only as a fallback)
   const fallback = t(lvl.isBoss && lvl.boss && lvl.boss.introKey ? lvl.boss.introKey : lvl.loreKey);
   const bk = (typeof levelBlurbKey === 'function') ? levelBlurbKey(lvl) : null;
   const blurb = bk ? t(bk) : '';
-  const situation = (blurb && blurb !== bk) ? blurb : fallback;
-  setTxt('briefLore', situation);
+  setTxt('briefLore', (blurb && blurb !== bk) ? blurb : fallback);
   setTxt('briefObjectives', t(lvl.objectivesKey));
   let intel = t(lvl.enemyIntelKey);
   if (lvl.isBoss && lvl.boss && lvl.boss.phases) intel += '\n' + lvl.boss.phases.map(ph => '• ' + t(ph.descKey)).join('\n');
   setTxt('briefIntel', intel);
+  const plan = g('briefPlan');
+  if (plan) plan.innerHTML = levelBeats(lvl).map(b => '<li>' + cwIcon(b.type) + '<span><b>' + cwEsc(t('campaign.type.' + b.type)) + '</b>' + cwEsc(b.text) + '</span>' + (b.clock ? '<em>' + b.clock + '</em>' : '') + '</li>').join('');
+  const sl = g('briefStars');
+  if (sl) {
+    const best = levelBest(opId, lvl);
+    sl.innerHTML = levelConds(lvl).map((c, i) => '<li class="' + (i < best ? 'got' : '') + '">★ ' + cwEsc(tf('stars.cond.' + c.type, { n: c.n || 0 })) + '</li>').join('');
+  }
   setTxt('briefLoadout', campaignLoadoutSummary(opId));
-  setTxt('briefLoreH', t('campaign.situation')); setTxt('briefObjH', t('campaign.objectives'));
-  setTxt('briefIntelH', t('campaign.enemyIntel')); setTxt('briefLoadoutH', t('campaign.loadout'));
-  showScreen('briefing');   // hide #levelMap + show #briefing (nav.js)
-  const play = g('briefPlay'); if (play) { play.textContent = '▶ ' + t('campaign.play'); play.onclick = () => launchLevel(opId, idx); }
-  const back = g('briefBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openLevelMap(opId); }; }   // openLevelMap → showScreen('levelMap') hides #briefing
+  setTxt('briefLoreH', t('campaign.situation')); setTxt('briefObjH', t('campaign.flightPlan'));
+  setTxt('briefIntelH', t('campaign.enemyIntel')); setTxt('briefLoadoutH', t('campaign.loadout')); setTxt('briefStarsH', t('campaign.starTargets'));
+  showScreen('briefing');
+  const play = g('briefPlay'); if (play) { play.textContent = '▶ ' + t('campaign.play'); play.onclick = () => launchLevel(opId, idx); play.focus({ preventScroll: true }); }
+  const back = g('briefBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openLevelMap(opId, idx); }; }
   if (audio.on) audio.ui();
 }
 // read-only loadout summary for the briefing screen
@@ -455,7 +560,7 @@ function enterOperationRun(opId) {
   player._cheatUsed = false;
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   campaignPlayerOpId = opId;
-  run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: performance.now(), escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
+  run = freshRun(performance.now());
   weatherSeed = (Math.random() * 0x7fffffff) | 0;
   if (typeof applyWeather === 'function') applyWeather('clear');
   if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: ground scatter deterministic from this run's weatherSeed
@@ -483,14 +588,15 @@ function launchLevel(opId, idx) {
   campaignLevelRunBase = snapshotRunCounters(run);   // v1.3: per-level star scoring baseline (run is cumulative across the op)
   campaignLevelT0 = performance.now();               // v1.3: level-start clock for the fastClear star
   wave = 0; betweenWaves = true; waveTimer = 1.4; strikeWaveActive = false;
-  mission = null; setpieceActive = null; campaignBossPhases = null; noDamageWave = false;
+  mission = null; campaignBossPhases = null; noDamageWave = false;
   campaignMode = true; opSector = lvl.type;   // opSector reused as the level's mission/sector type
+  campaignEnd = null; if (typeof hideOutroStamp === 'function') hideOutroStamp();
   resetArenaForLevel(lvl);   // v1.3: reposition jet to runway + apply this level's weather/TOD + ready all abilities, BEFORE first render
   showScreen('playing'); paused = false;   // hide #briefing + show touch controls (if touch) + state='playing' (nav.js)
   if (clock) clock.getDelta();
   if (startWingman) spawnWingman(false, 'STD');
-  showBanner(t('banner.launching'));
   if (typeof hideLoading === 'function') hideLoading();   // fade the curtain out once the new arena is built + state is live
+  if (typeof showMissionIntro === 'function') showMissionIntro(op, idx, lvl);   // cinematic title card (replaces the old LAUNCHING… banner)
 }
 
 // WIN: commit rewards, persist the clear, return to the map (boss level → operation complete)
@@ -506,6 +612,7 @@ function campaignLevelComplete() {
   const lr = levelRunDelta(run, campaignLevelRunBase);
   lr.waveReached = lvl.waves || campaignWaveCount(idx);
   lr.timeSecs = campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
+  lr.expectedKills = lr.spawned || 0;   // kill-efficiency star measures against what this level actually put in the air
   const conds = levelConds(lvl);
   const stars = evalStarsFor(lr, player, conds);
   campaignClearLevel(opId, idx, lvl.id, (player && player.score) || 0, stars);   // persists + advances furthest unlocked
@@ -517,42 +624,78 @@ function campaignLevelComplete() {
   state = 'dead';
   if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
   clearCampaignArena();
-  showLevelCleared(opId, idx, lvl, rw);
+  showLevelCleared(opId, idx, lvl, rw, firstClear);
 }
 
-// dedicated LEVEL CLEARED panel for a NORMAL (non-boss) level win — renders the SAME computed stars
-// (lastLevelResult) as a pip row + met/missed checklist + this level's RP/score, then Continue → map.
-function showLevelCleared(opId, idx, lvl, rw) {
+// dedicated debrief for a NORMAL (non-boss) level win: the SAME computed stars (lastLevelResult) as big
+// pips + the met/missed condition list, this sortie's numbers, the rewards, then NEXT MISSION / REPLAY / MAP.
+function renderStarList(el, conds, lr) {
+  if (!el) return;
+  el.innerHTML = (conds || []).slice(0, 3).map(c => {
+    const met = starCondMet(c, lr);
+    return '<li class="' + (met ? 'got' : 'miss') + '">' + (met ? '★ ' : '☆ ') + cwEsc(tf('stars.cond.' + c.type, { n: c.n || 0 })) + '</li>';
+  }).join('');
+}
+function statCells(st) {
+  return [['campaign.stat.time', st.time], ['campaign.stat.kills', st.kills], ['campaign.stat.acc', st.acc + '%'], ['campaign.stat.dmg', st.dmg]]
+    .map(r => '<div><span>' + cwEsc(t(r[0])) + '</span><b>' + cwEsc(r[1]) + '</b></div>').join('');
+}
+function showLevelCleared(opId, idx, lvl, rw, firstClear) {
   const ov = g('levelCleared'); if (!ov) { openLevelMap(opId); return; }
   const res = lastLevelResult || { stars: 0, conds: levelConds(lvl), lr: {} };
   lastLevelResult = null;   // consumed by THIS panel — never let it linger into a later non-campaign endRun debrief
-  setTxt('lvlcTitle', t('campaign.levelCleared'));
   const op = OPERATIONS.find(o => o.id === opId);
-  setTxt('lvlcSub', '// ' + ((op && t(op.nameKey)) || '') + ' · ' + t('campaign.level') + ' ' + (idx + 1) + ' //');
-  const pips = g('lvlcPips'); if (pips) pips.textContent = '★'.repeat(res.stars) + '☆'.repeat(3 - res.stars);
-  setTxt('lvlcNote', res.stars + ' / 3');
-  renderStarChecklist(g('lvlcConds'), res.conds, res.lr);
-  setTxt('lvlcRwRp', '+' + (rw ? rw.rp : 0) + ' RP');
-  setTxt('lvlcRwScore', '+' + (rw ? rw.score : 0));
-  const go = g('lvlcContinue'); if (go) { go.textContent = t('campaign.continueMap'); go.onclick = () => { openLevelMap(opId); }; }   // openLevelMap → showScreen('levelMap') hides #levelCleared
-  showScreen('levelCleared');   // show #levelCleared over the (hidden) flight view; state stays 'dead' (nav.js)
+  setTxt('lvlcSub', ((op && t(op.nameKey)) || '') + '  ·  ' + ('0' + (idx + 1)).slice(-2) + ' ' + t(lvl.nameKey));
+  setTxt('lvlcTitle', t('campaign.accomplished'));
+  const pips = g('lvlcPips');
+  if (pips) { pips.innerHTML = [0, 1, 2].map(i => '<span class="' + (i < res.stars ? 'on' : '') + '" style="--i:' + i + '">★</span>').join(''); pips.setAttribute('aria-label', res.stars + ' / 3'); }
+  renderStarList(g('lvlcConds'), res.conds, res.lr);
+  const sc = g('lvlcStats'); if (sc) sc.innerHTML = statCells(levelDebriefStats(res.lr || {}));
+  const rr = g('lvlcRewards'); if (rr) rr.textContent = '+' + (rw ? rw.rp : 0) + ' RP   +' + (rw ? rw.score : 0).toLocaleString() + ' ' + t('campaign.stat.score') + (firstClear ? '' : '   (' + t('campaign.replayRate') + ')');
+  const hasNext = op && idx + 1 < op.levels.length;
+  const go = g('lvlcContinue');
+  if (go) { go.textContent = hasNext ? t('campaign.nextMission') + ' ▶' : t('campaign.continueMap'); go.onclick = () => { if (hasNext) openBriefing(opId, idx + 1); else openLevelMap(opId); }; }
+  const mp = g('lvlcMap'); if (mp) { mp.textContent = t('campaign.map'); mp.onclick = () => openLevelMap(opId, hasNext ? idx + 1 : idx); }
+  const rp = g('lvlcReplay'); if (rp) { rp.textContent = t('campaign.replay'); rp.onclick = () => launchLevel(opId, idx); }
+  showScreen('levelCleared');
+  if (go) go.focus({ preventScroll: true });
+  if (audio.on) audio.ui();
+}
+// failure debrief: what went wrong + how to fix it, this sortie's numbers, RETRY (free) / MAP
+function showLevelFailed(opId, idx, lvl, reason, lr) {
+  const ov = g('levelFailed'); if (!ov) { openLevelMap(opId); return; }
+  const op = OPERATIONS.find(o => o.id === opId);
+  setTxt('lvlfSub', ((op && t(op.nameKey)) || '') + '  ·  ' + ('0' + (idx + 1)).slice(-2) + ' ' + (lvl ? t(lvl.nameKey) : ''));
+  setTxt('lvlfTitle', t('campaign.failed'));
+  setTxt('lvlfReason', t(failReasonKey(reason)));
+  setTxt('lvlfTip', t('fail.tip.' + (FAIL_REASONS.indexOf(reason) >= 0 ? reason : 'objective')));
+  const sc = g('lvlfStats'); if (sc) sc.innerHTML = statCells(levelDebriefStats(lr || {}));
+  setTxt('lvlfNote', t('campaign.retryNote'));
+  const rt = g('lvlfRetry'); if (rt) { rt.textContent = '▶ ' + t('campaign.retry'); rt.onclick = () => launchLevel(opId, idx); }
+  const mp = g('lvlfMap'); if (mp) { mp.textContent = t('campaign.map'); mp.onclick = () => openLevelMap(opId, idx); }
+  showScreen('levelFailed');
+  if (rt) rt.focus({ preventScroll: true });
   if (audio.on) audio.ui();
 }
 
-// FAIL (death or objective failure): roll back the economy, return to the map, level stays unlocked
-function campaignLevelFailed() {
-  const opId = campaignOpId;
-  campaignMode = false;
+// FAIL (death or objective failure): roll back the economy, show the failure debrief (reason + RETRY / MAP);
+// the level stays unlocked and the retry is free.
+function campaignLevelFailed(reason) {
+  const opId = campaignOpId, idx = campaignLevelIdx;
+  const lvl = currentCampaignLevel();
+  const lr = levelRunDelta(run, campaignLevelRunBase);
+  lr.timeSecs = campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
+  campaignMode = false; campaignEnd = null;
   if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // flight exit → silence the engine hum
   if (campaignSnapshot && player) {
     const r = rollbackSnapshot(campaignSnapshot);   // pure; tech untouched (no mid-level shop) — only restore economy
     player.tp = r.rp; player.score = r.score;
   }
   campaignSnapshot = null; opSector = null;
-  if (player && player.group) player.group.visible = true;   // un-hide (the gameOver guard returned before exploding)
+  if (player && player.group) player.group.visible = true;   // un-hide (the crash hid the jet)
   clearCampaignArena();
-  showBanner(t('banner.missionFailed'));
-  openLevelMap(opId);
+  if (typeof hideOutroStamp === 'function') hideOutroStamp();
+  showLevelFailed(opId, idx, lvl, reason || 'objective', lr);
 }
 
 // ===== Boss Rush mode (F15) =====
@@ -576,7 +719,7 @@ function bossRushComplete() {
   if (meta) { meta.bossRushBest = betterTime(meta.bossRushBest || 0, secs); saveMeta(); }   // keep the LOWER time
   player.score += 8000;   // gauntlet clear bonus
   state = 'dead';
-  choosingUpgrade = false; pendingUpgrades = null; g('upgrade').classList.remove('show');
+  choosingUpgrade = false; g('upgrade').classList.remove('show');
   showBanner(tf('bossrush.cleared', { t: bossRushTimeStr(secs) }));
   endRun(t('bossrush.title'), true);
   if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();

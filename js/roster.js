@@ -77,7 +77,7 @@ const JETS = [
     context:'Shenyang / SAC \u00B7 China (demonstrator). A second Chinese sixth-generation design that surfaced in December 2024 \u2014 smaller and more fighter-like than the J-36. It is a tailless, twin-engine, lambda-wing jet that appears to use swivelling wingtips for control in place of vertical tails, and is rumoured to be aimed in part at future carrier operations.' },
 ];
 
-/* ---- ace pool (pure over JETS) — moved out of THREE-coupled entities.js so tests/ace-pool.test.js imports the real impl ---- */
+/* ---- ace pool (pure over JETS; tests/ace-pool.test.js imports the real impl) ---- */
 function aceShapePool() { return JETS.filter(j => j.shape !== 'STD').map(j => j.shape); }
 function jetNameForShape(shape) { const j = JETS.find(x => x.shape === shape); return j ? j.name : shape; }
 

@@ -1,4 +1,4 @@
-/* SKYSTRIKE — globals.js: constants, jet roster, tech tree, global state, math & vector helpers. Load 1st (after three.js). */
+/* SKYSTRIKE — globals.js: constants, tech tree, global runtime state, THREE vector helpers. Loaded after the pure data/core files (core/prefs/roster/content-packs), before i18n.js. */
 
 /* =====================================================================
    SKYSTRIKE :: ACE PROTOCOL  —  low-poly arcade flight combat
@@ -44,7 +44,7 @@ const TODS = [
 
 /* ---------------- weather (feature #4: weather + TOD gameplay) ---------------- */
 // Live weather modifiers — engine.js applyWeather writes these; combat.js (lock),
-// ui.js (radar + HUD chip) and engine.js (fog/sky) read them. Default clear = neutral (no-op).
+// the HUD (radar + chip) and engine.js (fog/sky) read them. Default clear = neutral (no-op).
 let weather = { type: 'clear', radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, fogMul: 1.0 };
 let weatherSeed = 1;         // per-run seed for standalone (non-op) weather rolls; reseeded in startGame
 const FOG_BASE = 0.000058;   // neutral FogExp2 density; weather.fogMul scales from this (matches scene init)
@@ -149,7 +149,9 @@ const DIFFS = [
   { key: 'VETERAN', dmg: 1.0, fire: 1.0,  missile: 1.0, count: 0,  hp: 1.0,  desc: 'The intended challenge.' },
   { key: 'ACE',     dmg: 1.5, fire: 0.72, missile: 0.7, count: 1,  hp: 0.85, desc: 'Lethal — more foes, faster guns, fragile hull.' },
 ];
-let run = { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: 0, escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, setpieceDone: {}, cleanWaves: 0 };
+// fresh per-run stat counters (startGame / enterOperationRun start a run with freshRun(performance.now()))
+function freshRun(t0) { return { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: t0, escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, cleanWaves: 0 }; }
+let run = freshRun(0);
 let noDamageWave = false;   // per-wave "no hit taken yet" flag for star objectives — set true at wave start (main.js), cleared in damagePlayer; a wave cleared while still true bumps run.cleanWaves
 
 /* per-airframe special-ability cooldown (seconds) */
@@ -362,7 +364,7 @@ const CAM_NAMES = ['CHASE', 'CLOSE', 'COCKPIT'];
 // ---- camera shake globals (F1) ----
 // camShake: current shake magnitude; decays to 0 each frame via decayShake.
 // shakeCam(amt): sets camShake = max(current, amt) — strongest pending shake wins, never accumulates unboundedly.
-// decayShake(v, dt): PURE — returns max(0, v - dt * CAMSHAKE_RATE). Mirrored byte-identical in tests/camshake.test.js.
+// decayShake(v, dt): PURE — returns max(0, v - dt * CAMSHAKE_RATE) (core.js; tests/camshake.test.js).
 let camShake = 0;
 function shakeCam(amt) { camShake = Math.max(camShake, amt); }
 // camera-shake core (CAMSHAKE_RATE, CAMSHAKE_K, decayShake) → core.js.
@@ -391,10 +393,9 @@ const SKIN_HUDFONT = {
   flat:       "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   blueprint:  "'Courier New', monospace",
 };
-let activePalette = 'amber', activeSkin = 'standard';
+let activeSkin = 'standard';
 function applyPalette(id) {
   if (!PALETTES[id]) id = 'amber';
-  activePalette = id;
   document.documentElement.dataset.palette = id;          // DOM (CSS variables) follows
   if (typeof HUD !== 'undefined') { const p = PALETTES[id]; for (const k in p) HUD[k] = p[k]; }  // canvas follows
   store.set('skystrike_palette', id);
@@ -477,7 +478,7 @@ let campaignLevelT0 = 0;
 // graphics quality (F11 mobile perf): 'auto' picks a render tier by a cheap device heuristic; 'low'/'high'
 // force it. VISUAL-ONLY — never changes gameplay (it gates shadow-map resolution, shadow-camera far, and a
 // draw-distance .visible cull on distant enemy meshes; enemies are NEVER despawned, so locks/markers survive).
-// Persisted via the settings seam (saveSettings/loadSettings in ui.js). engine.js owns applyGfxQuality().
+// Persisted via the settings seam (saveSettings/loadSettings in ui-settings.js). engine.js owns applyGfxQuality().
 let gfxQuality = 'auto';
 let unitSystem = 'imperial';   // HUD units: 'imperial' (mph + ft, default) | 'metric' (kph + m). Persisted; drives the speedometer/altimeter readout + labels.
 // gfx-quality core (GFX_TIERS + pure resolveQuality) → core.js. refreshGfxTier (below) is the impure call site.

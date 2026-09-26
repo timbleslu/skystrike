@@ -78,9 +78,7 @@ function applyLang() {
   setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
   // hangar inline controls (3 lines)
-  const c1 = g('hangarCtl1'); if (c1) c1.textContent = t('hangar.controls1');
-  const c2 = g('hangarCtl2'); if (c2) c2.textContent = t('hangar.controls2');
-  const c3 = g('hangarCtl3'); if (c3) c3.textContent = t('hangar.controls3');
+  setTxt('hangarCtl1', t('hangar.controls1')); setTxt('hangarCtl2', t('hangar.controls2')); setTxt('hangarCtl3', t('hangar.controls3'));
   // game over labels
   setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
   setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
@@ -94,27 +92,18 @@ function applyLang() {
   setTxt('metaClose', t('meta.back')); setTxt('metaHint', t('meta.hint'));
   // tech tree shell
   setTxt('rplab', t('tech.researchPoints'));
-  const th = g('techHeadTitle'); if (th) th.textContent = t('tech.title');
-  const ts = g('techHeadSub'); if (ts) ts.textContent = t('tech.sub');
+  setTxt('techHeadTitle', t('tech.title')); setTxt('techHeadSub', t('tech.sub'));
   document.querySelectorAll('.tech-tab').forEach(b => { b.textContent = b.dataset.tab === 'armory' ? t('tech.tabArmory') : t('tech.tabTech'); });
   setTxt('techDeploy', t('tech.deploy'));
-  const hint = g('techhint'); if (hint) hint.textContent = techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree');
+  setTxt('techhint', techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree'));
   renderDraftBar();   // FRONTIER DRAFT: localize the pin readout + reroll button on language switch
   // wing picker
-  const wt = g('wpTitle'); if (wt) wt.textContent = t('wing.title');
-  const wsx = g('wpSub'); if (wsx) wsx.textContent = t('wing.sub');
+  setTxt('wpTitle', t('wing.title')); setTxt('wpSub', t('wing.sub'));
   setTxt('wpCancel', t('wing.cancel'));
-  // operation map
-  const ot = g('opTitle'); if (ot) ot.textContent = t('op.title');
-  const osb = g('opSub'); if (osb) osb.textContent = t('op.sub');
-  const oi = g('opInfo'); if (oi) oi.textContent = t('op.info');
-  setTxt('opLaunch', '▶ ' + t('op.launch').replace('▶ ', ''));
-  setTxt('opLaunch', t('op.launch'));
-  applyOpLegend();
   // hud panel labels
   setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
   if (el.abIndicator) el.abIndicator.textContent = t('hud.ab');
-  setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); setTxt('lblWave', t('hud.wave')); setTxt('lblCombo', t('hud.combo'));
+  setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); { const lw = g('lblWave'); if (lw) putText(lw, t('hud.wave')); } setTxt('lblCombo', t('hud.combo'));
   applyUnitLabels();
   setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));
   // manual
@@ -162,22 +151,8 @@ function applyLang() {
   setTxt('ssecAppearance', t('set.sec.appearance')); setTxt('ssecReadout', t('set.sec.readout'));
   setTxt('ssecSteering', t('set.sec.steering')); setTxt('ssecTouch', t('set.sec.touch')); setTxt('ssecMotion', t('set.sec.motion'));
   setTxt('ssecMix', t('set.sec.mix')); setTxt('ssecAim', t('set.sec.aim')); setTxt('ssecModes', t('set.sec.modes')); setTxt('ssecDev', t('set.sec.dev'));
-  const shs2 = g('setHudScale');
-  if (shs2 && shs2.options.length >= 5) {
-    shs2.options[0].textContent = t('set.hudXs');
-    shs2.options[1].textContent = t('set.hudSmall');
-    shs2.options[2].textContent = t('set.hudNormal');
-    shs2.options[3].textContent = t('set.hudLarge');
-    shs2.options[4].textContent = t('set.hudXl');
-  }
-  const sus2 = g('setUiScale');
-  if (sus2 && sus2.options.length >= 5) {
-    sus2.options[0].textContent = t('set.hudXs');
-    sus2.options[1].textContent = t('set.hudSmall');
-    sus2.options[2].textContent = t('set.hudNormal');
-    sus2.options[3].textContent = t('set.hudLarge');
-    sus2.options[4].textContent = t('set.hudXl');
-  }
+  const sizeKeys = ['set.hudXs', 'set.hudSmall', 'set.hudNormal', 'set.hudLarge', 'set.hudXl'];   // HUD + UI size dropdowns share the XS..XL labels
+  ['setHudScale', 'setUiScale'].forEach(id => { const sel = g(id); if (sel && sel.options.length >= 5) sizeKeys.forEach((k, i) => { sel.options[i].textContent = t(k); }); });
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
   segTxt('#controlSchemeTog [data-cs="auto"]', 'set.csAuto'); segTxt('#controlSchemeTog [data-cs="pointer"]', 'set.csPointer'); segTxt('#controlSchemeTog [data-cs="rate"]', 'set.csClassic');
@@ -191,8 +166,7 @@ function applyLang() {
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
   setTxt('w_highg', t('hud.highG')); setTxt('w_stealth', t('hud.stealthActive')); { const wl = g('w_lock'); if (wl) putText(wl, t('hud.targetLocked')); }   // updateDom's guarded-write cache owns this node
   setTxt('wingStatus', t('hud.escort'));
-  const hintEl = g('hint'); if (hintEl) hintEl.textContent = t('hud.hint');
-  const pauseEl = g('btnPause'); if (pauseEl) pauseEl.textContent = t('hud.pause');
+  setTxt('hint', t('hud.hint')); setTxt('btnPause', t('hud.pause'));
   // touch buttons
   setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
   setTxt('tb-thr-lbl', t('touch.thr')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
@@ -210,13 +184,6 @@ function applyLang() {
   renderKillBoard();
   updateSpHud();
   if (g('meta') && g('meta').classList.contains('show')) renderMetaScreen();
-}
-function applyOpLegend() {
-  const map = { FURBALL: 'op.legFurball', INTERCEPT: 'op.legIntercept', STRIKE: 'op.legStrike', ESCORT: 'op.legEscort', DEFEND: 'op.legDefend', ELITE: 'op.legElite', DEPOT: 'op.legDepot', FINAL: 'op.legFinal' };
-  const order = ['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE', 'DEPOT', 'FINAL'];
-  const leg = document.querySelector('#opmap .op-legend');
-  if (!leg) return;
-  leg.innerHTML = order.map(k => '<span><b>' + t('op.' + k) + '</b> ' + t(map[k]) + '</span>').join('');
 }
 // generic segmented toggle: data-<attr> buttons, getter()/setter(v) on a global, optional onChange.
 function bindSeg(containerId, attr, getter, setter, onChange) {
@@ -325,6 +292,10 @@ function clearArenaEntities() {
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0; BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
+  if (typeof clearAllies === 'function') clearAllies();   // campaign overhaul: friendly convoy/outpost + in-flight bombs
+  if (typeof campaignEnd !== 'undefined') campaignEnd = null;   // never carry an outro beat into another arena
+  if (typeof hideOutroStamp === 'function') hideOutroStamp();
+  if (typeof hideMissionIntro === 'function') hideMissionIntro();
 }
 function clearArena() {
   clearArenaEntities();
@@ -339,7 +310,7 @@ function clearArena() {
   if (el.flash) putStyle(el.flash, 'opacity', '0');
   if (el.bossbar) el.bossbar.classList.remove('show');
   if (el.banner) el.banner.classList.remove('show');
-  choosingUpgrade = false; pendingUpgrades = null;
+  choosingUpgrade = false;
   const up = g('upgrade'); if (up) up.classList.remove('show');
 }
 function returnToHangar() {

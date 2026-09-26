@@ -4,10 +4,8 @@
    THE SEAM: every analog flight source converges on `flightInput = {pitch, roll}` (globals.js),
    recomputed once per frame by readFlightInput() and consumed by combat.js updatePlayer().
    Keyboard stays digital in combat.js and is ADDED on top before clamping, so desktop is unchanged.
-   Pure shaping helpers (shapeAxis/mapFlightInput/motionAxis/emaSmooth) + the AGGRESSION table now
-   live in core.js (require-safe; tests import them directly — no byte-identical mirror). */
-
-/* ---------------- pure input shaping → core.js (shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth) ---------------- */
+   Pure shaping helpers (shapeAxis/mapFlightInput/motionAxis/emaSmooth) + the AGGRESSION table live in
+   core.js (require-safe; tests import them directly). */
 
 /* ---------------- per-frame source selection (the seam writer) ---------------- */
 // Picks the active analog source by Settings.mobileControl and writes flightInput{pitch,roll}.
@@ -60,21 +58,19 @@ function readFlightInput() {
     const rawRoll = motionAxis(motionInput.gamma, motionOffset.gamma, a.maxAngle);
     pitch = mapFlightInput(rawPitch, a, !invertY) * a.pitchClamp;  // default push-up=climb -> invert raw beta
     roll = mapFlightInput(rawRoll, a, false);
-  } else if (isTouchEnabled && joyActive) {
-    // DIRECTIONAL joystick: the jet flies TOWARD the stick — up = climb, down = dive, left/right = bank that way.
-    // (combat.js applies pitchIn = -pitchCmd and +pitchRate = nose up, so +touchInput.y / pull-down -> dive.)
-    // MOBILE invert flips the WHOLE stick: s negates BOTH pitch and roll, so the jet flies OPPOSITE the stick.
+  } else {
+    // DIRECTIONAL stick — touch joystick, else desktop mouse pointer (offset from screen centre): the jet
+    // flies TOWARD it — up = climb, down = dive, left/right = bank that way. (combat.js applies
+    // pitchIn = -pitchCmd and +pitchRate = nose up, so +y / pull-down -> dive.)
+    // Invert flips the WHOLE stick: s negates BOTH pitch and roll, so the jet flies OPPOSITE the stick.
     // This is deliberately different from the keyboard invert (combat.js), which flips pitch only.
-    const s = invertY ? -1 : 1;
-    pitch = mapFlightInput(s * touchInput.y, a, false) * a.pitchClamp;
-    roll = mapFlightInput(s * touchInput.x, a, false);
-  } else if (mouseFlight && mouseInput.active && state === 'playing') {
-    // DIRECTIONAL mouse pointer (desktop): the jet flies TOWARD the pointer's offset from screen
-    // center — same shaping + sign convention as the touch joystick (+y = dive, since combat.js
-    // applies pitchIn = -pitchCmd). invertY flips the WHOLE pointer like the touch stick.
-    const s = invertY ? -1 : 1;
-    pitch = mapFlightInput(s * mouseInput.y, a, false) * a.pitchClamp;
-    roll  = mapFlightInput(s * mouseInput.x, a, false);
+    const stick = (isTouchEnabled && joyActive) ? touchInput
+                : (mouseFlight && mouseInput.active && state === 'playing') ? mouseInput : null;
+    if (stick) {
+      const s = invertY ? -1 : 1;
+      pitch = mapFlightInput(s * stick.y, a, false) * a.pitchClamp;
+      roll = mapFlightInput(s * stick.x, a, false);
+    }
   }
   flightInput.pitch = clamp(pitch, -1, 1);
   flightInput.roll = clamp(roll, -1, 1);
@@ -82,9 +78,9 @@ function readFlightInput() {
 }
 
 /* ---------------- THR throttle slider (touch) ---------------- */
-// Drag the vertical track to set player.throttle directly (0 = bottom, 1 = top). Replaces the old
-// momentary THR/BRK touch buttons. combat.js no longer ramps throttle on touch (touchBtns.thr/brk
-// stay false there); the slider writes player.throttle and readFlightInput repaints it each frame.
+// Drag the vertical track to set player.throttle directly (0 = bottom, 1 = top). combat.js does not
+// ramp throttle on touch (touchBtns.thr/brk stay false); the slider writes player.throttle and
+// readFlightInput repaints it each frame.
 // Keyboard Shift/Ctrl throttle is unchanged (desktop unaffected).
 let thrTouchId = null;
 let _thrPainted = -1;   // last painted throttle; skips the per-frame layout read when nothing changed
@@ -162,9 +158,7 @@ function onDeviceOrientation(e) {
   // Any event means the sensor is alive — cancel the no-data watchdog (idempotent).
   clearMotionWatchdog();
   // First real event after enable: capture neutral + report 'live'.
-  const wasReady = motionInput.ready;
-  if (!motionInput.ready) { recenterMotion(); motionInput.ready = true; }
-  if (!wasReady) emitMotionStatus('live');
+  if (!motionInput.ready) { recenterMotion(); motionInput.ready = true; emitMotionStatus('live'); }
 }
 // capture the current attitude as the neutral offset.
 function recenterMotion() {
@@ -276,27 +270,27 @@ function initTouchControls() {
   window.addEventListener('touchend', joyEnd, { passive: false });
   window.addEventListener('touchcancel', joyEnd, { passive: false });
 
-  // Action buttons (unchanged behavior; always on-screen on the right).
+  // Action buttons (always on-screen on the right); tap actions only fire while flying, unpaused.
   function bindBtn(id, key, clickAction) {
     const el = g(id);
     if (!el) return;
-    el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); touchBtns[key] = true; if (clickAction) clickAction(); }, { passive: false });
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); touchBtns[key] = true; if (clickAction && state === 'playing' && !paused) clickAction(); }, { passive: false });
     el.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); touchBtns[key] = false; }, { passive: false });
   }
   bindBtn('tb-gun', 'gun');
-  bindThrSlider();   // THR slider replaces the old thr/brk momentary buttons (sets player.throttle directly)
-  bindBtn('tb-msl', 'msl', () => { if (state === 'playing' && !paused) fireMissile(); });
-  bindBtn('tb-flr', 'flr', () => { if (state === 'playing' && !paused) deployFlares(); });
-  bindBtn('tb-spc', 'spc', () => { if (state === 'playing' && !paused) useSpecial(); });
-  bindBtn('tb-spc2', 'spc2', () => { if (state === 'playing' && !paused) useSpecial(2); });   // feature #3: equipped SLOT-2 special
-  bindBtn('tb-lck', 'lck', () => { if (state === 'playing' && !paused) cycleLock(); });
-  bindBtn('tb-cam', 'cam', () => { if (state === 'playing' && !paused) cycleCamera(); });
-  bindBtn('tb-aws', 'aws', () => { if (state === 'playing' && !paused) awacsAction('strike'); });    // AWACS orbital strike
-  bindBtn('tb-ars', 'ars', () => { if (state === 'playing' && !paused) awacsAction('resupply'); });   // AWACS resupply
-  bindBtn('tb-ajm', 'ajm', () => { if (state === 'playing' && !paused) awacsAction('jam'); });        // AWACS jamming
-  bindBtn('tb-weng', 'weng', () => { if (state === 'playing' && !paused) issueWingOrder('ENGAGE'); });    // F3 wingman-wheel: wingmen engage my target
-  bindBtn('tb-wcov', 'wcov', () => { if (state === 'playing' && !paused) issueWingOrder('COVER'); });     // F3 wingman-wheel: wingmen cover the player
-  bindBtn('tb-wrgp', 'wrgp', () => { if (state === 'playing' && !paused) issueWingOrder('REGROUP'); });   // F3 wingman-wheel: wingmen form up + hold fire
+  bindThrSlider();   // THR slider sets player.throttle directly
+  bindBtn('tb-msl', 'msl', () => fireMissile());
+  bindBtn('tb-flr', 'flr', () => deployFlares());
+  bindBtn('tb-spc', 'spc', () => useSpecial());
+  bindBtn('tb-spc2', 'spc2', () => useSpecial(2));   // feature #3: equipped SLOT-2 special
+  bindBtn('tb-lck', 'lck', () => cycleLock());
+  bindBtn('tb-cam', 'cam', () => cycleCamera());
+  bindBtn('tb-aws', 'aws', () => awacsAction('strike'));    // AWACS orbital strike
+  bindBtn('tb-ars', 'ars', () => awacsAction('resupply'));   // AWACS resupply
+  bindBtn('tb-ajm', 'ajm', () => awacsAction('jam'));        // AWACS jamming
+  bindBtn('tb-weng', 'weng', () => issueWingOrder('ENGAGE'));    // F3 wingman-wheel: wingmen engage my target
+  bindBtn('tb-wcov', 'wcov', () => issueWingOrder('COVER'));     // F3 wingman-wheel: wingmen cover the player
+  bindBtn('tb-wrgp', 'wrgp', () => issueWingOrder('REGROUP'));   // F3 wingman-wheel: wingmen form up + hold fire
 
   applyButtonStyle();
 }

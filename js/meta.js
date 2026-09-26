@@ -14,7 +14,7 @@ let meta = null;            // persistent meta-progression state (loaded at boot
 /* the only jet unlocked for free from the start; the rest (incl. F-22, SU-57) are gated behind SP. */
 const STARTER_JETS = ['FT-1'];
 
-/* ---------------- SP award (PURE — mirrored byte-identical in tests/meta.test.js) ----------------
+/* ---------------- SP award (PURE) ----------------
    Derives the run's SP payout from the existing `run` stats object + player score. Monotonic in
    every term; a do-nothing run pays 0. Callers stamp run.waveReached / run.rivalLevel before
    calling so this stays pure (no globals). */
@@ -32,7 +32,7 @@ function spAward(run, player) {
   return Math.max(0, Math.floor(sp));
 }
 
-/* ---------------- run grading (PURE — mirrored byte-identical in tests/grading.test.js) ----------------
+/* ---------------- run grading (PURE) ----------------
    Grades the completed run on kill efficiency, time, damage taken, and objectives. Returns
    { letter, mult, score } where letter is S/A/B/C and mult is the SP bonus multiplier.
    Callers must stamp run.waveReached + run.timeSecs before calling so this stays pure. */
@@ -59,7 +59,7 @@ function gradeRun(run, player) {
   return { letter: letter, mult: mult, score: total };
 }
 
-/* ---------------- star objectives (PURE — mirrored byte-identical in tests/stars.test.js) ----------------
+/* ---------------- star objectives (PURE) ----------------
    1–3 secondary stars per run from three independent, checkable conditions over the existing
    `run` stats (kill efficiency / a full no-damage wave / objectives completed). Callers stamp
    run.waveReached first (as for spAward/gradeRun). run.cleanWaves counts waves cleared without
@@ -77,17 +77,17 @@ function evalStars(run, player) {
   return stars;
 }
 /* ---------------- per-mission star conditions (Ops/campaign) ----------------
-   The DEFAULT 3 conditions (kills / clean / objective) mirror evalStars exactly. A level row may
+   The DEFAULT 3 conditions (kills / clean / objective) mirror evalStars (except that starCondMet's
+   'kills' honours run.expectedKills via starExpectedKills; evalStars always uses 4/wave). A level row may
    override them with an authored `stars` array of up to 3 condition descriptors `{ type, n? }`,
    each mapped to ONE real `run` stat (no invented stats). `starCondMet(cond, run)` is PURE and
    total over its args; `evalStarsFor(run, player, conds)` sums the met conditions, capped 0..3,
    and falls back to evalStars when `conds` is missing/empty (so non-annotated levels & Endless
-   are byte-for-byte unchanged). Mirrored in tests/stars.test.js. */
+   are unchanged). */
 const STAR_DEFAULT_CONDS = [{ type: 'kills' }, { type: 'clean' }, { type: 'objective' }];
 function starCondMet(cond, run) {
   if (!cond || !run) return false;
-  var waves = Math.max(1, run.waveReached || 1);
-  var expected = waves * 4;
+  var expected = starExpectedKills(run);
   var kills = (run.kills || 0) + (run.ground || 0) + (run.boss || 0);
   switch (cond.type) {
     case 'kills':     return kills / expected >= STAR_KILL_FRAC;       // ≥60% kill efficiency
@@ -98,20 +98,63 @@ function starCondMet(cond, run) {
       (run.hits || 0) / run.shots * 100 >= (cond.n || 0);             // shot accuracy ≥ n%
     case 'flawless':  return (run.missions || 0) >= 1 &&
       (run.damageTaken || 0) === 0;                                    // objective done, no hits taken
-    // --- per-mission UNIQUE conditions (v1.3 stars rework) — all over EXISTING run stats, no invented tracking ---
+    // --- per-mission UNIQUE conditions — all over EXISTING run stats, no invented tracking ---
     case 'gunOnly':   return kills > 0 && (run.pMissiles || 0) === 0;  // every kill with guns — never fired a missile
     case 'noFlares':  return (kills > 0 || (run.missions || 0) >= 1) &&
       (run.pFlares || 0) === 0;                                        // cleared the level without burning a flare
     case 'fastClear': return (run.timeSecs || 0) > 0 &&
       run.timeSecs <= (cond.n || 0);                                   // cleared within n seconds
     case 'killsN':    return kills >= (cond.n || 0);                   // absolute kill count ≥ n
+    case 'alliesIntact': return (run.missions || 0) >= 1 &&
+      (run.allyLosses || 0) === 0;                                     // objective done without losing a friendly
     default:          return false;
   }
 }
-/* ---------------- per-mission star conditions, v1.3: 2 type-defaults + 1 hand-authored unique ----------------
+/* The 60% kill-efficiency star measures against what the level ACTUALLY spawned (run.expectedKills,
+   stamped from the per-level hostile spawn count); falls back to 4/wave for Endless/legacy. PURE. */
+function starExpectedKills(run) {
+  if (run && run.expectedKills > 0) return run.expectedKills;
+  return Math.max(1, (run && run.waveReached) || 1) * 4;
+}
+/* LIVE star readout for the in-flight checklist. Same conditions as starCondMet, but
+   judged MID-FLIGHT so the pilot can see which stars are still in reach:
+     'met'   — already locked in (can't be lost),
+     'track' — currently on course; it'll be met if nothing changes,
+     'fail'  — already lost this sortie,
+     'pending' — not decided yet (needs the objective / more kills / more shots).
+   `lr` = the per-level run delta so far; ctx = { elapsed } seconds since launch. Returns
+   { state, cur?, need? } — cur/need are the numbers the HUD prints ("4/6", "58%", "1:12"). PURE. */
+function starCondLive(cond, lr, ctx) {
+  lr = lr || {}; ctx = ctx || {};
+  var kills = (lr.kills || 0) + (lr.ground || 0) + (lr.boss || 0);
+  switch (cond && cond.type) {
+    case 'noDamage':
+    case 'flawless': return { state: (lr.damageTaken || 0) > 0 ? 'fail' : 'track' };
+    case 'gunOnly':  return { state: (lr.pMissiles || 0) > 0 ? 'fail' : (kills > 0 ? 'track' : 'pending') };
+    case 'noFlares': return { state: (lr.pFlares || 0) > 0 ? 'fail' : 'track' };
+    case 'alliesIntact': return { state: (lr.allyLosses || 0) > 0 ? 'fail' : 'track' };
+    case 'killsN':   return { state: kills >= (cond.n || 0) ? 'met' : 'pending', cur: kills, need: cond.n || 0 };
+    case 'kills': {
+      var need = Math.ceil(starExpectedKills(lr) * STAR_KILL_FRAC);
+      return { state: kills >= need ? 'met' : 'pending', cur: kills, need: need };
+    }
+    case 'accuracy': {
+      var acc = (lr.shots || 0) > 0 ? Math.round((lr.hits || 0) / lr.shots * 100) : 0;
+      return { state: (lr.shots || 0) > 0 ? (acc >= (cond.n || 0) ? 'track' : 'pending') : 'pending', cur: acc, need: cond.n || 0 };
+    }
+    case 'fastClear': {
+      var left = (cond.n || 0) - (ctx.elapsed || 0);
+      return { state: left >= 0 ? 'track' : 'fail', cur: Math.max(0, Math.ceil(left)), need: cond.n || 0 };
+    }
+    case 'clean':     return { state: (lr.cleanWaves || 0) >= 1 ? 'met' : 'pending' };
+    case 'objective': return { state: (lr.missions || 0) >= 1 ? 'met' : 'pending' };
+    default:          return { state: 'pending' };
+  }
+}
+/* ---------------- per-mission star conditions: 2 type-defaults + 1 hand-authored unique ----------------
    starsForType(type) gives the TWO default conditions a mission type always rewards; each level row adds ONE
    bespoke `starUnique` descriptor. levelConds(lvl) composes [typeDefault0, typeDefault1, lvl.starUnique].
-   An explicit `lvl.stars` array still wins (escape hatch). PURE. Mirrored in tests/stars.test.js. */
+   An explicit `lvl.stars` array still wins (escape hatch). PURE. */
 var STAR_TYPE_CONDS = {
   FURBALL:   [{ type: 'kills' },     { type: 'noDamage' }],
   SWEEP:     [{ type: 'kills' },     { type: 'clean' }],
@@ -119,8 +162,8 @@ var STAR_TYPE_CONDS = {
   STRIKE:    [{ type: 'objective' }, { type: 'accuracy', n: 50 }],
   RECON:     [{ type: 'objective' }, { type: 'clean' }],
   STEALTH:   [{ type: 'objective' }, { type: 'noDamage' }],
-  ESCORT:    [{ type: 'objective' }, { type: 'clean' }],
-  DEFEND:    [{ type: 'objective' }, { type: 'clean' }],
+  ESCORT:    [{ type: 'objective' }, { type: 'alliesIntact' }],
+  DEFEND:    [{ type: 'objective' }, { type: 'alliesIntact' }],
   FINAL:     [{ type: 'noDamage' },  { type: 'objective' }],
 };
 function starsForType(type) {
@@ -137,7 +180,7 @@ function levelConds(lvl) {
    but stars must reflect THIS level only. Snapshot the counters at level start (snapshotRunCounters) and
    subtract here; the caller stamps waveReached + timeSecs for the single level. PURE. */
 var RUN_DELTA_KEYS = ['shots', 'hits', 'missiles', 'kills', 'ground', 'boss', 'missions',
-  'escortKills', 'pMissiles', 'pGunKills', 'pFlares', 'damageTaken', 'cleanWaves'];
+  'escortKills', 'pMissiles', 'pGunKills', 'pFlares', 'damageTaken', 'cleanWaves', 'allyLosses', 'spawned'];
 function snapshotRunCounters(run) {
   var s = {}; run = run || {};
   for (var i = 0; i < RUN_DELTA_KEYS.length; i++) s[RUN_DELTA_KEYS[i]] = run[RUN_DELTA_KEYS[i]] || 0;
@@ -218,15 +261,15 @@ const META_PERKS = [
 const META_BY_ID = {};
 for (var _i = 0; _i < META_PERKS.length; _i++) META_BY_ID[META_PERKS[_i].id] = META_PERKS[_i];
 
-/* cost of the NEXT level of a perk (level = levels already owned). PURE — mirrored in tests. */
+/* cost of the NEXT level of a perk (level = levels already owned). PURE. */
 function perkCost(perkId, level) {
   const def = META_BY_ID[perkId];
   if (!def) return Infinity;
   return Math.round(def.base * Math.pow(1.6, level));
 }
 
-/* apply every owned meta perk to a freshly-spawned player. Called at run start, BEFORE in-run
-   tech. PURE over (player, perks-map) — mirrored byte-identical in tests via a mock player. */
+/* apply every owned meta perk (read from the module `meta` state) to a freshly-spawned player.
+   Called at run start, BEFORE in-run tech. Mutates only `player`. */
 function applyMetaPerks(player) {
   if (!player || !meta || !meta.perks) return;
   for (var k = 0; k < META_PERKS.length; k++) {
@@ -234,21 +277,19 @@ function applyMetaPerks(player) {
     var lvl = meta.perks[def.id] || 0;
     if (lvl > 0) def.apply(player, lvl);
   }
-  // === F9 veterancy perk: +1% turn rate per veterancy rank of the FLOWN airframe (cap +5% at rank 5).
-  // Multiplies player.turnMul (combat.js's dedicated turn-rate multiplier), so it composes with the base
-  // stat + in-run modifiers. vetRank is a load-order global (core.js loads first); typeof-guarded for safety. ===
+  // F9 veterancy perk: +1% turn rate per veterancy rank of the FLOWN airframe (cap +5% at rank 5).
+  // Multiplies player.turnMul so it composes with the base stat + in-run modifiers. vetRank is a
+  // load-order global from core.js; typeof-guarded because Node tests may require meta.js without it.
   var vetJet = player.jet && player.jet.id;
   if (vetJet && meta.veterancy && typeof vetRank === 'function') {
     var vr = vetRank(meta.veterancy[vetJet] || 0);
     if (vr > 0) player.turnMul = (player.turnMul || 1) * (1 + 0.01 * vr);
   }
-  // === end F9 ===
 }
 
 /* ---------------- cosmetic skins (per airframe) ----------------
-   id 'default' is always owned (the jet's stock color/accent, color:null = use the JETS row).
-   Others cost SP and override the paint via color/accent at build time. */
-/* In-code paint skins ONLY for the texture-less glTF jets (geometry-only / flat-albedo exports render flat):
+   id 'default' is always owned; the others cost SP (SKIN_COST) and override the paint at build time.
+   In-code paint skins ONLY for the texture-less glTF jets (geometry-only / flat-albedo exports render flat):
    FT-1(STD), F-47(F47), J-20(J20), J-36(J36), J-50(J50), EFT, FA18. cloneJetGLTF→applyPaint recolours
    their bare materials. Each jet gets exactly 3 skins:
      - `default` — PLAIN solid colour (always free/owned), the neutral stock look. Fast path: {color, accent}.
@@ -317,7 +358,6 @@ const ACHIEVEMENTS = [
 ];
 
 /* ---------------- callsign + emblem (F13) ----------------
-   PURE helpers — mirrored byte-identical in tests/meta.test.js.
    EMBLEMS: each patch has a gate type: 'free', 'sp' (cost = gate value), or 'ach' (achievement id). */
 const EMBLEMS = [
   { id: 'wings',    gate: 'free' },
@@ -375,7 +415,7 @@ function setCallsign(str) {
 
 /* ---------------- persistence ----------------
    Only meta.js touches storage for the meta blob (via store.get/set). validMeta guards a loaded
-   blob; malformed/legacy data falls back to a fresh meta. Mirrored byte-identical in tests. */
+   blob; malformed/legacy data falls back to a fresh meta. */
 /* Node tests require meta.js WITHOUT prefs.js; pull loadHealed in so loadMeta can use it (in the browser
    it is a load-order global — prefs.js loads before meta.js). Inert in the browser (require undefined). */
 if (typeof loadHealed === 'undefined' && typeof require === 'function') {
@@ -392,10 +432,9 @@ function validMeta(m) {
     m.perks && typeof m.perks === 'object' && m.ach && typeof m.ach === 'object');
 }
 function loadMeta() {
-  // parse + validMeta outer gate + lenient per-key heal, all in prefs.js loadHealed. It fills any field
-  // whose value is null or whose typeof differs from freshMeta()'s — byte-identical to the old inline heal
-  // wall (stars/callsign/emblem/patches/bossRush*/slot2/campaign/veterancy/weekly), and, gated by validMeta,
-  // a no-op on the validMeta-guaranteed fields (v/sp/jets/skins/perks/ach). Never wipes progression, no version bump.
+  // parse + validMeta outer gate + lenient per-key heal (prefs.js loadHealed): fills any top-level field
+  // whose value is null or whose typeof differs from freshMeta()'s, so saves predating a field heal in
+  // place. Never wipes progression, no version bump.
   meta = loadHealed(META_KEY, freshMeta, { valid: validMeta });
   // ensure starter jets are always present even if an older save predates one
   for (var i = 0; i < STARTER_JETS.length; i++) if (!meta.jets[STARTER_JETS[i]]) meta.jets[STARTER_JETS[i]] = true;
@@ -492,7 +531,7 @@ function resolveSkin(jet, skinId) {
   }
   return { color: jet.color, accent: jet.accent, zones: null };
 }
-/* back-compat alias for the original resolver name (tests + call sites still use it) — same deep interface. */
+/* alias for the original resolver name — no runtime callers; kept for tests/skins.test.js + scripts/jets-sheet.mjs. */
 function resolveSkinPaint(jet, id) { return resolveSkin(jet, id); }
 /* a jet's OWNED paint (honours the persisted skin choice) — a thin convenience over resolveSkin. Used by
    gameplay (createPlayer) — NEVER reads the transient hangarPreview.skin, so an unowned preview can never
@@ -507,10 +546,6 @@ function jetPaint(jet) { return resolveSkin(jet, selectedSkin(jet.id)); }
 function campaignOpUnlocked(opId) {
   if (typeof devUnlockLevels !== 'undefined' && devUnlockLevels) return true;   // v1.3 dev: every op open
   return isOpUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId);
-}
-function campaignLevelUnlocked(opId, levelIndex) {
-  if (typeof devUnlockLevels !== 'undefined' && devUnlockLevels) return true;   // v1.3 dev: every level open
-  return isLevelUnlocked((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
 }
 function campaignLevelState(opId, levelIndex) {
   var st = levelState((meta && meta.campaign) || {}, OPERATIONS, opId, levelIndex);
@@ -565,11 +600,14 @@ if (typeof module !== 'undefined' && module.exports) {
     // achievements
     achEarned, grantAch, checkAchievements,
     // campaign progress (Operations Map revamp)
-    campaignOpUnlocked, campaignLevelUnlocked, campaignLevelState, campaignClearLevel,
+    campaignOpUnlocked, campaignLevelState, campaignClearLevel,
     // tables & constants
     META_KEY, META_VERSION, STARTER_JETS, STAR_KILL_FRAC,
     META_PERKS, META_BY_ID, SKINS, ACHIEVEMENTS, EMBLEMS,
     JET_LOCK_COST, SKIN_COST,
+    // F8 weekly-challenge best
+    weeklyBest, recordWeeklyBest,
+    // live / level-relative star helpers
+    starExpectedKills, starCondLive,
   };
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { weeklyBest, recordWeeklyBest });   // F8 weekly-challenge
