@@ -110,13 +110,11 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
 
 // ===== i18n: every shipped pack modifier has name + desc in EN + ZH + KO =====
 {
-  const fs = require('fs'), path = require('path');
-  const src = fs.readFileSync(path.join(__dirname, '../js/i18n.js'), 'utf8');
+  const I18N = require('./lib/i18n.js').loadI18N();
   for (const pk of CONTENT_PACKS) for (const m of (pk.modifiers || [])) {
     for (const suffix of ['', '.d']) {
-      const key = "'weekly.mod." + m.id + suffix + "':";
-      const hits = src.split(key).length - 1;
-      assert.strictEqual(hits, 3, key + ' must appear in EN+ZH+KO (found ' + hits + ')');
+      const key = 'weekly.mod.' + m.id + suffix;
+      for (const L of ['EN', 'ZH', 'KO']) assert.ok(typeof I18N[L][key] === 'string', key + ' missing in ' + L);
     }
   }
 }

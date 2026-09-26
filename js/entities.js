@@ -1688,10 +1688,11 @@ function updateBomber(e, dt) {
   if (agl < 320) desired.y = Math.max(desired.y, 0.18);
   desired.normalize();
   dirToQuat(desired, q1);
+  const pf = fwdQ(e.logicQuat, t4);   // heading BEFORE the turn — bank follows the turn rate
   e.logicQuat.rotateTowards(q1, 0.5 * dt * (e.stun > 0 ? 0.35 : 1));
   const nf = fwdQ(e.logicQuat, t3);
-  const cross = t4.copy(fwdQ(e.logicQuat, t5)).cross(nf);
-  e.bank = damp(e.bank, clamp(-cross.y * 4, -0.5, 0.5), 3, dt);
+  const cross = t5.copy(pf).cross(nf);
+  e.bank = damp(e.bank, clamp(-cross.y / Math.max(dt, 1e-3) * 0.9, -0.5, 0.5), 3, dt);   // ~0.45 rad at the 0.5 rad/s max turn
   q2.setFromAxisAngle(ZAX, e.bank);
   e.group.quaternion.copy(e.logicQuat).multiply(q2);
   e.vel.copy(nf).multiplyScalar(e.speed);
@@ -1722,7 +1723,9 @@ function updateBomber(e, dt) {
 }
 function radarUp() { for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.type === 'ground' && e.gkind === 'radar') return true; } return false; }
 function updateGround(e, dt) {
-  if (e.group.userData.turret) e.group.lookAt(player.group.position);
+  if (e.group.userData.turret) {   // traverse to face the player (+Z, same heading lookAt gave) — yaw only, the site stays level
+    const pp = player.group.position, gp = e.group.position; e.group.rotation.set(0, Math.atan2(pp.x - gp.x, pp.z - gp.z), 0);
+  }
   const d = e.group.position.distanceTo(player.group.position);
   if (e.gkind === 'radar') {
     if (e.group.userData.dish) e.group.userData.dish.rotation.y += dt * 1.2;

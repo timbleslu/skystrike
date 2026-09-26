@@ -505,10 +505,11 @@ function flyWingman(w, desired, turnRate, dt) {
 
   // steer + bank
   dirToQuat(desired, q1);
+  const pf = fwdQ(w.logicQuat, tA);   // heading BEFORE the turn — bank follows the turn rate
   w.logicQuat.rotateTowards(q1, turnRate * dt);
   const nf = fwdQ(w.logicQuat, t4);
-  const cross = t5.copy(fwdQ(w.logicQuat, tA)).cross(nf);
-  w.bank = damp(w.bank, clamp(-cross.y * 5, -0.7, 0.7), 3, dt);
+  const cross = t5.copy(pf).cross(nf);
+  w.bank = damp(w.bank, clamp(-cross.y / Math.max(dt, 1e-3) * 0.25, -0.7, 0.7), 3, dt);   // full ±0.7 rad at a ~2.8 rad/s turn
   q2.setFromAxisAngle(ZAX, w.bank);
   w.group.quaternion.copy(w.logicQuat).multiply(q2);
   w.vel.copy(nf).multiplyScalar(w._spd);

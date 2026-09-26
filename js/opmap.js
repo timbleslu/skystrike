@@ -3,7 +3,7 @@ let opSector = null;    // currently-flying sector type (string) or null
 
 /* ---- OPERATIONS table ----
    The fixed campaign as DATA: hand-authored level rows with i18n KEYS for all user-facing text
-   (strings live in i18n.js). Boss levels (`type:'FINAL'`, `isBoss:true`) carry a 3-phase `boss`
+   (strings live in js/lang/*.js). Boss levels (`type:'FINAL'`, `isBoss:true`) carry a 3-phase `boss`
    descriptor. Meta is keyed on `${opId}.${id}` — ids are stable and MUST NOT be renumbered. */
 const OPERATIONS = [
   /* Every level is a SCRIPTED sequence of 2–3 varied objective beats
