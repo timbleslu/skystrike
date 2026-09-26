@@ -4,10 +4,14 @@
                     waypoints → every level must COMPLETE (no stall, no fail).
      passive mode — ESCORT/DEFEND levels only; the bot clears everything EXCEPT raiders → the level must
                     FAIL (the raiders are a real threat; ignoring them loses the convoy/asset).
-   Exits non-zero on any wrong outcome or page error. Usage: node scripts/verify-campaign.mjs */
+   Exits non-zero on any wrong outcome or page error.
+   Usage: node scripts/verify-campaign.mjs                 all levels (the merge gate)
+          node scripts/verify-campaign.mjs ironVeil:5      one level (op id : level index), kill mode
+          node scripts/verify-campaign.mjs ironVeil:5 passive   one level, ignore raiders (escort/defend must fail) */
 import { launchGame, bootToHangar } from './lib/boot.mjs';
 
 const KILL_EVERY = 1.2, SIM_CAP = 900, DT = 1 / 30;
+const ONLY = process.argv[2] || null, ONLY_MODE = process.argv[3] || null;   // single-level debug run
 const { page, port, close } = await launchGame({ viewport: { width: 640, height: 400 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
@@ -27,8 +31,12 @@ await page.evaluate(() => {
 });
 
 const levels = await page.evaluate(() => OPERATIONS.flatMap(op => op.levels.map((l, i) => ({ op: op.id, idx: i, id: l.id, type: l.type }))));
-const runs = levels.map(L => ({ L, mode: 'kill', want: 'COMPLETE' }))
+let runs = levels.map(L => ({ L, mode: 'kill', want: 'COMPLETE' }))
   .concat(levels.filter(L => L.type === 'ESCORT' || L.type === 'DEFEND').map(L => ({ L, mode: 'passive', want: 'FAILED' })));
+if (ONLY) {
+  runs = runs.filter(r => r.L.op + ':' + r.L.idx === ONLY && (ONLY_MODE ? r.mode === ONLY_MODE : r.mode === 'kill'));
+  if (!runs.length) { console.log('no such level/mode: ' + ONLY + ' ' + (ONLY_MODE || 'kill') + ' (ids: ' + levels.map(L => L.op + ':' + L.idx).join(' ') + ')'); await close(); process.exit(1); }
+}
 
 let bad = 0;
 for (const { L, mode, want } of runs) {

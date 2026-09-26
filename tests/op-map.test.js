@@ -2,8 +2,6 @@
 const assert = require('assert');
 const { OPERATIONS, levelPlan, levelBlurbKey, sectorMission } = require('../js/opmap.js');
 const { LEVEL_WAVE_CAP } = require('../js/core.js');
-const fs = require('fs');
-const path = require('path');
 
 // ---- sectorMission: sector type -> typed-mission descriptor (LIVE — levelPlan reads it) ----
 assert.strictEqual(sectorMission('FURBALL'), 'sweep', 'FURBALL → sweep');
@@ -126,20 +124,8 @@ OPERATIONS.forEach(function (op) {
 });
 
 // ---- op4 (polarVortex) i18n parity: every *Key referenced by op4 rows resolves in EN+ZH+KO ----
-// i18n.js is NOT require-safe (no module.exports; references LANG at load). Scrape it (readFileSync +
-// key regex — the tests/storage.test.js precedent): a section state-machine walks the main dict
-// (`EN:{`/`ZH:{`/`KO:{`) + every tail `Object.assign(I18N.<lang>,{...})` block, collecting each
-// language's property keys, then asserts every op4 key is present in all three languages.
-const i18nSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'i18n.js'), 'utf8');
-const langKeys = { EN: new Set(), ZH: new Set(), KO: new Set() };
-let curLang = null;
-i18nSrc.split('\n').forEach(function (line) {
-  const sec = line.match(/^\s*(EN|ZH|KO)\s*:\s*\{/) || line.match(/Object\.assign\(\s*I18N\.(EN|ZH|KO)/);
-  if (sec) { curLang = sec[1]; return; }
-  if (!curLang) return;
-  const kv = line.match(/^\s*(['"])([A-Za-z0-9_.\-]+)\1\s*:/);
-  if (kv) langKeys[curLang].add(kv[2]);
-});
+const I18N = require('./lib/i18n.js').loadI18N();
+const langKeys = { EN: new Set(Object.keys(I18N.EN)), ZH: new Set(Object.keys(I18N.ZH)), KO: new Set(Object.keys(I18N.KO)) };
 assert.ok(langKeys.EN.size > 100 && langKeys.ZH.size > 100 && langKeys.KO.size > 100, 'i18n scrape found all three language dicts');
 
 const op4 = OPERATIONS.find(function (o) { return o.id === 'polarVortex'; });

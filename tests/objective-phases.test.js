@@ -1,11 +1,9 @@
 'use strict';
 // Operations objective SEQUENCES (campaign overhaul 2026-09). Every level is a scripted run of 2–3
 // objective beats. PURE queue helpers come from the REAL js/core.js; the invariants run against the REAL
-// OPERATIONS data (js/opmap.js) + a scrape of js/i18n.js (the tests/storage.test.js precedent — i18n.js is
-// not require-safe) so a level can never reference a radio line / ally name that doesn't exist.
+// OPERATIONS data (js/opmap.js) + the real string tables (tests/lib/i18n.js) so a level can never reference a
+// radio line / ally name that doesn't exist.
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
 const { nextObjectivePhase, objectiveTypes } = require('../js/core.js');
 const { OPERATIONS } = require('../js/opmap.js');
 const { missionForSector } = require('../js/missions.js');
@@ -24,18 +22,9 @@ assert.deepStrictEqual(
 assert.deepStrictEqual(objectiveTypes(null), [], 'null queue -> empty');
 assert.deepStrictEqual(objectiveTypes([]), [], 'empty queue -> empty');
 
-// ===== i18n scrape (EN/ZH/KO key sets) =====
-const i18nSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'i18n.js'), 'utf8');
-const langKeys = { EN: new Set(), ZH: new Set(), KO: new Set() };
-let curLang = null;
-i18nSrc.split('\n').forEach(function (line) {
-  const sec = line.match(/^\s*(EN|ZH|KO)\s*:\s*\{/) || line.match(/Object\.assign\(\s*I18N\.(EN|ZH|KO)/);
-  if (sec) { curLang = sec[1]; return; }
-  if (!curLang) return;
-  const re = /(['"])([A-Za-z0-9_.\-]+)\1\s*:/g; let m;
-  while ((m = re.exec(line))) langKeys[curLang].add(m[2]);
-});
-const hasAll = k => ['EN', 'ZH', 'KO'].every(L => langKeys[L].has(k));
+// ===== i18n (real tables via the shared loader) =====
+const I18N = require('./lib/i18n.js').loadI18N();
+const hasAll = k => ['EN', 'ZH', 'KO'].every(L => I18N[L][k] != null);
 
 // ===== the scripted-level contract =====
 const PHASE_TYPES = ['RECON', 'STEALTH', 'STRIKE', 'SWEEP', 'INTERCEPT', 'ESCORT', 'DEFEND', 'BOSS'];

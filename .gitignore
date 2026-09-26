@@ -18,3 +18,8 @@ graphify-out/
 
 # local subagent worktrees (never commit)
 .claude/worktrees/
+
+# scratch workspace: throwaway scripts/logs/shots stay local; markdown specs/handoffs remain trackable
+.scratch/**
+!.scratch/**/
+!.scratch/**/*.md
