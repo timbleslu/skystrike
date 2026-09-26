@@ -1,4 +1,4 @@
-/* SKYSTRIKE — main.js: wave/boss/wingman spawning, input & touch controls, main animation loop, boot. Load 6th (last). */
+/* SKYSTRIKE — main.js: wave/boss/wingman spawning, keyboard input, main animation loop, boot. Loads last (after controls.js). */
 
 /* ---------------- waves ---------------- */
 function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
@@ -20,29 +20,29 @@ function nextWave() {
     // own hand-authored spawn budget verbatim, not a wave-scaled procedural roll). Difficulty/weather/tod
     // are FIXED by the level row. Distinct path; the endless scheduler below is untouched.
     const lvl = currentCampaignLevel();
-    let plan = levelPlan(lvl);
-    if (lvl.setpiece && !run.setpieceDone[lvl.id]) { run.setpieceDone[lvl.id] = true; plan = setpiecePlan(lvl.setpiece, plan); }
+    const plan = levelPlan(lvl);
     const m = composeWave({ campaignPlan: plan, bossPhases: (lvl.boss && lvl.boss.phases) || null, bossWaveNext });
     strikeWaveActive = m.ground;
     bossWaveActive = lastWaveWasBoss = m.boss;
     applyWeather(m.weather); applyTimeOfDay(m.tod);   // authored condition, fixed per level (not rolled)
     startSectorMission(plan, wave);
-    const sectorLine = m.boss ? t('banner.finalTarget') : t(lvl.nameKey);
-    const condLine = weatherLabel(); showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);
-    // multi-phase objective levels (m.objectives) own ALL their spawns per phase (startMissionPhase
-    // in missions.js); skip the level's base air/ground budget so phase 1 (a nav leg) starts clean.
+    // multi-phase objective levels (m.objectives) open on the cinematic title card (launchLevel) and own ALL
+    // their spawns per phase (startMissionPhase in missions.js) — incl. a scripted FINAL level's boss, spawned
+    // from its BOSS phase after the approach fight — so skip the banner + base air/ground budget here.
     if (!m.objectives) {
+      const sectorLine = m.boss ? t('banner.finalTarget') : t(lvl.nameKey); const condLine = weatherLabel();
+      showBanner(condLine ? sectorLine + '  ·  ' + condLine : sectorLine);
       queueFighterWave(m.fighters);   // F2: a >=3 fighter budget flies in as a formation
       for (let i = 0; i < m.aces; i++) pendingSpawns.push(spawnAce);
       for (let i = 0; i < m.bombers; i++) pendingSpawns.push(m.mission === 'intercept' ? spawnInterceptTarget : spawnBomber);
+      if (m.boss) {
+        campaignBossPhases = m.bossPhases;   // hand authored phase knobs to spawnBoss → e._phaseCfg
+        if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss);
+      }
+      if (m.ground) queueStrikeSite(wave);
+      const aceKey = campaignOpId + ':' + campaignLevelIdx;
+      if (m.hostileAce && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
     }
-    if (m.boss) {
-      campaignBossPhases = m.bossPhases;   // hand authored phase knobs to spawnBoss → e._phaseCfg
-      if (rivalEnabled) { run.lastRivalWave = wave; pendingSpawns.push(spawnFinalRival); } else pendingSpawns.push(spawnBoss);
-    }
-    if (m.ground && !m.objectives) queueStrikeSite(wave);
-    const aceKey = campaignOpId + ':' + campaignLevelIdx;
-    if (m.hostileAce && !m.objectives && !run.sectorAceSpawned[aceKey]) { run.sectorAceSpawned[aceKey] = true; pendingSpawns.push(spawnHostileAce); }
     return;
   }
   // ENDLESS — build inputs, decide the whole wave in core.js composeWave, commit the boss schedule, then enact.
@@ -214,11 +214,31 @@ function spawnFinalRival() {
   const e = enemies[enemies.length - 1];
   if (e && enemies.length > before) { e.finalCap = true; e.noFlee = true; e.hp = e.maxHp = Math.round(e.maxHp * 1.25); if (campaignBossPhases) e._phaseCfg = campaignBossPhases; }
 }
+/* Campaign overhaul — the operation's named ace as the boss: an elite fighter in the ace's own airframe
+   (not the generic boss hull) with boss-grade HP, the authored 3-phase signature (e._phaseCfg → phase
+   shifts in damageEnemy, patterns in bossPatternSteer) and the boss HP bar under its callsign. */
+const CAMPAIGN_BOSS_SHAPE = { warlord: 'J20', glacier: 'SU57', corsair: 'F22', northWind: 'J50' };
+function spawnCampaignBoss(lvl) {
+  const shape = CAMPAIGN_BOSS_SHAPE[lvl.id] || 'SU57';
+  const pp = player.group.position;
+  const x = pp.x + rand(-1400, 1400), z = pp.z - 4400;
+  const pos = new THREE.Vector3(x, clamp(pp.y + 500, terrainH(x, z) + 600, 4200), z);
+  const e = createEnemy('fighter', pos, { shapePool: [shape], useGLTF: true, elite: true });
+  e.elite = true; e.campaignBoss = true; e.finalCap = true; e.noFlee = true; e.desprintUsed = true;
+  e.callsign = t(lvl.boss.callsignKey); e.aceName = jetNameForShape(shape);
+  e.hp = e.maxHp = 1150; e.turnRate = 1.55; e.speed = 260; e.gunRunCd = rand(1.2, 2.2);
+  e.bulletAmmo = 500; e.missileAmmo = 18; e.flareAmmo = 6; e.flares = 4;
+  e.phase = 1; e._phaseCfg = lvl.boss.phases;
+  styleElite(e, 0xc8389a, 0x40002a, 1.1, 0xff50dc, 0xff50dc);
+  dirToQuat(t1.copy(pp).sub(pos).normalize(), e.logicQuat); e.group.quaternion.copy(e.logicQuat);
+  showBanner(tf('banner.bossArrives', { name: e.callsign }));
+  if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+  return e;
+}
 function spawnBoss() {
   const px = player.group.position.x + rand(-1200, 1200), pz = player.group.position.z - 4200, py = player.group.position.y + 450;
-  createEnemy('boss', new THREE.Vector3(px, py, pz));
-  const e = enemies[enemies.length - 1];
-  if (campaignBossPhases && e && e.type === 'boss') e._phaseCfg = campaignBossPhases;   // authored multi-phase knobs (campaign); absent in endless/boss-rush
+  const e = createEnemy('boss', new THREE.Vector3(px, py, pz));
+  if (campaignBossPhases) e._phaseCfg = campaignBossPhases;   // authored multi-phase knobs (campaign); absent in endless/boss-rush
   return e;
 }
 function spawnGround() {
@@ -231,24 +251,31 @@ function spawnGroundAt(gkind, x, z) {
    radar at the centre, a SAM/AAA ring around it, and a supply convoy already rolling
    for the horizon — kill the radar to blind the SAMs, catch the trucks before they
    escape, flatten everything for a site bonus (see killEnemy). Scales with wave. */
-function queueStrikeSite(w) {
-  const center = groundSpawnPos(2000, 3200);
-  const nSam = 2 + Math.min(2, Math.floor(w / 10));
-  const nAaa = 2 + Math.min(2, Math.floor(w / 12));
-  const nTruck = 3 + Math.min(3, Math.floor(w / 8));
-  pendingSpawns.push(() => spawnGroundAt('radar', center.x, center.z));
+function queueStrikeSite(w, size) {
+  // campaign overhaul: sites sit on LAND ahead of the player where one exists (a SAM ring on open water read
+  // as a bug), every unit is tagged e.strikeSite so the objective only ever waits on the site itself, and the
+  // authored `size` picks the footprint: 'outpost' (radar + 2 SAM/AAA + 2 trucks) / default / 'fortified'.
+  let center = groundSpawnPos(2000, 3200);
+  if (typeof landPoint === 'function') { const lp = landPoint(player.group.position.x, player.group.position.z, 2000, 3400); if (lp) center = new THREE.Vector3(lp.x, terrainH(lp.x, lp.z), lp.z); }
+  const small = size === 'outpost', big = size === 'fortified';
+  const nSam = small ? 1 : (big ? 3 : 2) + Math.min(2, Math.floor(w / 10));
+  const nAaa = small ? 1 : (big ? 3 : 2) + Math.min(2, Math.floor(w / 12));
+  const nTruck = small ? 2 : 3 + Math.min(3, Math.floor(w / 8));
+  const site = (kind, x, z) => { const e = spawnGroundAt(kind, x, z); e.strikeSite = true; return e; };
+  pendingSpawns.push(() => site('radar', center.x, center.z));
+  if (big) pendingSpawns.push(() => site('radar', center.x + rand(-160, 160), center.z + rand(-160, 160)));
   const ringN = nSam + nAaa;
   for (let i = 0; i < ringN; i++) {
     const kind = i < nSam ? 'sam' : 'aaa';
     const ang = (i / ringN) * TWO_PI + rand(-0.25, 0.25), r = rand(340, 560);
-    pendingSpawns.push(() => spawnGroundAt(kind, center.x + Math.cos(ang) * r, center.z + Math.sin(ang) * r));
+    pendingSpawns.push(() => site(kind, center.x + Math.cos(ang) * r, center.z + Math.sin(ang) * r));
   }
   const cAng = rand(0, TWO_PI);
   const cDir = new THREE.Vector3(Math.cos(cAng), 0, Math.sin(cAng));
   for (let k = 0; k < nTruck; k++) {
     const off = 700 + k * 120;
     pendingSpawns.push(() => {
-      const e = spawnGroundAt('truck', center.x + cDir.x * off + rand(-45, 45), center.z + cDir.z * off + rand(-45, 45));
+      const e = site('truck', center.x + cDir.x * off + rand(-45, 45), center.z + cDir.z * off + rand(-45, 45));
       e.truckDir = cDir.clone(); e.convoy = true; e.convoySpeed = 46 + w * 0.6;
     });
   }
@@ -461,6 +488,40 @@ function wingCommand(kind) {
     showBanner(t('banner.wingRegroup')); audio.ui();
   }
 }
+// no target: head for the station off the player's wing, speed-matching the player (catches up when far)
+function wingHoldStation(w, desired, dt) {
+  wingmanSlot(w.side, t1);
+  const toS = t5.copy(t1).sub(w.group.position); const sd = toS.length();
+  if (sd > 14) desired.copy(toS).normalize(); else desired.copy(fwdOf(player.group, t4));
+  w._spd = lerp(w._spd, clamp((player.speed || 300) * (sd > 240 ? 1.45 : 1.0), 230, 920), 2 * dt);
+}
+// shared escort flight step (wingmen + CCAs): terrain floor, steer + bank toward `desired` at `turnRate`,
+// integrate, then engine flicker + contrail + hit flash
+function flyWingman(w, desired, turnRate, dt) {
+  // terrain avoidance
+  const agl = w.group.position.y - terrainH(w.group.position.x, w.group.position.z);
+  if (agl < 180) desired.y = Math.max(desired.y, 0.35);
+  desired.normalize();
+
+  // steer + bank
+  dirToQuat(desired, q1);
+  w.logicQuat.rotateTowards(q1, turnRate * dt);
+  const nf = fwdQ(w.logicQuat, t4);
+  const cross = t5.copy(fwdQ(w.logicQuat, tA)).cross(nf);
+  w.bank = damp(w.bank, clamp(-cross.y * 5, -0.7, 0.7), 3, dt);
+  q2.setFromAxisAngle(ZAX, w.bank);
+  w.group.quaternion.copy(w.logicQuat).multiply(q2);
+  w.vel.copy(nf).multiplyScalar(w._spd);
+  w.group.position.addScaledVector(w.vel, dt);
+
+  // engine flicker + contrail + hit flash
+  const u = w.group.userData;
+  if (u.engines) for (let k = 0; k < u.engines.length; k++) u.engines[k].flame.material.opacity = 0.45 + Math.random() * 0.25;
+  w.trailT -= dt;
+  if (w.trailT <= 0 && !inCloud(w.group.position)) { spawnTrail(w.group.position, w.cca ? 0x49b6ff : WING_TEAL, 0.3); w.trailT = 0.06; }
+  if (w.hitFlash > 0) { w.hitFlash -= dt; w.group.scale.setScalar(w.baseScale * (1 + (w.hitFlash > 0 ? 0.12 : 0))); }
+  else w.group.scale.setScalar(w.baseScale);
+}
 function updateCCA(w, dt) {
   w.retargetCd -= dt;
   if (w.forced && !w.forced.alive) w.forced = null;
@@ -489,33 +550,11 @@ function updateCCA(w, dt) {
     } else { w.target = null; }
   }
   if (!engaging) {
-    wingmanSlot(w.side, t1);
-    const toS = t5.copy(t1).sub(w.group.position); const sd = toS.length();
-    if (sd > 14) desired.copy(toS).normalize(); else desired.copy(fwdOf(player.group, t4));
-    w._spd = lerp(w._spd, clamp((player.speed || 300) * (sd > 240 ? 1.45 : 1.0), 230, 920), 2 * dt);
+    wingHoldStation(w, desired, dt);
   } else {
     w._spd = lerp(w._spd, 420, 2 * dt);
   }
-  const agl = w.group.position.y - terrainH(w.group.position.x, w.group.position.z);
-  if (agl < 180) desired.y = Math.max(desired.y, 0.35);
-  desired.normalize();
-
-  dirToQuat(desired, q1);
-  w.logicQuat.rotateTowards(q1, 3.5 * dt);
-  const nf = fwdQ(w.logicQuat, t4);
-  const cross = t5.copy(fwdQ(w.logicQuat, tA)).cross(nf);
-  w.bank = damp(w.bank, clamp(-cross.y * 5, -0.7, 0.7), 3, dt);
-  q2.setFromAxisAngle(ZAX, w.bank);
-  w.group.quaternion.copy(w.logicQuat).multiply(q2);
-  w.vel.copy(nf).multiplyScalar(w._spd);
-  w.group.position.addScaledVector(w.vel, dt);
-
-  const u = w.group.userData;
-  if (u.engines) for (let k = 0; k < u.engines.length; k++) u.engines[k].flame.material.opacity = 0.45 + Math.random() * 0.25;
-  w.trailT -= dt;
-  if (w.trailT <= 0 && !inCloud(w.group.position)) { spawnTrail(w.group.position, 0x49b6ff, 0.3); w.trailT = 0.06; }
-  if (w.hitFlash > 0) { w.hitFlash -= dt; w.group.scale.setScalar(w.baseScale * (1 + (w.hitFlash > 0 ? 0.12 : 0))); }
-  else w.group.scale.setScalar(w.baseScale);
+  flyWingman(w, desired, 3.5, dt);
 
   w.fireCd -= dt; w.missileCd -= dt;
   if (engaging && !terminal && w.fireCd <= 0) {
@@ -591,11 +630,7 @@ function updateWingman(w, dt) {
     } else { w.target = null; }
   }
   if (!engaging) {
-    // ----- hold formation off the player's wing -----
-    wingmanSlot(w.side, t1);
-    const toS = t5.copy(t1).sub(w.group.position); const sd = toS.length();
-    if (sd > 14) desired.copy(toS).normalize(); else desired.copy(fwdOf(player.group, t4));
-    w._spd = lerp(w._spd, clamp((player.speed || 300) * (sd > 240 ? 1.45 : 1.0), 230, 920), 2 * dt);
+    wingHoldStation(w, desired, dt);
   } else {
     w._spd = lerp(w._spd, 365, 2 * dt);
     w.sprintT -= dt;
@@ -605,29 +640,7 @@ function updateWingman(w, dt) {
     }
   }
 
-  // terrain avoidance
-  const agl = w.group.position.y - terrainH(w.group.position.x, w.group.position.z);
-  if (agl < 180) desired.y = Math.max(desired.y, 0.35);
-  desired.normalize();
-
-  // steer + bank
-  dirToQuat(desired, q1);
-  w.logicQuat.rotateTowards(q1, 2.5 * dt);
-  const nf = fwdQ(w.logicQuat, t4);
-  const cross = t5.copy(fwdQ(w.logicQuat, tA)).cross(nf);
-  w.bank = damp(w.bank, clamp(-cross.y * 5, -0.7, 0.7), 3, dt);
-  q2.setFromAxisAngle(ZAX, w.bank);
-  w.group.quaternion.copy(w.logicQuat).multiply(q2);
-  w.vel.copy(nf).multiplyScalar(w._spd);
-  w.group.position.addScaledVector(w.vel, dt);
-
-  // engine flicker + contrail + hit flash
-  const u = w.group.userData;
-  if (u.engines) for (let k = 0; k < u.engines.length; k++) u.engines[k].flame.material.opacity = 0.45 + Math.random() * 0.25;
-  w.trailT -= dt;
-  if (w.trailT <= 0 && !inCloud(w.group.position)) { spawnTrail(w.group.position, w.cca ? 0x49b6ff : WING_TEAL, 0.3); w.trailT = 0.06; }
-  if (w.hitFlash > 0) { w.hitFlash -= dt; w.group.scale.setScalar(w.baseScale * (1 + (w.hitFlash > 0 ? 0.12 : 0))); }
-  else w.group.scale.setScalar(w.baseScale);
+  flyWingman(w, desired, 2.5, dt);
 
   // ----- weapons -----
   w.fireCd -= dt; w.missileCd -= dt;
@@ -749,13 +762,13 @@ function wingmanSpecial(w) {
     }
     burstMissiles(3);
   } else if (id === 'TEJAS') {
-    if (typeof spawnDecoys === 'function') spawnDecoys(2);
+    spawnDecoys(2);
     burstMissiles(1);
   } else if (id === 'J-36') {
     burstMissiles(6);
   } else if (id === 'F-47') {
     // CCA SWARM: spawn a drone ahead
-    const pt = pos.clone().addScaledVector(fwdQ(w.logicQuat, t1.clone()), 200);
+    const pt = pos.clone().addScaledVector(fwdQ(w.logicQuat, t1), 200);
     spawnCCA(pt);
     burstMissiles(2);
   } else if (id === 'J-50') {
@@ -765,35 +778,36 @@ function wingmanSpecial(w) {
     burstMissiles(id === 'F-22' ? 3 : 2);
   }
 
-  audio.power && audio.power();
+  audio.power();
   w.specialCd = rand(30, 45);
 }
 
 function clearWingmen() {
-  for (let i = 0; i < wingmen.length; i++) if (wingmen[i].group) { scene.remove(wingmen[i].group); disposeGroup(wingmen[i].group); }
+  for (let i = 0; i < wingmen.length; i++) despawnObject(wingmen[i].group);
   wingmen.length = 0;
 }
 
 function handleWaves(dt) {
-  const aliveCombat = enemies.some(e => e.alive && (strikeWaveActive ? e.type !== 'bomber' && e.gkind !== 'truck' : e.type !== 'ground' && e.type !== 'bomber'));
+  let aliveCombat = false;   // plain loop: runs every frame (no per-frame closure)
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (e.alive && (strikeWaveActive ? e.type !== 'bomber' && e.gkind !== 'truck' : e.type !== 'ground' && e.type !== 'bomber')) { aliveCombat = true; break; }
+  }
   if (!betweenWaves) {
     // Don't declare the wave clear until the queue is empty — otherwise the frames between
     // nextWave() and the first fighter being built would look "enemy-free" and re-trigger clear.
     // a mission sector stays open until its objective resolves (escort exit / defend hold / etc.)
     if (!aliveCombat && pendingSpawns.length === 0 && wave > 0 && !(mission && mission.status === 'active')) {
       if (noDamageWave) run.cleanWaves = (run.cleanWaves || 0) + 1;   // cleared a full wave untouched → no-damage star progress
-      betweenWaves = true; waveTimer = 4; showBanner(tf('banner.waveClear', { n: wave }));
+      betweenWaves = true; waveTimer = 4; if (!campaignMode) showBanner(tf('banner.waveClear', { n: wave }));
       if (campaignMode) {   // Operations campaign: BOUNDED level clear — distinct path, never the endless scheduler
         campaignWavesLeft--;
         const clvl = currentCampaignLevel();
-        if ((clvl && clvl.isBoss) || campaignWavesLeft <= 0) { campaignLevelComplete(); return; }
+        if ((clvl && clvl.isBoss) || campaignWavesLeft <= 0) { beginCampaignEnd('win'); return; }   // short "mission accomplished" outro, then the debrief
         return;   // more bounded waves remain: the waveTimer auto-advances; NO mid-level tech screen
       }
-      if (opMode && opSector === 'FINAL') { operationComplete(); return; }
-      // Tech-screen cadence (balance pass 2026-06): in OPERATION mode the tech screen is also the
-      // campaign-navigation hub (deployFromTech → openOpMap is the ONLY path to the next sector), so
-      // it must always open. In ENDLESS the shop opens on a cadence (skip wave 1, then every 2nd wave
-      // + after any boss) so it stops ejecting the player from the dogfight every ~60-90s; RP banks in
+      // Tech-screen cadence (balance pass 2026-06): the shop opens on a cadence (skip wave 1, then every 2nd
+      // wave + after any boss) so it stops ejecting the player from the dogfight every ~60-90s; RP banks in
       // player.tp between visits. When skipped, the waveTimer above auto-advances to the next wave.
       if (MODE_POLICY[modeKeyFor({ campaignMode, opMode, dailyMode, weeklyActive: weeklyMode, bossRush })].opensTechShop || shouldOpenTechScreen(wave, lastWaveWasBoss)) openTechScreen();   // Candidate 8: opMode ≡ MODE_POLICY[key].opensTechShop here
     }
@@ -821,7 +835,8 @@ function handleBossRush(dt) {
     if (state === 'playing') bossRushComplete();
     return;
   }
-  const bossAlive = enemies.some(e => e.alive && e.type === 'boss');
+  let bossAlive = false;
+  for (let i = 0; i < enemies.length; i++) if (enemies[i].alive && enemies[i].type === 'boss') { bossAlive = true; break; }
   if (!bossAlive && pendingSpawns.length === 0) {
     if (bossRushIndex < BOSS_RUSH_TOTAL) {         // arena clear and more bosses to come → next leg
       betweenWaves = true; waveTimer -= dt;
@@ -832,7 +847,7 @@ function handleBossRush(dt) {
 
 /* First-run guided tutorial (F5): each frame, detect whether the player performed the CURRENT
    step's action from live player/run state and feed the matching event to the pure step machine
-   (advanceTutorial → tutorialNext, ui.js/globals.js). Detection is action-based so the prompt only
+   (advanceTutorial in ui-hud.js → tutorialNext in core.js). Detection is action-based so the prompt only
    advances once the pilot actually does the thing — works identically for keyboard and touch input.
      step 0 pitch    : nose pitching (|pitchRate| past a clear threshold)
      step 1 throttle : throttle pushed past 0.6
@@ -919,7 +934,7 @@ window.addEventListener('touchstart', function firstTouch() {
 let hangarCoverT = 0;   // when the opaque hangar last started covering the viewport (0 = not covering)
 function animate() {
   requestAnimationFrame(animate);
-  if (typeof syncManualBtn === 'function') syncManualBtn();   // global gear button visibility (menus vs flight)
+  syncManualBtn();   // global gear button visibility (menus vs flight)
   const dt = Math.min(clock.getDelta(), 0.05); lastDt = dt;
   if (seaMat) seaMat.uniforms.time.value = clock.elapsedTime;
   updateSunRig();
@@ -936,14 +951,13 @@ function animate() {
   updateClouds(dt);
 
   if (state === 'hangar') {
-    // C2: the jet preview now spins/renders in its OWN isolated loop (ui-hangar.js previewLoop) on a
-    // dedicated canvas inside the card — previewJet is NOT in the shared scene, so nothing to do here.
+    // the jet preview spins/renders in its own loop (ui-hangar.js previewLoop) — not in the shared scene
     if (platform) platform.children[1].rotation.z += dt * 0.6;
   } else if (state === 'playing') {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
     readFlightInput();   // compose touch/motion into flightInput before the player update consumes it
     updateWeather(dt * ts);   // fog tracer dimming + storm lightning
-    updatePlayer(dt);
+    if (!(typeof campaignEnd !== 'undefined' && campaignEnd && campaignEnd.frozen)) updatePlayer(dt);   // shot down: hold the camera on the wreck during the outro
     tickTutorial();   // first-run guided tutorial: gate stepped prompts on the player's own actions
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
     cullDistantEnemies();   // F11: low tier hides far enemy meshes (.visible only; AI/markers/locks untouched)
@@ -951,6 +965,7 @@ function animate() {
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);
     updateMission(dt * ts);   // tick the active sector mission + resolve win/fail
+    if (typeof tickCampaignEnd === 'function') tickCampaignEnd(dt);   // campaign outro beat → debrief
     if (bossRush) handleBossRush(dt);   // F15: fixed boss gauntlet — no waves / tech tree / op-map
     else handleWaves(dt);
     maybeSpawnCrate(dt);
@@ -1064,5 +1079,5 @@ loadRival();
 loadMeta();
 buildHangar();
 initOnboarding();
-initPreviewDrag();   // hangar drag-to-rotate (raycast-gated, touch + mouse)
+initPreviewDrag();   // hangar drag-to-rotate (preview-canvas-gated, touch + mouse)
 animate();

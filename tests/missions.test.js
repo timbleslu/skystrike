@@ -59,21 +59,28 @@ for (let k = 0; k < 5; k++) missionKill(sm, {});
 tickMission(sm, 0.016);
 assert.strictEqual(sm.status, 'won', 'sweep won when wave cleared');
 
-// ===== escort.winFail: failed when survivors<threshold; won at exit (balance 2026-06: target 3, lose <=1 of 4) =====
-let em = startMission('escort', 5);   // convoy 4, target 3 survivors
-em.params.survivors = 2;              // two trucks lost -> below the tightened threshold
+// ===== escort.winFail (campaign overhaul): convoy drives a route; judged on DELIVERIES, not a map-edge exit =====
+let em = startMission('escort', 5);   // convoy 4, must deliver 3
+em.params.spawnedAll = true;
+em.params.enRoute = 1; em.params.delivered = 1;   // two trucks destroyed -> at most 2 can arrive
 tickMission(em, 0.016);
-assert.strictEqual(em.status, 'failed', 'escort failed when more than one convoy unit dies');
+assert.strictEqual(em.status, 'failed', 'escort failed once the convoy can no longer deliver the required 3');
+assert.strictEqual(em.failReason, 'convoyLost', 'escort fail carries a debrief reason');
 
-let emOk = startMission('escort', 5); // losing exactly one (survivors 3) is still within tolerance
-emOk.params.survivors = 3;
+let emOk = startMission('escort', 5); // losing exactly one (3 still rolling) is within tolerance
+emOk.params.spawnedAll = true; emOk.params.enRoute = 3;
 tickMission(emOk, 0.016);
-assert.strictEqual(emOk.status, 'active', 'escort still active after losing only one unit (not yet exited)');
+assert.strictEqual(emOk.status, 'active', 'escort still active after losing only one unit (convoy still en route)');
+
+let emWait = startMission('escort', 5);   // nothing judged until the whole convoy is on the road
+emWait.params.enRoute = 0;
+tickMission(emWait, 0.016);
+assert.strictEqual(emWait.status, 'active', 'escort is not judged before the convoy has spawned');
 
 let em2 = startMission('escort', 5);
-em2.params.exited = true;             // convoy reached its exit, survivors still >= target (4 >= 3)
+em2.params.spawnedAll = true; em2.params.enRoute = 0; em2.params.delivered = 4;   // every truck arrived
 tickMission(em2, 0.016);
-assert.strictEqual(em2.status, 'won', 'escort won at convoy exit');
+assert.strictEqual(em2.status, 'won', 'escort won once the convoy has delivered');
 
 // ===== defend.winFail: won when timer elapses with asset alive; failed when asset dead =====
 let dm = startMission('defend', 1);   // timer 52

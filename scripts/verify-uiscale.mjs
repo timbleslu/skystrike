@@ -48,7 +48,7 @@ await page.evaluate(() => { opMode = true; const op = (typeof OPERATIONS !== 'un
 await page.waitForTimeout(450);
 const measure = () => page.evaluate(() => {
   const box = document.querySelector('#briefing .brief-box') || document.querySelector('#briefing .cmp-box') || document.querySelector('#briefing > div');
-  const dense = document.querySelector('#briefing .ui-dense');
+  const dense = document.querySelector('#briefing .ui-dense, #briefing .ui-dense-fill');
   const br = box ? box.getBoundingClientRect() : null;
   const dr = dense ? dense.getBoundingClientRect() : null;
   return { boxW: br ? Math.round(br.width) : null, boxH: br ? Math.round(br.height) : null, denseW: dr ? Math.round(dr.width) : null, denseH: dr ? Math.round(dr.height) : null, hasDense: !!dense };

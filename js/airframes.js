@@ -103,19 +103,16 @@ const SHAPES = {
 Object.keys(SHAPES).forEach(k => { SHAPES[k].id = k; });
 
 /* per-airframe accuracy flags (stealth jets fly clean; others carry tip missiles) */
-['F22', 'F35', 'J20', 'SU57', 'J36', 'F47', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].clean = true; });
-if (SHAPES.F22) SHAPES.F22.nozzle = '2d';            // F-22: rectangular 2D thrust-vectoring nozzles
-if (SHAPES.J20) { SHAPES.J20.dsi = true; }  // J-20: DSI bumps (ventral fins now carried by finBoom block)
-if (SHAPES.F35) SHAPES.F35.dsi = true;               // F-35: DSI inlet bumps
-// 6th-gen: flat stealth nozzles & diverterless intakes
-if (SHAPES.F47) { SHAPES.F47.nozzle = '2d'; SHAPES.F47.dsi = true; }
-if (SHAPES.J36) { SHAPES.J36.dsi = true; }
-if (SHAPES.J50) { SHAPES.J50.nozzle = '2d'; SHAPES.J50.dsi = true; }
+['F22', 'F35', 'J20', 'SU57', 'J36', 'F47', 'J50'].forEach(k => { SHAPES[k].clean = true; });
+// rectangular 2D nozzles: F-22 thrust vectoring, flat 6th-gen stealth exhausts
+['F22', 'F47', 'J50'].forEach(k => { SHAPES[k].nozzle = '2d'; });
+// DSI (diverterless) inlet bumps
+['J20', 'F35', 'F47', 'J36', 'J50'].forEach(k => { SHAPES[k].dsi = true; });
 // electro-optical sensors: forward IRST ball (Flanker/Typhoon/Rafale) vs faceted under-nose EOTS / aperture (F-35, J-20, 6th-gen)
-['SU57', 'EFT', 'RAFALE'].forEach(k => { if (SHAPES[k]) SHAPES[k].irst = true; });
-['F35', 'J20', 'F47', 'J36', 'J50'].forEach(k => { if (SHAPES[k]) SHAPES[k].eots = true; });
+['SU57', 'EFT', 'RAFALE'].forEach(k => { SHAPES[k].irst = true; });
+['F35', 'J20', 'F47', 'J36', 'J50'].forEach(k => { SHAPES[k].eots = true; });
 // 6th-gen US blended-body details
-if (SHAPES.F47) { SHAPES.F47.dorsalHump = true; SHAPES.F47.chineRidge = true; }
+SHAPES.F47.dorsalHump = true; SHAPES.F47.chineRidge = true;
 // flag aliasing — unify near-duplicate spec names onto one generic implementation each
 Object.keys(SHAPES).forEach(k => {
   const s = SHAPES[k];
@@ -125,7 +122,7 @@ Object.keys(SHAPES).forEach(k => {
 });
 
 /* enemy shape pool — fodder all fly STD (aces pick named real jets via roster.js aceShapePool) */
-const FIGHTER_SHAPES = ['STD'];   // regular fodder all fly the plain trainer; aces fly the named real jets
+const FIGHTER_SHAPES = ['STD'];
 
 /* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {

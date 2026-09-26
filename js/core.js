@@ -19,15 +19,12 @@ const damp = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
 
 /* ---------------- weather core (feature #4) ---------------- */
 const NIGHT_RADAR_MUL = 0.75;   // night (TOD index 2) additionally shortens radar detection
-// fogMul values DRAMATICALLY raised (Track B §5): storm 1.6→5.7, fog 3.0→11.4 so active weather
-// guts the draw distance (storm ~6km, fog ~3km visible, vs the old ~21/~11km that read as barely-there).
-// The actual scene.fog.density is computed by fogDensityFor(tier, type) below (clear scales by tier,
-// storm/fog hit a fixed effective density); fogMul stays the descriptive gameplay-facing field and is
-// what visuals/tests key off. radar/lock fields unchanged — only fog distance changes.
+// fogMul is the descriptive gameplay-facing fog factor (visuals/tests key off it); the actual
+// scene.fog.density comes from fogDensityFor(tier, type) below.
 const WEATHER = {
   clear: { radarMul: 1.0, lockRangeMul: 1.0,  lockSpeedMul: 1.0,  fogMul: 1.0 },
-  fog:   { radarMul: 0.6, lockRangeMul: 0.65, lockSpeedMul: 1.15, fogMul: 11.4 },   // radar 0.8→0.6: fog cuts enemy detection ~40% (weather-FX pass)
-  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, fogMul: 5.7 },     // radar 0.7: storm cuts enemy detection ~20%
+  fog:   { radarMul: 0.6, lockRangeMul: 0.65, lockSpeedMul: 1.15, fogMul: 11.4 },   // fog cuts enemy detection ~40%
+  storm: { radarMul: 0.7, lockRangeMul: 0.6,  lockSpeedMul: 1.35, fogMul: 5.7 },    // storm cuts enemy detection ~30%
 };
 // PURE — resolve the live modifier set for a condition + time-of-day (folds the night radar
 // factor). Unknown types fall back to clear. This is the pure core of engine.js applyWeather.
@@ -83,9 +80,8 @@ function nextBossPhase(reached, hpFrac) {
 // PURE — resolve a boss's per-phase combat state. `phaseCfg` is the authored e._phaseCfg array
 // (one {turnMul,fireMul,extraMissiles,pattern,flags,…} entry per phase) or null for the legacy
 // endless/boss-rush/rivals ramp; `phase` is 1/2/3; `baseTurnRate` is the boss's ORIGINAL (phase-1)
-// turn rate. Returns ONE plain phase-state consumed by all the readers that used to poke scattered
-// underscore fields: entities.js (pattern/flags movement + turnRate), main.js (fireMul cadence /
-// extraMissiles salvo). `baseTurnRate` is echoed back so the impure caller can carry it forward
+// turn rate. Returns ONE plain phase-state read by entities.js (pattern/flags movement + turnRate)
+// and main.js (fireMul cadence / extraMissiles salvo). `baseTurnRate` is echoed back so the impure caller can carry it forward
 // across phases WITHOUT a separate _baseTurnRate field. NO mutation, NO THREE/DOM.
 // null/absent cfg reproduces the legacy behaviour EXACTLY: one ×1.18 turn bump per crossed phase
 // (byte-identical to the old compounding `e.turnRate *= 1.18`), fireMul 1 / extraMissiles 0 / no
@@ -175,7 +171,7 @@ function betterTime(prev, next) {
 
 /* ---------------- first-run tutorial step machine (F5) ---------------- */
 // Steps gate on player actions, in order:
-//   0 = pitch, 1 = throttle (>0.6), 2 = guns fired, 3 = missile (lock + fire), 4 = DONE.
+//   0 = pitch, 1 = throttle (>0.6), 2 = guns fired, 3 = missile (lock + fire), 4 = barrel roll, 5 = DONE.
 // Each step's REQUIRED event advances it by one; the 'skip' event jumps straight to DONE
 // from any step. Pure + monotonic: an event that does not match the current step is ignored,
 // the step index never decreases, and DONE (5) is a terminal absorbing state.
@@ -225,11 +221,9 @@ const CAMSHAKE_K    = 1.2; // world-unit scale at camShake == 1
 function decayShake(v, dt) { return Math.max(0, v - dt * CAMSHAKE_RATE); }
 
 /* ---------------- AWACS support-call core (F10) ---------------- */
-// AWACS calls are COOLDOWN-GATED, not RP-costed (balance pass 2026-06: they used to draw from
-// player.tp, the same pool as the permanent TECH_TREE, so spending on a one-shot call was never
-// rational vs. a compounding upgrade — the whole feature was economically dead. Decoupling from RP
-// revives it without new HUD chrome.) AWACS_COOLDOWNS = seconds between successive calls of a key;
-// AWACS_USES_MAX = the unchanged hard cap on how many times each may be called per sector.
+// AWACS calls are COOLDOWN-GATED, not RP-costed: paying from player.tp (the TECH_TREE pool) made a
+// one-shot call never worth it vs a compounding upgrade. AWACS_COOLDOWNS = seconds between successive
+// calls of a key; AWACS_USES_MAX = hard cap on calls of each key per sector.
 const AWACS_COOLDOWNS = { strike: 30, resupply: 26, jam: 18 };
 const AWACS_USES_MAX  = { strike: 1,   resupply: 1,  jam: 2 };
 const AWACS_JAM_TIME  = 8;   // seconds enemy missiles stay blinded by a jamming call
@@ -269,27 +263,23 @@ function awacsResolve(state, cd, max, key, now) {
   return { ok: true, reason: 'ok', uses: r.uses, last: r.last, effect: key, banner: AWACS_EFFECTS[key] };
 }
 
-/* ---------------- tech-screen cadence core (balance pass 2026-06) ---------------- */
-// The R&D shop used to open after EVERY wave (flow-killing full-screen modal every ~60-90s, and each
-// buy was low-stakes because RP arrived in a trickle every wave). It now opens on a CADENCE: skip
-// wave 1 entirely (pure-flight opener), then every 2nd wave AND always after any wave that contained
-// a boss. RP banks naturally between visits (player.tp persists), so each shop visit funds a bigger,
-// more deliberate purchase. PURE — `wasBoss` = the just-cleared wave contained a boss.
+/* ---------------- tech-screen cadence core ---------------- */
+// The R&D shop opens on a CADENCE, not after every wave (a full-screen modal each wave killed flow):
+// skip wave 1, then every 2nd wave AND always after a boss wave. RP banks between visits (player.tp
+// persists), so each visit funds a bigger purchase. PURE — `wasBoss` = the just-cleared wave had a boss.
 function shouldOpenTechScreen(wave, wasBoss) {
   if (wave < 2) return false;            // first wave is pure flight — no shop interruption
   if (wasBoss) return true;              // always restock after a boss fight
   return wave % 2 === 0;                 // otherwise every second wave
 }
 
-/* ---------------- wave/boss cadence + density core (balance pass 2026-06) ---------------- */
-// Boss cadence used to be a hard metronome (`wave % 4 === 0`) — fully predictable, so the player
-// could autopilot the calm waves and brace for the known boss wave. These helpers replace it with a
-// windowed schedule: after each boss, the NEXT boss is rolled 3-5 waves out, so the player can never
-// be certain which wave spikes. Enemy density used to cap at 10 (hit by ~wave 7, flat forever after);
-// the cap is lifted to 16 (distant-enemy culling already exists, GFX_CULL_*/cullDistantEnemies).
+/* ---------------- wave/boss cadence + density core ---------------- */
+// Windowed boss schedule: after each boss the NEXT one is rolled 3-5 waves out, so the boss wave is
+// never predictable (a fixed `wave % 4` metronome let players autopilot the calm waves). Density
+// escalates up to WAVE_COUNT_CAP; distant-enemy culling (GFX_CULL_*) keeps the draw cost bounded.
 const BOSS_WINDOW_MIN = 3;   // soonest the next boss can arrive after the previous one
 const BOSS_WINDOW_MAX = 5;   // latest the next boss can arrive
-const WAVE_COUNT_CAP  = 16;  // hard ceiling on simultaneous queued fighters (was 10)
+const WAVE_COUNT_CAP  = 16;  // hard ceiling on simultaneous queued fighters
 // PURE — gap (in waves) until the next boss. Rolled once per boss kill/spawn so cadence stays varied.
 // rng() ∈ [0,1). Inclusive integer in [BOSS_WINDOW_MIN, BOSS_WINDOW_MAX].
 function nextBossOffset(rng) {
@@ -299,8 +289,7 @@ function nextBossOffset(rng) {
 // PURE — is THIS wave a boss wave, given the wave number the next boss is scheduled for? The schedule
 // is seeded the first time the player reaches the window (caller initializes bossWaveNext).
 function isBossWave(wave, bossWaveNext) { return wave >= bossWaveNext; }
-// PURE — fighters to queue this wave. Same growth as before (3 + wave + difficulty delta) but clamped
-// to WAVE_COUNT_CAP instead of 10, so density keeps escalating past the old wave-7 plateau.
+// PURE — fighters to queue this wave: 3 + wave + difficulty delta, clamped to [2, cap] (default WAVE_COUNT_CAP).
 function waveCount(wave, diffDelta, cap) {
   return clamp(3 + wave + diffDelta, 2, (cap === undefined ? WAVE_COUNT_CAP : cap));
 }
@@ -313,7 +302,7 @@ function isWildcardWave(wave, isBoss, roll) {
 // PURE — decide the WHOLE "what is this wave" question up front, returning ONE plain manifest so main.js
 // nextWave shrinks to: build inputs → composeWave → commit schedule state → enact (queue spawns/weather/banner).
 // Two input shapes:
-//   CAMPAIGN: { campaignPlan: <levelPlan(lvl), post-setpiece>, bossPhases, bossWaveNext } — authored + deterministic
+//   CAMPAIGN: { campaignPlan: <levelPlan(lvl)>, bossPhases, bossWaveNext } — authored + deterministic
 //             (no rng); the endless boss schedule is passed straight through, untouched.
 //   ENDLESS:  { wave, strike, difficulty, weatherSeed, lockWeather, weeklyAces, weeklyWavePlan, countDelta,
 //             groundAllowed, bossWaveNext, rivalDue, rng } — rng() ∈ [0,1) is drawn in the SAME order (with the
@@ -353,7 +342,7 @@ function composeWave(ctx) {
   }
   // Windowed boss schedule: seed if uninitialized, fire once wave reaches the mark, reschedule off a boss wave.
   let bossWaveNext = ctx.bossWaveNext;
-  if (bossWaveNext < BOSS_WINDOW_MIN) bossWaveNext = BOSS_WINDOW_MIN + Math.floor(rng() * (BOSS_WINDOW_MAX - BOSS_WINDOW_MIN + 1));
+  if (bossWaveNext < BOSS_WINDOW_MIN) bossWaveNext = nextBossOffset(rng);   // first boss lands on wave 3-5
   const boss = isBossWave(wave, bossWaveNext);
   if (boss) bossWaveNext = wave + nextBossOffset(rng);
   // occasional non-boss "wildcard spike" (always rolls one rng)
@@ -413,7 +402,7 @@ const STEER = { maxBank: 1.4, bankGain: 2.4, autoLevelGain: 1.6, deadzone: 0.06,
 //               world-axis yaw applied in combat.js, kept OUT of pitch so you can dive while turning.
 function steerCommand(scheme, intent, currentBank, t) {
   const pitchCmd = intent.pitch;
-  if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic) — byte-identical mapping
+  if (scheme !== 'pointer' && scheme !== 'auto') return { pitchCmd, rollCmd: intent.roll };   // 'rate' (classic): stick = roll rate
   const cb = currentBank || 0;
   const mb = (scheme === 'auto') ? t.autoMaxBank : t.maxBank;   // 'auto' banks gently; heading turns via world-yaw in combat.js
   let rollCmd;
@@ -432,20 +421,18 @@ function steerCommand(scheme, intent, currentBank, t) {
 //   cone    : radians — the DETECTION RADIUS: the angular field where pulling begins. Outside it the
 //             player flies free (a wider error is the player deliberately pointing elsewhere). The
 //             aimStrength slider scales this field up; range scales with it.
-//   gain    : legacy proportional coefficient — kept for back-compat (monotonic w/ strength). NOT used
-//             by the magnet curve below; the pull shape is now driven by maxRate (the max force).
 //   maxRate : radians/second — the MAX pull force, reached at angErr≈0. Scales PROPORTIONALLY with the
 //             field/radius (bigger field = stronger snap), and is still the hard per-frame rate cap.
 // 5 strength presets, weakest -> strongest. cone (field) + maxRate (max force) scale together;
 // level 5 is the "forcing" tier.
 const AIM_ASSIST_LEVELS = [
-  { range: 2400, cone: 0.45, gain: 1.2, maxRate: 0.6 },  // 1 — barely a nudge
-  { range: 2500, cone: 0.52, gain: 2.0, maxRate: 1.0 },  // 2
-  { range: 2600, cone: 0.60, gain: 3.0, maxRate: 1.8 },  // 3 — original default
-  { range: 2800, cone: 0.75, gain: 4.5, maxRate: 3.0 },  // 4
-  { range: 3000, cone: 1.20, gain: 9.0, maxRate: 7.0 },  // 5 — strongest / forcing
+  { range: 2400, cone: 0.45, maxRate: 0.6 },  // 1 — barely a nudge
+  { range: 2500, cone: 0.52, maxRate: 1.0 },  // 2
+  { range: 2600, cone: 0.60, maxRate: 1.8 },  // 3 — default
+  { range: 2800, cone: 0.75, maxRate: 3.0 },  // 4
+  { range: 3000, cone: 1.20, maxRate: 7.0 },  // 5 — strongest / forcing
 ];
-const AIM_ASSIST = AIM_ASSIST_LEVELS[2];   // back-compat alias (the original default)
+const AIM_ASSIST = AIM_ASSIST_LEVELS[2];   // default preset (level 3); aimAssistStep's fallback cfg
 // Magnet curve constant (rad^-2): pullForce = maxForce / (1 + AIM_MAGNET_K * angErr^2).
 // Tuned so the pull collapses fast off the lead pip. Force vs. angular distance to the lead:
 //   0°  -> 100%   15° -> 44.8%   30° -> 16.8%   45° -> 8.3%   (of maxForce)
@@ -479,8 +466,7 @@ function aimAssistStep(angErr, dist, dt, cfg) {
 const GFX_TIERS = ['auto', 'low', 'medium', 'high'];
 // PURE — resolve the effective render tier ('low'|'medium'|'high') from the gfxQuality setting plus a
 // cheap device heuristic. Explicit 'low'/'medium'/'high' pass through; 'auto' (and any unknown value)
-// picks 'medium' for ANY touch device (Track B target: mobile → MEDIUM, a behaviour change from the old
-// touch→low), else 'high' for desktop/non-touch. A user who wants the cheapest path selects 'low'
+// picks 'medium' for ANY touch device, else 'high' for desktop/non-touch. A user who wants the cheapest path selects 'low'
 // manually. The fps sample (which headless cannot measure) may layer an auto→low downgrade on at the
 // impure call site (refreshGfxTier in globals.js).
 function resolveQuality(setting, dpr, isTouch) {
@@ -715,12 +701,11 @@ function enemyIsAimingPlayer(o) {
   return !!(o && o.engaged && o.canSee && o.ang < o.gunCone && o.dist < o.gunRange);
 }
 
-/* ---------------- fighter archetypes (feature 2026-06: AI threat variety) ----------------
-   Replaces the single ~40% `aggressive` temperament with distinct, READABLE behavioral roles
-   so dogfights stop feeling same-y and the player must recognize + counter different threats.
-   PURE selection here; the imperative steering (lateral jukes, proactive flares, flank offsets)
-   stays in entities.js updateEnemy, gated on `e.archetype`. 'duelist' is byte-for-byte the old
-   behavior (existing `aggressive` sub-roll still applies), so early waves are unchanged in feel. */
+/* ---------------- fighter archetypes (AI threat variety) ----------------
+   Distinct, READABLE behavioural roles the player must recognise + counter. PURE selection here;
+   the imperative steering (lateral jukes, proactive flares, flank offsets) stays in entities.js
+   updateEnemy, gated on `e.archetype`. 'duelist' is the baseline dogfighter (the `aggressive`
+   sub-roll still applies to it). */
 const ARCHETYPES = ['duelist', 'baiter', 'decoy', 'pincer'];
 // Weighted picker. duelist dominates early; baiter/decoy/pincer ramp in with wave so the opener
 // stays a clean dogfight and exotic threats appear as the run heats up. Elites/aces bias exotic
@@ -1183,18 +1168,13 @@ function strikeSiteResolves(strikeWaveActive, missionType) {
   return !!strikeWaveActive || missionType === 'strike';
 }
 
-/* Bounded-campaign clear target (2026-06). In a BOUNDED Operations level every wave spawns the
-   SAME authored air budget (main.js nextWave: plan.fighters/aces/bombers), but the single-phase
-   mission's PROCEDURAL setup target grows with the wave (sweep min(4+(wave>>1),10); intercept
-   wave>=8?4:3). On later waves the procedural target could EXCEED the kill-targets actually spawned
-   that wave -> the wave never clears (e.g. openSkies sweep wave 2 wanted 5 kills but only 4 fighters
-   spawn). The spawn budget is the source of truth: this PURE helper clamps the kill-type clear target
-   to the spawned kill-count so a bounded wave is always winnable with exactly its authored budget.
-   Endless mode is untouched (it never calls this — it keeps the procedural target). Non-kill verbs
-   (escort/defend/recon/stealth/none/boss) carry no kill target; they pass through unchanged (null).
-   Kill-count per verb mirrors what missionKill credits in the single-phase path: sweep counts EVERY
-   air kill (onKill++ unconditional) so fighters+aces; intercept counts only _missionTarget bombers;
-   strike is the one ground site (target 1). */
+/* Bounded-campaign clear target. In a BOUNDED Operations level every wave spawns the SAME authored
+   air budget, but the mission's PROCEDURAL setup target grows with the wave and could exceed what
+   actually spawned — the wave would never clear. The spawn budget is the source of truth: clamp the
+   kill-type target to the spawned kill-count. Endless never calls this. Non-kill verbs
+   (escort/defend/recon/stealth/none/boss) return null (target left as startMission set it).
+   Kill-count per verb mirrors missionKill's crediting: sweep counts every air kill (fighters+aces);
+   intercept only the bomber targets; strike is the one ground site. */
 function campaignSpawnedKillCount(verb, spawn) {
   const s = spawn || {};
   if (verb === 'sweep') return (s.fighters || 0) + (s.aces || 0);
@@ -1202,8 +1182,8 @@ function campaignSpawnedKillCount(verb, spawn) {
   if (verb === 'strike') return 1;   // a single strike site
   return null;                       // not a kill objective
 }
-// the raw per-wave procedural target the endless MISSIONS[verb].setup would assign (kept in sync
-// with missions.js so core stays the single source of truth without depending on missions.js).
+// the raw per-wave procedural target the endless MISSIONS[verb].setup assigns. NOTE: missions.js
+// setup repeats these two formulas inline — keep them in sync.
 function campaignProceduralTarget(verb, wave) {
   if (verb === 'sweep') return Math.min(4 + (wave >> 1), 10);
   if (verb === 'intercept') return wave >= 8 ? 4 : 3;
@@ -1219,16 +1199,13 @@ function campaignClearTarget(verb, wave, spawn) {
   return Math.min(campaignProceduralTarget(verb, wave), killable);
 }
 
-/* ---------------- kill-reward / combo / killstreak cores (Candidate C) ---------------- */
-// PURE owners of the RP / combo / killstreak / score math that used to be smeared across four
-// call sites in combat.js (damageEnemy hit-score + killEnemy kill-score/RP + killstreak). The
-// impure callers gather plain numbers, call these, and APPLY the returned values; all FX/audio/
-// ammo refills stay in the caller. NO mutation of inputs, NO THREE/store/DOM.
+/* ---------------- kill-reward / combo / killstreak cores ---------------- */
+// PURE owners of the RP / combo / killstreak / score math for combat.js (damageEnemy hit-score,
+// killEnemy kill-score/RP + killstreak). The impure callers gather plain numbers, call these, and
+// APPLY the returned values; all FX/audio/ammo refills stay in the caller. NO mutation of inputs.
 
-// COMBO_TIMER: seconds the combo stays alive after a hit (combat.js used the literal 2.2).
-const COMBO_TIMER = 2.2;
-// KILLSTREAK_INTERVAL: a streak reward fires every Nth kill (combat.js used % 5).
-const KILLSTREAK_INTERVAL = 5;
+const COMBO_TIMER = 2.2;          // seconds the combo stays alive after a hit
+const KILLSTREAK_INTERVAL = 5;    // a streak reward fires every Nth kill
 
 // Per-HIT reward (combat.js damageEnemy): a landed hit bumps the combo, refreshes its timer, and
 // scores points scaled by the (post-increment) combo and the score multiplier. `state` carries the
@@ -1270,7 +1247,7 @@ function awardKill(state, event) {
   return { score: score, rp: rp, killStreak: killStreak, streakReward: streakReward };
 }
 
-/* ---- Lock-on / targeting cores (Candidate B) -----------------------
+/* ---- Lock-on / targeting cores -----------------------
    The two-stage lock state machine (acquire candidate -> advance progress -> promote to locked)
    has its PURE progress arithmetic + clear-on-death rule here; the impure caller (combat.js /
    entities.js) does the THREE geometry (cone/range) and feeds plain scalars/booleans in.
@@ -1296,9 +1273,8 @@ function advanceLock(lock, sample) {
   return { progress: progress, locked: locked, justLocked: locked && prev < 1 };
 }
 
-/* clearLockIf(lock, deadTarget): when an enemy dies, decide what the player's lock should become —
-   replaces the enemy module reaching into player.lock* directly. Returns a PLAIN lock; the OWNER
-   applies it. A matching locked `target` is dropped; a matching mid-acquire `candidate` is dropped
+/* clearLockIf(lock, deadTarget): when an enemy dies, decide what the player's lock should become.
+   Returns a PLAIN lock; the OWNER applies it. A matching locked `target` is dropped; a matching mid-acquire `candidate` is dropped
    and its progress reset. Unrelated deaths return the lock unchanged. Never mutates the input. */
 function clearLockIf(lock, deadTarget) {
   const candidateDead = lock.candidate === deadTarget;
@@ -1309,50 +1285,7 @@ function clearLockIf(lock, deadTarget) {
   };
 }
 
-/* ===================================================================
-   CommonJS export — Node tests only. In the browser `module` is undefined, so this whole block
-   is skipped and every symbol above remains a plain browser global (no behavioural change).
-   =================================================================== */
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    reqSatisfied,
-    TWO_PI, DEG, clamp, lerp, rand, randInt, damp,
-    NIGHT_RADAR_MUL, WEATHER, resolveWeather, rollWeather,
-    BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase, resolveBossPhase,
-    resolveDamage,
-    BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime,
-    TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,
-    makeRng, dailySeedFor,
-    CAMSHAKE_RATE, CAMSHAKE_K, decayShake,
-    AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
-    shouldOpenTechScreen,
-    BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
-    composeWave, spawnDrainCount,
-    rollDetect, rollCooldownGate,
-    STEER, steerCommand,
-    AIM_ASSIST, AIM_ASSIST_LEVELS, AIM_MAGNET_K, aimAssistCfg, aimAssistStep,
-    GFX_TIERS, resolveQuality,
-    TERRAIN_TIER, SEA_TIER, terrainDetailH, valueNoise2, terrainHeight, TERRAIN_MAX_H, BIOMES, biomeFor,
-    FOG_CLEAR_DENSITY, FOG_ACTIVE_DENSITY, fogDensityFor,
-    GROUNDOBJ_TIER, GROUNDOBJ_RADIUS, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_PLATFORM_CLEAR, GROUNDOBJ_BUILD_MAX_SLOPE, planGroundObjects,
-    shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
-    enemyIsAimingPlayer,
-    reconProgress, nextWaypoint, detectionDelta, reconWon, stealthWon, stealthFailed,
-    ARCHETYPES, pickArchetype, shouldJink, pincerSign,
-    equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
-    DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
-    instrumentState, speedDisplay, altDisplay, KT_TO_MPH, KT_TO_KPH, FT_TO_M,
-    LEVEL_WAVE_MIN, LEVEL_WAVE_CAP, campaignWaveCount, levelCleared,
-    isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
-    captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
-    objectiveTypes, nextObjectivePhase, strikeSiteResolves,
-    campaignSpawnedKillCount, campaignProceduralTarget, campaignClearTarget,
-    COMBO_TIMER, KILLSTREAK_INTERVAL, awardHit, awardKill,
-    advanceLock, clearLockIf,
-  };
-}
-
-// === F5 killstreak === pure kill-streak momentum core (require-safe; no THREE/store/DOM).
+// === F5 killstreak === pure kill-streak momentum core.
 // A chain of kills within STREAK.window seconds builds a count; the multiplier steps up at the tier
 // counts (3/6/10 -> x1.5/x2/x3) and scales the kill's score contribution in combat.js killEnemy.
 const STREAK = { window: 6, counts: [3, 6, 10], mults: [1, 1.5, 2, 3] };
@@ -1370,8 +1303,6 @@ function streakStep(streak, event, now) {
   for (let i = 0; i < STREAK.counts.length; i++) if (count >= STREAK.counts[i]) mult = STREAK.mults[i + 1];
   return { count: count, mult: mult, t: now, tierUp: mult > (s.mult || base) };
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { STREAK, streakStep });
-// === end F5 ===
 // === F3 wingman-wheel ===
 // Pure wingman command-wheel state machine (no clock, no DOM). The active order is one of WINGMAN_ORDERS.
 // `wingmanOrder(state, cmd)` folds an order command (FREE/ENGAGE/COVER/REGROUP) OR a fallback event
@@ -1394,8 +1325,6 @@ function wingmanOrder(state, cmd) {
   }
   return { order: cur, banner: null };                      // unknown command — no-op
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { WINGMAN_ORDERS, wingmanOrder });
-// === end F3 ===
 // === F4 defensive-ai ===
 // Enemy evasion core (pure, deterministic). The impure caller (entities.js applyEvade) gathers the
 // per-frame threat and threads {lastEvade, flares} in and out; every source of randomness stays in the
@@ -1429,13 +1358,11 @@ function evadeDecision(state, threat, now) {
   const action = (missileThreat && flares > 0) ? 'flare' : 'break';
   return { action, state: { lastEvade: now, flares: action === 'flare' ? flares - 1 : flares } };
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { EVADE, evadeDecision });
-// === end F4 ===
 /* === enemy tactical state (F4 sibling extraction 2026-07) =============================
    The evade/extend/engage decision updateEnemy runs each frame, lifted out of the THREE-scratch
    steering so the transition table is testable in isolation. PURE: given the frame's threat +
    geometry it returns the next state; the caller keeps ONLY the vector steering for whichever
-   state wins. Priority + hysteresis are byte-identical to the old inline ladder:
+   state wins. Priority + hysteresis:
      1. incoming player missile        -> 'evade'   (defensive, overrides everything)
      2. dist < nearRange               -> 'extend'  (too close, bug out)
      3. prev==='extend' && dist < prefRange*1.25 -> 'extend'  (STICKY: don't re-engage until 1.25×PREF)
@@ -1456,9 +1383,9 @@ function enemyTacticalState(prev, o) {
 }
 // gun-run cadence: the ENGAGE-state tracking timer. Ticks gunRunCd down; while a run is live
 // (gunRun>0) it counts that down instead; when both lapse it rolls a fresh run window. Returns the
-// advanced {gunRun, gunRunCd} plus the derived `tracking` flag the steering + gun-cone read. Byte-
-// identical to the old inline block (same rand(1.6,2.8)/rand(2.2,4.2) draws in the same order); the
-// caller writes gunRun/gunRunCd back onto the enemy. Tests stub Math.random for determinism.
+// advanced {gunRun, gunRunCd} plus the derived `tracking` flag the steering + gun-cone read. Draw
+// order (rand(1.6,2.8) then rand(2.2,4.2)) is part of the contract; the caller writes gunRun/gunRunCd
+// back onto the enemy. Tests stub Math.random for determinism.
 function gunRunCadence(state, dt) {
   state = state || {};
   let gunRun = state.gunRun || 0;
@@ -1468,7 +1395,6 @@ function gunRunCadence(state, dt) {
   else if (gunRunCd <= 0) { gunRun = rand(1.6, 2.8); gunRunCd = rand(2.2, 4.2); }
   return { gunRun, gunRunCd, tracking: gunRun > 0 };
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { enemyTacticalState, gunRunCadence });
 /* === F1 gun-overheat ===================================================================
    Gun thermal model. Sustained fire builds heat 0->1; at 1.0 the cannon LOCKS OUT and stays
    locked (hysteresis) until heat cools back below HEAT.rearm, then re-arms. Heat decays whenever
@@ -1495,9 +1421,6 @@ function heatStep(state, firing, dt) {
   else if (wasLocked && heat < HEAT.rearm) { locked = false; justArmed = true; }
   return { heat: heat, locked: locked, justLocked: justLocked, justArmed: justArmed };
 }
-
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { HEAT, heatStep });
-/* === end F1 gun-overheat === */
 // === F2 enemy-formations ===
 // Pure geometry + break logic for non-boss fighter formations. A wave of >=3 fighters spawns with a
 // leader (slot 0, normal AI) and followers that hold a leader-relative slot until the player closes to
@@ -1562,8 +1485,6 @@ function formationBreak(distToPlayer, leaderAlive, cfg) {
   const range = (cfg && cfg.engageRange) || FORMATION_ENGAGE_RANGE;
   return distToPlayer <= range;                                      // player in engage range -> break to fight
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { FORMATIONS, formationSlots, formationBreak });
-// === end F2 ===
 // === F9 veterancy ===
 // Per-airframe veterancy rank derived from lifetime kills. vetRank(kills) → integer 0..5 over 5
 // escalating thresholds: rank 0 below the first threshold, rank N once kills ≥ VET_THRESHOLDS[N-1],
@@ -1575,9 +1496,7 @@ function vetRank(kills) {
   for (var i = 0; i < VET_THRESHOLDS.length; i++) if (k >= VET_THRESHOLDS[i]) r = i + 1;
   return r;
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { VET_THRESHOLDS, vetRank });
-// === end F9 ===
-// === run-mode policy table (Candidate 8) ===
+// === run-mode policy table ===
 // PURE lookup: classify the current run mode into ONE key, then read a small policy row instead of
 // re-deriving the same boolean from the raw flags at each lifecycle branch point. The mode flags are
 // mutually exclusive at runtime (startDaily/startWeekly/startBossRush each zero opMode; enterOperationRun
@@ -1605,8 +1524,6 @@ function modeKeyFor(f) {
   if (f.dailyMode) return 'daily';
   return 'endless';
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { MODE_POLICY, modeKeyFor });
-// === end run-mode policy table ===
 // === F8 weekly-challenge ===
 // PURE — ISO-8601 week → deterministic seed + week id + 2-modifier pick, mirroring the daily core.
 // Every helper takes a date STRING ('YYYY-MM-DD') and NEVER reads the clock (pure integer arithmetic,
@@ -1658,10 +1575,9 @@ function weeklySeedFor(dateStr) {
   x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
   return (x ^ (x >>> 16)) >>> 0;
 }
-// Weekly modifier table — >=5 distinct run-start handicaps. IDs only (pure data); the impure
-// application (player/weather mutation) lives in ui-flow.js + main.js spawn guards.
-// Each entry's `effects` is DATA interpreted by ui-flow.js applyWeeklyMods / the main.js wave
-// guards (CF content-factory: pack modifiers use the same schema — see PACK_LIMITS.effectKeys).
+// Weekly modifier table — run-start handicaps as pure DATA. Each entry's `effects` is interpreted by
+// ui-flow.js applyWeeklyMods / the main.js wave guards; content-pack modifiers use the same schema
+// (see PACK_LIMITS.effectKeys).
 var WEEKLY_MODIFIERS = [
   { id: 'stormFront', effects: { lockWeather: 'storm' } },   // the sky is locked to storm all week
   { id: 'noFlares',   effects: { flares: 0 } },              // countermeasures offline — no flares
@@ -1676,21 +1592,17 @@ function weeklyModifiers(seed, pool) {
   pool = (pool || WEEKLY_MODIFIERS).slice();
   var out = [];
   for (var k = 0; k < 2 && pool.length; k++) {
-    var i = Math.floor(rng() * pool.length) % pool.length;
+    var i = Math.floor(rng() * pool.length);   // rng() < 1, so i < pool.length
     out.push(pool[i]);
     pool.splice(i, 1);
   }
   return out;
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { weeklySeedFor, weekIdFor, WEEKLY_MODIFIERS, weeklyModifiers });
-// === end F8 ===
 // === wing-node routing ===
 // Which tech/draft node ids open the jet WING PICKER (choose a wingman airframe) instead of buying
 // immediately. Pure membership predicate; the impure buyNode/deployFromTech (ui-tech.js) delegate here.
 const WING_NODES = new Set(['w1', 'w2', 'reserve']);
 function routesToWingPicker(nodeId) { return WING_NODES.has(nodeId); }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { WING_NODES, routesToWingPicker });
-// === end wing-node routing ===
 // === CF content-factory ===
 // Versioned CONTENT PACKS (js/content-packs.js) carry new formations / weekly modifiers / weekly
 // wave patterns as pure DATA. This section is the pure half: bounds, validation, merge, and the
@@ -1818,7 +1730,118 @@ function weeklyEffectsFor(ids, pool) {
 function weeklyWavePattern(seed, patterns) {
   if (!patterns || !patterns.length) return null;
   var rng = makeRng((seed ^ 0x5f356495) >>> 0);
-  return patterns[Math.floor(rng() * patterns.length) % patterns.length];
+  return patterns[Math.floor(rng() * patterns.length)];
 }
-if (typeof module !== 'undefined' && module.exports) Object.assign(module.exports, { PACK_LIMITS, validatePack, applyContentPacks, weeklyEffectsFor, weeklyWavePattern });
-// === end CF ===
+
+/* ===================================================================
+   CAMPAIGN OVERHAUL — allies, raids, escort + intercept resolution.
+   Friendly mission props (escort convoy / defended asset) live in their OWN `allies` list
+   (missions.js) — never in `enemies` — so they can't be locked, shot, AWACS-struck or drawn as
+   hostiles. Enemy RAIDERS fly attack runs on them; these pure cores own the route/attack/outcome
+   decisions. No THREE/store/DOM.
+   =================================================================== */
+// Advance a ground unit along a polyline route. state {x,z,leg} (leg = index of the NEXT route point),
+// route [{x,z}…]. Returns a NEW {x,z,leg,done,dirX,dirZ}: `done` once the last point is reached (the
+// unit parks there). Overshoot carries into the next leg so fast units never stall on a corner.
+function convoyStep(state, route, speed, dt) {
+  let x = state.x, z = state.z, leg = state.leg || 0;
+  let budget = Math.max(0, speed * dt), dirX = 0, dirZ = -1;
+  if (!route || !route.length) return { x: x, z: z, leg: leg, done: true, dirX: dirX, dirZ: dirZ };
+  while (leg < route.length) {
+    const tx = route[leg].x - x, tz = route[leg].z - z, d = Math.hypot(tx, tz);
+    if (d > 1e-6) { dirX = tx / d; dirZ = tz / d; }
+    if (d > budget) { x += dirX * budget; z += dirZ * budget; budget = 0; break; }
+    x = route[leg].x; z = route[leg].z; budget -= d; leg++;
+    if (budget <= 0) break;
+  }
+  return { x: x, z: z, leg: leg, done: leg >= route.length, dirX: dirX, dirZ: dirZ };
+}
+// Raider attack-run state machine. A raider cycles inbound → strafe → extend → inbound against its
+// ally target, but DROPS the run to dogfight ('engage') when the player actually THREATENS it — lands a hit,
+// points its nose at it inside ~1.5 km, or gets right on top of it — and only resumes once the player is well
+// clear and no longer hunting it. Merely flying NEAR the convoy protects nothing: you have to go after them.
+// o = { dTarget (horizontal u), dPlayer (u), hitAgo (s since the player last damaged it), threatened (player's
+// nose on it), extendT (s left on the pull-off), dt }. Returns { mode, extendT }.
+const RAID = { strafeR: 1000, passR: 170, extendTime: 3.2, closeR: 450, threatR: 1500, engageHit: 3.5, resumeR: 2400 };
+function raidMode(prev, o) {
+  const hitAgo = (o.hitAgo == null) ? 99 : o.hitAgo;
+  const pressed = hitAgo < RAID.engageHit || o.dPlayer < RAID.closeR || (!!o.threatened && o.dPlayer < RAID.threatR);
+  if (prev === 'engage') {
+    if (!pressed && o.dPlayer > RAID.resumeR && hitAgo > RAID.engageHit * 2) return { mode: 'inbound', extendT: 0 };
+    return { mode: 'engage', extendT: 0 };
+  }
+  if (pressed) return { mode: 'engage', extendT: 0 };
+  if (prev === 'extend') {
+    const t = (o.extendT || 0) - (o.dt || 0);
+    return t > 0 ? { mode: 'extend', extendT: t } : { mode: 'inbound', extendT: 0 };
+  }
+  if (prev === 'strafe') {
+    if (o.dTarget < RAID.passR || o.dTarget > RAID.strafeR * 1.35) return { mode: 'extend', extendT: RAID.extendTime };
+    return { mode: 'strafe', extendT: 0 };
+  }
+  return o.dTarget < RAID.strafeR ? { mode: 'strafe', extendT: 0 } : { mode: 'inbound', extendT: 0 };
+}
+// Escort resolution over the live convoy counts. enRoute = alive + not yet delivered. Fails the moment
+// the convoy can no longer deliver `required`; wins once nothing is still en route and enough arrived.
+function escortOutcome(enRoute, delivered, required) {
+  if (delivered + enRoute < required) return 'failed';
+  if (enRoute === 0 && delivered >= required) return 'won';
+  return 'active';
+}
+// Intercept resolution with escapes: every target spawned (spawnedAll) and too few left alive to still
+// hit the kill target → failed early (a bomber got through) instead of waiting out the clock.
+function interceptDoomed(progress, target, aliveTargets, spawnedAll) {
+  return !!spawnedAll && progress + aliveTargets < target;
+}
+
+/* CommonJS export — Node tests only. In the browser `module` is undefined, so this block is skipped
+   and every symbol above stays a plain browser global. */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    reqSatisfied,
+    TWO_PI, DEG, clamp, lerp, rand, randInt, damp,
+    NIGHT_RADAR_MUL, WEATHER, resolveWeather, rollWeather,
+    BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase, resolveBossPhase,
+    resolveDamage,
+    BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime,
+    TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext,
+    makeRng, dailySeedFor,
+    CAMSHAKE_RATE, CAMSHAKE_K, decayShake,
+    AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, AWACS_EFFECTS, awacsCall, awacsResolve,
+    shouldOpenTechScreen,
+    BOSS_WINDOW_MIN, BOSS_WINDOW_MAX, WAVE_COUNT_CAP, nextBossOffset, isBossWave, waveCount, isWildcardWave,
+    composeWave, spawnDrainCount,
+    rollDetect, rollCooldownGate,
+    STEER, steerCommand,
+    AIM_ASSIST, AIM_ASSIST_LEVELS, AIM_MAGNET_K, aimAssistCfg, aimAssistStep,
+    GFX_TIERS, resolveQuality,
+    TERRAIN_TIER, SEA_TIER, terrainDetailH, valueNoise2, terrainHeight, TERRAIN_MAX_H, BIOMES, biomeFor,
+    FOG_CLEAR_DENSITY, FOG_ACTIVE_DENSITY, fogDensityFor,
+    GROUNDOBJ_TIER, GROUNDOBJ_RADIUS, GROUNDOBJ_WATER_MARGIN, GROUNDOBJ_PLATFORM_CLEAR, GROUNDOBJ_BUILD_MAX_SLOPE, planGroundObjects,
+    shapeAxis, AGGRESSION, mapFlightInput, motionAxis, emaSmooth,
+    enemyIsAimingPlayer,
+    reconProgress, nextWaypoint, detectionDelta, reconWon, stealthWon, stealthFailed,
+    ARCHETYPES, pickArchetype, shouldJink, pincerSign,
+    equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
+    DRAFT_OFFER_N, DRAFT_PITY_THRESHOLD, frontierEligible, prereqPath, draftOffer,
+    instrumentState, speedDisplay, altDisplay, KT_TO_MPH, KT_TO_KPH, FT_TO_M,
+    LEVEL_WAVE_MIN, LEVEL_WAVE_CAP, campaignWaveCount, levelCleared,
+    isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
+    captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
+    objectiveTypes, nextObjectivePhase, strikeSiteResolves,
+    campaignSpawnedKillCount, campaignProceduralTarget, campaignClearTarget,
+    COMBO_TIMER, KILLSTREAK_INTERVAL, awardHit, awardKill,
+    advanceLock, clearLockIf,
+    STREAK, streakStep,
+    WINGMAN_ORDERS, wingmanOrder,
+    EVADE, evadeDecision, enemyTacticalState, gunRunCadence,
+    HEAT, heatStep,
+    FORMATIONS, formationSlots, formationBreak,
+    VET_THRESHOLDS, vetRank,
+    MODE_POLICY, modeKeyFor,
+    weeklySeedFor, weekIdFor, WEEKLY_MODIFIERS, weeklyModifiers,
+    WING_NODES, routesToWingPicker,
+    PACK_LIMITS, validatePack, applyContentPacks, weeklyEffectsFor, weeklyWavePattern,
+    convoyStep, RAID, raidMode, escortOutcome, interceptDoomed,
+  };
+}

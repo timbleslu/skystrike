@@ -5,7 +5,7 @@
    SCOPE: this router owns the FULL-SCREEN flow — the mutually-exclusive screens that REPLACE one
    another (hangar ⇄ campaign-nav chain, hangar → playing → gameover). It does NOT own modal overlays
    that render ON TOP of the current screen without hiding it (meta, manual, tech/upgrade, wingpick,
-   opmap, langSelect, onboard) — those stay hand-rolled at their call sites (a "hide current + show
+   langSelect, onboard) — those stay hand-rolled at their call sites (a "hide current + show
    new" model would wrongly hide the screen underneath the modal). #modeChoice / #endlessSetup are
    also modal-over-hangar (entered by hand-rolled code) but are listed here so hideAllScreens() can
    reset them; see their `entry:'manual'` rows.
@@ -31,7 +31,8 @@ const SCREENS = {
   opLore:       { panel: 'opLore',       state: null,      touch: null,   inverted: false, entry: 'router' },
   levelMap:     { panel: 'levelMap',     state: null,      touch: null,   inverted: false, entry: 'router' },
   briefing:     { panel: 'briefing',     state: null,      touch: null,   inverted: false, entry: 'router' },
-  levelCleared: { panel: 'levelCleared', state: null,      touch: null,   inverted: false, entry: 'router' },
+  levelCleared: { panel: 'levelCleared', state: 'dead',    touch: 'hide', inverted: false, entry: 'router' },
+  levelFailed:  { panel: 'levelFailed',  state: 'dead',    touch: 'hide', inverted: false, entry: 'router' },   // campaign overhaul: failure debrief (reason + RETRY / MAP)
   // menu overlays over the hangar — entered hand-rolled (openModeChoice/openEndlessSetup); here only
   // so hideAllScreens() resets them. Do NOT drive these via showScreen (it would hide the hangar).
   modeChoice:   { panel: 'modeChoice',   state: null,      touch: null,   inverted: false, entry: 'manual' },
@@ -100,7 +101,8 @@ function hideAllScreens() {
    BACK (so Esc is exactly the on-screen BACK — no second code path). Topmost-first precedence. */
 const MENU_BACK = [
   ['gameover',     'goHangar'],
-  ['levelCleared', 'lvlcContinue'],
+  ['levelCleared', 'lvlcMap'],
+  ['levelFailed',  'lvlfMap'],
   ['briefing',     'briefBack'],
   ['opLore',       'opLoreBack'],
   ['levelMap',     'levelMapBack'],
@@ -132,7 +134,7 @@ function installMenuKeys() {
       return;
     }
     const actKey = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
-    if (shown('gameover') && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }   // debrief (state 'dead'): focused REDEPLOY/HANGAR activate natively
+    if ((shown('gameover') || shown('levelCleared') || shown('levelFailed')) && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }   // debriefs (state 'dead'): focused buttons activate natively
     if (typeof state === 'undefined' || state !== 'hangar') return;               // flight keys: untouched
     if (open.length) {
       // an overlay is up: the hangar carousel shortcuts (←/→ browse, Enter launch) must not fire beneath it,

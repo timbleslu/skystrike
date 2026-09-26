@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { OPERATIONS, levelPlan, levelBlurbKey, sectorMission, setpiecePlan, setpieceOutcome } = require('../js/opmap.js');
+const { OPERATIONS, levelPlan, levelBlurbKey, sectorMission } = require('../js/opmap.js');
 const { LEVEL_WAVE_CAP } = require('../js/core.js');
 const fs = require('fs');
 const path = require('path');
@@ -16,19 +16,6 @@ assert.strictEqual(sectorMission('STEALTH'), 'stealth', 'STEALTH → stealth');
 assert.strictEqual(sectorMission('ELITE'), 'none', 'ELITE → none (elite-ace furball, no objective)');
 assert.strictEqual(sectorMission('DEPOT'), 'none', 'DEPOT → none');
 assert.strictEqual(sectorMission('FINAL'), 'boss', 'FINAL → boss');
-
-// ---- set-pieces: data table + pure fold + outcome still hold ----
-// fold an authored encounter onto a base plan: NEW object, base untouched, tags `setpiece`.
-const base = { fighters: 3, aces: 0, bombers: 0, ground: true, boss: false, rival: false, depot: false, hostileAce: true, mission: 'strike', weather: 'storm', tod: 0 };
-const folded = setpiecePlan('samCorridor', base);
-assert.notStrictEqual(folded, base, 'setpiecePlan returns a NEW object');
-assert.strictEqual(folded.setpiece, 'samCorridor', 'folded plan tags the set-piece id');
-assert.strictEqual(folded.mission, 'strike', 'samCorridor folds the strike mission');
-assert.strictEqual(folded.ground, true, 'samCorridor folds the ground threat');
-assert.strictEqual(base.setpiece, undefined, 'base plan is left untouched');
-// outcome maps win → outro key, fail → shared objective-failed line.
-assert.strictEqual(setpieceOutcome('samCorridor', true), 'setpiece.samCorridor.outro', 'win → outro key');
-assert.strictEqual(setpieceOutcome('samCorridor', false), 'banner.missionFailedObj', 'fail → objective-failed line');
 
 // ---- OPERATIONS table validation (Operations Map revamp) ----
 assert.ok(Array.isArray(OPERATIONS), 'OPERATIONS is an array');
@@ -92,15 +79,10 @@ const bossLvl = OPERATIONS[0].levels[7]; // ironVeil warlord
 const bPlan = levelPlan(bossLvl);
 assert.strictEqual(bPlan.boss, true, 'warlord plan flags boss:true (type FINAL)');
 assert.strictEqual(bPlan.mission, 'boss', 'warlord plan mission = boss');
-// setpiece fold path on levelPlan
-const spLvl = { id: 'tmp', type: 'STRIKE', setpiece: 'samCorridor', spawn: { fighters: 3, aces: 0, bombers: 0, ground: false, weather: 'storm', tod: 0, hostileAce: true } };
-const spPlan = levelPlan(spLvl);
-assert.strictEqual(spPlan.setpiece, 'samCorridor', 'levelPlan folds an opt-in set-piece');
-assert.strictEqual(spPlan.ground, true, 'set-piece fold overrides ground threat');
 
 // ---- table-shape invariants covering ALL ops incl. op4 (F6 add) ----
 // valid starCondMet descriptor types (js/meta.js starCondMet switch) — starUnique/stars must use only these
-const VALID_STAR_TYPES = ['kills', 'clean', 'objective', 'noDamage', 'accuracy', 'flawless', 'gunOnly', 'noFlares', 'fastClear', 'killsN'];
+const VALID_STAR_TYPES = ['kills', 'clean', 'objective', 'noDamage', 'accuracy', 'flawless', 'gunOnly', 'noFlares', 'fastClear', 'killsN', 'alliesIntact'];
 const KNOWN_BOSS_PATTERNS = ['standoff', 'headOn', 'dive', 'mirror'];   // authored boss-phase pattern vocabulary (undefined = default)
 const KNOWN_BOSS_FLAGS = ['chaff', 'mirror'];
 

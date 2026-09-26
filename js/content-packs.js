@@ -18,7 +18,7 @@
 // impossible packs) → `npm test` must stay green → new modifier ids need EN+ZH+KO i18n entries.
 var CONTENT_PACKS = [
   {
-    // Candidate A — formation geometry drop: three new shapes + a ladder that shows them off.
+    // formation geometry drop: three new shapes + a ladder that shows them off.
     id: 'vanguard-geometry',
     version: 1,
     formations: {
@@ -35,7 +35,7 @@ var CONTENT_PACKS = [
     ],
   },
   {
-    // Candidate B — weekly-modifier drop: four new run-start handicaps on the shared effect knobs.
+    // weekly-modifier drop: four new run-start handicaps on the shared effect knobs.
     id: 'iron-skies',
     version: 1,
     formations: {},
@@ -48,7 +48,7 @@ var CONTENT_PACKS = [
     waves: [],
   },
   {
-    // Candidate C — pressure-line drop: a strung-out trail formation + a gauntlet that leans on it.
+    // pressure-line drop: a strung-out trail formation + a gauntlet that leans on it.
     id: 'gauntlet-lines',
     version: 1,
     formations: {

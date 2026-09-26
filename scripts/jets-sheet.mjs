@@ -1,9 +1,9 @@
 /* Dev-only: build each roster jet as the game does (buildJetOrGLTF player path → afterburner),
    throttle the engines up, and render a rear-3/4 grid with the game's env lighting — one screenshot
-   to verify per-jet FLAMES (count/position) + COLOUR/texture + orientation. Usage: node scripts/verify-jets.mjs [out.png] */
+   to verify per-jet FLAMES (count/position) + COLOUR/texture + orientation. Usage: node scripts/jets-sheet.mjs [out.png] */
 import { launchGame } from './lib/boot.mjs';
 import { join } from 'path';
-const out = process.argv[2] || '.scratch/jet-visual-overhaul/verify-jets.png';
+const out = process.argv[2] || '.scratch/jet-visual-overhaul/jets-sheet.png';
 const view = process.argv[3] || '3q';                          // top | rear | 3q
 const shapesArg = process.argv[4] || '';                       // csv subset, e.g. SU57,EFT,RAFALE
 const skinId = process.argv[5] || '';                          // optional skin id (e.g. splinter) → render that livery's zones

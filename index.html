@@ -71,6 +71,11 @@
     <div class="mcard-blurb" id="missionCardBlurb"></div>
     <div class="mcard-hint" id="missionCardHint"></div>
   </div></div>
+  <!-- campaign overhaul: radio comms (callsign + typewriter line), cinematic title card, outcome stamp -->
+  <div id="comms" data-tone="info" aria-live="polite"><div class="cm-head"><span class="cm-dot"></span><span id="commsWho"></span></div><div id="commsText"></div></div>
+  <div id="missionIntro" aria-hidden="true"><div class="mi-bar mi-top"></div><div class="mi-bar mi-bot"></div>
+    <div class="mi-copy"><div class="mi-op" id="miOp"></div><div class="mi-num" id="miNum"></div><div class="mi-name" id="miName"></div><div class="mi-cond" id="miCond"></div></div></div>
+  <div id="outroStamp" aria-live="assertive"><div class="os-rule"></div><div class="os-title" id="outroTitle"></div><div class="os-reason" id="outroReason"></div><div class="os-rule"></div></div>
   <div id="hint">W/S PITCH &middot; Q/E ROLL &middot; A/D YAW &middot; SHIFT/CTRL THRUST &middot; CTRL+S HIGH-G &middot; SPACE GUN &middot; G MISSILE &middot; X FLARE &middot; F LOCK &middot; R SPECIAL &middot; B SPECIAL-2 &middot; C CAM &middot; V LOOK-BACK &middot; RMB TRACK</div>
 </div>
 
@@ -110,7 +115,7 @@
 <button id="manualBtn" class="ghostbtn manual-cta manual-fixed mb-hide">&#9881; CONTROLS &amp; MANUAL</button>
 <!-- Global version tag: body-level so it pins to the viewport bottom-right (rides scroll) on the language-select
      screen and every menu; visibility toggled with the gear by syncManualBtn(). -->
-<div id="versionTag" class="version-tag mb-hide">Version 1.8</div>
+<div id="versionTag" class="version-tag mb-hide">Version 1.9</div>
 <!-- v1.3 flight-to-flight loading curtain: opaque overlay covering the arena swap so no stale mission frame shows -->
 <div id="loadingScreen" class="loading-screen" aria-hidden="true">
   <div class="loading-spinner"></div>
@@ -238,26 +243,6 @@
   </div>
 </div>
 
-<div id="opmap">
-  <div class="op-box">
-    <div class="op-title" id="opTitle">OPERATION MAP</div>
-    <div class="op-sub" id="opSub">// SELECT NEXT SECTOR //</div>
-    <div class="op-info" id="opInfo">Plot your own course through enemy territory: pick one highlighted sector per column, left to right. Each pick is the next wave you fly &mdash; clear it, spend your RP, then return here. Reach <b>FINAL</b> and destroy the boss to complete the operation.</div>
-    <div class="op-legend">
-      <span><b>FURBALL</b> fighter swarm &mdash; grows with depth</span>
-      <span><b>INTERCEPT</b> bombers &mdash; down them before they escape</span>
-      <span><b>STRIKE</b> fortified ground site + fleeing convoy</span>
-      <span><b>ESCORT</b> shepherd a friendly convoy to the map edge</span>
-      <span><b>DEFEND</b> hold the line &mdash; keep the asset alive on the clock</span>
-      <span><b>ELITE</b> ace squadron &mdash; your rival hunts here</span>
-      <span><b>DEPOT</b> repair &amp; full rearm, no combat</span>
-      <span><b>FINAL</b> the operation's boss target</span>
-    </div>
-    <div id="opStages" class="op-stages"></div>
-    <button id="opLaunch" class="btn-primary" disabled>&#9654; LAUNCH</button>
-  </div>
-</div>
-
 <!-- Pre-launch reflow: SELECT <jet> -> mode-choice -> (Endless -> endless-setup -> START) | (Operation -> operations-select) -->
 <div id="modeChoice">
   <div class="cmp-box">
@@ -310,71 +295,75 @@
   </div>
 </div>
 
-<!-- Operations campaign (linear multi-operation revamp): operations-select -> level map -> mission briefing -->
-<div id="opsSelect">
-  <div class="cmp-box">
-    <div class="cmp-title" id="opsTitle">OPERATIONS</div>
-    <div class="cmp-sub">// SELECT OPERATION //</div>
-    <div class="cmp-core ui-dense">
-    <div id="opsList" class="ops-list"></div>
-    </div>
-    <button id="opsBack" class="cmp-btn cmp-back">&#9664; BACK</button>
+<!-- Operations campaign (campaign overhaul 2026-09): theater board -> dossier -> sortie map -> flight plan -> debriefs.
+     One visual system ("sortie board"): each operation's tactical chart is the hero, cards dock around it. -->
+<div id="opsSelect" class="cw-screen">
+  <div class="cw-frame">
+    <header class="cw-head"><button id="opsBack" class="cw-back">&#9664; BACK</button><h2 class="cw-title" id="opsTitle">OPERATIONS</h2><div class="cw-head-meta" id="opsMeta"></div></header>
+    <div id="opsList" class="cw-theaters"></div>
   </div>
 </div>
-<div id="levelMap">
-  <div class="cmp-box">
-    <div class="cmp-title" id="levelMapTitle">OPERATION</div>
-    <div class="cmp-sub">// MISSION SELECT //</div>
-    <div id="levelNodes" class="level-nodes"></div>
-    <div class="cmp-actions">
-      <button id="levelMapBack" class="cmp-btn cmp-back">&#9664; BACK</button>
-      <button id="levelMapTech" class="cmp-btn">&#9874; R&amp;D</button>
+<div id="opLore" class="cw-screen">
+  <div class="cw-frame cw-dossier">
+    <header class="cw-head"><button id="opLoreBack" class="cw-back">&#9664; BACK</button><h2 class="cw-title" id="opLoreTitle">OPERATION</h2><div class="cw-head-meta" id="opLoreTheater"></div></header>
+    <div class="cw-dossier-body">
+      <div class="cw-dossier-chart" id="opLoreChart"></div>
+      <div class="cw-dossier-text ui-dense-fill"><div class="cw-kicker" id="opLoreH">BACKGROUND</div><div class="cw-prose" id="opLoreBody"></div></div>
     </div>
+    <footer class="cw-foot"><button id="opLoreGo" class="cw-go">&#9654; ENTER</button></footer>
   </div>
 </div>
-<div id="levelCleared">
-  <div class="cmp-box lvlc-box">
-    <div class="cmp-title" id="lvlcTitle">LEVEL CLEARED</div>
-    <div class="cmp-sub" id="lvlcSub">// OPERATION &middot; LV //</div>
-    <div class="cmp-core ui-dense">
-      <div id="lvlc_stars" class="gostars"><span class="stars-pips" id="lvlcPips">&#9734;&#9734;&#9734;</span><span class="stars-note" id="lvlcNote">0 / 3</span></div>
-      <div class="stars-conds" id="lvlcConds"></div>
-      <div class="lvlc-rewards"><span id="lvlcRwRp">+0 RP</span><span class="lvlc-rwsep">&middot;</span><span id="lvlcRwScore">+0</span></div>
-    </div>
-    <button id="lvlcContinue" class="cmp-btn cmp-play">CONTINUE &#9654; MAP</button>
-  </div>
-</div>
-<div id="briefing">
-  <div class="brief-box brief-box-2col">
-    <div class="brief-title" id="briefTitle">MISSION BRIEFING</div>
-    <div class="cmp-sub">// PRE-FLIGHT BRIEFING //</div>
-    <div class="brief-grid">
-      <!-- LEFT: dominant situation column -->
-      <div class="brief-sec brief-sec-hero"><div class="brief-h" id="briefLoreH">SITUATION</div><div class="brief-body ui-dense brief-pre" id="briefLore"></div></div>
-      <!-- RIGHT: stacked intel column -->
-      <div class="brief-col">
-        <div class="brief-sec"><div class="brief-h" id="briefObjH">OBJECTIVES</div><div class="brief-body ui-dense" id="briefObjectives"></div></div>
-        <div class="brief-sec"><div class="brief-h" id="briefIntelH">ENEMY INTEL</div><div class="brief-body brief-pre ui-dense" id="briefIntel"></div></div>
-        <div class="brief-sec brief-sec-loadout"><div class="brief-h" id="briefLoadoutH">LOADOUT</div><div class="brief-body ui-dense" id="briefLoadout"></div></div>
-      </div>
-    </div>
-    <div class="brief-actions">
-      <button id="briefBack" class="cmp-btn cmp-back">&#9664; BACK</button>
-      <button id="briefPlay" class="cmp-btn cmp-play">&#9654; LAUNCH</button>
+<div id="levelMap" class="cw-screen">
+  <div class="cw-frame cw-map-frame">
+    <header class="cw-head"><button id="levelMapBack" class="cw-back">&#9664; BACK</button><h2 class="cw-title" id="levelMapTitle">OPERATION</h2><div class="cw-head-meta" id="levelMapMeta"></div><button id="levelMapTech" class="cw-ghost">&#9874; R&amp;D</button></header>
+    <div class="cw-map-body">
+      <div id="levelNodes" class="cw-chart"></div>
+      <aside id="sortieCard" class="cw-sortie"></aside>
     </div>
   </div>
 </div>
-<div id="opLore">
-  <div class="brief-box">
-    <div class="brief-title" id="opLoreTitle">OPERATION</div>
-    <div class="cmp-sub">// CAMPAIGN DOSSIER //</div>
-    <div class="brief-grid">
-      <div class="brief-sec"><div class="brief-h" id="opLoreH">BACKGROUND</div><div class="brief-body ui-dense" id="opLoreBody"></div></div>
+<div id="briefing" class="cw-screen">
+  <div class="cw-frame cw-brief">
+    <header class="cw-head"><button id="briefBack" class="cw-back">&#9664; BACK</button><h2 class="cw-title" id="briefTitle">MISSION BRIEFING</h2><div class="cw-head-meta" id="briefCond"></div></header>
+    <div class="cw-brief-body">
+      <section class="cw-brief-main ui-dense-fill">
+        <div class="cw-kicker" id="briefLoreH">SITUATION</div>
+        <div class="cw-prose" id="briefLore"></div>
+        <div class="cw-kicker" id="briefIntelH">ENEMY INTEL</div>
+        <div class="cw-prose cw-intel" id="briefIntel"></div>
+      </section>
+      <section class="cw-brief-side ui-dense-fill">
+        <div class="cw-kicker" id="briefObjH">FLIGHT PLAN</div>
+        <div class="cw-summary" id="briefObjectives"></div>
+        <ol class="cw-plan" id="briefPlan"></ol>
+        <div class="cw-kicker" id="briefStarsH">STAR TARGETS</div>
+        <ul class="cw-stars" id="briefStars"></ul>
+        <div class="cw-loadout"><span class="cw-kicker" id="briefLoadoutH">LOADOUT</span><span id="briefLoadout"></span></div>
+      </section>
     </div>
-    <div class="brief-actions">
-      <button id="opLoreBack" class="cmp-btn cmp-back">&#9664; BACK</button>
-      <button id="opLoreGo" class="cmp-btn cmp-play">&#9654; ENTER</button>
-    </div>
+    <footer class="cw-foot"><button id="briefPlay" class="cw-go">&#9654; LAUNCH</button></footer>
+  </div>
+</div>
+<div id="levelCleared" class="cw-screen cw-debrief-screen">
+  <div class="cw-frame cw-debrief win">
+    <div class="cw-debrief-sub" id="lvlcSub"></div>
+    <h2 class="cw-debrief-title" id="lvlcTitle">MISSION ACCOMPLISHED</h2>
+    <div class="cw-bigstars" id="lvlcPips" aria-label="stars"></div>
+    <ul class="cw-stars cw-stars-result" id="lvlcConds"></ul>
+    <div class="cw-statrow" id="lvlcStats"></div>
+    <div class="cw-rewards" id="lvlcRewards"></div>
+    <footer class="cw-foot cw-foot-debrief"><button id="lvlcMap" class="cw-ghost">MAP</button><button id="lvlcReplay" class="cw-ghost">REPLAY</button><button id="lvlcContinue" class="cw-go">NEXT MISSION &#9654;</button></footer>
+  </div>
+</div>
+<div id="levelFailed" class="cw-screen cw-debrief-screen">
+  <div class="cw-frame cw-debrief fail">
+    <div class="cw-debrief-sub" id="lvlfSub"></div>
+    <h2 class="cw-debrief-title" id="lvlfTitle">MISSION FAILED</h2>
+    <p class="cw-fail-reason" id="lvlfReason"></p>
+    <p class="cw-fail-tip" id="lvlfTip"></p>
+    <div class="cw-statrow" id="lvlfStats"></div>
+    <p class="cw-fail-note" id="lvlfNote"></p>
+    <footer class="cw-foot cw-foot-debrief"><button id="lvlfMap" class="cw-ghost">MAP</button><button id="lvlfRetry" class="cw-go">&#9654; RETRY</button></footer>
   </div>
 </div>
 
@@ -625,7 +614,7 @@
       </select>
     </div>
     <!-- version readout on the language-select screen; text is synced from #versionTag (single source) in initOnboarding -->
-    <p id="langVersion" class="ls-version">Version 1.8</p>
+    <p id="langVersion" class="ls-version">Version 1.9</p>
   </div>
 </div>
 

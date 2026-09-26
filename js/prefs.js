@@ -2,10 +2,9 @@
    Require-safe: no THREE/store/DOM at LOAD. The store seam, the setting globals (globals.js), the
    apply fns (ui-settings.js/engine.js/globals.js) and clamp (core.js) are all referenced INSIDE
    functions, resolved at CALL time (the meta.js/rival.js pattern — prefs.js loads before globals.js,
-   but nothing here reads a global until loadSettings/applySetting run at boot). Consolidates the
-   per-setting knowledge that used to be stated three times: loadSettings parse/clamp, ~30 buildHangar
-   change handlers, and the scattered apply fns (incl. the "refreshGfxTier BEFORE applyGfxQuality"
-   ordering invariant — now encoded once, in the 'gfx' row's apply chain). */
+   but nothing here reads a global until loadSettings/applySetting run at boot). Each setting's
+   parse/clamp, change handling and apply chain is stated ONCE here (incl. the "refreshGfxTier BEFORE
+   applyGfxQuality" ordering invariant, encoded in the 'gfx' row's apply chain). */
 
 /* run a named apply fn (a function-declaration global) at call time; inert if unresolved (Node). */
 function _runPrefFn(name) {
@@ -14,7 +13,7 @@ function _runPrefFn(name) {
   if (typeof fn === 'function') fn();
 }
 
-/* accept-predicate + parse helpers (mirror the exact typeof/enum guards the old loadSettings used). */
+/* accept-predicate (typeof/enum load guards) + parse helpers. */
 var _prefBool = function (v) { return typeof v === 'boolean'; };
 var _prefNum = function (v) { return typeof v === 'number'; };
 function _prefOneOf() {
@@ -46,7 +45,7 @@ const SETTINGS = [
   { id: 'gunLead',            key: 'gunLead',            def: true,       accept: _prefBool, parse: _prefTruthy, set: function (v) { gunLead = v; }, apply: null },
   { id: 'aimAssist',          key: 'aimAssist',          def: true,       accept: _prefBool, parse: _prefTruthy, set: function (v) { aimAssist = v; }, apply: null },
   { id: 'haptics',            key: 'haptics',            def: true,       accept: _prefBool, parse: _prefTruthy, set: function (v) { haptics = v; }, apply: null },
-  // --- numbers (parse = clamp; exact bounds lifted from the old loadSettings) ---
+  // --- numbers (parse = clamp) ---
   { id: 'volume',             key: 'volume',             def: 0.55,       accept: _prefNum, parse: function (v) { return clamp(v, 0, 1); }, set: function (v) { volume = v; }, apply: null },
   { id: 'aimStrength',        key: 'aimStrength',        def: 3,          accept: _prefNum, parse: function (v) { return clamp(v | 0, 1, 5); }, set: function (v) { aimStrength = v; }, apply: null },
   { id: 'controlSensitivity', key: 'controlSensitivity', def: 1.0,        accept: _prefNum, parse: function (v) { return clamp(v, 0.5, 2.0); }, set: function (v) { controlSensitivity = v; }, apply: null },
@@ -60,8 +59,8 @@ const SETTINGS = [
   { id: 'motionAggression',   key: 'motionAggression',   def: 'balanced', accept: _prefOneOf('casual', 'balanced', 'direct'), parse: _prefId, set: function (v) { motionAggression = v; }, apply: null },
   { id: 'buttonLayout',       key: 'buttonLayout',       def: 'right',    accept: _prefOneOf('right', 'left', 'compact'), parse: _prefId, set: function (v) { buttonLayout = v; }, apply: ['applyButtonStyle'] },
   { id: 'unitSystem',         key: 'unitSystem',         def: 'imperial', accept: _prefOneOf('imperial', 'metric'), parse: _prefId, set: function (v) { unitSystem = v; }, apply: ['applyUnitLabels'] },
-  // gfx quality — the ordering invariant (refreshGfxTier BEFORE applyGfxQuality) lives HERE now, once,
-  // and is consumed by BOTH loadSettings (runSettingApply('gfx'), unconditional) and applySetting.
+  // gfx quality — the ordering invariant (refreshGfxTier BEFORE applyGfxQuality) lives HERE, once, and is
+  // consumed by BOTH loadSettings (runSettingApply('gfx'), unconditional) and applySetting.
   { id: 'gfx',                key: 'gfxQuality',         def: 'auto',     accept: _prefOneOf('auto', 'low', 'medium', 'high'), parse: _prefId, set: function (v) { gfxQuality = v; }, apply: ['refreshGfxTier', 'applyGfxQuality'] },
 ];
 
@@ -84,7 +83,7 @@ function applySetting(id, value) {
   if (typeof saveSettings === 'function') saveSettings();
 }
 /* load-time fold: for each row, if the stored raw value passes the row's accept guard, parse+set it
-   (NO apply — matches the old loadSettings, where only gfx applied on load, and that runs separately).
+   (NO apply — only gfx applies on load, and loadSettings runs that separately).
    Bespoke rows + the unconditional gfx boot apply stay in ui-settings.js loadSettings. */
 function loadSettingsFold(s) {
   s = s || {};
@@ -96,12 +95,11 @@ function loadSettingsFold(s) {
 }
 
 /* ---------------- generic save-heal (loadHealed) ----------------
-   "read blob -> validate -> fill defaults" — the shape re-implemented across loadMeta / loadSettings /
-   loadBest / loadDaily / rival. Reads via the store seam (INSIDE the fn), JSON-parses defensively, and —
-   when the blob passes the outer validity gate — fills any key whose value is null OR whose typeof
-   differs from freshFn()'s. FLAT (no recursion — matches loadMeta, the only converted loader, which heals
-   top-level keys only). Lenient: never wipes progression, no version bump. opts.valid overrides the default
-   object gate (loadMeta passes validMeta so a malformed blob falls back to fresh WHOLESALE, as before). */
+   "read blob -> validate -> fill defaults". Reads via the store seam (INSIDE the fn), JSON-parses
+   defensively, and — when the blob passes the outer validity gate — fills any key whose value is null OR
+   whose typeof differs from freshFn()'s. FLAT (top-level keys only). Lenient: never wipes progression, no
+   version bump. opts.valid overrides the default object gate (loadMeta passes validMeta so a malformed
+   blob falls back to fresh WHOLESALE). Used by meta.js loadMeta. */
 function loadHealed(key, freshFn, opts) {
   opts = opts || {};
   var fresh = freshFn();
