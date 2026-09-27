@@ -21,8 +21,8 @@
 import { launchGame, dismissLanguageGate } from './lib/boot.mjs';
 
 const CYCLES = +(process.env.LEAK_CYCLES || 8);
-const STEP = +(process.env.LEAK_STEP || 300);   // ms of stepped frames between build + teardown
-const EPS = +(process.env.LEAK_EPS || 2);       // allowed spread across the last 3 cycles
+const STEP = +(process.env.LEAK_STEP || 300);
+const EPS = +(process.env.LEAK_EPS || 2);
 
 const { page, port, close } = await launchGame();
 let pageErr = null;
@@ -31,10 +31,6 @@ page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForTimeout(1400);
 
-// Material-clone probe: renderer.info can't see per-instance material clones, so wrap
-// THREE.Material.prototype.clone/.dispose here (THREE is live post-load) to track net live
-// clones. clone() catches the per-spawn clones (buildJet/foe-tint/paint zones); dispose() is
-// counted only for tracked clones so unrelated shared-material disposes don't skew the net.
 await page.evaluate(() => {
   if (window.__matProbe) return;
   window.__matProbe = true;
@@ -56,10 +52,8 @@ await page.evaluate(() => {
   };
 });
 
-// drive past the first-run language gate (langSelect -> onboard -> hangar), same as shot.mjs
 await dismissLanguageGate(page, { continueWait: 700 });
 
-// The per-cycle sampler runs entirely in page scope so raw THREE objects never cross the bridge.
 const measure = () => {
   const info = renderer.info, mem = info.memory || {};
   const mats = new Set(), geos = new Set(), texs = new Set();
@@ -75,14 +69,14 @@ const measure = () => {
   let geoCache = -1;
   try { geoCache = (typeof GEO_CACHE !== 'undefined') ? GEO_CACHE.size : -1; } catch { geoCache = -1; }
   return {
-    gpuGeo: mem.geometries || 0,          // renderer.info.memory.geometries — leak signal (survives scene.remove)
-    gpuTex: mem.textures || 0,            // renderer.info.memory.textures
-    sceneMat: mats.size,                  // unique materials currently in the scene graph
-    sceneGeo: geos.size,                  // unique geometries currently in the scene graph
-    geoCache,                             // GEO_CACHE.size (bounded shared-template cache — should plateau fast)
+    gpuGeo: mem.geometries || 0,
+    gpuTex: mem.textures || 0,
+    sceneMat: mats.size,
+    sceneGeo: geos.size,
+    geoCache,
     children: scene.children.length,
     programs: (info.programs || []).length,
-    matLive: (typeof window !== 'undefined' && window.__matTracked) ? window.__matTracked.size : -1   // net live material clones (created - disposed) — invisible to renderer.info
+    matLive: (typeof window !== 'undefined' && window.__matTracked) ? window.__matTracked.size : -1
   };
 };
 
@@ -90,7 +84,7 @@ const rows = [];
 for (let c = 0; c < CYCLES; c++) {
   const started = await page.evaluate(() => {
     try {
-      if (typeof opMode !== 'undefined') opMode = false;   // ensure a direct Endless run (Operations would divert to nav)
+      if (typeof opMode !== 'undefined') opMode = false;
       if (state !== 'hangar') { if (typeof returnToHangar === 'function') returnToHangar(); }
       startGame(selectedJet);
       return state === 'playing';
@@ -99,14 +93,13 @@ for (let c = 0; c < CYCLES; c++) {
   if (started !== true) { console.error(`cycle ${c + 1}: startGame did not enter play (${started})`); }
   await page.waitForTimeout(STEP);
   await page.evaluate(() => { try { returnToHangar(); } catch (e) { console.error('returnToHangar threw', e.message); } });
-  await page.waitForTimeout(300);                          // let the hangar render so renderer.info is current
+  await page.waitForTimeout(300);
   const m = await page.evaluate(measure);
   rows.push(m);
 }
 
 await close();
 
-// ---- report ----
 const cols = ['gpuGeo', 'gpuTex', 'sceneMat', 'sceneGeo', 'geoCache', 'children', 'programs', 'matLive'];
 const pad = (s, w) => String(s).padStart(w);
 console.log('\nReset-path leak — per-cycle GPU/scene sample (N=' + CYCLES + ', step=' + STEP + 'ms)\n');
@@ -114,8 +107,6 @@ console.log('cycle | ' + cols.map(c => pad(c, 9)).join(' | '));
 console.log('------+-' + cols.map(() => '---------').join('-+-'));
 rows.forEach((r, i) => console.log(pad(i + 1, 5) + ' | ' + cols.map(c => pad(r[c], 9)).join(' | ')));
 
-// gate metrics: GPU-resident resources persist across scene.remove, so they expose the leak;
-// matLive is the material-clone half renderer.info can't see (grows unbounded if clones aren't disposed).
 const gate = ['gpuGeo', 'gpuTex', 'sceneMat', 'matLive'];
 const last3 = rows.slice(-3);
 let fail = false;

@@ -11,7 +11,6 @@ page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
 await bootToHangar(page, { port, gotoWait: 1400, mode: 'hide' });
 
-// ---- load-time merge + weekly pools, all read from the LIVE runtime ----
 const merge = await page.evaluate(() => {
   const wk = weeklyThisWeek();
   return {
@@ -28,19 +27,18 @@ const merge = await page.evaluate(() => {
   };
 });
 
-// ---- enter a run and fly a PACK formation (diamond) through the REAL spawn path ----
 const setup = await page.evaluate(() => {
   opMode = false;
   startGame(0);
-  updatePlayer = function () {};                  // freeze the player so the formation legitimately holds
+  updatePlayer = function () {};
   if (player) { player.hp = 1e9; player.invuln = 999; if (player.vel) player.vel.set(0, 0, 0); }
   pendingSpawns.length = 0; enemies.length = 0;
-  const leader = spawnFighterFormation(4, 'diamond');   // pack formation via the SAME in-game path
+  const leader = spawnFighterFormation(4, 'diamond');
   const followers = enemies.filter(e => e.formation);
   return { total: enemies.length, followers: followers.length, type: followers[0] && followers[0].formation.type, leaderHasFormation: !!(leader && leader.formation) };
 });
 
-await page.waitForTimeout(3500);                  // real frames — followers steer onto the template slots
+await page.waitForTimeout(3500);
 
 const R = await page.evaluate(() => {
   const out = [];
@@ -79,22 +77,18 @@ const R = await page.evaluate(() => {
 await page.waitForTimeout(500);
 await page.screenshot({ path: join(root, 'pack-check-diamond.png') });
 
-// ---- fresh reload: the WEEKLY wave plan drives wave 1 end-to-end (startWeekly → nextWave) ----
 await bootToHangar(page, { port, gotoWait: 1400, mode: 'hide' });
 const weekly = await page.evaluate(() => {
   startWeekly();
   if (player) { player.hp = 1e9; player.invuln = 999; }
   pendingSpawns.length = 0; enemies.length = 0;
-  nextWave();                                     // the REAL per-wave path reads player._weeklyWavePlan
-  processSpawnQueue(99);                          // drain the queue so the formation actually spawns
+  nextWave();
+  processSpawnQueue(99);
   const followers = enemies.filter(e => e.formation);
   const planned = player._weeklyWavePlan && player._weeklyWavePlan.pattern[0];
   return {
     planId: player._weeklyWavePlan && player._weeklyWavePlan.id,
     plannedRow: planned,
-    // plain fighters only — the wave-plan row governs the formation budget; weekly extraAces
-    // mods (doubleAces/aceSeason) add ELITE fighters on top on any week whose draw includes one,
-    // so counting elites here made the assert week-dependent.
     fighters: enemies.filter(e => e.type === 'fighter' && !e.elite).length,
     followers: followers.length,
     formationType: followers[0] && followers[0].formation.type,

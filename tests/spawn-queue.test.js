@@ -2,16 +2,11 @@
 const assert = require('assert');
 const { spawnDrainCount } = require('../js/core.js');
 
-// The spawn queue's pure DECISION — "how many to build this frame" — now lives in core.js spawnDrainCount
-// and is exercised here directly (no mirror copy). The FIFO drain + closure invocation are THREE-bound in
-// main.js processSpawnQueue, so we keep a THIN local harness that delegates to the REAL spawnDrainCount —
-// byte-identical to the production `for (let i = spawnDrainCount(pendingSpawns.length, n); i > 0; i--) …`.
 let pendingSpawns = [];
 function processSpawnQueue(n) {
   for (let i = spawnDrainCount(pendingSpawns.length, n); i > 0; i--) pendingSpawns.shift()();
 }
 
-// --- Test 0: the pure decision (real core.js implementation) ---
 (function testDrainCount() {
   assert.strictEqual(spawnDrainCount(10, 2), 2, 'plenty queued -> build the full per-frame budget');
   assert.strictEqual(spawnDrainCount(1, 2), 1, 'fewer queued than the budget -> build only what is left');
@@ -21,12 +16,11 @@ function processSpawnQueue(n) {
   console.log('ok - drain count decision');
 })();
 
-// --- Test 1: only n built per tick (real spawnDrainCount drives the drain) ---
 (function testDrainRate() {
   pendingSpawns = [];
   let built = 0;
   const spawn = () => { built++; };
-  for (let i = 0; i < 10; i++) pendingSpawns.push(spawn);  // 10-fighter wave
+  for (let i = 0; i < 10; i++) pendingSpawns.push(spawn);
 
   processSpawnQueue(2);
   assert.strictEqual(built, 2, 'first tick builds exactly 2');
@@ -38,13 +32,11 @@ function processSpawnQueue(n) {
   console.log('ok - drain rate');
 })();
 
-// --- Test 2: a combat enemy is built on the first tick (no wave-clear race) ---
 (function testFirstTickHasCombatEnemy() {
   pendingSpawns = [];
   let combatAlive = 0;
   const spawnFighter = () => { combatAlive++; };
-  const spawnGround  = () => { /* non-combat: excluded from aliveCombat */ };
-  // nextWave enqueues fighters first, then turrets (mirrors js/main.js ordering)
+  const spawnGround  = () => { };
   pendingSpawns.push(spawnFighter, spawnFighter, spawnGround);
 
   processSpawnQueue(2);

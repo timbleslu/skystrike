@@ -1,23 +1,4 @@
 // serve-https.mjs — minimal self-signed HTTPS static server for the repo root.
-//
-// WHY THIS EXISTS:
-//   The mobile motion controls use the `deviceorientation` event. Browsers only
-//   fire that event in a SECURE CONTEXT (HTTPS). Opening the game over `file://`
-//   or plain `http://` yields ZERO orientation events — i.e. motion controls look
-//   "completely broken" on a phone. This server hands the page over HTTPS so a
-//   real device can receive `deviceorientation` while you develop on LAN.
-//
-// HOW TO TEST ON A PHONE:
-//   1. Run `npm run serve:https` on your dev machine (Mac/PC).
-//   2. On the phone (same Wi-Fi), open the printed LAN URL, e.g.
-//        https://<LAN-IP>:8443
-//   3. The browser WILL show a "your connection is not private" /
-//      "self-signed certificate" warning — this is expected for a dev cert.
-//      ACCEPT IT (Advanced → Proceed) to load the page. Without accepting,
-//      the page won't load and motion will still appear broken.
-//
-// Built entirely on Node built-ins + the `selfsigned` devDependency (in-memory
-// cert, nothing written to disk). Override the port with the PORT env var.
 
 import https from 'node:https';
 import { createReadStream, promises as fs } from 'node:fs';
@@ -27,7 +8,7 @@ import os from 'node:os';
 import selfsigned from 'selfsigned';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..'); // repo root (one up from scripts/)
+const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT) || 8443;
 
 const CONTENT_TYPES = {
@@ -53,12 +34,11 @@ function contentType(filePath) {
   return CONTENT_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
 
-// Resolve a request URL to a real file path inside ROOT, blocking traversal.
 function resolvePath(reqUrl) {
   const urlPath = decodeURIComponent(new URL(reqUrl, 'http://x').pathname);
   let rel = urlPath === '/' ? '/index.html' : urlPath;
   const full = path.normalize(path.join(ROOT, rel));
-  if (full !== ROOT && !full.startsWith(ROOT + path.sep)) return null; // escaped root
+  if (full !== ROOT && !full.startsWith(ROOT + path.sep)) return null;
   return full;
 }
 
@@ -108,8 +88,6 @@ function lanAddress() {
 }
 
 async function start() {
-  // Generate a throwaway self-signed cert in memory at startup.
-  // NOTE: selfsigned >=5 is async (WebCrypto-based) — generate() returns a Promise.
   const pems = await selfsigned.generate(
     [{ name: 'commonName', value: 'localhost' }],
     { days: 365, algorithm: 'sha256' }

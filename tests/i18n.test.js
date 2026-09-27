@@ -1,7 +1,5 @@
 'use strict';
 // Localization gate: EN/ZH/KO key parity, {placeholder} parity, and every literal t('…') / tf('…') /
-// radioKey(…, '…') key used by the code exists in EN (so no raw key can reach the screen).
-// Tables load through the shared VM loader (tests/lib/i18n.js); edit strings with scripts/i18n.mjs.
 const assert = require('assert'), fs = require('fs'), path = require('path');
 const I = require('./lib/i18n.js').loadI18N();
 const strKeys = L => Object.keys(I[L]).filter(k => typeof I[L][k] === 'string');

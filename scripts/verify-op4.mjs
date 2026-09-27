@@ -11,18 +11,16 @@ const { page, port, close } = await launchGame({ viewport: { width: 1280, height
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE ' + m.text()); });
-// drive past the first-run language gate (langSelect → onboard → hangar) — mirror shot.mjs
 await bootToHangar(page, { port, gotoWait: 1300 });
 
 const results = [];
 const ok = (name, cond) => results.push({ name, pass: !!cond });
 
-// ---- op4 exists + navigate operations-select → op4 briefing (level 1), assert RESOLVED strings ----
 const brief = await page.evaluate(() => {
   const out = { asserts: [] };
   const A = (name, cond) => out.asserts.push({ name, pass: !!cond });
-  devUnlockLevels = true;                                              // v1.3 dev: every op/level open
-  if (typeof devUnlockAll !== 'undefined') devUnlockAll = true;        // bypass any skin/jet launch gate
+  devUnlockLevels = true;
+  if (typeof devUnlockAll !== 'undefined') devUnlockAll = true;
   const op = OPERATIONS.find(o => o.id === 'polarVortex');
   A('op4 polarVortex present in OPERATIONS', !!op);
   A('op4 has 8 levels', !!op && op.levels.length === 8);
@@ -34,8 +32,6 @@ const brief = await page.evaluate(() => {
   openBriefing('polarVortex', 0);
   A('briefing overlay shown', document.getElementById('briefing').classList.contains('show'));
 
-  // gather EVERY op4 i18n key string, then assert none leaks raw into the briefing (t() returns the
-  // key verbatim on a miss, so an unresolved key would show up literally on screen).
   const keys = new Set();
   [op.nameKey, op.theaterKey, op.loreKey].forEach(k => k && keys.add(k));
   op.levels.forEach(l => {
@@ -55,7 +51,6 @@ brief.asserts.forEach(a => results.push(a));
 await page.waitForTimeout(200);
 await page.screenshot({ path: `${prefix}-briefing.png` });
 
-// ---- launch 3 distinct levels far enough to render the arctic terrain ----
 const LEVELS = [[0, 'l1'], [3, 'l4'], [7, 'l8']];
 for (const [idx, tag] of LEVELS) {
   const r = await page.evaluate((i) => {
@@ -73,7 +68,7 @@ for (const [idx, tag] of LEVELS) {
   }, idx);
   ok('level ' + tag + ' launches to state=playing', r.state === 'playing');
   ok('level ' + tag + ' has a live player + campaignMode', r.playerOk && r.campaignMode);
-  await page.waitForTimeout(1900);   // let the render loop build + draw the arena (weather/TOD applied)
+  await page.waitForTimeout(1900);
   await page.screenshot({ path: `${prefix}-${tag}.png` });
   results.push({ name: 'level ' + tag + ' arena (weather=' + r.weather + ' tod=' + r.tod + ') captured', pass: true });
 }

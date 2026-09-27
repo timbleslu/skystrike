@@ -17,20 +17,17 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { OPERATIONS } = require('../js/opmap.js');
 
-// fly-to-waypoint navigation types and how many waypoints each lays by default.
-// RECON lays a ring of N waypoints (missions.js recon.setup: 4 at bounded campaign waves, 5 late).
-// STEALTH lays 1 extraction waypoint. An objective may override its count with `wp`.
 const FLYTO_DEFAULT = { RECON: 4, STEALTH: 1 };
 const NAV_TYPES = new Set(['RECON', 'STEALTH']);
 
 function typeOf(obj) { return typeof obj === 'string' ? obj : obj.type; }
 function flyToOf(obj) {
-  if (obj && typeof obj === 'object' && obj.wp != null) return obj.wp;   // explicit per-phase override
+  if (obj && typeof obj === 'object' && obj.wp != null) return obj.wp;
   return FLYTO_DEFAULT[typeOf(obj)] || 0;
 }
 function objectivesOf(level) {
   if (Array.isArray(level.objectives) && level.objectives.length) return level.objectives;
-  return [level.type];   // legacy single-objective level
+  return [level.type];
 }
 
 const rows = [];
@@ -52,7 +49,6 @@ for (const op of OPERATIONS) {
   }
 }
 
-// ---- report ----
 const W = (s, n) => String(s).padEnd(n);
 console.log('\n=== FLY-TO-WAYPOINT AUDIT (per level) ===\n');
 let curOp = null;

@@ -1,16 +1,11 @@
-/* SKYSTRIKE — split from ui.js (god-file refactor). Global scope; load order among ui-*.js irrelevant, but all must load after deps and before controls.js/main.js. */
-/* ui-hangar.js: hangar, kill board, pilot panel, jet select, onboarding, manual tabs. */
-/* ---------------- hangar / flow ---------------- */
 function renderKillBoard() {
   const list = g('rbList'); if (!list || !rival) return;
   list.innerHTML = rival.board.length
     ? rival.board.slice().reverse().map(b => '<div class="rb-row"><span>☠ ' + b.name + '</span><span>' + b.jetName + '</span><span>' + tf('hud.killRow', { lv: b.level, wv: b.wave }) + '</span></div>').join('')
     : '<div class="rb-empty">' + t('hangar.noRivals') + '</div>';
 }
-// the aim-assist strength bar only appears while aim assist is enabled
 function updateAimStrengthVis() { const r = g('rowAimStrength'); if (r) r.style.display = aimAssist ? '' : 'none'; }
 function buildHangar() {
-  // ---- single-jet carousel selector ----
   const dots = g('jetDots'); dots.innerHTML = '';
   JETS.forEach((j, i) => {
     const d = document.createElement('i'); d.title = jetText(j, 'name');
@@ -30,24 +25,22 @@ function buildHangar() {
   g('manualAbort').addEventListener('click', abortMission);
   const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
   const ssn = g('ssetNav'); if (ssn) ssn.addEventListener('click', e => { const b = e.target.closest('.ssetbtn'); if (b) { showSettingsSubtab(b.dataset.sset); if (audio.on) audio.ui(); } });
-  g('redeploy').addEventListener('click', redeployRun);   // plain Endless: fly again (ui-flow.js); else → hangar
+  g('redeploy').addEventListener('click', redeployRun);
   const goH = g('goHangar'); if (goH) goH.addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
-  const trr = g('techReroll'); if (trr) trr.addEventListener('click', rerollDraft);   // FRONTIER DRAFT: reroll the 3 offers (once/visit)
+  const trr = g('techReroll'); if (trr) trr.addEventListener('click', rerollDraft);
   const tg = g('techgrid');
-  if (tg) {   // drag anywhere to pan the tech tree (scroll wheel & touch still work too)
+  if (tg) {
     let panning = false, sx = 0, sy = 0, sl = 0, stp = 0;
     tg.addEventListener('pointerdown', e => { panning = true; techPanMoved = false; sx = e.clientX; sy = e.clientY; sl = tg.scrollLeft; stp = tg.scrollTop; });
     tg.addEventListener('pointermove', e => { if (!panning) return; const dx = e.clientX - sx, dy = e.clientY - sy; if (Math.abs(dx) + Math.abs(dy) > 5) techPanMoved = true; tg.scrollLeft = sl - dx; tg.scrollTop = stp - dy; });
     const endPan = () => { panning = false; };
     tg.addEventListener('pointerup', endPan); tg.addEventListener('pointerleave', endPan); tg.addEventListener('pointercancel', endPan);
   }
-  // Difficulty/environment now live on the #endlessSetup screen; their .dbtn/.tbtn ids are unchanged so this global wiring still applies.
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.addEventListener('click', () => setDifficulty(+b.dataset.d)));
   setDifficulty(difficulty);
   document.querySelectorAll('.tbtn').forEach(b => b.addEventListener('click', () => setTimeOfDay(+b.dataset.t)));
   setTimeOfDay(timeOfDay);
-  // mode (Endless/Operation) is now chosen on the #modeChoice screen, not a hangar toggle.
   g('modeEndless').addEventListener('click', () => { opMode = false; saveSettings(); openEndlessSetup(); });
   g('modeOperation').addEventListener('click', () => { opMode = true; saveSettings(); g('modeChoice').classList.remove('show'); openOperationsSelect(); });
   g('modeBack').addEventListener('click', () => { g('modeChoice').classList.remove('show'); if (audio.on) audio.ui(); });
@@ -59,7 +52,6 @@ function buildHangar() {
   const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { applySetting('startWingman', sw.checked); if (audio.on) audio.ui(); }); }
   const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; if (audio.on) audio.ui(); saveSettings(); renderJetCard(); }); }
   const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { applySetting('devUnlockLevels', sdl.checked); if (audio.on) audio.ui(); }); }
-  // v1.3 dev-panel password gate: 'timbles' unlocks the panel PERMANENTLY (devUnlocked persisted in settings).
   syncDevPanel();
   const dpb = g('devUnlockBtn'), dpf = g('devPass'), dpd = g('devDeny');
   const tryDevUnlock = () => {
@@ -77,17 +69,13 @@ function buildHangar() {
   updateAimStrengthVis();
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
   const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { applySetting('controlSensitivity', ss.value / 100); }); }
-  // mobile control settings (controls.js owns the input layer; these just set state + persist). Each seg
-  // setter is now a one-liner into the SETTINGS registry (parse+clamp+apply+save centralised in prefs.js);
   // bindSeg still fires onChange (audio) + its own saveSettings (a harmless redundant write). mobileControl
   // stays bespoke — the 'motion' branch triggers the permission flow (enableMotionFlow).
   bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => applySetting('controlScheme', v), () => { if (audio.on) audio.ui(); });
   bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
   bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => applySetting('motionAggression', v), () => { if (audio.on) audio.ui(); });
   bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => applySetting('buttonLayout', v), () => { if (audio.on) audio.ui(); });
-  // F11 graphics quality — the render-tier re-resolve + shadow-map resize (refreshGfxTier BEFORE applyGfxQuality) is the 'gfx' row's apply chain now
   bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => applySetting('gfx', v), () => { if (audio.on) audio.ui(); });
-  // F3 HUD units (imperial mph+ft / metric kph+m) — the 'unitSystem' row applies applyUnitLabels on change
   bindSeg('unitsTog', 'un', () => unitSystem, (v) => applySetting('unitSystem', v), () => { if (audio.on) audio.ui(); });
   const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
   const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { applySetting('buttonOpacity', sbo.value / 100); }); }
@@ -119,7 +107,6 @@ function buildHangar() {
     });
   }
   applyUiScale();
-  // Theming: visual language (skin) + color scheme (palette). Apply stored choice at boot, then wire selects.
   const storedSkin = store.get('skystrike_skin') || 'standard';
   const storedPalette = store.get('skystrike_palette') || 'amber';
   if (typeof applySkin === 'function') applySkin(storedSkin);
@@ -139,28 +126,25 @@ function buildHangar() {
   renderKillBoard();
   const db = g('dailyBtn'); if (db) db.addEventListener('click', startDaily);
   refreshDailyEntry();
-  const wb = g('weeklyBtn'); if (wb) wb.addEventListener('click', startWeekly);   // F8 weekly: wire the weekly entry beside the daily one
-  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();   // F8 weekly: render this week's modifiers + best
-  const brb = g('bossRushBtn'); if (brb) brb.addEventListener('click', startBossRush);   // F15
+  const wb = g('weeklyBtn'); if (wb) wb.addEventListener('click', startWeekly);
+  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();
+  const brb = g('bossRushBtn'); if (brb) brb.addEventListener('click', startBossRush);
   refreshBossRushEntry();
   const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);
   const mc = g('metaClose'); if (mc) mc.addEventListener('click', closeMetaScreen);
   const mn = g('metaNav'); if (mn) mn.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showMetaTab(b.dataset.tab); });
   const mg = g('metaGrid'); if (mg) mg.addEventListener('click', onMetaGridClick);
-  const js = g('jetStage'); if (js) { js.addEventListener('click', onJetMetaClick);   // jet-card lock/skin buys (delegated)
-    js.addEventListener('mouseover', onJetMetaHover); js.addEventListener('focusin', onJetMetaHover); }   // F3: surface livery name on hover/focus (delegated)
+  const js = g('jetStage'); if (js) { js.addEventListener('click', onJetMetaClick);
+    js.addEventListener('mouseover', onJetMetaHover); js.addEventListener('focusin', onJetMetaHover); }
   renderPilotPanel();
 }
-/* v1.3 dev-panel password gate: show the lock prompt until 'timbles' has ever been entered, then the panel. */
 function syncDevPanel() {
   const lock = g('devLock'), panel = g('devPanel');
   if (lock) lock.hidden = !!devUnlocked;
   if (panel) panel.hidden = !devUnlocked;
 }
-/* ---------------- pilot callsign + emblem (F13) ---------------- */
 const EMBLEM_GLYPHS = { wings: '✈', skull: '☠', star: '★', dragon: 'ᚴ', ace: '◈' };
 function renderPilotPanel() {
-  // callsign input
   const inp = g('callsignInput');
   if (inp) {
     inp.value = (meta && meta.callsign) || '';
@@ -170,7 +154,6 @@ function renderPilotPanel() {
     inp.removeEventListener('blur', _onCallsignBlur);
     inp.addEventListener('blur', _onCallsignBlur);
   }
-  // emblem grid
   const grid = g('emblemGrid');
   if (!grid) return;
   grid.innerHTML = '';
@@ -192,12 +175,10 @@ function renderPilotPanel() {
     btn.addEventListener('click', function() { onEmblemClick(em.id); });
     grid.appendChild(btn);
   });
-  // update label
   setTxt('lblCallsign', t('pilot.callsign'));
   setTxt('lblEmblem', t('pilot.emblem'));
 }
 function _onCallsignInput(e) {
-  // show sanitized value live
   const raw = e.target.value;
   const clean = sanitizeCallsign(raw);
   e.target.value = clean;
@@ -214,7 +195,6 @@ function onEmblemClick(id) {
     setEmblem(id);
     renderPilotPanel();
   } else {
-    // try to buy if SP-gated
     const def = EMBLEMS.find(e => e.id === id);
     if (def && def.gate === 'sp') {
       if (buyPatch(id)) { setEmblem(id); updateSpHud(); renderPilotPanel(); if (typeof audio !== 'undefined' && audio.on) audio.ui(); }
@@ -224,10 +204,8 @@ function onEmblemClick(id) {
     }
   }
 }
-// first-run flow: language select -> controls/instructions brief -> hangar. Skipped for returning players.
 function initOnboarding() {
   const langDd = g('langDropdown');
-  // mirror the version onto the language-select panel as "Version: <n>" — sourced from #versionTag so one literal drives both
   const lv = g('langVersion'), vt = g('versionTag');
   if (lv && vt) { const m = vt.textContent.match(/[\d.]+/); lv.textContent = 'Version: ' + (m ? m[0] : ''); }
   if (langDd) langDd.addEventListener('change', () => {
@@ -244,7 +222,7 @@ function initOnboarding() {
     if (audio.on) audio.ui();
     startGame(0);
   });
-  if (isReturningPlayer) {     // already onboarded, or a returning player from before onboarding existed
+  if (isReturningPlayer) {
     store.set('skystrike_onboarded', '1');
     return;
   }
@@ -253,16 +231,11 @@ function initOnboarding() {
 }
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
 
-/* ---------------- SLOT-2 special equip (feature #3) ----------------
-   The set of jet ids the player has UNLOCKED, used as the source pool for slot-2 equippable
-   specials (mirrors the hangar's own jetUnlocked() gate so the picker only offers owned airframes). */
 function unlockedJetIds() {
   const out = [];
   for (let k = 0; k < JETS.length; k++) if (jetUnlocked(JETS[k].id)) out.push(JETS[k].id);
   return out;
 }
-// equipSpecial2(p, id, currentJetId): fill p.special2 from a chosen equip id, validated against the
-// equippable pool (unlocked, real ability, not the current jet). Stale/invalid/null → empty inert slot.
 // Cooldown starts ready (cd=0); max is the raw SPECIAL_CD (NO OVERCLOCK/GHOST mods — those are slot-1 only).
 function equipSpecial2(p, id, currentJetId) {
   if (!p) return;
@@ -271,8 +244,6 @@ function equipSpecial2(p, id, currentJetId) {
     ? { id: id, cd: 0, max: specialCooldownMax(id, SPECIAL_CD, 15) }
     : { id: null, cd: 0, max: 15 };
 }
-// setSpecial2(id): hangar-side setter — persists the equip (via saveSettings, the selectedJet seam)
-// and re-renders the card so the chosen ability shows. `null`/'' clears the slot.
 function setSpecial2(id) {
   special2Id = (id && id !== '') ? id : null;
   saveSettings();
@@ -282,8 +253,6 @@ function setSpecial2(id) {
 
 function renderJetCard(i) {
   const j = JETS[i];
-  // F9 veterancy: rank insignia chip (chevrons + rank name) for this airframe, hidden at rank 0.
-  // Inline-styled (styles.css is out of scope) so it reads as an amber badge regardless of theme.
   const vetKills = (typeof meta !== 'undefined' && meta && meta.veterancy && meta.veterancy[j.id]) || 0;
   const vetR = (typeof vetRank === 'function') ? vetRank(vetKills) : 0;
   const vetChip = vetR > 0
@@ -293,8 +262,8 @@ function renderJetCard(i) {
       + '</div>'
     : '';
   g('jetCard').innerHTML =
-    '<div id="jetPreview3D" class="jetpreview3d">' +   // C1: 3D preview HERO at the TOP of the card (the persistent isolated canvas is reparented in here)
-      '<div class="jpzoom">' +   // F2: side-mounted zoom slider (dollies previewCamera; reset to 1.0 on jet switch)
+    '<div id="jetPreview3D" class="jetpreview3d">' +
+      '<div class="jpzoom">' +
         '<span class="jpzoomlbl">' + t('hangar.zoom') + '</span>' +
         '<input id="jetZoom" class="jpzoomrange" type="range" min="0.8" max="2.5" step="0.05" value="1" aria-label="' + t('hangar.zoom') + '">' +
       '</div>' +
@@ -320,25 +289,20 @@ function renderJetCard(i) {
         '<div class="cabilitydesc">' + jetText(j, 'abilityDesc') + '</div>' : '<div class="cspeclbl">' + t('card.noSpecialAbility') + '</div>') +
         (j.passive ? '<div class="cpassivelbl">' + t('card.passive') + ' \u2014 ' + jetText(j, 'passive').split('\u2014')[0].trim() + '</div><div class="cpassivetext">' + jetText(j, 'passive') + '</div>' : '') +
       '</div>' +
-      // decision content (slot-2 equip + paint/lock/BUY) BEFORE the flavour text, so a locked jet's BUY
-      // and the paint chips sit near the top of the data column instead of under two prose blocks
       '<div id="special2Row" class="special2row"></div>' +
       '<div id="jetMeta" class="jetmeta"></div>' +
       '<div class="cblurb">' + jetText(j, 'desc') + '</div>' +
       '<div class="ccontext"><div class="cctlbl">' + t('card.realBrief') + '</div>' + jetText(j, 'context') + '</div>' +
     '</div>';
-  mountPreviewCanvas();   // C2: reparent the persistent isolated preview canvas into this card's #jetPreview3D host
-  wireZoomSlider();       // F2: sync the zoom slider to hangarPreview.zoom + bind its input
+  mountPreviewCanvas();
+  wireZoomSlider();
   renderSpecial2Picker(i);
   renderJetMeta(i);
 }
-// SLOT-2 equip picker (feature #3): a compact <select> offering every UNLOCKED jet's ability except
-// this jet's own (that is slot 1). Persists via setSpecial2 → saveSettings (the selectedJet seam).
 function renderSpecial2Picker(i) {
   const wrap = g('special2Row'); if (!wrap) return;
-  // feature #3: equipping a 2nd special is gated behind a one-time SP unlock (devUnlockAll bypasses)
   if (!slot2Unlocked()) {
-    if (special2Id) { special2Id = null; saveSettings(); }   // drop any stale equip while the slot is locked
+    if (special2Id) { special2Id = null; saveSettings(); }
     wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
                      '<div class="cabilitydesc">' + t('card.slot2Locked') + '</div>' +
                      '<button id="slot2Unlock" class="segbtn" style="margin-top:6px">' + tf('card.slot2Unlock', { n: SLOT2_COST }) + '</button>';
@@ -350,7 +314,7 @@ function renderSpecial2Picker(i) {
     return;
   }
   const pool = equippableSpecials(unlockedJetIds(), JETS, JETS[i].id);
-  if (!pool.length) {                                   // nothing to equip yet — surface why, no control
+  if (!pool.length) {
     wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
                      '<div class="cabilitydesc">' + t('card.special2NoneAvail') + '</div>';
     return;
@@ -371,13 +335,11 @@ function renderSpecial2Picker(i) {
   const sel = g('special2Sel');
   if (sel) sel.addEventListener('change', e => setSpecial2(e.target.value));
 }
-// The hangar CTA reads "SELECT <jet>" and opens the mode-choice screen; #launchSub is kept blank.
 function refreshLaunchSub() {
   const lb = g('launch'); if (lb) { const sub = g('launchSub'); lb.textContent = tf('hangar.selectJet', { n: jetText(JETS[selectedJet], 'name') }); if (sub) { sub.textContent = ''; lb.appendChild(sub); } }
 }
-// hangar "SELECT <jet>" → mode-choice screen (Endless / Operation). state stays 'hangar' (no player built yet).
 function openModeChoice() {
-  if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first
+  if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }
   // #modeChoice / #endlessSetup are MODALS over the still-visible hangar (they do NOT hide it), tracked in
   // nav.js SCREENS as entry:'manual' so hideAllScreens() resets them, but entered here by hand — a router
   // showScreen would wrongly hide the hangar underneath. They toggle each other's .show directly. (nav.js)
@@ -386,7 +348,6 @@ function openModeChoice() {
   ov.classList.add('show');
   if (audio.on) audio.ui();
 }
-// Endless branch: difficulty + environment + an explicit START.
 function openEndlessSetup() {
   const ov = g('endlessSetup'); if (!ov) return;
   g('modeChoice') && g('modeChoice').classList.remove('show');
@@ -396,7 +357,7 @@ function openEndlessSetup() {
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === difficulty));
-  setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));   // localized (was the English DIFFS[].desc)
+  setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
   refreshLaunchSub();
   if (audio.on) audio.ui();
   saveSettings();
@@ -411,11 +372,10 @@ function setTimeOfDay(t) {
 function showManualTab(name) {
   document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
   document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
-  if (name === 'settings') showSettingsSubtab(settingsSubtab);   // restore the last settings sub-section
+  if (name === 'settings') showSettingsSubtab(settingsSubtab);
   if (audio.on) audio.ui();
 }
 let settingsSubtab = 'display';
-// Settings is split into Display / Controls / Audio / Gameplay sub-sections so the long list is navigable.
 function showSettingsSubtab(name) {
   settingsSubtab = name;
   document.querySelectorAll('#manual .sset-group').forEach(gp => gp.classList.toggle('show', gp.dataset.sset === name));
@@ -432,7 +392,6 @@ function syncManualBtn() {
     || (g('onboard') && g('onboard').classList.contains('show'))
     || (g('manual') && g('manual').classList.contains('show'));
   b.classList.toggle('mb-hide', !!blocked);
-  // §2: version tag rides along — shown on the language-select screen + every menu, hidden only in flight/gameover.
   const v = g('versionTag');
   if (v) v.classList.toggle('mb-hide', state === 'playing' || state === 'dead');
 }
@@ -459,7 +418,7 @@ function previewPaint(jet) {
    lights; matches the main renderer's colour pipeline (sRGB + ACES, exposure 1.0) so liveries read true.
    Own rAF loop, idle-cheap off the hangar. NO game entities / HUD ever enter this scene. */
 let previewRenderer = null, previewScene = null, previewCamera = null, previewCanvas = null, previewRO = null;
-const PREVIEW_CAM_Z = 40, PREVIEW_CAM_Y = 14, PREVIEW_FOV = 38;   // elevated 3/4 framing: a len≈26 fighter fills ~half the box (BOMBER 44 still fits)
+const PREVIEW_CAM_Z = 40, PREVIEW_CAM_Y = 14, PREVIEW_FOV = 38;
 
 function ensurePreviewRenderer() {
   if (previewRenderer || typeof THREE === 'undefined') return previewRenderer;
@@ -468,13 +427,13 @@ function ensurePreviewRenderer() {
   previewCanvas.style.cssText = 'width:100%;height:100%;display:block;touch-action:none;cursor:grab';
 
   previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: true, alpha: true });
-  previewRenderer.outputColorSpace = THREE.SRGBColorSpace;            // match engine.js initThree pipeline
+  previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
   previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
   previewRenderer.toneMappingExposure = 1.0;
-  previewRenderer.setPixelRatio(window.devicePixelRatio);            // kill retina blur (main caps at 2; preview is small → full DPR is cheap)
-  previewRenderer.setSize(380, 320, false);                          // larger base box (F1); resized by the RO to the real host box
+  previewRenderer.setPixelRatio(window.devicePixelRatio);
+  previewRenderer.setSize(380, 320, false);
 
-  previewScene = new THREE.Scene();                                 // transparent bg (alpha:true) → the hangar backdrop shows behind the card already
+  previewScene = new THREE.Scene();
   previewCamera = new THREE.PerspectiveCamera(PREVIEW_FOV, 380 / 320, 1, 4000);
   previewCamera.position.set(0, PREVIEW_CAM_Y, PREVIEW_CAM_Z);
   previewCamera.lookAt(0, 0, 0);
@@ -489,15 +448,12 @@ function ensurePreviewRenderer() {
   const rim = new THREE.DirectionalLight(0x9fc0ff, 1.6); rim.position.set(-50, 25, -45); previewScene.add(rim);
   previewScene.add(buildContactShadow());
 
-  // track the host box (card-relative) so the canvas always matches its container, sharp on resize.
   previewRO = new ResizeObserver(resizePreview);
   previewRO.observe(previewCanvas);
 
   requestAnimationFrame(previewLoop);
   return previewRenderer;
 }
-// Throwaway scene the PMREM pre-filters into the preview's environment: a dark-to-light gradient dome
-// with two soft-box panels (overhead + side) for crisp highlights along the hull.
 function buildStudioEnv() {
   const s = new THREE.Scene();
   const dome = new THREE.SphereGeometry(50, 32, 16), col = [], p = dome.attributes.position, c = new THREE.Color();
@@ -512,11 +468,10 @@ function buildStudioEnv() {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k), side: THREE.DoubleSide }));
     m.position.set(x, y, z); m.lookAt(0, 0, 0); s.add(m);
   };
-  box(40, 14, 0, 45, 10, 5);     // overhead strip
-  box(16, 24, 42, 12, 20, 2.5);  // side soft-box
+  box(40, 14, 0, 45, 10, 5);
+  box(16, 24, 42, 12, 20, 2.5);
   return s;
 }
-// Soft radial contact shadow under the preview jet so it reads as sitting in a space, not floating.
 function buildContactShadow() {
   const c = document.createElement('canvas'); c.width = c.height = 128;
   const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -533,63 +488,55 @@ function resizePreview() {
   previewRenderer.setSize(w, h, false);
   previewCamera.aspect = w / h; previewCamera.updateProjectionMatrix();
 }
-/* host the persistent preview canvas inside the CURRENT card's #jetPreview3D block (called from renderJetCard,
-   which has just rebuilt the card innerHTML and destroyed the previous host). */
 function mountPreviewCanvas() {
   ensurePreviewRenderer();
   const host = g('jetPreview3D');
   if (host && previewCanvas && previewCanvas.parentNode !== host) host.appendChild(previewCanvas);
   resizePreview();
 }
-/* F2: sync the zoom slider UI to hangarPreview.zoom and bind it — previewLoop reads it each frame.
-   Called after each card rebuild; hangarPreview.zoom is reset to 1.0 in selectJet on a real jet switch. */
 function wireZoomSlider() {
   const z = g('jetZoom'); if (!z) return;
   z.value = hangarPreview.zoom;
   z.addEventListener('input', () => { hangarPreview.zoom = parseFloat(z.value) || 1.0; });
 }
-/* dedicated rAF — auto-rotate + drag orientation; idles cheaply (no render) when not in the hangar. */
 function previewLoop() {
   requestAnimationFrame(previewLoop);
-  if (typeof state !== 'undefined' && state !== 'hangar') return;   // off-hangar: keep the loop alive but skip the draw
+  if (typeof state !== 'undefined' && state !== 'hangar') return;
   if (!previewRenderer || !previewScene || !previewCamera) return;
   const z = 1 / (hangarPreview.zoom || 1);                                   // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
   previewCamera.position.set(0, PREVIEW_CAM_Y * z, PREVIEW_CAM_Z * z);
   if (previewJet) {
     const pn = performance.now();
-    if (!hangarPreview.dragging && pn > hangarPreview.spinResumeAt) hangarPreview.yaw += 0.012;   // auto-rotate (resumes ~3s after release via spinResumeAt)
-    previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);      // own the full orientation (yaw spins, dragged pitch held)
-    previewJet.position.y = Math.sin(pn * 0.0012) * 0.6;                     // gentle bob (optional)
+    if (!hangarPreview.dragging && pn > hangarPreview.spinResumeAt) hangarPreview.yaw += 0.012;
+    previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);
+    previewJet.position.y = Math.sin(pn * 0.0012) * 0.6;
   }
   previewRenderer.render(previewScene, previewCamera);
 }
-/* launch is BLOCKED while previewing an UNOWNED skin (must buy it first). */
 function launchBlocked() {
   return !!(hangarPreview.skin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, hangarPreview.skin));
 }
-/* reflect the gate on the LAUNCH control (disabled + dimmed .gated). */
 function refreshLaunchGate() {
   const lb = g('launch'); if (lb) { const b = launchBlocked(); lb.classList.toggle('gated', b); lb.disabled = b; }
 }
-let _previewJetIdx = -1;   // last jet whose preview was built; a real jet switch reverts the preview skin + resets drag orientation
+let _previewJetIdx = -1;
 function selectJet(i) {
-  if (i !== _previewJetIdx) { hangarPreview.clear(); _previewJetIdx = i; }   // jet switch → revert preview, reset orientation + zoom (F2)
+  if (i !== _previewJetIdx) { hangarPreview.clear(); _previewJetIdx = i; }
   selectedJet = i;
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
   const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
-  ensurePreviewRenderer();               // C2: build the isolated renderer/scene/camera once (mountPreviewCanvas in renderJetCard reparents the canvas into this card)
+  ensurePreviewRenderer();
   if (previewJet) { if (previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); }   // free the prev preview's per-instance painted/burner clones (shared geo/mats spared)
-  const paint = previewPaint(JETS[i]);   // previewing skin (owned OR not) → live look; gameplay still uses jetPaint
+  const paint = previewPaint(JETS[i]);
   previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true, { skin: paint });
-  previewJet.position.set(0, 0, 0);      // C2: centred at origin in the PREVIEW scene (no world gutter)
+  previewJet.position.set(0, 0, 0);
   previewJet.rotation.set(hangarPreview.pitch, hangarPreview.yaw, 0);
   if (previewScene) previewScene.add(previewJet);   // → isolated preview scene, NEVER the shared game scene
-  refreshLaunchSub();   // CTA reads "SELECT <jet>" — keep it in sync with the selected airframe name
+  refreshLaunchSub();
   audio.init(); audio.ui();
   saveSettings();
 }
-// jet-card overlay: lock/buy state + skin chips (called by renderJetCard tail)
 function renderJetMeta(i) {
   const j = JETS[i];
   const wrap = g('jetMeta'); if (!wrap) return;
@@ -605,28 +552,24 @@ function renderJetMeta(i) {
       html += '<div class="jmskins"><span class="jmskinlbl">' + t('meta.skins') + '</span>';
       for (let s = 0; s < skins.length; s++) {
         const sk = skins[s], owned = skinOwned(j.id, sk.id), sel = selectedSkin(j.id) === sk.id;
-        const previewing = sk.id === pvUnowned;   // previewing-but-unowned: distinct chip state
+        const previewing = sk.id === pvUnowned;
         const sw = (sk.color != null ? sk.color : j.color);
         html += '<button class="jmskin' + (sel && !pvUnowned ? ' on' : '') + (owned ? '' : ' locked') + (previewing ? ' preview' : '') + '" data-skin="' + sk.id + '" data-jet="' + j.id +
                 '" style="--sw:#' + ('000000' + (sw >>> 0).toString(16)).slice(-6) + '" title="' + metaText({ id: 'skin.' + sk.id }, 'name') + '">' +
                 (owned ? '' : '<span class="jmsklk">' + skinCost(j.id, sk.id) + '</span>') + '</button>';
       }
       html += '</div>';
-      // F3: livery NAME readout — shows the hovered/focused/selected paint name prominently (any skin id, via metaText)
       const curId = hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? hangarPreview.skin : selectedSkin(j.id);
       html += '<div id="jetSkinName" class="jmskinname">' + metaText({ id: 'skin.' + curId }, 'name') + '</div>';
-      // buy-to-preview: while previewing an UNOWNED skin, surface an inline BUY · cost right at the preview
       if (pvUnowned) html += '<button id="jetMetaBuy" class="jmpvbuy" data-buyskin="' + pvUnowned + '" data-jet="' + j.id + '">' + tf('meta.buyPaint', { c: skinCost(j.id, pvUnowned) }) + '</button>';
     }
   }
   wrap.innerHTML = html;
-  refreshLaunchGate();   // chips changed → keep the LAUNCH gate in sync
+  refreshLaunchGate();
 }
-// delegated buy/select handlers for the jet-card meta overlay
 function onJetMetaClick(e) {
   const buy = e.target.closest('[data-buyjet]');
   if (buy) { if (buyJet(buy.dataset.buyjet)) { updateSpHud(); selectJet(selectedJet); audio.ui(); } else showBanner(t('meta.needSp')); return; }
-  // inline BUY · cost — purchase the previewed (unowned) skin, equip it, clear the launch block
   const buySk = e.target.closest('[data-buyskin]');
   if (buySk) {
     const jet = buySk.dataset.jet, id = buySk.dataset.buyskin;
@@ -637,22 +580,17 @@ function onJetMetaClick(e) {
   const sk = e.target.closest('.jmskin');
   if (sk) {
     const jet = sk.dataset.jet, id = sk.dataset.skin;
-    hangarPreview.skin = id;                   // preview ANY chip (owned or not) on the live model — UI only
+    hangarPreview.skin = id;
     if (skinOwned(jet, id)) setSkin(jet, id);  // owned → also equip (persist); unowned → preview only, NO meta/store write
-    selectJet(selectedJet);                    // rebuild preview with previewPaint (+ refreshes chips + gate)
+    selectJet(selectedJet);
     audio.ui();
   }
 }
-// F3: hover/focus a paint chip → show its livery NAME (any skin id, resolved generically via metaText).
-// Mouse leaving the chips restores the equipped/previewed name (re-rendered by renderJetMeta otherwise).
 function onJetMetaHover(e) {
   const sk = e.target.closest('.jmskin'); if (!sk) return;
   const lbl = g('jetSkinName'); if (lbl) lbl.textContent = metaText({ id: 'skin.' + sk.dataset.skin }, 'name');
 }
 
-/* ---- Visual-style picker: 6-card gallery, each card a mini-HUD preview rendered in its OWN skin.
-   Replaces the old <select>. Cards carry data-skin locally so the preview CSS (.skin-card[data-skin]
-   .pv-*) renders in-style without touching :root. Selection applies the skin live + persists. ---- */
 const SKIN_IDS = ['standard', 'futuristic', 'analog', 'manual', 'flat', 'blueprint'];
 function buildSkinGallery(current) {
   const gal = g('skinGallery');
@@ -674,7 +612,6 @@ function buildSkinGallery(current) {
       card.addEventListener('click', () => selectSkinCard(id));
       gal.appendChild(card);
     });
-    // roving-tabindex arrow navigation across the radiogroup
     gal.addEventListener('keydown', (e) => {
       const cur = SKIN_IDS.indexOf(activeSkin);
       let ni = -1;

@@ -10,9 +10,6 @@ import { launchGame } from './lib/boot.mjs';
 const failures = [];
 function check(cond, msg) { if (cond) { console.log('  ok  - ' + msg); } else { failures.push(msg); console.error('  FAIL- ' + msg); } }
 
-// Boot as a RETURNING player so we land on a STABLE hangar. First-run onboarding's Continue button calls
-// startGame(0) (an auto tutorial sortie) — seeding skystrike_onboarded makes isReturningPlayer true
-// (globals.js), so onboarding is skipped and the jet card is the visible screen (no flight behind it).
 const { page, port, close } = await launchGame({
   viewport: { width: 1280, height: 900 },
   initScript: () => {
@@ -28,12 +25,11 @@ page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForTimeout(1400);
 
-// ---- 1. rank-3 insignia chip renders on the jet card with resolved text ----
 const chip = await page.evaluate(() => {
-  if (typeof LANG !== 'undefined') LANG = 'EN';   // deterministic EN strings for the assertion + shot
+  if (typeof LANG !== 'undefined') LANG = 'EN';
   const jetId = JETS[selectedJet].id;
-  meta.veterancy[jetId] = VET_THRESHOLDS[2];   // rank 3
-  renderJetCard(selectedJet);                  // re-render the card with the chip
+  meta.veterancy[jetId] = VET_THRESHOLDS[2];
+  renderJetCard(selectedJet);
   const el = document.querySelector('#jetCard .cvet');
   return {
     jetId,
@@ -57,14 +53,13 @@ if (card) await card.screenshot({ path: 'vet-check-chip.png' });
 else await page.screenshot({ path: 'vet-check-chip.png' });
 console.log('  saved vet-check-chip.png');
 
-// ---- 2. applyMetaPerks: rank-3 veterancy on the flown jet gives +3% turn rate vs baseline ----
 const perk = await page.evaluate(() => {
   const jetId = JETS[selectedJet].id;
-  meta.veterancy = {};                                  // baseline: no veterancy
+  meta.veterancy = {};
   const pBase = { jet: { id: jetId }, stats: { turnRate: 1 }, turnMul: 1 };
   applyMetaPerks(pBase);
   const base = pBase.turnMul;
-  meta.veterancy[jetId] = VET_THRESHOLDS[2];            // rank 3
+  meta.veterancy[jetId] = VET_THRESHOLDS[2];
   const pVet = { jet: { id: jetId }, stats: { turnRate: 1 }, turnMul: 1 };
   applyMetaPerks(pVet);
   const buffed = pVet.turnMul;

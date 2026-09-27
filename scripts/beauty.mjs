@@ -7,8 +7,8 @@ import { launchGame } from './lib/boot.mjs';
 const prefix = process.argv[2] || 'beauty';
 const jetIdx = +(process.argv[3] || 1);
 const tod = +(process.argv[4] || 0);
-const zoom = +(process.argv[5] || 1);   // <1 = closer dolly for judging fine detail (default 1 = standard framing)
-const thr = process.argv[6] != null ? +process.argv[6] : 0.95;   // engine throttle for the shot (low = small plume, judge the model)
+const zoom = +(process.argv[5] || 1);
+const thr = process.argv[6] != null ? +process.argv[6] : 0.95;
 
 const { page, port, close } = await launchGame();
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
@@ -21,21 +21,19 @@ await page.addStyleTag({ content: 'body > *:not(canvas){display:none!important}'
 await page.evaluate(({ j, t, thr, zoom }) => {
   applyTimeOfDay(t);
   selectJet(j);
-  // hangar preview lives in the ISOLATED previewScene/previewCanvas (not the main scene) — pull the
-  // persistent preview canvas out to body so it isn't hidden with the rest of the hangar DOM, and fill the viewport
   document.body.appendChild(previewCanvas);
   previewCanvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;display:block';
   previewRenderer.setSize(window.innerWidth, window.innerHeight, false);
   previewCamera.aspect = window.innerWidth / window.innerHeight;
   previewCamera.updateProjectionMatrix();
-  hangarPreview.spinResumeAt = Infinity;   // freeze auto-rotate so the yaw set per-frame below sticks for the screenshot
+  hangarPreview.spinResumeAt = Infinity;
   hangarPreview.pitch = 0;
-  hangarPreview.zoom = 1 / zoom;    // previewLoop dollies the camera by 1/hangarPreview.zoom — invert to keep the CLI's <1=closer convention
+  hangarPreview.zoom = 1 / zoom;
   animEngines(previewJet, thr);
 }, { j: jetIdx, t: tod, thr, zoom });
 
 const frames = [
-  ['front', Math.PI],       // previewJet's nose is local -Z; previewCamera sits at +Z, so yaw=PI turns the nose to face it
+  ['front', Math.PI],
   ['side', Math.PI / 2],
   ['rear', 0],
 ];
@@ -48,7 +46,6 @@ for (const [name, yaw] of frames) {
   await page.screenshot({ path: `${prefix}-jet-${name}.png` });
 }
 
-// missile + tracer rounds staged over the platform (main scene/canvas — hide the preview overlay for this shot)
 await page.evaluate(() => {
   previewCanvas.style.display = 'none';
   const m = buildMissileMesh(false); m.position.set(-2, 5, 0); m.rotation.y = 0.55; scene.add(m);

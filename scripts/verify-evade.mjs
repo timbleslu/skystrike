@@ -24,14 +24,10 @@ async function done() {
   process.exit(0);
 }
 
-// drive past the first-run language gate → hangar (mirrors scripts/shot.mjs)
 await bootToHangar(page, { port });
 
-// start a run and let wave 1 spawn
 await page.evaluate(() => { applyTimeOfDay(1); startGame(selectedJet); });
 
-// tag a live fighter, stage it dead-ahead of the player, and mark it (window.__e) for later steps.
-// poll (waves spawn over a few seconds); if a fighter never comes, force-spawn one so the test is robust.
 let staged = { ok: false };
 for (let i = 0; i < 30; i++) {
   await page.waitForTimeout(400);
@@ -39,7 +35,7 @@ for (let i = 0; i < 30; i++) {
     let e = enemies.find(x => x.alive && x.type === 'fighter') || enemies.find(x => x.alive && x.type !== 'ground' && x.type !== 'boss');
     if (!e && typeof createEnemy === 'function' && typeof player !== 'undefined' && player.group) {
       const fwd = fwdOf(player.group, new THREE.Vector3());
-      e = createEnemy('fighter', player.group.position.clone().addScaledVector(fwd, 900));   // mook: opts.useGLTF absent -> 1 flare
+      e = createEnemy('fighter', player.group.position.clone().addScaledVector(fwd, 900));
     }
     if (!e) return { ok: false, n: enemies.length, types: enemies.map(x => x.type).join(','), state: (typeof state !== 'undefined' ? state : '?') };
     window.__e = e;
@@ -53,22 +49,19 @@ ok(staged.ok, 'a live fighter/mook spawned to test (type=' + staged.type + ', e.
 ok(typeof staged.flares === 'number' && staged.flares >= 1, 'the mook carries a finite flare loadout (>=1)');
 if (!staged.ok) { await done(); }
 
-// helper (runs in-page): pin the enemy + a homing player missile in a stable, visible frame ahead of
-// the player so applyEvade sees a live missile threat every frame without the missile ever impacting.
 await page.evaluate(() => {
   window.__pin = function () {
     const e = window.__e;
     const fwd = fwdOf(player.group, new THREE.Vector3());
     e.group.position.copy(player.group.position).addScaledVector(fwd, 260); e.group.position.y += 20;
-    e.speed = 0;                                   // freeze for a clean, stable screenshot
+    e.speed = 0;
     let m = missiles.find(x => !x.enemy && x.target === e);
     if (!m) { m = spawnMissile(player.group.position.clone().addScaledVector(fwd, 110), fwd.clone(), e, false, 1); }
-    m.mesh.position.copy(player.group.position).addScaledVector(fwd, 110);   // ~150u from e: in range, never impacts
+    m.mesh.position.copy(player.group.position).addScaledVector(fwd, 110);
     m.armed = 5; m.life = 6;
   };
 });
 
-// ---------- 1. FLARE: a stocked enemy pops a visible enemy flare when a missile is inbound ----------
 await page.evaluate(() => { const e = window.__e; e.flares = 3; e._evadeLast = undefined; e._evadeBreakT = 0; });
 let flarePopped = false, flaresLeft = 3;
 for (let i = 0; i < 40; i++) {
@@ -83,15 +76,12 @@ for (let i = 0; i < 40; i++) {
 ok(flarePopped, 'a stocked enemy popped a visible owner:"enemy" flare under missile threat');
 ok(flaresLeft < 3, 'the finite flare pool decremented on the pop (3 -> ' + flaresLeft + ')');
 
-// capture the flare fx (keep the frame pinned so the flares are fresh on screen)
 await page.evaluate(() => { window.__pin(); });
 await page.waitForTimeout(60);
 await page.screenshot({ path: 'evade-check-flare.png' });
 console.log('saved evade-check-flare.png');
 
-// confirm the enemy flare actually spoofs a PLAYER missile (combat.js EVADE.flareSpoofChance path)
 const spoofed = await page.evaluate(() => {
-  // give it a couple hundred ms of pinned frames for the 45%/frame spoof roll to land
   return new Promise(res => {
     let n = 0;
     const iv = setInterval(() => {
@@ -104,28 +94,24 @@ const spoofed = await page.evaluate(() => {
 });
 ok(spoofed, 'an enemy flare spoofed the inbound player missile (m.decoy = enemy flare)');
 
-// ---------- 2. BREAK: an empty flare pool falls back to a cooldown-gated break-turn ----------
-// Drive the REAL hook fn directly so the check is deterministic and independent of whether the frozen
-// probe survived the flare phase (the animate loop only calls applyEvade for live enemies).
 const brk = await page.evaluate(() => {
   const e = window.__e;
   e.alive = true; e.speed = 0;
   e.flares = 0; e._evadeLast = -1e9; e._evadeBreakT = 0; e._jinkT = 0;
-  window.__pin();                                   // guarantee a live missile threat within range
+  window.__pin();
   const missileDist = Math.min(...missiles.filter(m => !m.enemy && m.target === e)
     .map(m => Math.sqrt(m.mesh.position.distanceToSquared(e.group.position))).concat([Infinity]));
-  applyEvade(e, 0.016);                             // one frame of the real evasion hook
+  applyEvade(e, 0.016);
   return { breakT: e._evadeBreakT, jinkT: e._jinkT, flares: e.flares, missileDist };
 });
 ok(brk.breakT > 0, 'an empty-rack enemy under threat falls back to an active break-turn (e._evadeBreakT=' + brk.breakT.toFixed(2) + ', missileDist=' + Math.round(brk.missileDist) + ')');
 ok(brk.jinkT > 0, 'the break-turn drives the engine lateral-break primitive (e._jinkT > 0)');
 ok(brk.flares === 0, 'a depleted flare pool never pops another flare (stays at 0, no negative)');
 
-// boss carries 0 flares by construction (break-turns only, never flares)
 const bossFlares = await page.evaluate(() => {
   if (typeof createEnemy !== 'function') return null;
   const b = createEnemy('boss', new THREE.Vector3(player.group.position.x, player.group.position.y, player.group.position.z - 4000));
-  const f = b.flares; b.alive = false;   // dispose-flag the probe boss
+  const f = b.flares; b.alive = false;
   return f;
 });
 ok(bossFlares === 0, 'a boss is built with e.flares === 0 (break-turns only) — got ' + bossFlares);

@@ -1,7 +1,6 @@
 /* SKYSTRIKE — lang/ko.js: Korean strings. Loaded right after js/i18n.js (which declares I18N + t/tf).
    Add/update keys with `node scripts/i18n.mjs set <key> --en ... --zh ... --ko ...` instead of hand-editing all three files. */
 I18N.KO = {
-  /* ---- language / onboarding ---- */
   'lang.tagline': '아케이드 제트 전투',
   'lang.begin': '시작하려면 언어를 선택하세요',
   'onboard.title': '조작법',
@@ -15,7 +14,6 @@ I18N.KO = {
   'onboard.touch': '터치스크린 조작은 모바일 기기에서 자동으로 감지되어 활성화됩니다.',
   'onboard.more': '전체 참조, 기체 브리핑, 설정은 비행 매뉴얼(격납고의 ▣ 조작 및 매뉴얼)에서 확인하세요.',
   'onboard.continue': '▶ 격납고로 진입',
-  /* ---- first-run guided tutorial (F5) ---- */
   'tut.title': '비행 훈련',
   'tut.pitch': '기수를 당기세요 — S를 눌러 기수를 올리고 상승하세요.',
   'tut.pitchTouch': '상승 — 스틱을 위로 당겨 기수를 들어올리고 고도를 높이세요(아래로 밀면 강하).',
@@ -31,7 +29,6 @@ I18N.KO = {
   'tut.roll': '배럴 롤 — Q 또는 E를 두 번 눌러 360° 급선회 롤로 적탄을 회피하세요(6초 쿨다운).',
   'tut.rollTouch': '배럴 롤 — 스틱을 좌우로 두 번 튕겨 360° 급선회 롤로 적탄을 회피하세요(6초 쿨다운).',
 
-  /* ---- hud labels ---- */
   'hud.guns': '기총',
   'hud.locking': '잠금 중',
   'hud.locked': '◉ 잠금 완료',
@@ -61,27 +58,21 @@ I18N.KO = {
   'hud.killRow': 'Lv{lv} · W{wv}',
   'hud.hint': 'W/S 피치 · Q/E 롤 · A/D 요 · SHIFT/CTRL 추력 · CTRL+S 고G · SPACE 기총 · G 미사일 · X 플레어 · F 잠금 · R 특수 · B 특수-2 · T/Y 편대 명령 · C 카메라 · V 후방 · RMB 추적',
 
-  /* ---- camera modes ---- */
   'cam.CHASE': '추적', 'cam.CLOSE': '근접', 'cam.COCKPIT': '콕핏',
 
-  /* ---- airframe generation ---- */
   'gen.BASELINE': '기본형', 'gen.4.5 GEN': '4.5세대', 'gen.5th GEN': '5세대', 'gen.6th GEN': '6세대',
 
-  /* ---- touch buttons ---- */
   'touch.gun': '기총', 'touch.msl': '미사일', 'touch.flr': '플레어', 'touch.spc': '특수',
   'touch.thr': 'THR','touch.cam': '카메라', 'touch.lck': '잠금',
   'touch.aws': '타격', 'touch.ars': '보급', 'touch.ajm': '재밍',
 
-  /* ---- AWACS support calls (keys 1/2/3) ---- */
   'awacs.strike': '궤도 타격', 'awacs.resupply': '긴급 보급', 'awacs.jam': '재밍',
   'awacs.empty': 'AWACS: 이 구역에서 호출 소진',
   'awacs.cooldown': 'AWACS: 채널 쿨다운 중',
   'awacs.chipStrike': '타격', 'awacs.chipResupply': '보급', 'awacs.chipJam': '재밍',
 
-  /* ---- killstreak callouts ---- */
   'ks.5': '연속 격추', 'ks.10': '파괴 행진', 'ks.15': '저지 불가', 'ks.20': '신의 경지',
 
-  /* ---- banners ---- */
   'banner.getReady': '준비하라',
   'banner.waveInbound': '웨이브 {n} 접근',
   'banner.wave': '웨이브 {n}',
@@ -157,17 +148,14 @@ I18N.KO = {
   'banner.wingFocus': '▸ 편대: 집중 사격', 'banner.wingRegroup': '▸ 편대: 재편성',
   'banner.wingNone': '발진한 호위기 없음', 'banner.wingNoTarget': '집중할 표적 없음',
 
-  /* ---- mission grading ---- */
   'grade.title': '임무 평가',
   'grade.bonus': 'SP 보너스',
 
-  /* ---- star objectives ---- */
   'stars.title': '목표',
   'stars.best': '최고 {n}/3',
   'stars.obj.kills': '적의 60% 격멸',
   'stars.obj.noDamage': '한 웨이브 무피해',
   'stars.obj.rescue': '목표 하나 완료',
-  /* per-mission star condition labels (Ops debrief — what each star required) */
   'stars.cond.kills': '적의 60% 격멸',
   'stars.cond.clean': '한 웨이브 무피해',
   'stars.cond.objective': '목표 완료',
@@ -179,7 +167,6 @@ I18N.KO = {
   'stars.cond.fastClear': '{n}초 내 클리어',
   'stars.cond.killsN': '{n}킬 이상',
 
-  /* ---- tech tree ui ---- */
   'tech.core': '코어', 'tech.owned': '보유', 'tech.na': '해당 없음',  'tech.researchPoints': '연구 점수',
   'tech.title': 'R&D 기술 트리',
   'tech.sub': '// 매 웨이브마다 3개 중 1개 선택 · 업그레이드는 이번 출격 동안 유지 //',
@@ -193,12 +180,10 @@ I18N.KO = {
   'tech.pinHint': '흐려진 노드를 탭하여 목표로 PIN하세요 — 이후 제안이 그쪽으로 유도됩니다. 빛나는 3개 제안을 탭하여 하나를 선택하세요.',
   'tech.pinned': '◈ 고정됨: {name}',
 
-  /* ---- wing picker ---- */
   'wing.title': '호위기 기체 선택',
   'wing.sub': '// 새 호위기가 운용할 제트기를 선택하세요 //',
   'wing.cancel': '취소',
 
-  /* ---- campaign: operations-map revamp — screen chrome ---- */
   'campaign.operations': '작전',
   'campaign.enemyIntel': '적 정보',
   'campaign.loadout': '무장',
@@ -211,7 +196,6 @@ I18N.KO = {
   'campaign.met': '(달성)',
   'campaign.miss': '(미달성)',
 
-  /* ---- campaign: boss callsigns + per-phase intel lines ---- */
   'boss.warlord': 'WARLORD',
   'boss.warlord.p1': '페이즈 1 — 교과서적인 도그파이트. 너와 함께 선회하며 정면 기총전으로 담력을 시험한다.',
   'boss.warlord.p2': '페이즈 2 — 산호초 위 저공으로 강하해 채프를 흩뿌리고 미사일로 하늘을 메운다.',
@@ -225,7 +209,6 @@ I18N.KO = {
   'boss.corsair.p2': '페이즈 2 — 침착함이 무너졌다. 지면 가까이에서 벌이는 필사의 에너지 전투.',
   'boss.corsair.p3': '페이즈 3 — 연기를 끌며 잔해 자체를 무기로 바꾼다. 충돌을 피하고, 그다음 마지막 한 발을 피하라.',
 
-  /* ---- campaign: OPERATION IRON VEIL (Op1) ---- */
   'op.ironVeil.name': '작전명 아이언 베일',
   'op.ironVeil.theater': '남중국해 · 다오린 군도',
   'op.ironVeil.lore': '다오린 군도는 수십 년간 분쟁 지역이었다 — 남중국해에 흩어진 암초와 환초의 무리로, 해저 가스가 풍부하고 대륙의 절반을 먹여 살리는 항로에 걸쳐 있다. 수십 년간 분쟁은 동결 상태였다. 04시 정각, 그것이 녹아내렸다. 주량 해상주권군은 단 한 번의 통합된 새벽 공세로 모든 섬을 점령했다 — 상륙정, 조립식 벙커, 그리고 첫 위성 정찰이 포착하기도 전에 이미 상공을 장악한 전투 공중초계.\n\nZMSF는 오합지졸 민병대가 아니다. 그들은 전문적이고, 잘 무장되어 있으며, 이를 수년간 계획해 왔다. 해변에 들어서는 요새는 우리 함대가 수평선을 넘기도 전에 콘크리트가 타설되었다. 그들의 교리는 단순하고 추악하다: 빠르게 점령하고, 더 빠르게 참호를 파고, 콘크리트가 굳는 동안 세계가 논쟁하게 둔다. 우리가 기다리는 매 시간마다 섬은 점점 더 그들의 것이 되고, 점점 더 누구도 되찾기 어려워진다.\n\n우리 항모 타격단은 이에 응답할 수 있는 가장 가까운 전력이자, 시간 내에 응답할 수 있는 유일한 전력이다. 외교는 전화 한 통 거리이지만 한 달은 늦었다. 함대 사령부의 명령은 침공을 봉쇄하고, ZMSF가 점령을 기정사실로 선언하기 전에 — 비행장이 가동되기 전에, 해안 포대가 우리 함선을 사정거리에 넣기 전에, 이것이 사건이 아닌 전쟁이 되기 전에 — 그것을 되돌리는 것이다.\n\n너는 그 창끝을 모는 자다. 가장 먼저 들어가 우리가 마주한 것을 정찰하고, 모든 후속 전력이 따라올 수 있도록 하늘을 장악하며, 암초 하나씩 섬을 되찾는다. 이것은 응징 습격이 아니다. 기정사실을 무효화하는 작전이며, 그 성패는 공중 전력에 달려 있다.\n\n다오린 상공의 날씨는 청명하고 바다는 따뜻하다. 그 무엇도 중요하지 않을 것이다. ZMSF는 훔친 것을 지키기 위해 가진 모든 것을 쏟아부을 것이고, 그 끝에는 그들의 항공 지휘관이 떠날 생각이 전혀 없이 산호초 위에서 기다리고 있다. 그들을 봉쇄하라. 그들을 분쇄하라. 잃기로 동의한 적 없는 사람들에게 섬을 돌려주어라.',
@@ -262,7 +245,6 @@ I18N.KO = {
   'op.ironVeil.l8.obj': 'WARLORD의 엄호 편대를 돌파한 뒤, WARLORD를 격추하라.',
   'op.ironVeil.l8.intel': '단일 엘리트 요격기 — 스텔스 기체, 다단계 전투. 베테랑 에이스. 그는 꺾이지 않는다.',
 
-  /* ---- campaign: OPERATION MIDNIGHT MERIDIAN (Op2) ---- */
   'op.midnightMeridian.name': '작전명 미드나이트 메리디안',
   'op.midnightMeridian.theater': '보스토크 고원 · 겨울 능선',
   'op.midnightMeridian.lore': '보스토크 고원은 한때 어느 옛 소비에트 공화국이 본토라 부르던 얼어붙은 암벽의 장벽이다. 보스토크 통합방공군이라 자칭하는 군사정권이 그 공화국을 통째로 집어삼켰다 — 투표도, 경고도 없이, 그저 기갑 종대와 줄지은 처형으로 — 그리고 옛 정권이 산속에 묻어둔 것을 물려받았다. 그들이 물려받은 것은 핵 탑재가 가능한 지대공 미사일 망이며, 그들은 겨우내 능선 전역에 그것을 다시 가동하는 데 매달려 왔다.\n\n그 망이 완성되면 지역 절반의 하늘을 닫아버리고, 어떤 함대도 뚫고 날 수 없는 방공 우산 뒤에 핵 위협을 둔다. 모든 포대는 강화되어 있고, 모든 레이더는 겹겹이 쌓여 있으며, 모든 방사원은 발견한 것에 계곡 전체를 떨어뜨리는 도화선이다. VCAD는 이것을 국경을 지키려고 만든 게 아니다. 세계가 와서 빼앗아 보라며 도발하려고 만들었다.\n\nNATO 연계 사령부는 그것을 빼앗으려 한다 — 그것이 완전히 가동되기 전에 눈을 멀게 하고, 돌파하고, 묻어버리려 한다. 그러나 어느 나라도 자기 이름이 여기 걸리길 원치 않는다. 보도자료도, 뉴스에 나올 항모도, 누군가 그 계곡에 있었다는 기록도 없을 것이다. 이 작전이 우리에게로 추적되면, 무엇을 파괴했든 실패한 것이다. 너는 어둠 속에서, 조용히, 홀로 난다.\n\n너의 역할은 칼날 전체다: 타격 편대가 볼 수 없는 것을 정찰하기 위해 레이더 틈을 빠져나가고, 네 위치를 외칠 방사원을 제거하고, 눈이 고개를 막기 전에 청취소와 그곳 인원을 호위해 내보내고, 한 번에 깨끗한 패스로 포대에 정밀 강철을 박는다. 이 계곡에는 두 번째 패스가 없다. 네가 통과하든 못하든 날씨는 등 뒤에서 문을 닫을 것이다.\n\n그리고 이 하늘에 너만 유령인 것은 아니다. 첫 방사원이 꺼진 이래로 무언가가 너를 그림자처럼 따라왔다 — 죽일 만큼 가깝지도, 놓칠 만큼 멀지도 않게. 콜사인 GLACIER. 그는 VCAD의 요격 교리를 썼고 마지막 포대에서 기다리고 있으며, 네가 한 모든 움직임을 익힐 시간이 있었다. 망을 끝내라. 그를 끝내라. 그리고 사라져라, 공식적으로 너는 결코 여기 있지 않았으니까. 겨울은 어느 쪽이든 개의치 않는다.',
@@ -299,7 +281,6 @@ I18N.KO = {
   'op.midnightMeridian.l8.obj': '빙하 위 최종 SAM 포대를 파괴한 뒤, GLACIER를 격추하라.',
   'op.midnightMeridian.l8.intel': '단일 엘리트 에이스 — BVR 특화 중전투기, 다단계 전투. 그가 그들의 요격 교리를 썼다.',
 
-  /* ---- campaign: OPERATION SUNFIRE HORIZON (Op3) ---- */
   'op.sunfireHorizon.name': '작전명 선파이어 호라이즌',
   'op.sunfireHorizon.theater': '페르시아만 · 요새화된 반도',
   'op.sunfireHorizon.lore': '보스토크 고원의 전쟁은 끝났지만 그 무기들은 죽지 않았다 — 흩어졌을 뿐이다. VCAD 잔당은 그들의 장비와 노하우를 남쪽으로, 페르시아만으로 곧장 이어지는 암시장 송유관 속으로, 칼리디 원정군의 손으로 가져갔다. KEF는 돈과 야망이 있었고 거리낌이 없었다; 잔당에게는 기술과 그것을 팔아넘길 절박함이 있었다. 그 결과가 지금 만 어귀의 요새화된 반도에서 솟아오르고 있다.\n\n그것은 항모 킬러 미사일 단지다 — 지하 탄약고 금고, 겹겹의 방공망, 반도 전체를 하나의 연속된 함정으로 바꾸는 센서 고리. 그것이 새벽에 가동되면 항모 전단 전체가 그 사정권 안에 들고, 발밑의 모든 함선이 단지가 첫 숨을 쉬는 순간 표적이 된다. 여기엔 거리를 두고 떨어질 방법이 없다. 사정거리는 그들의 것이다. 안전 거리란 사라졌다.\n\n이 단지는 우리가 어떻게 싸우는지 정확히 아는 자가 설계했다, 한때 우리 곁에서 싸웠으니까. 콜사인 CORSAIR — 자신의 전문성과 국기를 팔아넘긴 연합 에이스로, 자신이 불가능하다고 일축한 접근로를 누구도 감히 시도하지 않으리라 확신하며 이곳을 지었다. 그가 내린 모든 방어 선택은 자신이 작성을 도운 교과서를 예상하고 있다. 그의 단지를 이기려면 그가 결코 시도하지 않으리라 확신한 것들을 해내야 한다.\n\n너의 역할은 일출 전에 반도 전체를 해체하는 것이다: 초계기를 일소하고, 하늘을 봉쇄하기 전에 경계 CAP을 분쇄하고, 레이더 수평선 아래에서 표적 해법을 추측 항법으로 얻고, 중계소와 구조 작전을 살려두고, 그런 다음 탄약고 금고에 강철을 박는다 — 닫히는 창을 통해 노출된 금고를, 그리고 CORSAIR가 비행 불가능하다고 단언한 계곡 회랑을 따라 매장된 금고를. 그 표적 정보 일부는 보스토크 계곡에서 온 유령이 우리에게 흘려보내고 있다; 오랜 빚은 갚아야 할 날이 오는 법이다.\n\n그리고 활주로에서 기다리는 그 사람 자신이 있다, 결국 이렇게 되리라는 것을 늘 알고 있던 자. 그는 우리 중 하나였기에 우리 중 하나처럼 난다. 다단계, 5세대, 그리고 더 이상 변명이 없다. 단지는 새벽에 발사되거나 영영 발사되지 않거나다. 태양이 그러기 전에 우리가 끝낸다.',
@@ -340,7 +321,6 @@ I18N.KO = {
   'op.sunfireHorizon.l9.obj': 'CORSAIR의 편대를 돌파한 뒤, CORSAIR를 격추하라.',
   'op.sunfireHorizon.l9.intel': '단일 엘리트 에이스 — 5세대 제공 전투기, 다단계 전투. 그는 너의 모든 전술을 안다.',
 
-  /* ---- mission intro-card blurbs (per level, shown on the §2 in-flight objective card) ---- */
   'op.ironVeil.l1.blurb': '저 아래에 무엇이 있는지 알기 전까지 전단은 아무것도 투입하지 않는다. 네가 가장 먼저 들어간다 — 저공으로, 조용히, 적의 레이더 수평선 아래로 — ZMSF가 밤새 쌓아 올린 해변 요새를 촬영하기 위해. 해협 상공에 경미한 전투 공중초계, 해상에 레이더 초계함 1척, 강력한 저항은 예상되지 않음. 그것이 브리핑이다. 바다는 브리핑을 고쳐 쓰는 법이 있다.\n\n이것은 정찰이지 전투가 아니다. 사진을 얻고, 적 스코프에서 벗어나, 네가 여기 있었다는 걸 알아채기 전에 사라져라. 카메라가 죽일 가치가 있는 것을 잡으면, 죽여라 — 하지만 영상은 어느 쪽이든 가지고 온다. 앞으로 일주일간 함대가 하는 모든 일은 이 새벽에 네가 가져오는 것에서 시작된다.',
   'op.ironVeil.l2.blurb': 'ZMSF가 해협 상공에 전투 공중초계를 전개했고 지금 그 공역은 그들의 것이다. 일선 전투기 다수 편대가 대기하고 있고, 그들은 해협을 싸게 내주지 않는다. 쉽지 않은 정정당당한 일전을 예상하라 — 교차가 모든 것을 결정하고 두 번째 패스가 첫 번째보다 나쁜 그런 종류의.\n\n네가 달리 말하기 전까지 해협은 그들의 것이다. 뒤따르는 모든 타격, 호위, 상륙은 네가 이 하늘을 장악하는 데 달려 있다. 올라가서 빼앗아라. 사격 자유 — 그들을 해협에서 몰아내고, 하늘이 우리 것이 되기 전엔 돌아오지 마라.',
   'op.ironVeil.l3.blurb': 'ZMSF 레이더 초계함이 타격 편대 전체를 비추고 있다 — 그것이 우리를 보는 한 우리는 움직일 수 없다. 그 위로 겹겹이 배치된 전투 공중초계가 있고, 네가 상승하는 순간 위협 보드에 네 이름이 켜진다. 그러니 상승하지 마라. 초계함 자신의 맹점인 파고높이로 들어가 그곳에 머물러라.\n\n그 초계함은 어둠 속에서도 본다. 초계를 발각되지 않고 통과해 레이더를 바다 밑바닥에 가라앉히고, 누구도 신호 급증을 읽기 전에 사라져라. 눈을 제거하면 타격 전체가 네게 유리하게 눈을 잃는다. 한 척, 한 번의 깨끗한 격침, 그러면 다오린으로 가는 문이 활짝 열린다.',
@@ -367,7 +347,6 @@ I18N.KO = {
   'op.sunfireHorizon.l8.blurb': '금고 베타는 강화되어 깊이 매장되어 있고, 유일한 진입로는 CORSAIR가 통과 불가능하다고 일축한 계곡 회랑을 따른 강하 타격이다. 그것은 가혹한 지형 진입과 완전한 근접 방어 뒤의 깊은 지하 표적이다 — 전역에서 가장 어려운 접근로이며, 그는 누구도 결코 시도하지 않으리라 확신하며 이곳을 지었다.\n\n그는 금고 베타를 지으며 누구도 계곡을 감히 시도하지 않으리라 확신했다. 그럼에도 강하해 그가 틀렸음을 증명하라. 그가 비행 불가능하다고 단언한 회랑을 누비고, 두 번째 금고의 목구멍에 강철을 박고, 협곡 벽이 총구가 놓친 것을 가져가기 전에 빠져나와라. 이것은 그가 우리 함대 위로 지우려 한 두 번째 태양이다. 그것이 결코 떠오르지 않게 하라.',
   'op.sunfireHorizon.l9.blurb': '그는 활주로에 있고, 결국 이렇게 되리라는 것을 늘 알고 있었다. 콜사인 CORSAIR — 적에게 우리 작전 계획서를 넘겨준 자, 5세대 제공 전투기를 몰며 너의 모든 전술을 아는 다단계 전투를 기다리는 중. 그는 우리 중 하나였기에 우리 중 하나처럼 난다.\n\n그는 우리와 함께 날았고, 그다음 작전 계획서를 팔았다. CORSAIR는 이제 활주로에 있고, 결국 네게로 좁혀지리라는 것을 늘 알았다. 항모 킬러 위협을 그것이 시작된 곳에서 끝내라 — 그것을 설계한 사람과 함께. 그는 네가 배운 모든 것에 대응할 것이니, 그가 결코 예상하지 못한 것으로 그를 이겨라. CORSAIR를 끝내고, 단지를 끝내고, 선파이어 호라이즌을 끝내라.',
 
-  /* ---- hangar ---- */
   'hangar.sub': '// 기체를 선택하세요 //',
   'hangar.best': '최고 점수',
   'hangar.difficulty': '난이도',
@@ -393,7 +372,6 @@ I18N.KO = {
   'diff.descACE': '치명적 — 적이 더 많고, 기총이 더 빠르며, 기체가 약함.',
   'tod.DAY': '주간', 'tod.DUSK': '황혼', 'tod.NIGHT': '야간',
 
-  /* ---- jet card ---- */
   'card.noSpecial': '특수 없음',
   'card.noSpecialAbility': '특수 능력 없음',
   'card.special': '특수',
@@ -410,12 +388,10 @@ I18N.KO = {
   'stat.SPD': 'SPD', 'stat.AGI': 'AGI', 'stat.ACC': 'ACC',
   'stat.ARM': 'ARM', 'stat.STL': 'STL', 'stat.FPW': 'FPW',
 
-  /* ---- game over ---- */
   'go.score': '점수', 'go.wave': '웨이브', 'go.best': '최고',
   'go.kills': '격추', 'go.accuracy': '명중률', 'go.missiles': '미사일', 'go.time': '시간',
   'go.redeploy': '▶ 재출격', 'go.hangar': '격납고',
 
-  /* ---- manual ---- */
   'manual.title': '비행 매뉴얼',
   'manual.sub': '// 전술 참조 //',
   'manual.resume': '▶ 계속하기',
@@ -438,7 +414,6 @@ I18N.KO = {
   'manual.tabTactics': '전술',
   'manual.tabSettings': '설정',
 
-  /* ---- settings labels ---- */
   'set.language': '언어',
   'set.sensitivity': '조작 감도',
   'set.volume': '마스터 볼륨',
@@ -471,7 +446,6 @@ I18N.KO = {
   'set.hudLarge': '크게',
   'set.hudXl': '아주 크게',
   'set.langEN': 'English', 'set.langZH': '简体中文', 'set.langKO': '한국어',
-  /* ---- mobile control settings ---- */
   'set.mobileControl': '모바일 조작',
   'set.mcTouch': '터치', 'set.mcMotion': '모션',
   'set.aggression': '기울기 반응성',
@@ -496,7 +470,6 @@ I18N.KO = {
   'set.msNoData': '모션 데이터 없음 — HTTPS로 열고(npm run serve:https) 새로고침하세요',
   'set.msLive': '모션 작동 중',
 
-  /* ---- manual body (HTML) ---- */
   'manBody.flight': '<li><b>W</b> / <b>S</b> — 기수 내림 / 올림</li><li><b>Q</b> / <b>E</b> — 좌 / 우 롤</li><li><b>A</b> / <b>D</b> — 요(러더)</li><li><b>SHIFT</b> / <b>CTRL</b> — 추력 증가 / 제동</li><li><b>CTRL + S</b> — 고G 선회(더 급한 피치, 속도 손실)</li><li><b>Q / E 두 번 누르기</b> — 배럴 롤: 360° 급선회로 적탄 회피(6초 쿨다운)</li>',
   'manBody.combat': '<li><b>SPACE</b> — 기관포(이제 탄약이 유한함 — <em>GUN</em> 잔량을 주시하라)</li><li>전방의 가장 가까운 표적에 대해 <em>조준 조준점</em>이 기총 리드를 계산한다 — 기수를 조준점에 맞추면 격추 사격이 가능할 때 녹색 <em>GUNS</em> 다이아몬드로 스냅된다. 설정에서 전환 가능.</li><li><b>G</b> — 미사일 발사(완전 잠금 시에만 유도)</li><li><b>X</b> — 플레어 투하(이제 안정적으로 미사일을 떼어냄)</li><li><b>F</b> — 잠금 표적 지정 / 전환 <em>(잠금은 기본적으로 수동 — 설정에서 자동 잠금 전환)</em></li><li><b>R</b> — 특수 능력</li><li><b>T</b> — 편대에 표적 집중 사격 명령 · <b>Y</b> — 재편성 및 방어 명령(호위기는 HUD에 표시됨)</li><li><b>C</b> 카메라 전환(콕핏 클리어 시점 포함) · <b>V</b> 길게 눌러 후방 시점 · <b>RMB</b> 길게 눌러 추적</li><li>빛나는 녹색 <em>보급 상자</em>로 날아들어 기총, 미사일, 플레어를 재보급하라.</li><li><b>H</b> / <b>ESC</b> — 이 매뉴얼 열기(일시정지)</li>',
   'manBody.lock': '기본적으로 잠금은 <b>수동</b>이다: <b>F</b>를 눌러 전방의 가장 가까운 표적을 지정하라(다시 누르면 전환). 그것을 전방 조준선에 두고 있으면 고리가 닫히고; 단단한 빨간 <em>LOCKED</em> 박스로 스냅되면 다음 미사일이 유도되어 <b>모든 비보스를 즉시 격파</b>한다. 보스는 깎아내야 한다. 구름과 활성 스텔스는 잠금을 끊는다. 예전 방식을 선호하는가? 설정에서 <em>자동 잠금</em>을 켜라.',
@@ -510,7 +483,6 @@ I18N.KO = {
   'manBody.special': '<li><b>R</b>을 눌러 기체의 고유 특수 능력을 발동하라. HUD의 <em>SPECIAL</em> 게이지가 충전을 표시한다; 능력은 자동으로 재충전된다.</li><li><b>스텔스 클로크</b>(F-35, F-22): 8초간 적 레이더에서 사라지고 들어오는 모든 미사일 잠금을 끊는다. 구름이 클로킹 효과를 연장한다.</li><li><b>애프터버너 버스트</b>: 미사일 추적을 끊을 수 있는 폭발적 추력 — 추격을 회피하는 저속에서 가장 효과적이다.</li><li><b>CCA 드론 군집</b>(F-47): 즉시 표적을 포착해 교전하는 전기 블루 자율 공격 드론을 전개한다(약 16초 지속).</li><li><b>지향성 레이저</b>: 고체력 표적과 보스에 이상적인 지속 빔 정밀 무기.</li><li>격납고의 각 기체 카드가 패시브 특전과 액티브 능력을 설명한다.</li>',
   'manBody.missions': '<li>출격 중 무전 호출이 선택적 <b>임무 목표</b>를 알린다. 보너스 RP와 SP를 위해 완료하거나 — 무시하고 생존에 집중하라.</li><li><b>STRIKE</b>: 표시된 고가치 표적을 파괴하라. AWACS 궤도 타격에 면역.</li><li><b>ESCORT</b>: 호송 유닛을 적 공격으로부터 보호하라. 호송 유닛 격추는 집계에 포함되지 않는다.</li><li><b>INTERCEPT</b>: 표시된 폭격기가 구역을 벗어나기 전에 격추하라.</li><li><b>SWEEP</b>: 웨이브 내 모든 적을 격멸하라.</li><li><b>BOSS ACE</b>: 웨이브 보스를 격파하라. 웨이브를 지나 전진하면 만료된다.</li><li>한 출격에서 5개 임무를 완료해 <em>TACTICIAN</em> 업적을 획득하라.</li>',
 
-  /* ---- meta-progression (SP currency, perks, jet/skin unlocks, achievements) ---- */
   'meta.title': '지휘 진행',
   'meta.sub': '// 전략 점수는 출격 사이에 유지됩니다 //',
   'meta.btn': '▲ 지휘 및 진행',
@@ -538,14 +510,12 @@ I18N.KO = {
   'pilot.needAch': '필요: {a}',
   'pilot.hint': '콜사인은 비행 중 HUD와 임무 보고 카드에 표시됩니다.',
   'banner.achUnlocked': '★ 업적 {n}개 달성 ★',
-  /* ---- daily seeded challenge (F7) ---- */
   'daily.sub': '오늘은 모두가 같은 시드로 비행합니다 — 단 한 번의 시도. 날짜 {date}.',
   'daily.play': '▶ 오늘의 출격 비행',
   'daily.done': '✔ 오늘 비행 완료',
   'daily.best': '오늘의 최고 {best}',
   'daily.locked': '내일 새 시드로 다시 도전하세요',
 
-  /* ---- Boss Rush (F15) ---- */
   'bossrush.title': '☠ 보스 러시',
   'bossrush.start': '☠ 보스 러시',
   'bossrush.locked': '☠ 보스 러시 — 전역을 클리어하면 잠금 해제',
@@ -554,7 +524,6 @@ I18N.KO = {
   'bossrush.wave': '보스 {n} / {total}',
   'bossrush.cleared': '관문 돌파 — {t}',
 
-  /* meta data strings (perks / achievements / skins) — Korean */
   meta: {
     'hull':     { name: '강화 기체',     desc: '매 출격을 더 높은 기체 내구도로 시작(레벨당 최대 HP +6%).' },
     'plating':  { name: '소모성 장갑',   desc: '더 튼튼한 방어막으로 시작(레벨당 최대 방어막 +8%).' },
@@ -575,17 +544,14 @@ I18N.KO = {
     'skin.splinter': { name: '스플린터' }, 'skin.raptor': { name: '프레데터' },
     'skin.felon':    { name: '펠론' }, 'skin.aurora': { name: '오로라' },
     'skin.shadow':   { name: '섀도우' }, 'skin.blaze': { name: '블레이즈' },
-    // designed per-jet liveries (skins 2 & 3)
     'skin.desert':   { name: '사막' }, 'skin.ghost':  { name: '고스트' },
     'skin.viper':    { name: '바이퍼' },  'skin.dragon': { name: '드래곤' },
     'skin.panel':    { name: '패널' },  'skin.tiger':  { name: '타이거' },
     'skin.navy':     { name: '네이비' },
-    // textureless-jet livery redesign — skin 2 (aggressor) + elevated skin 3 (decal + geo)
     'skin.aggressor':   { name: '어그레서' },    'skin.valedictor':   { name: '밸리딕터' },
     'skin.swarmlord':   { name: '스웜로드' },    'skin.mightydragon': { name: '마이티 드래곤' },
     'skin.dunestalker': { name: '듄 스토커' }, 'skin.nightreaper':  { name: '나이트 리퍼' },
     'skin.tigermeet':   { name: '타이거 미트' },   'skin.blueangel':    { name: '블루 엔젤' },
-    // authentic real-world livery re-theme (skins 2 & 3, Jun 17)
     'skin.eagle':        { name: '이글 그레이' },    'skin.havglass':    { name: '헤이브 글래스' },
     'skin.silverdragon': { name: '실버 드래곤' }, 'skin.desertghost': { name: '데저트 고스트' },
     'skin.nightfall':    { name: '나이트폴' },     'skin.nightjar':    { name: '나이트자' },
@@ -651,7 +617,6 @@ I18N.KO = {
       context:'선양항공기공업그룹(선페이) · 중국(시제기). 2024년 12월 수면 위로 떠오른 중국의 두 번째 6세대 전투기 설계 — J-36보다 작고 전통적 전투기 외형에 가깝다. 무미익 쌍발 람다익 기체로, 수직미익 대신 회전 익단으로 조종하는 듯하며, 일부는 미래 함재 운용을 겨냥한 것으로 전해진다.' },
   },
 
-  /* TECH_TREE data-table overrides — names + descriptions */
   tech: {
     core: { name:'코어 시스템', desc:'업그레이드 버스 가동. (매 출격 시작 시 보유.)' },
     wpn: { name:'무기 버스', desc:'기총과 미사일 피해 각 +12%. 기총, 군비, 미사일 분기 해금.' },
@@ -812,7 +777,6 @@ I18N.KO = {
   'weekly.mod.doubleAces.d': '매 웨이브마다 적 에이스가 하나 더 합류합니다. 하늘은 베테랑으로 가득합니다.',
   'weekly.mod.heavyWing': '헤비 윙',
   'weekly.mod.heavyWing.d': '강화되어 무거워진 기체 — 선회율이 감소합니다. 부드럽게 비행하고 선회를 계획하라.',
-  // CF content-factory pack modifiers (iron-skies)
   'weekly.mod.fogBank': '안개 지대',
   'weekly.mod.fogBank.d': '한 주 내내 하늘이 짙은 안개로 고정됩니다 — 레이더 약화, 짧은 시야, 근접전뿐.',
   'weekly.mod.lastFlare': '마지막 플레어',

@@ -6,7 +6,7 @@
 import { launchGame, bootToHangar } from './lib/boot.mjs';
 import { mkdir } from 'fs/promises';
 const label = process.argv[2] || 'after';
-const which = process.argv[3] || 'all';   // all | menus | flight
+const which = process.argv[3] || 'all';
 const out = new URL('../.scratch/shots/' + label + '/', import.meta.url).pathname;
 await mkdir(out, { recursive: true });
 const vps = [{ n: 'desk', width: 1280, height: 800 }, { n: 'mob', width: 390, height: 844 }, { n: 'land', width: 844, height: 390 }];
@@ -37,7 +37,6 @@ for (const vp of vps) {
     await page.evaluate(() => { tutorial.active = false; tutorial.done = true; if (el.tut) el.tut.classList.remove('show'); });
     await page.evaluate(() => __ff(1.2)); await page.waitForTimeout(1500); await page.screenshot({ path: out + vp.n + '-flight-intro.png' });
     await page.evaluate(() => __ff(3)); await page.waitForTimeout(1500); await page.screenshot({ path: out + vp.n + '-flight-comms.png' });
-    // clear the pickup-zone sweep so the escort beat starts, then let the raiders arrive
     await page.evaluate(() => { __ff(1); enemies.filter(e => e.alive).forEach(e => killEnemy(e, true)); __ff(16); });
     await page.waitForTimeout(1500); await page.screenshot({ path: out + vp.n + '-flight-escort.png' });
     await page.evaluate(() => { beginCampaignEnd('fail', 'convoyLost'); __ff(0.6); });

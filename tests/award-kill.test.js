@@ -2,12 +2,8 @@
 const assert = require('assert');
 const { awardHit, awardKill, COMBO_TIMER, KILLSTREAK_INTERVAL } = require('../js/core.js');
 
-// Mirrors of the live combat.js values these cores replaced.
-const ASSIST_FRAC = 0.4;   // TP.assistFrac (globals.js)
+const ASSIST_FRAC = 0.4;
 
-// ============================ awardHit ============================
-
-// ---- combo increment + timer reset ----
 {
   const r = awardHit({ combo: 0 }, { amt: 30 });
   assert.strictEqual(r.combo, 1, 'first hit -> combo 1');
@@ -19,35 +15,27 @@ const ASSIST_FRAC = 0.4;   // TP.assistFrac (globals.js)
   assert.strictEqual(r.combo, 8, 'combo increments from prior value');
 }
 {
-  // missing combo treated as 0
   const r = awardHit({}, { amt: 10 });
   assert.strictEqual(r.combo, 1, 'absent combo defaults to 0 -> 1');
 }
 
-// ---- hit score = round(amt * (1 + combo*0.05) * scoreMul) using POST-increment combo ----
 {
   const r = awardHit({ combo: 0 }, { amt: 30 });
-  // combo becomes 1 -> 30 * (1 + 0.05) = 31.5 -> round 32
   assert.strictEqual(r.score, Math.round(30 * 1.05), 'hit score uses post-increment combo');
   assert.strictEqual(r.score, 32, 'concrete: 32');
 }
 {
-  // score multiplier applies
   const r = awardHit({ combo: 0 }, { amt: 100, scoreMul: 2 });
   assert.strictEqual(r.score, Math.round(100 * 1.05 * 2), 'scoreMul multiplies hit score');
 }
 {
-  // absent scoreMul -> 1
   const r = awardHit({ combo: 0 }, { amt: 40 });
   assert.strictEqual(r.score, Math.round(40 * 1.05 * 1), 'absent scoreMul defaults to 1');
 }
 {
-  // float amt is NOT pre-rounded (matches legacy: round of full product)
   const r = awardHit({ combo: 0 }, { amt: 30.7 });
   assert.strictEqual(r.score, Math.round(30.7 * 1.05), 'float amt rounded only after multiply');
 }
-
-// ============================ awardKill ============================
 
 function killEv(over) {
   return Object.assign(
@@ -57,7 +45,6 @@ function killEv(over) {
   );
 }
 
-// ---- kill score = round(pts * (1 + combo*0.1) * scoreMul) using PRE-existing combo ----
 {
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ pts: 1000 }));
   assert.strictEqual(r.score, Math.round(1000 * 1 * 1), 'no combo -> base pts');
@@ -67,12 +54,10 @@ function killEv(over) {
   assert.strictEqual(r.score, Math.round(1000 * 1.5), 'combo 5 -> 1.5x kill score');
 }
 {
-  // score multiplier applies to kill score
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ pts: 6000, scoreMul: 3 }));
   assert.strictEqual(r.score, Math.round(6000 * 1 * 3), 'scoreMul multiplies kill score');
 }
 
-// ---- RP by source: player ----
 {
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ byPlayer: true, tpBase: 8, rpPerKill: 2, rpMul: 1 }));
   assert.strictEqual(r.rp, (8 + 2) * 1, 'player RP = (tpBase + rpPerKill) * rpMul');
@@ -81,34 +66,28 @@ function killEv(over) {
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ byPlayer: true, tpBase: 8, rpPerKill: 2, rpMul: 1.5 }));
   assert.strictEqual(r.rp, (8 + 2) * 1.5, 'rpMul multiplies player RP');
 }
-// ---- RP by source: CCA escort kill (half rate) ----
 {
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ byPlayer: false, byCCA: true, tpBase: 8, rpMul: 1 }));
   assert.strictEqual(r.rp, 8 * 0.5 * 1, 'CCA RP = tpBase * 0.5 * rpMul');
 }
-// ---- RP by source: assist (player damaged it but did not land the kill) ----
 {
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ byPlayer: false, byCCA: false, tpBase: 8, assistFrac: ASSIST_FRAC, playerDmg: 5 }));
   assert.strictEqual(r.rp, 8 * ASSIST_FRAC * 1, 'assist RP = tpBase * assistFrac * rpMul');
 }
-// ---- RP by source: no player damage, not CCA -> zero RP ----
 {
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ byPlayer: false, byCCA: false, playerDmg: 0 }));
   assert.strictEqual(r.rp, 0, 'no contribution -> no RP');
 }
 {
-  // tiny playerDmg below the 0.5 threshold does not count as an assist
   const r = awardKill({ combo: 0, killStreak: 0 }, killEv({ byPlayer: false, byCCA: false, playerDmg: 0.3 }));
   assert.strictEqual(r.rp, 0, 'playerDmg <= 0.5 is not an assist');
 }
 
-// ---- killstreak increment ----
 {
   const r = awardKill({ combo: 0, killStreak: 3 }, killEv());
   assert.strictEqual(r.killStreak, 4, 'killStreak increments');
   assert.strictEqual(r.streakReward, false, '4 is not an interval boundary');
 }
-// ---- killstreak interval boundary (every 5th kill) ----
 {
   assert.strictEqual(KILLSTREAK_INTERVAL, 5, 'KILLSTREAK_INTERVAL matches the legacy %5');
   const r = awardKill({ combo: 0, killStreak: 4 }, killEv());
@@ -125,7 +104,6 @@ function killEv(over) {
   assert.strictEqual(r.streakReward, false, '6 is not a boundary');
 }
 
-// ============================ input immutability ============================
 {
   const state = { combo: 2, killStreak: 4 };
   const stateCopy = Object.assign({}, state);

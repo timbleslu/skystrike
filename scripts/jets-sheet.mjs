@@ -4,14 +4,13 @@
 import { launchGame } from './lib/boot.mjs';
 import { join } from 'path';
 const out = process.argv[2] || '.scratch/jet-visual-overhaul/jets-sheet.png';
-const view = process.argv[3] || '3q';                          // top | rear | 3q
-const shapesArg = process.argv[4] || '';                       // csv subset, e.g. SU57,EFT,RAFALE
-const skinId = process.argv[5] || '';                          // optional skin id (e.g. splinter) → render that livery's zones
+const view = process.argv[3] || '3q';
+const shapesArg = process.argv[4] || '';
+const skinId = process.argv[5] || '';
 
 const { page, port, root, close } = await launchGame({ viewport: { width: 1500, height: 1150 } });
 page.on('pageerror', e => console.error('PAGEERR', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
-// wait for all glTF templates to load
 await page.waitForFunction(() => typeof jetGLTF !== 'undefined' && Object.keys(jetGLTF).length >= 13, { timeout: 20000 }).catch(() => {});
 await page.waitForTimeout(400);
 
@@ -23,7 +22,7 @@ const dataUrl = await page.evaluate(({ view, shapesArg, skinId }) => {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setSize(W, H); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
   const sc = new THREE.Scene(); sc.background = new THREE.Color(0x1a2028);
-  if (typeof scene !== 'undefined' && scene.environment) sc.environment = scene.environment;   // reuse game PBR env
+  if (typeof scene !== 'undefined' && scene.environment) sc.environment = scene.environment;
   sc.add(new THREE.HemisphereLight(0xffffff, 0x40454a, 1.1));
   const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(30, 50, 20); sc.add(dl);
   const present = SHAPESL.filter(id => jetGLTF[id]);
@@ -32,19 +31,18 @@ const dataUrl = await page.evaluate(({ view, shapesArg, skinId }) => {
   for (let k = 0; k < present.length; k++) {
     const id = present[k];
     const jet = (typeof JETS !== 'undefined') && JETS.find(j => j.shape === id);
-    // skinId: '' = equipped (jetPaint); '0'|'1'|'2' = that SKIN SLOT for each jet (so one montage = every jet's Nth livery); else a literal skin id
     let paint;
     if (jet && skinId !== '' && typeof resolveSkinPaint === 'function') {
       const list = (typeof SKINS !== 'undefined') && SKINS[jet.id];
       if (/^[0-2]$/.test(skinId) && list && list[+skinId]) paint = resolveSkinPaint(jet, list[+skinId].id);
       else paint = resolveSkinPaint(jet, skinId);
     } else paint = (jet && typeof jetPaint === 'function') ? jetPaint(jet) : { color: 0xdfe4ea, accent: 0xff7a2a };
-    const clone = buildJetOrGLTF(paint.color, paint.accent, SHAPES[id], true, { skin: paint });   // player path -> skin paint (zones) + burner
+    const clone = buildJetOrGLTF(paint.color, paint.accent, SHAPES[id], true, { skin: paint });
     if (clone.userData.engines && typeof animEngines === 'function') animEngines(clone, 0.95);
     const gx = ((k % cols) - (cols - 1) / 2) * cell;
     const gr = (Math.floor(k / cols) - (rows - 1) / 2) * cell;
-    if (view === 'rear') clone.position.set(gx, -gr, 0);   // rows stack in Y
-    else clone.position.set(gx, 0, gr);                    // top / 3q: rows in Z
+    if (view === 'rear') clone.position.set(gx, -gr, 0);
+    else clone.position.set(gx, 0, gr);
     sc.add(clone); loaded.push(id);
   }
   const aspect = W / H;

@@ -15,19 +15,16 @@ const path = require('path');
 
 const OUT_DIR = path.join(__dirname, '..', 'assets', 'maps');
 
-/* Muted tactical palette — dark navy sea, desaturated land, cyan/amber HUD grid.
-   Bright mission dots (drawn by CSS in the overlay) pop against this. */
 const PAL = {
-  sea0: '#06121d', sea1: '#0a1b2a',          // sea gradient (deep -> shallow)
-  land: '#1c2b22', landEdge: '#3a5a44',      // desaturated landmass + coastline
-  landAlt: '#2a2620', landAltEdge: '#5a4a32', // arid/desert land variant (sunfire)
-  ice: '#22303a', iceEdge: '#5a7488',         // snow/ridge land variant (midnight)
+  sea0: '#06121d', sea1: '#0a1b2a',
+  land: '#1c2b22', landEdge: '#3a5a44',
+  landAlt: '#2a2620', landAltEdge: '#5a4a32',
+  ice: '#22303a', iceEdge: '#5a7488',
   grid: 'rgba(90,150,180,0.14)', gridLit: 'rgba(120,200,230,0.22)',
   amber: 'rgba(210,150,60,0.32)', amberDim: 'rgba(210,150,60,0.16)',
   ring: 'rgba(120,200,230,0.16)', ink: 'rgba(150,200,225,0.55)', inkDim: 'rgba(120,170,200,0.32)',
 };
 
-/* shared defs: sea gradient + soft glow + a faint grid pattern, parametrized by id suffix */
 function defs(id, sea0, sea1) {
   return `
   <defs>
@@ -42,7 +39,6 @@ function defs(id, sea0, sea1) {
   </defs>`;
 }
 
-/* tactical graticule: a 10-unit grid, every other line slightly brighter, + edge frame */
 function grid() {
   let lines = '';
   for (let v = 10; v < 100; v += 10) {
@@ -55,19 +51,16 @@ function grid() {
   return `<g>${lines}</g>`;
 }
 
-/* range rings centered on a focal point (the operation's objective area) */
 function rings(cx, cy) {
   let r = '';
   [14, 26, 38].forEach(rad => {
     r += `<circle cx="${cx}" cy="${cy}" r="${rad}" fill="none" stroke="${PAL.ring}" stroke-width="0.14" stroke-dasharray="1.4 1.8"/>`;
   });
-  // crosshair tick at focal point
   r += `<line x1="${cx - 3}" y1="${cy}" x2="${cx + 3}" y2="${cy}" stroke="${PAL.ink}" stroke-width="0.16"/>`;
   r += `<line x1="${cx}" y1="${cy - 3}" x2="${cx}" y2="${cy + 3}" stroke="${PAL.ink}" stroke-width="0.16"/>`;
   return `<g>${r}</g>`;
 }
 
-/* compass rose in a corner */
 function compass(cx, cy) {
   const a = 6;
   return `<g opacity="0.7">
@@ -78,16 +71,10 @@ function compass(cx, cy) {
   </g>`;
 }
 
-/* sector label text */
 function label(x, y, text, anchor) {
   return `<text x="${x}" y="${y}" fill="${PAL.inkDim}" font-size="2.5" letter-spacing="0.4" font-family="monospace" text-anchor="${anchor || 'start'}">${text}</text>`;
 }
 
-/* ---- per-theater landmass paths (simplified, stylized — NOT survey-accurate) ---- */
-
-// IRON VEIL — South China Sea / Daolin Island Chain.
-// Open sea center; a mainland coast cutting the W edge, scattered island shapes (a chain) toward
-// the NE/center, a larger contested island near the objective. Sea-dominant theater.
 function ironVeil() {
   const focal = [60, 44];
   const land = `
@@ -109,9 +96,6 @@ function ironVeil() {
   return { theater: 'SOUTH CHINA SEA', sub: 'DAOLIN ISLAND CHAIN', focal, sea0: PAL.sea0, sea1: PAL.sea1, land, labels };
 }
 
-// MIDNIGHT MERIDIAN — Vostok Highlands / winter ridgeline.
-// Land-dominant: a mountainous landmass filling most of the frame with a ridgeline spine, a frozen
-// valley/channel cutting through, sparse water. Ice/snow palette.
 function midnightMeridian() {
   const focal = [50, 30];
   const land = `
@@ -130,9 +114,6 @@ function midnightMeridian() {
   return { theater: 'VOSTOK HIGHLANDS', sub: 'WINTER RIDGELINE', focal, sea0: '#0a1622', sea1: '#12202c', land, labels };
 }
 
-// SUNFIRE HORIZON — Persian Gulf / fortified peninsula.
-// A Gulf body (sea) with a fortified peninsula jutting from the NE, an arid mainland on the E/N,
-// a coalition channel to the SW. Arid/desert land palette.
 function sunfireHorizon() {
   const focal = [58, 34];
   const land = `

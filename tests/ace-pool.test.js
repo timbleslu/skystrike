@@ -1,11 +1,8 @@
 'use strict';
 const assert = require('assert');
 
-// rival.js touches `store` inside its fns — stub it so require() is clean under Node.
 global.store = { get: () => null, set: () => {} };
 const { hostileAceFor } = require('../js/rival.js');
-// aceShapePool/jetNameForShape + the roster now import the REAL impl (js/roster.js,
-// require-safe) instead of a hand-mirrored stub copy that silently drifts from the game.
 const { JETS, aceShapePool, jetNameForShape } = require('../js/roster.js');
 
 const pool = aceShapePool();
@@ -17,7 +14,6 @@ assert.strictEqual(jetNameForShape('CCAJET'), 'CCAJET', 'unknown shape falls bac
 
 console.log('ok - aceShapePool excludes STD and jetNameForShape maps shapes to names');
 
-// pool non-empty for each combat sector type
 const COMBAT_SECTORS = ['FURBALL', 'INTERCEPT', 'STRIKE', 'ESCORT', 'DEFEND', 'ELITE'];
 COMBAT_SECTORS.forEach(function (s) {
   const entry = hostileAceFor(s);
@@ -25,22 +21,18 @@ COMBAT_SECTORS.forEach(function (s) {
   assert.ok(typeof entry.callsign === 'string' && entry.callsign.length > 0, 'entry has a callsign (' + s + ')');
 });
 
-// DEPOT and FINAL have no entry (not combat sectors with named aces)
 assert.strictEqual(hostileAceFor('DEPOT'), null, 'DEPOT has no hostile ace entry');
 assert.strictEqual(hostileAceFor('FINAL'), null, 'FINAL has no hostile ace entry');
 assert.strictEqual(hostileAceFor('UNKNOWN'), null, 'unknown sector returns null');
 
-// selection is deterministic — same type always returns same callsign
 COMBAT_SECTORS.forEach(function (s) {
   assert.strictEqual(hostileAceFor(s).callsign, hostileAceFor(s).callsign, 'callsign is stable for ' + s);
 });
 
-// all callsigns are unique across the pool
 const callsigns = COMBAT_SECTORS.map(function (s) { return hostileAceFor(s).callsign; });
 const unique = callsigns.filter(function (c, i) { return callsigns.indexOf(c) === i; });
 assert.strictEqual(unique.length, callsigns.length, 'all hostile ace callsigns are unique');
 
-// stat deltas are within sane bounds: hpMul 1.0–1.5, turnRate 1.0–2.5, speed 1.0–1.5
 COMBAT_SECTORS.forEach(function (s) {
   const d = hostileAceFor(s);
   assert.ok(d.hpMul >= 1.0 && d.hpMul <= 1.5, 'hpMul in sane range for ' + s);

@@ -1,7 +1,6 @@
 /* SKYSTRIKE — lang/en.js: English (canonical — every key lives here first; t() falls back to EN) strings. Loaded right after js/i18n.js (which declares I18N + t/tf).
    Add/update keys with `node scripts/i18n.mjs set <key> --en ... --zh ... --ko ...` instead of hand-editing all three files. */
 I18N.EN = {
-  /* ---- language / onboarding ---- */
   'lang.tagline': 'ARCADE JET COMBAT',
   'lang.begin': 'SELECT LANGUAGE TO BEGIN',
   'onboard.title': 'CONTROLS',
@@ -15,7 +14,6 @@ I18N.EN = {
   'onboard.touch': 'Touchscreen controls auto-detect and activate on mobile devices.',
   'onboard.more': 'Full reference, aircraft briefs and Settings live in the FLIGHT MANUAL (▣ CONTROLS & MANUAL in the hangar).',
   'onboard.continue': '▶ CONTINUE TO HANGAR',
-  /* ---- first-run guided tutorial (F5) ---- */
   'tut.title': 'FLIGHT TRAINING',
   'tut.pitch': 'Pull back — press S to pitch your nose up and climb.',
   'tut.pitchTouch': 'Climb — pull the stick UP to raise your nose and gain altitude (push down to dive).',
@@ -31,7 +29,6 @@ I18N.EN = {
   'tut.roll': 'BARREL ROLL — double-tap Q or E to snap-roll 360° and dodge incoming fire (6s cooldown).',
   'tut.rollTouch': 'BARREL ROLL — double-flick the stick left or right to snap-roll 360° and dodge fire (6s cooldown).',
 
-  /* ---- hud labels ---- */
   'hud.guns': 'GUNS',
   'hud.locking': 'LOCKING',
   'hud.locked': '◉ LOCKED',
@@ -61,27 +58,21 @@ I18N.EN = {
   'hud.killRow': 'Lv{lv} · W{wv}',
   'hud.hint': 'W/S PITCH · Q/E ROLL · A/D YAW · SHIFT/CTRL THRUST · CTRL+S HIGH-G · SPACE GUN · G MISSILE · X FLARE · F LOCK · R SPECIAL · B SPECIAL-2 · T/Y FLIGHT CMD · C CAM · V LOOK-BACK · RMB TRACK',
 
-  /* ---- camera modes ---- */
   'cam.CHASE': 'CHASE', 'cam.CLOSE': 'CLOSE', 'cam.COCKPIT': 'COCKPIT',
 
-  /* ---- airframe generation ---- */
   'gen.BASELINE': 'BASELINE', 'gen.4.5 GEN': '4.5 GEN', 'gen.5th GEN': '5th GEN', 'gen.6th GEN': '6th GEN',
 
-  /* ---- touch buttons ---- */
   'touch.gun': 'GUN', 'touch.msl': 'MSL', 'touch.flr': 'FLR', 'touch.spc': 'SPC',
   'touch.thr': 'THR','touch.cam': 'CAM', 'touch.lck': 'LOCK',
   'touch.aws': 'STRK', 'touch.ars': 'RSPLY', 'touch.ajm': 'JAM',
 
-  /* ---- AWACS support calls (keys 1/2/3) ---- */
   'awacs.strike': 'ORBITAL STRIKE', 'awacs.resupply': 'EMERGENCY RESUPPLY', 'awacs.jam': 'JAMMING',
   'awacs.empty': 'AWACS: NO CALLS LEFT THIS SECTOR',
   'awacs.cooldown': 'AWACS: CHANNEL ON COOLDOWN',
   'awacs.chipStrike': 'STRIKE', 'awacs.chipResupply': 'RESUP', 'awacs.chipJam': 'JAM',
 
-  /* ---- killstreak callouts ---- */
   'ks.5': 'KILLSTREAK', 'ks.10': 'RAMPAGE', 'ks.15': 'UNSTOPPABLE', 'ks.20': 'GODLIKE',
 
-  /* ---- banners ---- */
   'banner.getReady': 'GET READY',
   'banner.waveInbound': 'WAVE {n} INBOUND',
   'banner.wave': 'WAVE {n}',
@@ -157,17 +148,14 @@ I18N.EN = {
   'banner.wingFocus': '▸ FLIGHT: FOCUS FIRE', 'banner.wingRegroup': '▸ FLIGHT: REGROUP',
   'banner.wingNone': 'NO ESCORTS AIRBORNE', 'banner.wingNoTarget': 'NO TARGET TO FOCUS',
 
-  /* ---- mission grading ---- */
   'grade.title': 'MISSION RATING',
   'grade.bonus': 'SP BONUS',
 
-  /* ---- star objectives ---- */
   'stars.title': 'OBJECTIVES',
   'stars.best': 'BEST {n}/3',
   'stars.obj.kills': 'CLEAR 60% OF FOES',
   'stars.obj.noDamage': 'A FULL WAVE, NO DAMAGE',
   'stars.obj.rescue': 'COMPLETE AN OBJECTIVE',
-  /* per-mission star condition labels (Ops debrief — what each star required) */
   'stars.cond.kills': 'CLEAR 60% OF FOES',
   'stars.cond.clean': 'A FULL WAVE, NO DAMAGE',
   'stars.cond.objective': 'COMPLETE THE OBJECTIVE',
@@ -179,7 +167,6 @@ I18N.EN = {
   'stars.cond.fastClear': 'CLEAR UNDER {n}s',
   'stars.cond.killsN': '{n}+ KILLS',
 
-  /* ---- tech tree ui ---- */
   'tech.core': 'CORE', 'tech.owned': 'OWNED', 'tech.na': 'N/A',  'tech.researchPoints': 'RESEARCH POINTS',
   'tech.title': 'R&D TECH TREE',
   'tech.sub': '// DRAFT ONE OF 3 PER WAVE · UPGRADES PERSIST FOR THE RUN //',
@@ -193,12 +180,10 @@ I18N.EN = {
   'tech.pinHint': 'Tap a dimmed node to PIN it as a goal — future offers steer toward it. Tap the 3 glowing offers to draft one.',
   'tech.pinned': '◈ PINNED: {name}',
 
-  /* ---- wing picker ---- */
   'wing.title': 'SELECT WINGMAN AIRFRAME',
   'wing.sub': '// CHOOSE THE JET YOUR NEW ESCORT WILL FLY //',
   'wing.cancel': 'CANCEL',
 
-  /* ---- campaign: operations-map revamp — screen chrome ---- */
   'campaign.operations': 'OPERATIONS',
   'campaign.enemyIntel': 'ENEMY INTEL',
   'campaign.loadout': 'LOADOUT',
@@ -211,7 +196,6 @@ I18N.EN = {
   'campaign.met': '(met)',
   'campaign.miss': '(miss)',
 
-  /* ---- campaign: boss callsigns + per-phase intel lines ---- */
   'boss.warlord': 'WARLORD',
   'boss.warlord.p1': 'PHASE 1 — Textbook dogfight. He turns with you and tests your nerve gun-to-gun.',
   'boss.warlord.p2': 'PHASE 2 — Drops to the deck over the reef, blooms chaff and walls the sky with missiles.',
@@ -225,7 +209,6 @@ I18N.EN = {
   'boss.corsair.p2': 'PHASE 2 — Composure gone. Desperation energy-fight down in the dirt.',
   'boss.corsair.p3': 'PHASE 3 — Smoke-trailing, he turns his wreck into a weapon. Dodge the ram, then the last shot.',
 
-  /* ---- campaign: OPERATION IRON VEIL (Op1) ---- */
   'op.ironVeil.name': 'OPERATION IRON VEIL',
   'op.ironVeil.theater': 'South China Sea · Daolin Island Chain',
   'op.ironVeil.lore': 'The Daolin Island Chain has been disputed for decades — a scatter of reefs and atolls in the South China Sea, rich in seabed gas, astride the shipping lanes that feed half a continent. For decades the dispute stayed frozen. At 0400 it thawed. The Zhuliang Maritime Sovereignty Force took every island in a single coordinated dawn — landing craft, prefabricated bunkers, a combat air patrol already overhead before the first satellite pass caught it.\n\nZMSF is not a ragtag militia. They are professional, well-equipped, and they planned this for years. The fortifications going up on the beaches were poured before our fleet cleared the horizon. Their doctrine is simple and ugly: seize fast, dig in faster, and let the world argue while concrete cures. Every hour we wait, the islands become more theirs and less anyone\'s to take back.\n\nOur carrier strike group is the nearest force that can answer, and the only one that can answer in time. Diplomacy is a phone call away and a month too late. The order from fleet command is to contain the incursion and reverse it before ZMSF can declare the seizure a fact on the ground — before the airfields are operational, before the coastal batteries can range our ships, before this becomes a war instead of an incident.\n\nYou fly the tip of that spear. You go in first to see what we are facing, you take the sky so everything else can follow, and you take the islands back one reef at a time. This is not a punitive raid. This is a campaign to undo a fait accompli, and it lives or dies on air power.\n\nThe weather over Daolin is fair and the water is warm. None of that will matter. ZMSF will throw everything they have to keep what they stole, and at the end of it their air commander is waiting over the reef with no intention of leaving. Contain them. Break them. Give the islands back to the people who never agreed to lose them.',
@@ -262,7 +245,6 @@ I18N.EN = {
   'op.ironVeil.l8.obj': 'Break through WARLORD\'s screen, then shoot down WARLORD.',
   'op.ironVeil.l8.intel': 'Single elite interceptor — stealth airframe, multi-phase fight. Veteran ace. He does not break.',
 
-  /* ---- campaign: OPERATION MIDNIGHT MERIDIAN (Op2) ---- */
   'op.midnightMeridian.name': 'OPERATION MIDNIGHT MERIDIAN',
   'op.midnightMeridian.theater': 'Vostok Highlands · Winter Ridgeline',
   'op.midnightMeridian.lore': 'The Vostok Highlands are a wall of frozen rock that a former Soviet republic once called home. A junta calling itself the Vostok Combined Air Defense swallowed that republic whole — no vote, no warning, just a column of armor and a string of executions — and inherited what the old regime left buried in the mountains. What they inherited is a nuclear-capable surface-to-air missile network, and they have spent the winter wiring it back to life across the ridgeline.\n\nWhen that network locks in, it closes the sky over half the region and puts a nuclear threat behind an air-defense umbrella no fleet can fly through. Every battery is hardened, every radar is layered, and every emitter is a tripwire that brings the whole valley down on whatever it sees. VCAD did not build this to defend a border. They built it to dare the world to come and take it.\n\nNATO-aligned command intends to take it — blind it, breach it, and bury it before it goes fully active. But no flag wants its name on this. There will be no press release, no carrier in the news, no record that anyone was ever in that valley. If this operation is traced back to us, it has failed regardless of what it destroyed. You fly it dark, you fly it quiet, and you fly it alone.\n\nYour role is the whole knife: slip the radar gaps to map what the strike package cannot see, kill the emitters that would scream your position, escort the listening post and its people out before the snow closes the passes, and put precision steel on the batteries one clean run at a time. There is no second pass in these valleys. The weather will close the door behind you whether you are through it or not.\n\nAnd you are not the only ghost in this sky. Since the first emitter went dark, something has been shadowing you — never close enough to kill, never far enough to lose. Callsign GLACIER. He wrote VCAD\'s intercept doctrine and he is waiting at the last battery, where he has had time to learn every move you have made. Finish the network. Finish him. Then vanish, because officially you were never here. Winter does not care either way.',
@@ -299,7 +281,6 @@ I18N.EN = {
   'op.midnightMeridian.l8.obj': 'Destroy the final SAM battery on the glacier, then shoot down GLACIER.',
   'op.midnightMeridian.l8.intel': 'Single elite ace — BVR-optimized heavy fighter, multi-phase. He wrote their intercept doctrine.',
 
-  /* ---- campaign: OPERATION SUNFIRE HORIZON (Op3) ---- */
   'op.sunfireHorizon.name': 'OPERATION SUNFIRE HORIZON',
   'op.sunfireHorizon.theater': 'Persian Gulf · Fortified Peninsula',
   'op.sunfireHorizon.lore': 'The war in the Vostok Highlands ended, but its weapons did not die — they scattered. VCAD remnants carried their hardware and their know-how south, into a black-market pipeline that ran straight to the Persian Gulf and into the hands of the Khalidi Expeditionary Force. KEF had money and ambition and no scruples; the remnants had the technology and the desperation to sell it. The result is rising out of a fortified peninsula at the mouth of the Gulf right now.\n\nIt is a carrier-killer missile complex — buried magazine vaults, layered air defenses, a sensor ring that turns the whole peninsula into one continuous trap. When it goes live at dawn, the entire carrier group will be inside its reach, and every ship under your feet becomes a target the moment the complex draws its first breath. There is no standing off from this. The range belongs to them. The only safe distance is gone.\n\nThe complex was designed by a man who knows exactly how we fight, because he used to fight beside us. Callsign CORSAIR — a coalition ace who sold his expertise and his flag and built this place certain that no one would dare the approaches he wrote off as impassable. Every defensive choice he made anticipates the textbook he helped write. To beat his complex you have to do the things he was sure you would never try.\n\nYour role is to take the whole peninsula apart before sunrise: sweep the pickets, break the alert CAP before it walls off the sky, dead-reckon a targeting solution under the radar horizon, hold the relays and the rescues alive, and then put steel into the magazine vaults — the exposed one through the closing window, the buried one down a valley corridor CORSAIR swears cannot be flown. Some of that targeting intel is feeding to us from a ghost out of the Vostok valleys; old debts have a way of coming due.\n\nThen there is the man himself, waiting on the runway, who always knew it would come down to this. He flies like one of us because he was one of us. Multi-phase, fifth-generation, and out of excuses. The complex fires at dawn or it never fires at all. We finish this before the sun does.',
@@ -340,7 +321,6 @@ I18N.EN = {
   'op.sunfireHorizon.l9.obj': 'Break through CORSAIR\'s wing, then shoot down CORSAIR.',
   'op.sunfireHorizon.l9.intel': 'Single elite ace — fifth-gen air superiority fighter, multi-phase. He knows your every tactic.',
 
-  /* ---- mission intro-card blurbs (per level, shown on the §2 in-flight objective card) ---- */
   'op.ironVeil.l1.blurb': 'The group commits nothing until we know what is down there. You go in first — low, quiet, under their radar horizon — to photograph the beach fortifications ZMSF threw up overnight. Light combat air patrol over the channel, one radar corvette offshore, no heavy resistance expected. That is the briefing. The sea has a way of editing briefings.\n\nThis is a look, not a fight. Get the pictures, stay off their scopes, and be gone before they know you were ever here. If your camera catches something worth killing, kill it — but the imagery comes home either way. Everything the fleet does for the next week starts with what you bring back from this dawn.',
   'op.ironVeil.l2.blurb': 'ZMSF stood up a combat air patrol over the channel and right now that airspace is theirs. Multiple flights of frontline fighters are holding station, and they will not give the channel up cheap. Expect a fair fight, not an easy one — the kind where the merge decides everything and the second pass is worse than the first.\n\nThe channel is theirs until you say otherwise. Every strike, every escort, every landing that follows rides on you owning this sky. Go up there and take it. Weapons free — clear them out of the channel and do not come home until the air is ours.',
   'op.ironVeil.l3.blurb': 'A ZMSF radar corvette is lighting up the entire strike package — while it sees us, we cannot move. There is a combat air patrol layered above it, and the moment you climb, the threat board lights up with your name on it. So you do not climb. You go in at wave-top altitude, in the corvette\'s own blind spot, and you stay there.\n\nThat corvette can see in the dark. Slip past the patrol undetected, put the radar on the bottom of the sea, and be gone before anyone reads the spike. Kill the eye and the whole strike goes blind in your favor. One ship, one clean kill, and the door to Daolin swings open.',
@@ -367,7 +347,6 @@ I18N.EN = {
   'op.sunfireHorizon.l8.blurb': 'Vault beta is hardened, buried deep, and the only way in is a dive-strike down the valley corridor CORSAIR wrote off as impassable. It is a deep underground target behind a brutal terrain run-in with full point defense — the hardest approach in the theater, and he built the place certain no one would ever try it.\n\nHe built vault beta sure no one would dare the valley. Dive it anyway and prove the man wrong. Thread the corridor he swore could not be flown, put steel down the throat of the second vault, and pull out before the canyon walls take what the guns miss. This is the second sun he meant to set over our fleet. Make sure it never rises.',
   'op.sunfireHorizon.l9.blurb': 'He is on the runway, and he always knew it would come to this. Callsign CORSAIR — the man who handed the enemy our playbook, flying a fifth-generation air superiority fighter and waiting through a multi-phase fight that knows your every tactic. He flies like one of us because he was one of us.\n\nHe flew with us, then sold the playbook. CORSAIR is on the runway now, and he always knew it would come down to you. End the carrier-killer threat where it started — with the man who designed it. He will counter everything you were taught, so beat him with what he never expected. Finish CORSAIR, finish the complex, finish SUNFIRE HORIZON.',
 
-  /* ---- hangar ---- */
   'hangar.sub': '// SELECT YOUR AIRCRAFT //',
   'hangar.best': 'BEST SCORE',
   'hangar.difficulty': 'DIFFICULTY',
@@ -393,7 +372,6 @@ I18N.EN = {
   'diff.descACE': 'Lethal — more foes, faster guns, fragile hull.',
   'tod.DAY': 'DAY', 'tod.DUSK': 'DUSK', 'tod.NIGHT': 'NIGHT',
 
-  /* ---- jet card ---- */
   'card.noSpecial': 'NO SPECIAL',
   'card.noSpecialAbility': 'NO SPECIAL ABILITY',
   'card.special': 'SPECIAL',
@@ -410,12 +388,10 @@ I18N.EN = {
   'stat.SPD': 'SPD', 'stat.AGI': 'AGI', 'stat.ACC': 'ACC',
   'stat.ARM': 'ARM', 'stat.STL': 'STL', 'stat.FPW': 'FPW',
 
-  /* ---- game over ---- */
   'go.score': 'SCORE', 'go.wave': 'WAVE', 'go.best': 'BEST',
   'go.kills': 'Kills', 'go.accuracy': 'Accuracy', 'go.missiles': 'Missiles', 'go.time': 'Time',
   'go.redeploy': '▶ REDEPLOY', 'go.hangar': 'HANGAR',
 
-  /* ---- manual ---- */
   'manual.title': 'FLIGHT MANUAL',
   'manual.sub': '// TACTICAL REFERENCE //',
   'manual.resume': '▶ RESUME',
@@ -438,7 +414,6 @@ I18N.EN = {
   'manual.tabTactics': 'Tactics',
   'manual.tabSettings': 'Settings',
 
-  /* ---- settings labels ---- */
   'set.language': 'Language',
   'set.sensitivity': 'Control sensitivity',
   'set.volume': 'Master volume',
@@ -471,7 +446,6 @@ I18N.EN = {
   'set.hudLarge': 'Large',
   'set.hudXl': 'Extra Large',
   'set.langEN': 'English', 'set.langZH': '简体中文', 'set.langKO': '한국어',
-  /* ---- mobile control settings ---- */
   'set.mobileControl': 'Mobile control',
   'set.mcTouch': 'Touch', 'set.mcMotion': 'Motion',
   'set.aggression': 'Tilt aggression',
@@ -496,7 +470,6 @@ I18N.EN = {
   'set.msNoData': 'No motion data — open over HTTPS (npm run serve:https) and reload',
   'set.msLive': 'Motion active',
 
-  /* ---- manual body (HTML) ---- */
   'manBody.flight': '<li><b>W</b> / <b>S</b> — pitch down / up</li><li><b>Q</b> / <b>E</b> — roll left / right</li><li><b>A</b> / <b>D</b> — yaw (rudder)</li><li><b>SHIFT</b> / <b>CTRL</b> — throttle up / brake</li><li><b>CTRL + S</b> — high-G turn (tighter pitch, bleeds speed)</li><li><b>Double-tap Q / E</b> — barrel roll: snap 360° to dodge incoming fire (6s cooldown)</li>',
   'manBody.combat': '<li><b>SPACE</b> — cannon (now a finite magazine — watch the <em>GUN</em> count)</li><li>A <em>GUNSIGHT PIPPER</em> computes cannon lead on the nearest target ahead — fly your nose onto the pipper and it snaps to a green <em>GUNS</em> diamond when you have a kill shot. Toggle in Settings.</li><li><b>G</b> — fire missile (homes only with a full lock)</li><li><b>X</b> — drop flares (now reliably drag incoming missiles off you)</li><li><b>F</b> — designate / cycle lock target <em>(locking is manual by default — toggle Auto-Lock in Settings)</em></li><li><b>R</b> — special ability</li><li><b>T</b> — order your flight to FOCUS FIRE your target · <b>Y</b> — order them to REGROUP &amp; defend (escorts are tagged on the HUD)</li><li><b>C</b> cycle camera (incl. clear cockpit view) · <b>V</b> hold to look back · hold <b>RMB</b> track</li><li>Fly into glowing green <em>SUPPLY CRATES</em> to restock guns, missiles &amp; flares.</li><li><b>H</b> / <b>ESC</b> — open this manual (pauses)</li>',
   'manBody.lock': 'By default locking is <b>manual</b>: press <b>F</b> to designate the nearest target ahead (press again to cycle). A ring then closes while you hold it in the forward reticle; when it snaps to a solid red <em>LOCKED</em> box, your next missile homes and <b>destroys any non-boss instantly</b>. Bosses must be worn down. Clouds and active stealth break a lock. Prefer the old behaviour? Turn on <em>Auto-Lock</em> in Settings.',
@@ -510,7 +483,6 @@ I18N.EN = {
   'manBody.special': '<li>Press <b>R</b> to activate the unique special ability of your airframe. The <em>SPECIAL</em> gauge on the HUD shows charge — abilities recharge automatically.</li><li><b>Stealth cloak</b> (F-35, F-22): vanish from enemy radar for 8s and break all incoming missile locks. Clouds extend the cloaking effect.</li><li><b>Afterburner burst</b>: explosive thrust that can break missile tracks — most effective at low speed when evading pursuit.</li><li><b>CCA drone swarm</b> (F-47): deploys electric-blue autonomous attack drones that immediately acquire and engage targets (~16s duration).</li><li><b>Directed laser</b>: a sustained-beam precision weapon ideal against high-HP targets and bosses.</li><li>Each aircraft card in the hangar describes its passive perk and active ability.</li>',
   'manBody.missions': '<li>Radio calls during a sortie announce optional <b>mission objectives</b>. Complete them for bonus RP and SP — or ignore them and focus on survival.</li><li><b>STRIKE</b>: destroy a marked high-value target. Immune to AWACS orbital strike.</li><li><b>ESCORT</b>: protect convoy units from enemy attack. Escort unit kills do not count toward your tally.</li><li><b>INTERCEPT</b>: shoot down marked bombers before they leave the sector.</li><li><b>SWEEP</b>: eliminate all enemies within the wave.</li><li><b>BOSS ACE</b>: defeat the wave boss. Expires if you advance past the wave.</li><li>Complete 5 missions in one run to earn the <em>TACTICIAN</em> achievement.</li>',
 
-  /* ---- meta-progression (SP currency, perks, jet/skin unlocks, achievements) ---- */
   'meta.title': 'COMMAND PROGRESSION',
   'meta.sub': '// STRATEGIC POINTS PERSIST BETWEEN SORTIES //',
   'meta.btn': '▲ COMMAND & PROGRESSION',
@@ -538,14 +510,12 @@ I18N.EN = {
   'pilot.needAch': 'REQUIRES: {a}',
   'pilot.hint': 'Your callsign shows in the HUD during flight and on your debrief card.',
   'banner.achUnlocked': '★ {n} ACHIEVEMENT(S) UNLOCKED ★',
-  /* ---- daily seeded challenge (F7) ---- */
   'daily.sub': 'Everyone flies the same seed today — one attempt. Date {date}.',
   'daily.play': '▶ FLY TODAY’S SORTIE',
   'daily.done': '✔ FLOWN TODAY',
   'daily.best': 'TODAY’S BEST {best}',
   'daily.locked': 'COME BACK TOMORROW FOR A NEW SEED',
 
-  /* ---- Boss Rush (F15) ---- */
   'bossrush.title': '☠ BOSS RUSH',
   'bossrush.start': '☠ BOSS RUSH',
   'bossrush.locked': '☠ BOSS RUSH — CLEAR THE CAMPAIGN TO UNLOCK',
@@ -554,7 +524,6 @@ I18N.EN = {
   'bossrush.wave': 'BOSS {n} / {total}',
   'bossrush.cleared': 'GAUNTLET CLEARED — {t}',
 
-  /* meta data strings (perks / achievements / skins) — canonical EN copy (no fields in meta.js tables) */
   meta: {
     'hull':     { name: 'REINFORCED HULL',   desc: 'Start every sortie with more hull integrity (+6% max HP per level).' },
     'plating':  { name: 'ABLATIVE PLATING',  desc: 'Begin with a sturdier shield (+8% max shield per level).' },
@@ -575,56 +544,35 @@ I18N.EN = {
     'skin.splinter': { name: 'SPLINTER' }, 'skin.raptor': { name: 'PREDATOR' },
     'skin.felon':    { name: 'FELON' }, 'skin.aurora': { name: 'AURORA' },
     'skin.shadow':   { name: 'SHADOW' }, 'skin.blaze': { name: 'BLAZE' },
-    // designed per-jet liveries (skins 2 & 3)
     'skin.desert':   { name: 'DESERT' }, 'skin.ghost':  { name: 'GHOST' },
     'skin.viper':    { name: 'VIPER' },  'skin.dragon': { name: 'DRAGON' },
     'skin.panel':    { name: 'PANEL' },  'skin.tiger':  { name: 'TIGER' },
     'skin.navy':     { name: 'NAVY' },
-    // textureless-jet livery redesign — skin 2 (aggressor) + elevated skin 3 (decal + geo)
     'skin.aggressor':   { name: 'AGGRESSOR' },    'skin.valedictor':   { name: 'VALEDICTOR' },
     'skin.swarmlord':   { name: 'SWARMLORD' },    'skin.mightydragon': { name: 'MIGHTY DRAGON' },
     'skin.dunestalker': { name: 'DUNE STALKER' }, 'skin.nightreaper':  { name: 'NIGHT REAPER' },
     'skin.tigermeet':   { name: 'TIGER MEET' },   'skin.blueangel':    { name: 'BLUE ANGEL' },
-    // authentic real-world livery re-theme (skins 2 & 3, Jun 17)
     'skin.eagle':        { name: 'EAGLE GREY' },    'skin.havglass':    { name: 'HAVE GLASS' },
     'skin.silverdragon': { name: 'SILVER DRAGON' }, 'skin.desertghost': { name: 'DESERT GHOST' },
     'skin.nightfall':    { name: 'NIGHTFALL' },     'skin.nightjar':    { name: 'NIGHTJAR' },
   },
 
-/* === F5 killstreak === kill-streak momentum strings, appended after the I18N dict is fully built (it is
-   closed above) so we extend each language table in place. `banner.streak` is parameterized by the new
-   multiplier ({mult} = 1.5 / 2 / 3, fired once per tier crossing); `hud.streak` labels the HUD chip. EN + ZH + KO. */
   'banner.streak': '⚡ KILL STREAK ×{mult} ⚡',
   'hud.streak': 'STREAK',
 
-/* === end F5 === */
-/* === F3 wingman-wheel i18n === */
-/* Command-wheel strings injected via Object.assign so the four concurrent factory features don't collide
-   inside the big I18N.EN/ZH/KO literals. Order-badge names (wing.order.*), order banners (banner.wingman*),
-   and the three order touch buttons (touch.w*). EN + ZH + KO for every key. */
   'wing.order.free': 'FREE', 'wing.order.engage': 'ENGAGE', 'wing.order.cover': 'COVER', 'wing.order.regroup': 'REGROUP',
   'banner.wingmanFree': '▸ FLIGHT: WEAPONS FREE', 'banner.wingmanEngage': '▸ FLIGHT: ENGAGE MY TARGET',
   'banner.wingmanCover': '▸ FLIGHT: COVER ME', 'banner.wingmanRegroup': '▸ FLIGHT: FORM UP · HOLD FIRE',
   'banner.wingmanBreak': '▸ FLIGHT: TARGET LOST · WEAPONS FREE',
   'touch.weng': 'ENG', 'touch.wcov': 'COV', 'touch.wrgp': 'RGP',
 
-/* === end F3 === */
-/* === F1 gun-overheat — banner + heat-gauge labels (EN + ZH + KO) === */
   'banner.gunsOverheat': '⚠ GUNS OVERHEATED ⚠',
   'hud.gunHeat': 'GUN HEAT',
   'hud.overheat': 'OVERHEAT',
 
-/* === end F1 gun-overheat === */
-/* === F9 veterancy — per-airframe rank insignia strings (chip label + 5 escalating rank names), EN + ZH + KO.
-   Appended via Object.assign so the concurrent factory features don't collide inside the big I18N literals. */
   'vet.label': 'VETERANCY',
   'vet.rank1': 'BLOODED', 'vet.rank2': 'SEASONED', 'vet.rank3': 'VETERAN', 'vet.rank4': 'ACE', 'vet.rank5': 'LEGEND',
 
-/* === end F9 === */
-/* === F6 operation-4 === OPERATION POLAR VORTEX — 4th campaign operation (arctic theater), 8 linear
-   levels + a 3-phase final boss (BOREAS). EN authored; ZH/KO machine-drafted (flagged for native
-   review, repo precedent). Keys mirror the op1–3 schema in js/opmap.js: op header name/theater/lore,
-   per-level name/lore/obj/intel/blurb, boss.<callsign>.p1..p3. */
   'op.polarVortex.name': 'OPERATION POLAR VORTEX',
   'op.polarVortex.theater': 'Arctic Circle · Frozen Frontier',
   'op.polarVortex.lore': "The ice was supposed to be a wall. For a century the polar cap sealed the top of the world shut — no lanes, no bases, nothing worth fighting for under two kilometres of frozen dark. Then the cap opened. What the thaw uncovered was not empty water but a buried grid: a chain of automated missile silos and early-warning masts the old northern bloc had sunk into the permafrost and forgotten.\n\nThe Boreal Pact did not forget. As the passage cleared they moved north in force, thawed the silos back to life, and declared the whole Arctic shelf a closed military zone. Cargo convoys that strayed past the ice edge stopped answering. Recon flights that went to look never came home.\n\nCommand's read is simple and grim: hold the Pact here, above the circle, or fight them everywhere else later. The theater is the worst you will ever fly — whiteout fog that erases the horizon, blizzards that swallow radar, and a polar night that does not lift for weeks.\n\nSomewhere under that ice sits BOREAS, the Pact's field commander, flying a stolen airframe out of a base carved into a glacier. Break the silo grid, break their supply line, and put him on the ice. This is OPERATION POLAR VORTEX.",
@@ -673,8 +621,6 @@ I18N.EN = {
   'boss.boreas.p2': 'PHASE 2 — Drags you low into the ice fog, walls the air with chaff and missiles in a knife-fight you cannot see.',
   'boss.boreas.p3': 'PHASE 3 — Out of tricks, he climbs into the dark and rolls in on one last high-speed head-on. Win the merge.',
 
-/* === end F6 operation-4 === */
-/* === F8 weekly-challenge — hangar card + modifier names/descs (EN + ZH + KO) === */
   'weekly.title': '◈ WEEKLY CHALLENGE',
   'weekly.play': '▶ FLY THIS WEEK’S OPS',
   'weekly.sub': 'This week’s modifiers: {mods}. Fixed seed — chase your best.',
@@ -689,7 +635,6 @@ I18N.EN = {
   'weekly.mod.doubleAces.d': 'An extra enemy ace joins every wave. The skies are thick with veterans.',
   'weekly.mod.heavyWing': 'Heavy Wing',
   'weekly.mod.heavyWing.d': 'A reinforced, heavier airframe — turn rate is cut. Fly smooth, plan your turns.',
-  // CF content-factory pack modifiers (iron-skies)
   'weekly.mod.fogBank': 'Fog Bank',
   'weekly.mod.fogBank.d': 'The sky is locked to dense fog all week — radar cut, short sightlines, close-range fights.',
   'weekly.mod.lastFlare': 'Last Flare',
@@ -699,8 +644,6 @@ I18N.EN = {
   'weekly.mod.aceSeason': 'Ace Season',
   'weekly.mod.aceSeason.d': 'Two extra enemy aces join every wave. The veterans are out in force.',
 
-/* === end F8 weekly-challenge === */
-/* campaign overhaul (2026-09): sortie board, scripted beats, radio comms — EN */
   'campaign.sectorN': 'SECTOR {n}',
   'campaign.opN': 'OP {n}',
   'campaign.type.RECON': 'RECON',
@@ -966,6 +909,5 @@ I18N.EN = {
   'comms.nw.p3': 'One pass, southerner. Win it or die here.',
   'op.midnightMeridian.l7.obj': 'Escort the SIGINT team\'s helicopter, Dustoff, to the border, then finish the last CAP.',
 
-/* campaign overhaul (2026-09): sortie board, scripted beats, radio comms — EN */
   'beat.SWEEP.ace': 'Shoot down {n} fighters, ace included',
 };

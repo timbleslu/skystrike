@@ -15,7 +15,6 @@ const R = await page.evaluate(() => {
   const ok = (name, cond) => out.push({ name, pass: !!cond });
   const g = (id) => document.getElementById(id);
 
-  // ===== F3 units: pure conversion + DOM labels =====
   ok('speedDisplay 100kt imperial = 115 mph', speedDisplay(100, 'imperial').value === 115 && speedDisplay(100, 'imperial').unit === 'mph');
   ok('speedDisplay 100kt metric = 185 kph', speedDisplay(100, 'metric').value === 185 && speedDisplay(100, 'metric').unit === 'kph');
   ok('altDisplay 10000ft metric = 3048 m', altDisplay(10000, 'metric').value === 3048 && altDisplay(10000, 'metric').unit === 'm');
@@ -31,27 +30,22 @@ const R = await page.evaluate(() => {
   ok('metric -> #lblAlt = m', g('lblAlt') && g('lblAlt').textContent === 'm');
   unitSystem = 'imperial'; applyUnitLabels();
 
-  // F3 REGRESSION: the segmented control must be WIRED (bindSeg('unitsTog')) — clicking a button flips unitSystem.
-  // (Previously this control had markup + labels but NO bindSeg call, so clicks did nothing.)
   unitSystem = 'imperial';
   const mBtn = document.querySelector('#unitsTog [data-un="metric"]'); if (mBtn) mBtn.click();
   ok('click Metric -> unitSystem = metric', unitSystem === 'metric');
   ok('click Metric -> metric button gets .on', !!(mBtn && mBtn.classList.contains('on')));
   const iBtn = document.querySelector('#unitsTog [data-un="imperial"]'); if (iBtn) iBtn.click();
   ok('click Imperial -> unitSystem = imperial', unitSystem === 'imperial');
-  unitSystem = 'imperial'; applyUnitLabels();   // restore default
+  unitSystem = 'imperial'; applyUnitLabels();
 
-  // ===== F2 mission card: DOM, content, first-time vs repeat =====
   ok('#missionCard exists', !!g('missionCard'));
   try { localStorage.removeItem('skystrike_seenMissionType_strike'); } catch (e) {}
 
-  showMissionCard('strike', 'op.ironVeil.l7.blurb');   // FIRST encounter
+  showMissionCard('strike', 'op.ironVeil.l7.blurb');
   const card = g('missionCard');
   ok('card shows on mission start', card && card.classList.contains('show'));
   ok('card title = STRIKE type name', g('missionCardTitle') && g('missionCardTitle').textContent === t('mission.name.strike'));
   ok('card desc = mechanical strike description', g('missionCardDesc') && g('missionCardDesc').textContent === t('mission.desc.strike') && g('missionCardDesc').textContent.length > 6);
-  // UX pass 2 (2026-06-17): the in-flight card is objective-only — the lore blurb moved to the
-  // briefing screen (#briefLore); showMissionCard empties + hides #missionCardBlurb
   ok('card blurb hidden (lore lives on the briefing screen)', g('missionCardBlurb') && g('missionCardBlurb').textContent === '' && g('missionCardBlurb').style.display === 'none');
   ok('first encounter is interactive (persists until tap)', card.classList.contains('interactive') && missionCardT === 0);
   ok('first encounter shows the TAP hint', g('missionCardHint') && g('missionCardHint').style.display !== 'none' && g('missionCardHint').textContent === t('card.tapContinue'));
@@ -60,14 +54,13 @@ const R = await page.evaluate(() => {
   dismissMissionCard();
   ok('dismiss clears the card', !card.classList.contains('show') && !card.classList.contains('interactive'));
 
-  showMissionCard('strike', 'op.ironVeil.l7.blurb');   // REPEAT encounter
+  showMissionCard('strike', 'op.ironVeil.l7.blurb');
   ok('repeat encounter is non-interactive (does not block flying)', !card.classList.contains('interactive'));
   ok('repeat encounter arms the 5s auto-dismiss', missionCardT === 5);
   ok('repeat encounter hides the TAP hint', g('missionCardHint') && g('missionCardHint').style.display === 'none');
   ok('repeat encounter also keeps the blurb hidden', g('missionCardBlurb') && g('missionCardBlurb').textContent === '' && g('missionCardBlurb').style.display === 'none');
   dismissMissionCard();
 
-  // ===== F5 operation-lore panel (tap op -> lore -> Enter proceeds to the level map) =====
   ok('#opLore panel exists', !!g('opLore'));
   openOperationLore('ironVeil');
   const lore = g('opLore');

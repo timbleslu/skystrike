@@ -2,7 +2,6 @@
 
 let LANG = 'EN';
 
-/* Data-row text (JETS/TECH_TREE/meta): current language, then EN override, then the row's own EN field. */
 function rowText(obj, id, field, group) {
   const L = I18N[LANG] && I18N[LANG][group];
   if (L && L[id] && L[id][field] != null) return L[id][field];
@@ -20,7 +19,7 @@ function t(key) {
   return I18N.EN[key] != null ? I18N.EN[key] : key;
 }
 
-const I18N = {};   // filled by js/lang/*.js
+const I18N = {};
 
 function tf(key, vars) {
   let s = t(key);

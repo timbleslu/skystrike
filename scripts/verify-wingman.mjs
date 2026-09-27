@@ -10,16 +10,13 @@ const fail = (msg) => { console.error('FAIL:', msg); failed = true; };
 const { page, port, close } = await launchGame();
 page.on('pageerror', e => { console.error('PAGE ERROR:', e.message); failed = true; });
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
-// clear the first-run language / onboarding gates → hangar
 await bootToHangar(page, { port });
 
-// start a run, then put one permanent escort on-station so the wingman sidebar + order badge render
 await page.evaluate(() => { startGame(selectedJet); });
 await page.waitForTimeout(2500);
 await page.evaluate(() => { if (typeof spawnWingman === 'function') spawnWingman(false); });
 await page.waitForTimeout(700);
 
-// press a key, let a frame render the badge, then read back the order state + badge text + sidebar visibility
 async function order(code) {
   await page.keyboard.press(code);
   await page.waitForTimeout(350);
@@ -47,7 +44,6 @@ for (const c of checks) {
   if (r.order === c.order && r.badge.includes(c.label)) console.log(`ok  ${c.code} → order=${r.order} badge="${r.badge}"`);
 }
 
-// capture the sidebar badge in its final (REGROUP) state
 await page.screenshot({ path: 'wingman-check-sidebar.png' });
 
 await close();
