@@ -7,21 +7,19 @@ function updateSpHud() { const v = g('hangarSpVal'); if (v) v.textContent = spBa
 // NOT loadHealed: this is a bare scalar (parseInt + monotonic max-into-bestScore), not a JSON blob with
 // default-filling — the loadHealed key-heal shape does not apply, so it stays hand-rolled by design.
 function loadBest() {
-  try { const v = parseInt(store.get('skystrike_best') || '0', 10); if (!isNaN(v) && v > bestScore) bestScore = v; } catch (e) {}
+  const v = parseInt(store.get('skystrike_best') || '0', 10);
+  if (!isNaN(v) && v > bestScore) bestScore = v;
 }
-function saveBest() {
-  try { store.set('skystrike_best', String(bestScore)); } catch (e) {}
-}
+function saveBest() { store.set('skystrike_best', String(bestScore)); }
 function loadSettings() {
   try {
     const s = JSON.parse(store.get('skystrike_settings') || '{}');
     loadSettingsFold(s);
     // --- bespoke rows kept hand-rolled (device reads / relocalize side effects — don't force the table) ---
     if (s.lang === 'EN' || s.lang === 'ZH' || s.lang === 'KO') LANG = s.lang;   // language picker: relocalize (applyLang) is caller-driven, not a plain apply chain
-    if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
-    else if ('ontouchstart' in window) hudScale = 0.8;   // touch default is a device read ('ontouchstart' in window)
-    if (typeof s.uiScale === 'number') uiScale = Math.max(0.5, Math.min(1.6, s.uiScale));
-    else if ('ontouchstart' in window) uiScale = 0.65;
+    const touch = 'ontouchstart' in window;   // touch devices default to denser HUD + menus
+    if (typeof s.hudScale === 'number') hudScale = clamp(s.hudScale, 0.65, 1.6); else if (touch) hudScale = 0.8;
+    if (typeof s.uiScale === 'number') uiScale = clamp(s.uiScale, 0.5, 1.6); else if (touch) uiScale = 0.65;
     if (typeof s.special2Id === 'string' || s.special2Id === null) special2Id = s.special2Id;
     // F11: re-resolve the gfx tier from the persisted setting + resize the shadow map. The ordering
     // invariant (refreshGfxTier BEFORE applyGfxQuality) is now encoded once in the SETTINGS 'gfx' row's
@@ -35,131 +33,105 @@ function applyUnitLabels() {
   setTxt('lblSpd', t(unitSystem === 'metric' ? 'hud.kph' : 'hud.mph'));
   setTxt('lblAlt', t(unitSystem === 'metric' ? 'hud.metres' : 'hud.ft'));
 }
+// static DOM labels: [element id, i18n key]
+const LANG_TEXT = [
+  ['langTagline', 'lang.tagline'], ['langBegin', 'lang.begin'], ['obTitle', 'onboard.title'],
+  ['obSub', 'onboard.sub'], ['obFlightH', 'onboard.flight'], ['obFlightK', 'onboard.flightKeys'],
+  ['obCombatH', 'onboard.combat'], ['obCombatK', 'onboard.combatKeys'], ['obViewH', 'onboard.view'],
+  ['obViewK', 'onboard.viewKeys'], ['obTouch', 'onboard.touch'], ['obMore', 'onboard.more'], ['tutSkip', 'tut.skip'],
+  ['obContinue', 'onboard.continue'], ['hangarSub', 'hangar.sub'], ['hangarBestLbl', 'hangar.best'],
+  ['lblDiff', 'hangar.difficulty'], ['lblEnv', 'hangar.environment'], ['rbTitle', 'hangar.rivalBoard'],
+  ['modeTitle', 'mode.title'], ['modeEndlessName', 'mode.endless'], ['modeEndlessDesc', 'mode.endlessDesc'],
+  ['modeOperationName', 'mode.operation'], ['modeOperationDesc', 'mode.operationDesc'],
+  ['endlessTitle', 'mode.endless'], ['manualBtn', 'hangar.manualBtn'], ['hangarSpLbl', 'meta.sp'],
+  ['metaBtn', 'meta.btn'], ['lblCallsign', 'pilot.callsign'], ['lblEmblem', 'pilot.emblem'],
+  ['dbtn0', 'diff.ROOKIE'], ['dbtn1', 'diff.VETERAN'], ['dbtn2', 'diff.ACE'], ['tbtn0', 'tod.DAY'],
+  ['tbtn1', 'tod.DUSK'], ['tbtn2', 'tod.NIGHT'], ['hangarCtl1', 'hangar.controls1'],
+  ['hangarCtl2', 'hangar.controls2'], ['hangarCtl3', 'hangar.controls3'], ['goLblScore', 'go.score'],
+  ['goLblWave', 'go.wave'], ['goLblBest', 'go.best'], ['goLblKills', 'go.kills'], ['goLblAcc', 'go.accuracy'],
+  ['goLblMsl', 'go.missiles'], ['goLblTime', 'go.time'], ['goLblSp', 'meta.spEarned'],
+  ['goLblSpTotal', 'meta.banked'], ['goLblGrade', 'grade.title'], ['goLblStars', 'stars.title'],
+  ['redeploy', 'go.redeploy'], ['goHangar', 'go.hangar'], ['metaTitle', 'meta.title'], ['metaSub', 'meta.sub'],
+  ['metaSpLbl', 'meta.sp'], ['metaTab_perks', 'meta.tabPerks'], ['metaTab_ach', 'meta.tabAch'],
+  ['metaClose', 'meta.back'], ['metaHint', 'meta.hint'], ['rplab', 'tech.researchPoints'],
+  ['techHeadTitle', 'tech.title'], ['techHeadSub', 'tech.sub'], ['techDeploy', 'tech.deploy'],
+  ['wpTitle', 'wing.title'], ['wpSub', 'wing.sub'], ['wpCancel', 'wing.cancel'], ['lblHp', 'hud.hp'],
+  ['lblShd', 'hud.shd'], ['lblThr', 'hud.thr'], ['lblScore', 'hud.score'], ['lblRd', 'hud.rd'],
+  ['lblCombo', 'hud.combo'], ['lblGun', 'hud.gun'], ['lblFlares', 'hud.flares'], ['lblMsl', 'hud.msl'],
+  ['manTitle', 'manual.title'], ['manSub', 'manual.sub'], ['manualClose', 'manual.resume'],
+  ['manualAbort', 'manual.abort'], ['manH_Flight', 'manual.hFlight'], ['manH_Combat', 'manual.hCombat'],
+  ['manH_Lock', 'manual.hLock'], ['manH_Stats', 'manual.hStats'], ['manH_Hud', 'manual.hHud'],
+  ['manH_Wingman', 'manual.hWingman'], ['manH_Enemies', 'manual.hEnemies'], ['manH_Tech', 'manual.hTech'],
+  ['manH_Settings', 'manual.hSettings'], ['manH_Sorties', 'manual.hSorties'], ['manH_Special', 'manual.hSpecial'],
+  ['manH_Missions', 'manual.hMissions'], ['manTab_guide', 'manual.tabGuide'],
+  ['manTab_systems', 'manual.tabSystems'], ['manTab_tactics', 'manual.tabTactics'],
+  ['manTab_settings', 'manual.tabSettings'], ['lblLang', 'set.language'], ['lblSens', 'set.sensitivity'],
+  ['lblVol', 'set.volume'], ['lblInvert', 'set.invert'], ['lblMouseFlight', 'set.mouseFlight'],
+  ['lblAutoLock', 'set.autoLock'], ['lblWingman', 'set.wingman'], ['lblRival', 'set.rival'],
+  ['lblGroundWar', 'set.groundWar'], ['lblGunLead', 'set.gunLead'], ['lblAimAssist', 'set.aimAssist'],
+  ['lblAimStrength', 'set.aimStrength'], ['lblMute', 'set.mute'], ['setLangEN', 'set.langEN'],
+  ['setLangZH', 'set.langZH'], ['setLangKO', 'set.langKO'], ['lblControlScheme', 'set.controlScheme'],
+  ['lblMobileControl', 'set.mobileControl'], ['lblAggression', 'set.aggression'], ['lblMotion', 'set.motionSensor'],
+  ['lblHaptics', 'set.haptics'], ['lblBtnOpacity', 'set.btnOpacity'], ['lblBtnLayout', 'set.btnLayout'],
+  ['lblGfx', 'set.gfx'], ['lblDevUnlock', 'set.devUnlock'], ['awacsLblStrike', 'awacs.chipStrike'],
+  ['awacsLblResupply', 'awacs.chipResupply'], ['awacsLblJam', 'awacs.chipJam'], ['manH_Awacs', 'manual.awacs'],
+  ['callsignHint', 'pilot.hint'], ['lblHudScale', 'set.hudScale'], ['lblUiScale', 'set.uiScale'],
+  ['lblSkin', 'set.skin'], ['lblPalette', 'set.palette'], ['ssetTab_display', 'set.tab.display'],
+  ['ssetTab_controls', 'set.tab.controls'], ['ssetTab_audio', 'set.tab.audio'], ['ssetTab_game', 'set.tab.game'],
+  ['ssecAppearance', 'set.sec.appearance'], ['ssecReadout', 'set.sec.readout'], ['ssecSteering', 'set.sec.steering'],
+  ['ssecTouch', 'set.sec.touch'], ['ssecMotion', 'set.sec.motion'], ['ssecMix', 'set.sec.mix'],
+  ['ssecAim', 'set.sec.aim'], ['ssecModes', 'set.sec.modes'], ['ssecDev', 'set.sec.dev'],
+  ['setEnableMotion', 'set.enableMotion'], ['setRecenter', 'set.recenter'], ['lblUnits', 'set.units'],
+  ['w_pull', 'hud.pullUp'], ['w_missile', 'hud.missileAlert'], ['w_drone', 'hud.droneSwarm'],
+  ['w_highg', 'hud.highG'], ['w_stealth', 'hud.stealthActive'], ['wingStatus', 'hud.escort'], ['hint', 'hud.hint'],
+  ['btnPause', 'hud.pause'], ['tb-gun', 'touch.gun'], ['tb-msl', 'touch.msl'], ['tb-flr', 'touch.flr'],
+  ['tb-spc', 'touch.spc'], ['tb-thr-lbl', 'touch.thr'], ['tb-cam', 'touch.cam'], ['tb-lck', 'touch.lck'],
+  ['tb-aws', 'touch.aws'], ['tb-ars', 'touch.ars'], ['tb-ajm', 'touch.ajm'], ['tb-weng', 'touch.weng'],
+  ['tb-wcov', 'touch.wcov'], ['tb-wrgp', 'touch.wrgp']
+];
 function applyLang() {
-  setTxt('langTagline', t('lang.tagline')); setTxt('langBegin', t('lang.begin'));
-  setTxt('obTitle', t('onboard.title')); setTxt('obSub', t('onboard.sub'));
-  setTxt('obFlightH', t('onboard.flight')); setTxt('obFlightK', t('onboard.flightKeys'));
-  setTxt('obCombatH', t('onboard.combat')); setTxt('obCombatK', t('onboard.combatKeys'));
-  setTxt('obViewH', t('onboard.view')); setTxt('obViewK', t('onboard.viewKeys'));
-  setTxt('obTouch', t('onboard.touch')); setTxt('obMore', t('onboard.more'));
-  setTxt('tutSkip', t('tut.skip'));
-  if (typeof tutorial !== 'undefined' && tutorial.active && !tutorial.done) renderTutorial();
-  setTxt('obContinue', t('onboard.continue'));
-  setTxt('hangarSub', t('hangar.sub')); setTxt('hangarBestLbl', t('hangar.best'));
-  setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment'));
-  setTxt('rbTitle', t('hangar.rivalBoard'));
-  setTxt('modeTitle', t('mode.title'));
-  setTxt('modeEndlessName', t('mode.endless')); setTxt('modeEndlessDesc', t('mode.endlessDesc'));
-  setTxt('modeOperationName', t('mode.operation')); setTxt('modeOperationDesc', t('mode.operationDesc'));
+  for (const [id, key] of LANG_TEXT) setTxt(id, t(key));
+  if (tutorial.active && !tutorial.done) renderTutorial();
   setTxt('modeBack', '◀ ' + t('common.back'));
-  setTxt('endlessTitle', t('mode.endless'));
   setTxt('endlessBack', '◀ ' + t('common.back'));
   setTxt('endlessStart', '▶ ' + t('mode.start'));
   refreshLaunchSub();
-  setTxt('manualBtn', t('hangar.manualBtn'));
-  setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
-  if (typeof refreshDailyEntry === 'function') refreshDailyEntry();
-  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();
-  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
-  setTxt('lblCallsign', t('pilot.callsign')); setTxt('lblEmblem', t('pilot.emblem'));
+  refreshDailyEntry();
+  refreshWeeklyEntry();
+  refreshBossRushEntry();
   const ci = g('callsignInput'); if (ci) ci.placeholder = t('pilot.placeholder');
-  setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
-  setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
-  setTxt('hangarCtl1', t('hangar.controls1')); setTxt('hangarCtl2', t('hangar.controls2')); setTxt('hangarCtl3', t('hangar.controls3'));
-  setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
-  setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
-  setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
-  setTxt('goLblGrade', t('grade.title'));
-  setTxt('goLblStars', t('stars.title'));
-  setTxt('redeploy', t('go.redeploy')); setTxt('goHangar', t('go.hangar'));
-  setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));
-  setTxt('metaTab_perks', t('meta.tabPerks')); setTxt('metaTab_ach', t('meta.tabAch'));
-  setTxt('metaClose', t('meta.back')); setTxt('metaHint', t('meta.hint'));
-  setTxt('rplab', t('tech.researchPoints'));
-  setTxt('techHeadTitle', t('tech.title')); setTxt('techHeadSub', t('tech.sub'));
   document.querySelectorAll('.tech-tab').forEach(b => { b.textContent = b.dataset.tab === 'armory' ? t('tech.tabArmory') : t('tech.tabTech'); });
-  setTxt('techDeploy', t('tech.deploy'));
   setTxt('techhint', techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree'));
   renderDraftBar();
-  setTxt('wpTitle', t('wing.title')); setTxt('wpSub', t('wing.sub'));
-  setTxt('wpCancel', t('wing.cancel'));
-  setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
   if (el.abIndicator) el.abIndicator.textContent = t('hud.ab');
-  setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); { const lw = g('lblWave'); if (lw) putText(lw, t('hud.wave')); } setTxt('lblCombo', t('hud.combo'));
+  { const lw = g('lblWave'); if (lw) putText(lw, t('hud.wave')); }
   applyUnitLabels();
-  setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));
-  setTxt('manTitle', t('manual.title')); setTxt('manSub', t('manual.sub'));
-  setTxt('manualClose', t('manual.resume')); setTxt('manualAbort', t('manual.abort'));
-  setTxt('manH_Flight', t('manual.hFlight')); setTxt('manH_Combat', t('manual.hCombat'));
-  setTxt('manH_Lock', t('manual.hLock')); setTxt('manH_Stats', t('manual.hStats'));
-  setTxt('manH_Hud', t('manual.hHud')); setTxt('manH_Wingman', t('manual.hWingman'));
-  setTxt('manH_Enemies', t('manual.hEnemies')); setTxt('manH_Tech', t('manual.hTech'));
-  setTxt('manH_Settings', t('manual.hSettings'));
-  setTxt('manH_Sorties', t('manual.hSorties')); setTxt('manH_Special', t('manual.hSpecial')); setTxt('manH_Missions', t('manual.hMissions'));
-  setTxt('manTab_guide', t('manual.tabGuide')); setTxt('manTab_systems', t('manual.tabSystems'));
-  setTxt('manTab_tactics', t('manual.tabTactics')); setTxt('manTab_settings', t('manual.tabSettings'));
-  setTxt('lblLang', t('set.language')); setTxt('lblSens', t('set.sensitivity'));
-  setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert')); setTxt('lblMouseFlight', t('set.mouseFlight'));
-  setTxt('lblAutoLock', t('set.autoLock')); setTxt('lblWingman', t('set.wingman'));
-  setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
-  setTxt('lblGunLead', t('set.gunLead')); setTxt('lblAimAssist', t('set.aimAssist')); setTxt('lblAimStrength', t('set.aimStrength')); setTxt('lblMute', t('set.mute'));
-  setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH')); setTxt('setLangKO', t('set.langKO'));
-  setTxt('lblControlScheme', t('set.controlScheme'));
-  setTxt('lblMobileControl', t('set.mobileControl')); setTxt('lblAggression', t('set.aggression'));
-  setTxt('lblMotion', t('set.motionSensor'));
-  setTxt('lblHaptics', t('set.haptics')); setTxt('lblBtnOpacity', t('set.btnOpacity'));
-  setTxt('lblBtnLayout', t('set.btnLayout'));
-  setTxt('lblGfx', t('set.gfx'));
-  setTxt('lblDevUnlock', t('set.devUnlock'));
-  setTxt('awacsLblStrike', t('awacs.chipStrike'));
-  setTxt('awacsLblResupply', t('awacs.chipResupply'));
-  setTxt('awacsLblJam', t('awacs.chipJam'));
-  setTxt('manH_Awacs', t('manual.awacs'));
   const _maw = g('manP_Awacs'); if (_maw) _maw.innerHTML = t('manBody.awacs');
-  setTxt('callsignHint', t('pilot.hint'));
-  setTxt('lblHudScale', t('set.hudScale'));
-  setTxt('lblUiScale', t('set.uiScale'));
-  setTxt('lblSkin', t('set.skin'));
-  if (typeof refreshSkinGallery === 'function') refreshSkinGallery(activeSkin);
-  setTxt('lblPalette', t('set.palette'));
-  setTxt('ssetTab_display', t('set.tab.display'));
-  setTxt('ssetTab_controls', t('set.tab.controls'));
-  setTxt('ssetTab_audio', t('set.tab.audio'));
-  setTxt('ssetTab_game', t('set.tab.game'));
-  setTxt('ssecAppearance', t('set.sec.appearance')); setTxt('ssecReadout', t('set.sec.readout'));
-  setTxt('ssecSteering', t('set.sec.steering')); setTxt('ssecTouch', t('set.sec.touch')); setTxt('ssecMotion', t('set.sec.motion'));
-  setTxt('ssecMix', t('set.sec.mix')); setTxt('ssecAim', t('set.sec.aim')); setTxt('ssecModes', t('set.sec.modes')); setTxt('ssecDev', t('set.sec.dev'));
+  refreshSkinGallery(activeSkin);
   const sizeKeys = ['set.hudXs', 'set.hudSmall', 'set.hudNormal', 'set.hudLarge', 'set.hudXl'];
   ['setHudScale', 'setUiScale'].forEach(id => { const sel = g(id); if (sel && sel.options.length >= 5) sizeKeys.forEach((k, i) => { sel.options[i].textContent = t(k); }); });
-  setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
   segTxt('#controlSchemeTog [data-cs="auto"]', 'set.csAuto'); segTxt('#controlSchemeTog [data-cs="pointer"]', 'set.csPointer'); segTxt('#controlSchemeTog [data-cs="rate"]', 'set.csClassic');
   segTxt('#mobileControlTog [data-mc="touch"]', 'set.mcTouch'); segTxt('#mobileControlTog [data-mc="motion"]', 'set.mcMotion');
   segTxt('#aggressionTog [data-ag="casual"]', 'set.agCasual'); segTxt('#aggressionTog [data-ag="balanced"]', 'set.agBalanced'); segTxt('#aggressionTog [data-ag="direct"]', 'set.agDirect');
   segTxt('#btnLayoutTog [data-bl="right"]', 'set.blRight'); segTxt('#btnLayoutTog [data-bl="left"]', 'set.blLeft'); segTxt('#btnLayoutTog [data-bl="compact"]', 'set.blCompact');
   segTxt('#gfxQualityTog [data-gq="auto"]', 'set.gfxAuto'); segTxt('#gfxQualityTog [data-gq="low"]', 'set.gfxLow'); segTxt('#gfxQualityTog [data-gq="medium"]', 'set.gfxMedium'); segTxt('#gfxQualityTog [data-gq="high"]', 'set.gfxHigh');
-  segTxt('#unitsTog [data-un="imperial"]', 'set.unitsImperial'); segTxt('#unitsTog [data-un="metric"]', 'set.unitsMetric'); setTxt('lblUnits', t('set.units'));
+  segTxt('#unitsTog [data-un="imperial"]', 'set.unitsImperial'); segTxt('#unitsTog [data-un="metric"]', 'set.unitsMetric');
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
-  setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
-  setTxt('w_highg', t('hud.highG')); setTxt('w_stealth', t('hud.stealthActive')); { const wl = g('w_lock'); if (wl) putText(wl, t('hud.targetLocked')); }   // updateDom's guarded-write cache owns this node
-  setTxt('wingStatus', t('hud.escort'));
-  setTxt('hint', t('hud.hint')); setTxt('btnPause', t('hud.pause'));
-  setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
-  setTxt('tb-thr-lbl', t('touch.thr')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
-  setTxt('tb-aws', t('touch.aws')); setTxt('tb-ars', t('touch.ars')); setTxt('tb-ajm', t('touch.ajm'));
-  setTxt('tb-weng', t('touch.weng')); setTxt('tb-wcov', t('touch.wcov')); setTxt('tb-wrgp', t('touch.wrgp'));
+  { const wl = g('w_lock'); if (wl) putText(wl, t('hud.targetLocked')); }   // updateDom's guarded-write cache owns this node
   const setHTML = (id, key) => { const e = g(id); if (e) e.innerHTML = t(key); };
   setHTML('manUL_Flight', 'manBody.flight'); setHTML('manUL_Combat', 'manBody.combat'); setHTML('manP_Lock', 'manBody.lock');
   setHTML('manUL_Stats', 'manBody.stats'); setHTML('manUL_Hud', 'manBody.hud'); setHTML('manUL_Wingman', 'manBody.wingman');
   setHTML('manUL_Enemies', 'manBody.enemies'); setHTML('manP_Tech', 'manBody.tech');
   setHTML('manUL_Sorties', 'manBody.sorties'); setHTML('manUL_Special', 'manBody.special'); setHTML('manUL_Missions', 'manBody.missions');
   if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
-  if (typeof selectedJet === 'number') renderJetCard(selectedJet);
+  renderJetCard(selectedJet);
   renderKillBoard();
   updateSpHud();
-  if (g('meta') && g('meta').classList.contains('show')) renderMetaScreen();
+  if (isShown('meta')) renderMetaScreen();
 }
+
 function bindSeg(containerId, attr, getter, setter, onChange) {
   const box = g(containerId);
   if (!box) return;
@@ -185,11 +157,11 @@ function syncControlSettingsUI() {
   const sh = g('setHaptics'); if (sh) sh.checked = haptics;
   const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
   const smf = g('setMouseFlight');
-  if (smf) { smf.checked = mouseFlight; if (!smf._bound) { smf._bound = true; smf.addEventListener('change', () => { mouseFlight = smf.checked; if (typeof audio !== 'undefined' && audio.on) audio.ui(); saveSettings(); }); } }
+  if (smf) { smf.checked = mouseFlight; if (!smf._bound) { smf._bound = true; smf.addEventListener('change', () => { mouseFlight = smf.checked; audio.ui(); saveSettings(); }); } }
 }
 function enableMotionFlow() {
   const note = g('motionNote'), txt = g('motionNoteTxt');
-  if (typeof requestMotionPermission !== 'function' || typeof motionSupported !== 'function' || !motionSupported()) {
+  if (!motionSupported()) {
     mobileControl = 'touch';
     if (note && txt) { txt.textContent = t('set.motionUnsupported'); note.style.display = ''; }
     syncControlSettingsUI(); saveSettings();
@@ -234,7 +206,7 @@ function installMotionStatus() {
 function applyHudScale() {
   const h = g('hud');
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
-  if (typeof applyButtonStyle === 'function') applyButtonStyle();
+  applyButtonStyle();
 }
 // UI size: publishes the --ui-content scale factor (root custom prop). Menu BOXES keep their fixed
 // footprint; only the CONTENT inside (text, map nodes, jet preview…) scales, via CSS that consumes
@@ -244,13 +216,11 @@ function applyUiScale() {
   document.documentElement.style.setProperty('--ui-content', String(uiScale));
 }
 function saveSettings() {
-  try {
-    store.set('skystrike_settings', JSON.stringify({
-      volume, muted, invertY, autoLock, startWingman, devUnlockAll, devUnlockLevels, devUnlocked, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
-      lang: LANG, controlSensitivity, hudScale, uiScale, controlScheme,
-      mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality, unitSystem
-    }));
-  } catch (e) {}
+  store.set('skystrike_settings', JSON.stringify({
+    volume, muted, invertY, autoLock, startWingman, devUnlockAll, devUnlockLevels, devUnlocked, mouseFlight, gunLead, aimAssist, aimStrength, difficulty, timeOfDay, selectedJet, special2Id, rivalEnabled, groundWar, opMode,
+    lang: LANG, controlSensitivity, hudScale, uiScale, controlScheme,
+    mobileControl, motionAggression, haptics, buttonOpacity, buttonLayout, gfxQuality, unitSystem
+  }));
 }
 // THE per-arena entity teardown (enemies, projectiles, particles, decoys, wingmen + spawn/HUD queues),
 // shared by clearArena (→ hangar), clearCampaignArena (between levels) and startGame. Keeps the player.
@@ -263,15 +233,15 @@ function clearArenaEntities() {
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0; BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
-  if (typeof clearAllies === 'function') clearAllies();
-  if (typeof campaignEnd !== 'undefined') campaignEnd = null;
-  if (typeof hideOutroStamp === 'function') hideOutroStamp();
-  if (typeof hideMissionIntro === 'function') hideMissionIntro();
+  clearAllies();
+  campaignEnd = null;
+  hideOutroStamp();
+  hideMissionIntro();
 }
 function clearArena() {
   clearArenaEntities();
-  if (typeof clearGroundObjects === 'function') clearGroundObjects();
-  if (player && player.group) { scene.remove(player.group); disposeGroup(player.group); }
+  clearGroundObjects();
+  if (player) despawnObject(player.group);
   player = null;
   if (h2d) h2d.clearRect(0, 0, W, H);
   if (radarCtx) radarCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
@@ -281,26 +251,25 @@ function clearArena() {
   if (el.flash) putStyle(el.flash, 'opacity', '0');
   if (el.bossbar) el.bossbar.classList.remove('show');
   if (el.banner) el.banner.classList.remove('show');
-  choosingUpgrade = false;
-  const up = g('upgrade'); if (up) up.classList.remove('show');
+  closeUpgrade();
 }
 function returnToHangar() {
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
+  audio.stopEngine();
   clearArena();
   campaignMode = false; campaignPlayerOpId = null; campaignOpId = null; campaignLevelIdx = -1; opSector = null;
   hideAllScreens();
   makePlatform();
-  if (typeof buildGroundObjects === 'function') buildGroundObjects();
+  buildGroundObjects();
   camMode = 0;
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
   state = 'hangar'; paused = false;
-  if (clock) clock.getDelta();
+  clock.getDelta();
   showScreen('hangar');
   hangarPreview.clear(); _previewJetIdx = -1;
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();
   refreshDailyEntry();
-  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();
-  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
+  refreshWeeklyEntry();
+  refreshBossRushEntry();
 }

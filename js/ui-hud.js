@@ -82,7 +82,7 @@ function pickGunTarget() {
 
 // Canvas-HUD size multiplier driven by the global hudScale setting (Settings → UI size).
 // World-projected x/y positions stay EXACT; only sizes (radii, fonts, line offsets) get ×k.
-function hudK() { return (typeof hudScale === 'number') ? Math.max(0.6, Math.min(1.6, hudScale)) : 1; }
+function hudK() { return clamp(hudScale, 0.6, 1.6); }
 function spawnHitMarker() { hitMarkers.push({ t: 0.25 }); }
 function spawnDamageNumber(pos, val, crit) { dmgNumbers.push({ pos: pos.clone(), val, life: crit ? 1.1 : 0.9, crit: !!crit }); }
 // Cancels any prior count-up on the same element (stored on el._cuRaf) so re-opens don't stack tweens.
@@ -100,8 +100,7 @@ function countUp(el, target, ms, fmt) {
 }
 
 function weatherLabel() {
-  const night = (typeof timeOfDay !== 'undefined') && timeOfDay === 2;
-  const wt = (typeof weather !== 'undefined' && weather) ? weather.type : 'clear';
+  const night = timeOfDay === 2, wt = weather.type;
   if (wt === 'clear' && !night) return '';
   let s = wt !== 'clear' ? t('weather.' + wt) : '';
   if (night) s = s ? (s + ' · ' + t('weather.night')) : t('weather.night');
@@ -139,6 +138,7 @@ function hudViewState() {
 
 let el = {};
 function g(id) { return document.getElementById(id); }
+function isShown(id) { const e = g(id); return !!e && e.classList.contains('show'); }
 function cacheEl() {
   el = {
     hudRoot: g('hud'), hp: g('hpfill'), thr: g('thrfill'), shd: g('shfill'), spd: g('spd'), alt: g('alt'),
@@ -197,32 +197,34 @@ function renderTutorial() {
 // so we detect the NEXT gun/missile action rather than ammo spent before this point.
 function startTutorial() {
   tutorial.active = true; tutorial.done = false; tutorial.step = 0;
-  tutorial.prevShots = (typeof run === 'object' && run) ? (run.shots || 0) : 0;
-  tutorial.prevMissiles = (typeof run === 'object' && run) ? (run.missiles || 0) : 0;
+  tutorial.prevShots = run.shots || 0;
+  tutorial.prevMissiles = run.missiles || 0;
   if (el.tutSkip) {
     el.tutSkip.textContent = t('tut.skip');
     if (!el.tutSkip._wired) {
       el.tutSkip._wired = true;
-      el.tutSkip.addEventListener('click', () => { skipTutorial(); });
+      el.tutSkip.addEventListener('click', skipTutorial);
     }
   }
   renderTutorial();
 }
 // tear down: latch done, hide overlay. Persistence is shared with onboarding (skystrike_onboarded
 // is already set once a new player clears the controls brief) — no extra storage key.
-function finishTutorial() {
+function endTutorial() {
   tutorial.active = false; tutorial.done = true;
   if (el.tut) el.tut.classList.remove('show');
+}
+function finishTutorial() {
+  endTutorial();
   showBanner(t('tut.done'));
   setTimeout(() => { if (state === 'playing' && tutorial.done) returnToHangar(); }, 4000);
 }
 // Skip = abandon the tutorial and return to the hangar immediately (do NOT keep flying the tutorial waves).
 // Latches tutorial.done so the start gate (ui-flow.js) won't relaunch it on the next mission.
 function skipTutorial() {
-  tutorial.active = false; tutorial.done = true;
-  if (el.tut) el.tut.classList.remove('show');
-  if (audio.on) audio.ui();
-  if (typeof returnToHangar === 'function') returnToHangar();
+  endTutorial();
+  audio.ui();
+  returnToHangar();
 }
 function advanceTutorial(event) {
   if (!tutorial.active || tutorial.done) return;
@@ -230,12 +232,14 @@ function advanceTutorial(event) {
   if (next === tutorial.step) return;
   tutorial.step = next;
   if (next >= TUTORIAL_DONE) { finishTutorial(); return; }
-  if (audio.on) audio.ui();
+  audio.ui();
   renderTutorial();
 }
 
 let bannerT = 0;
-function showBanner(txt) { el.banner.textContent = txt; el.banner.classList.remove('show'); void el.banner.offsetWidth; el.banner.classList.add('show'); bannerT = 2.0; }
+// restart a CSS animation: drop the class, force a reflow, re-add it
+function replayClass(e, cls) { e.classList.remove(cls); void e.offsetWidth; e.classList.add(cls); }
+function showBanner(txt) { el.banner.textContent = txt; replayClass(el.banner, 'show'); bannerT = 2.0; }
 let _loadingHideT = null;
 function showLoading() {
   const ls = g('loadingScreen'); if (!ls) return;
@@ -290,10 +294,9 @@ function updateWingmanSidebar() {
   let badge = el.sidebar.firstElementChild;
   if (!badge || badge.className !== 'wing-order') {
     badge = document.createElement('div'); badge.className = 'wing-order';
-    badge.style.cssText = 'font:700 11px/1.5 var(--hud-font,monospace);letter-spacing:.08em;text-align:center;padding:2px 6px;margin-bottom:4px;border-radius:4px;background:rgba(0,0,0,.35)';
     el.sidebar.insertBefore(badge, el.sidebar.firstChild);
   }
-  const ord = (typeof player !== 'undefined' && player && player.wingOrder) || 'FREE';
+  const ord = player.wingOrder || 'FREE';
   putText(badge, '◆ ' + t('wing.order.' + ord.toLowerCase()));
   putStyle(badge, 'color', ord === 'ENGAGE' ? '#ff6a4d' : ord === 'COVER' ? '#ffd24d' : ord === 'REGROUP' ? '#6cc8ff' : '#7dffcf');
   // Rebuild wingman rows only when the count changes; otherwise just patch text/style. (Badge is child 0.)
@@ -325,18 +328,15 @@ function updateAwacsHud() {
   putStyle(box, 'display', show ? 'flex' : 'none');
   if (!show) return;
   const now = performance.now() / 1000;
-  awacsChip('strike', 'awacsUsesStrike', 'awacsCostStrike', now);
-  awacsChip('resupply', 'awacsUsesResupply', 'awacsCostResupply', now);
-  awacsChip('jam', 'awacsUsesJam', 'awacsCostJam', now);
+  for (const [key, id] of AWACS_CHIPS) {
+    const rem = Math.max(0, (AWACS_USES_MAX[key] || 0) - (awacsUses[key] || 0));
+    const c = g('awacsUses' + id); if (c) putText(c, '×' + rem);
+    const cd = AWACS_COOLDOWNS[key] || 0, last = awacsLast[key] || 0;
+    const left = last > 0 ? Math.max(0, cd - (now - last)) : 0;
+    const k = g('awacsCost' + id); if (k) putText(k, left > 0 ? Math.ceil(left) + 's' : cd + 's');
+  }
 }
-function awacsChip(key, cntId, costId, now) {
-  const rem = Math.max(0, (AWACS_USES_MAX[key] || 0) - ((awacsUses && awacsUses[key]) || 0));
-  const c = g(cntId); if (c) putText(c, '×' + rem);
-  const cd = AWACS_COOLDOWNS[key] || 0;
-  const last = (awacsLast && awacsLast[key]) || 0;
-  const left = last > 0 ? Math.max(0, cd - (now - last)) : 0;
-  const k = g(costId); if (k) putText(k, left > 0 ? Math.ceil(left) + 's' : cd + 's');
-}
+const AWACS_CHIPS = [['strike', 'Strike'], ['resupply', 'Resupply'], ['jam', 'Jam']];
 function specialChipText(jet, st) {
   if (!hasSpecial(jet)) return t('hud.noSpecial');
   return jetText(jet, 'ability') + ' \u25B8 ' + (st.cd <= 0 ? t('hud.ready') : Math.ceil(st.cd) + t('hud.sec'));
@@ -371,7 +371,7 @@ function updateDom(dt, hudView) {
   const comboTxt = player.combo > 1 ? 'x' + player.combo : '';
   if (comboTxt !== el.combo.textContent) {
     el.combo.textContent = comboTxt;
-    if (player.combo > 1 && player.combo > (el._comboShown || 0)) { el.combo.classList.remove('pop'); void el.combo.offsetWidth; el.combo.classList.add('pop'); }
+    if (player.combo > 1 && player.combo > (el._comboShown || 0)) replayClass(el.combo, 'pop');
     el._comboShown = player.combo;
   }
   putText(el.flares, player.flares);
@@ -409,8 +409,7 @@ function updateDom(dt, hudView) {
   }
   updateWingmanSidebar();
   if (el.touch) {
-    let aloft = false; for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) { aloft = true; break; }
-    el.touch.classList.toggle('no-wing', !aloft);
+    el.touch.classList.toggle('no-wing', !firstAliveWingman());
   }
   tog(el.wStealth, player.stealth);
   tog(el.wHighG, player.highG);
@@ -452,7 +451,7 @@ const COMMS_TONE = { ovl: 'info', wing: 'ok', ally: 'ok', hq: 'primary', enemy: 
 let commsQ = [], commsCur = null, commsGap = 0;
 function commsSpeaker(who) {
   if (who === 'wing') { for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive && !wingmen[i].cca && wingmen[i].name) return wingmen[i].name; }
-  if (who === 'boss' && typeof currentCampaignLevel === 'function') { const lvl = currentCampaignLevel(); if (lvl && lvl.boss && lvl.boss.callsignKey) return t(lvl.boss.callsignKey); }
+  if (who === 'boss') { const lvl = currentCampaignLevel(); if (lvl && lvl.boss && lvl.boss.callsignKey) return t(lvl.boss.callsignKey); }
   return t('comms.who.' + who);
 }
 function radio(who, text, opts) {
@@ -461,11 +460,11 @@ function radio(who, text, opts) {
   const low = !!opts.low;
   if (low && commsQ.length >= 2) return;                    // don't let event chatter pile up behind story beats
   if (commsQ.length >= 5) commsQ.shift();
-  commsQ.push({ who: who, text: String(text), low: low });
+  commsQ.push({ who, text: String(text), low });
 }
 function radioKey(who, key, vars) {
-  const cs = (typeof meta !== 'undefined' && meta && meta.callsign) || t('comms.defaultCs');
-  const s = tf(key, Object.assign({ cs: cs }, vars || {}));
+  const cs = (meta && meta.callsign) || t('comms.defaultCs');
+  const s = tf(key, Object.assign({ cs }, vars));
   if (!s || s === key) return;                               // missing string → stay silent rather than print a key
   radio(who, s, { low: key.indexOf('comms.gen.') === 0 });
 }
@@ -484,7 +483,7 @@ function tickComms(dt) {
     putText(g('commsWho'), commsSpeaker(commsCur.who));
     putText(g('commsText'), '');
     box.classList.add('show');
-    if (typeof audio !== 'undefined' && audio.on && audio.radio) audio.radio();
+    audio.radio();
   }
   commsCur.t += dt;
   const n = prefersReducedMotion() ? commsCur.text.length : Math.min(commsCur.text.length, Math.floor(commsCur.t * 60));
@@ -498,11 +497,10 @@ function afterMissionIntro(fn) { if (missionIntroT > 0) missionIntroAfter = fn; 
 function showMissionIntro(op, idx, lvl) {
   const box = g('missionIntro'); if (!box || !op || !lvl) return;
   putText(g('miOp'), t(op.nameKey));
-  putText(g('miNum'), tf('campaign.sectorN', { n: ('0' + (idx + 1)).slice(-2) }) + '  ·  ' + t('campaign.type.' + lvl.type));
+  putText(g('miNum'), tf('campaign.sectorN', { n: pad2(idx + 1) }) + '  ·  ' + t('campaign.type.' + lvl.type));
   putText(g('miName'), t(lvl.nameKey));
-  const sp = lvl.spawn || {};
-  putText(g('miCond'), t(op.theaterKey) + '  ·  ' + t('tod.' + (['DAY', 'DUSK', 'NIGHT'][sp.tod || 0])) + '  ·  ' + t('weather.' + (sp.weather || 'clear')));
-  box.classList.remove('show'); void box.offsetWidth; box.classList.add('show');
+  putText(g('miCond'), [t(op.theaterKey), ...condLabel(lvl)].join('  ·  '));
+  replayClass(box, 'show');
   missionIntroT = 3.8; missionIntroAfter = null;
 }
 function hideMissionIntro() { const box = g('missionIntro'); if (box) box.classList.remove('show'); missionIntroT = 0; missionIntroAfter = null; }
@@ -512,7 +510,7 @@ function showOutroStamp(win, reasonKey) {
   box.classList.toggle('win', !!win); box.classList.toggle('fail', !win);
   putText(g('outroTitle'), t(win ? 'campaign.accomplished' : 'campaign.failed'));
   putText(g('outroReason'), reasonKey ? t(reasonKey) : '');
-  box.classList.remove('show'); void box.offsetWidth; box.classList.add('show');
-  if (typeof audio !== 'undefined' && audio.on && audio.stamp) audio.stamp(!!win);
+  replayClass(box, 'show');
+  audio.stamp(!!win);
 }
 function hideOutroStamp() { const box = g('outroStamp'); if (box) box.classList.remove('show'); }

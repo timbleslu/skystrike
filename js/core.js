@@ -10,6 +10,7 @@ const randInt = (a, b) => Math.floor(rand(a, b + 1));
 const damp = (a, b, rate, dt) => lerp(a, b, 1 - Math.exp(-rate * dt));
 
 // 32-bit avalanche shared by the weather / daily / weekly seeds.
+const pad2 = n => ('0' + n).slice(-2);
 function _mix32(x) {
   x = (x ^ 0x9e3779b9) | 0;
   x = Math.imul(x ^ (x >>> 16), 0x45d9f3b);
@@ -1178,7 +1179,7 @@ function isoWeekParts(dateStr) {
 // '2026-07-13' → '2026-W29'
 function weekIdFor(dateStr) {
   var p = isoWeekParts(dateStr);
-  return p.weekYear + '-W' + ('0' + p.week).slice(-2);
+  return p.weekYear + '-W' + pad2(p.week);
 }
 function weeklySeedFor(dateStr) {
   var p = isoWeekParts(dateStr);

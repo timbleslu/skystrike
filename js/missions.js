@@ -249,6 +249,10 @@ let allies = [];
 let bombs = [];
 const ALLY_GREEN = 0x46ff8c;
 
+function allyBeacon(g, scale, x, y, z, opacity) {
+  const b = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: ALLY_GREEN, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity }));
+  b.scale.setScalar(scale); b.position.set(x, y, z); g.add(b); g.userData.beacon = b;
+}
 function allyGroundY(x, z) { return Math.max(terrainH(x, z), surfaceH(x, z), SEA_LEVEL_Y); }
 const ALLY_AIR_AGL = 520;
 function buildShip() {
@@ -260,16 +264,14 @@ function buildShip() {
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.4, 22, 6), hullM); mast.position.set(0, 36, 4); g.add(mast);
   const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 6, 2.5, 12, 1, true), new THREE.MeshStandardMaterial({ color: 0x9aa6ae, side: THREE.DoubleSide, flatShading: true }));
   dish.position.set(0, 48, 4); dish.rotation.z = Math.PI / 3; g.add(dish); g.userData.dish = dish;
-  const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: ALLY_GREEN, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }));
-  beacon.scale.setScalar(22); beacon.position.set(0, 52, 4); g.add(beacon); g.userData.beacon = beacon;
+  allyBeacon(g, 22, 0, 52, 4, 0.9);
   markShadowCasters(g);
   return g;
 }
 function buildTransport() {
   const g = buildJetOrGLTF(0x8f9c94, 0x46ff8c, SHAPES.BOMBER, true, {});
   if (!g.userData.gltf) g.scale.setScalar(1.7);
-  const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: ALLY_GREEN, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
-  beacon.scale.setScalar(18); beacon.position.set(0, 9, 6); g.add(beacon); g.userData.beacon = beacon;
+  allyBeacon(g, 18, 0, 9, 6, 0.85);
   return g;
 }
 function friendlyMarker() {
@@ -291,18 +293,14 @@ function buildOutpost() {
   }
   const tank = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 14, 12), new THREE.MeshStandardMaterial({ color: 0x8d8f86, flatShading: true }));
   tank.position.set(30, 9, -24); g.add(tank);
-  const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: ALLY_GREEN, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }));
-  beacon.scale.setScalar(26); beacon.position.set(-28, 40, -10); g.add(beacon);
-  g.userData.beacon = beacon;
+  allyBeacon(g, 26, -28, 40, -10, 0.9);
   markShadowCasters(g);
   return g;
 }
 function buildFriendlyTruck() {
   const g = buildTruck();
   g.children.forEach(c => { if (c.material && c.material.color) { c.material.color.setHex(0x4f6a3a); c.material.emissive = new THREE.Color(0x0c2a10); c.material.emissiveIntensity = 0.6; } });
-  const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: ALLY_GREEN, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
-  beacon.scale.setScalar(14); beacon.position.set(0, 10, 0); g.add(beacon);
-  g.userData.beacon = beacon;
+  allyBeacon(g, 14, 0, 10, 0, 0.85);
   g.scale.setScalar(1.6);
   return g;
 }
@@ -312,7 +310,7 @@ function spawnAlly(kind, x, z, opts) {
   mesh.position.set(x, allyGroundY(x, z) + (kind === 'transport' ? ALLY_AIR_AGL : 0), z);
   scene.add(mesh);
   const a = {
-    kind: kind, group: mesh, alive: true, friendly: true, air: kind === 'transport', static: kind === 'outpost' || kind === 'ship',
+    kind, group: mesh, alive: true, friendly: true, air: kind === 'transport', static: kind === 'outpost' || kind === 'ship',
     hp: opts.hp || 100, maxHp: opts.hp || 100,
     label: opts.label || '', route: opts.route || null, leg: 0, speed: opts.speed || 0,
     delivered: false, hitFlash: 0, smokeT: 0, lastHitT: -99, marker: friendlyMarker(),
@@ -328,10 +326,10 @@ function damageAlly(a, amt) {
   // radio: throttle "taking fire" calls to one every ~9s per mission so a strafing run doesn't spam
   if (now - (missionNotes._allyHitT || -99) > 9) {
     missionNotes._allyHitT = now;
-    if (a.static) radioKeySafe('ally', a.hp / a.maxHp < 0.35 ? 'comms.gen.assetCritical' : 'comms.gen.assetHit', { hp: Math.ceil(a.hp / a.maxHp * 100) });
-    else radioKeySafe('ally', a.air ? (a.hp / a.maxHp < 0.4 ? 'comms.gen.transportCritical' : 'comms.gen.transportHit') : 'comms.gen.convoyHit');
+    if (a.static) radioKey('ally', a.hp / a.maxHp < 0.35 ? 'comms.gen.assetCritical' : 'comms.gen.assetHit', { hp: Math.ceil(a.hp / a.maxHp * 100) });
+    else radioKey('ally', a.air ? (a.hp / a.maxHp < 0.4 ? 'comms.gen.transportCritical' : 'comms.gen.transportHit') : 'comms.gen.convoyHit');
   }
-  if (a.static && a.hp / a.maxHp < 0.5 && !a._halfLoss) { a._halfLoss = true; if (run) run.allyLosses = (run.allyLosses || 0) + 1; }
+  if (a.static && a.hp / a.maxHp < 0.5 && !a._halfLoss) { a._halfLoss = true; run.allyLosses = (run.allyLosses || 0) + 1; }
   a.lastHitT = now;
   if (a.hp <= 0) destroyAlly(a);
 }
@@ -340,23 +338,18 @@ function destroyAlly(a) {
   a.alive = false;
   explode(a.group.position.clone().setY(a.group.position.y + 6), true);
   if (a.air) for (let k = 0; k < 4; k++) spawnSmoke(a.group.position, 0x1a1c20, 2.4);
-  if (run && !a.static) run.allyLosses = (run.allyLosses || 0) + 1;
-  scene.remove(a.group); disposeGroup(a.group);
-  if (a.marker) scene.remove(a.marker);
-  if (a.static) radioKeySafe('ally', 'comms.gen.assetLost');
+  if (!a.static) run.allyLosses = (run.allyLosses || 0) + 1;
+  despawnEnemy(a);
+  if (a.static) radioKey('ally', 'comms.gen.assetLost');
   else {
     const left = allies.filter(o => o.alive && !o.static && !o.delivered).length;
-    radioKeySafe(a.air ? 'ovl' : 'ally', a.air ? 'comms.gen.transportLost' : 'comms.gen.convoyLost', { n: left });
+    radioKey(a.air ? 'ovl' : 'ally', a.air ? 'comms.gen.transportLost' : 'comms.gen.convoyLost', { n: left });
     showBanner(t(a.air ? 'banner.transportLost' : 'banner.convoyTruckLost'));
   }
-  if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+  audio.warn();
 }
 function clearAllies() {
-  for (let i = 0; i < allies.length; i++) {
-    const a = allies[i];
-    if (a.group) { scene.remove(a.group); disposeGroup(a.group); }
-    if (a.marker) scene.remove(a.marker);
-  }
+  for (let i = 0; i < allies.length; i++) despawnEnemy(allies[i]);
   allies.length = 0;
   for (let i = 0; i < bombs.length; i++) { scene.remove(bombs[i].mesh); }
   bombs.length = 0;
@@ -382,8 +375,8 @@ function updateAllies(dt) {
       a.group.rotation.y = Math.atan2(-st.dirX, -st.dirZ);
       if (st.done) {
         a.delivered = true;
-        radioKeySafe('ally', 'comms.gen.delivered', { n: allies.filter(o => o.delivered).length });
-        if (typeof audio !== 'undefined' && audio.ping) audio.ping();
+        radioKey('ally', 'comms.gen.delivered', { n: allies.filter(o => o.delivered).length });
+        audio.ping();
       }
     }
     if (a.air) { const want = allyGroundY(pos.x, pos.z) + ALLY_AIR_AGL; pos.y += clamp(want - pos.y, -90 * dt, 90 * dt); if (a.group.userData.engines) animEngines(a.group, 0.6); }
@@ -430,8 +423,8 @@ function dropBombs(e, target) {
     if (lead.lengthSq() > 1) v.add(lead.setLength(Math.min(90, lead.length() * 0.18)));
     bombs.push({ mesh: m, vel: v, dmg: target.static ? 11 : 60, radius: target.static ? 150 : 90 });
   }
-  radioKeySafe('enemy', 'comms.gen.bombsAway');
-  if (typeof audio !== 'undefined' && audio.missile) audio.missile();
+  radioKey('enemy', 'comms.gen.bombsAway');
+  audio.missile();
 }
 
 function landPoint(cx, cz, rMin, rMax, tries) {
@@ -441,8 +434,8 @@ function landPoint(cx, cz, rMin, rMax, tries) {
     const x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
     const h = terrainH(x, z);
     const slope = Math.abs(terrainH(x + 40, z) - h) + Math.abs(terrainH(x, z + 40) - h);
-    if (h > 25 && h < 700 && slope < 60) return { x: x, z: z };
-    if (h > bestH) { bestH = h; best = { x: x, z: z }; }
+    if (h > 25 && h < 700 && slope < 60) return { x, z };
+    if (h > bestH) { bestH = h; best = { x, z }; }
   }
   return best;
 }
@@ -464,28 +457,23 @@ function objectiveText(m) {
   if (m.type === 'recon')     return t('mission.recon') + ' ' + m.progress + '/' + m.target;
   if (m.type === 'boss')      return t('mission.boss');
   if (m.type === 'stealth') {
-    if (typeof stealthBlown !== 'undefined' && stealthBlown) return t('mission.stealth') + ' — ' + t('mission.stealth.escape');
+    if (stealthBlown) return t('mission.stealth') + ' — ' + t('mission.stealth.escape');
     const det = Math.round(((m.params.detect || 0)) * 100);
     const tag = det >= 60 ? t('mission.stealth.spotted') : t('mission.stealth.undetected');
     return t('mission.stealth') + ' — ' + tag + ' ' + det + '%';
   }
   return '';
 }
-function fmtClock(sec) { sec = Math.ceil(sec); return Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2); }
+function fmtClock(sec) { sec = Math.ceil(sec); return Math.floor(sec / 60) + ':' + pad2(sec % 60); }
 
 function missionName(type) { return t('mission.name.' + type) !== 'mission.name.' + type ? t('mission.name.' + type) : ''; }
 
-function missionCardBlurbKey() {
-  if (typeof currentCampaignLevel !== 'function' || typeof levelBlurbKey !== 'function') return null;
-  return levelBlurbKey(currentCampaignLevel());
-}
+function missionCardBlurbKey() { return levelBlurbKey(currentCampaignLevel()); }
 function missionTypeSeen(verb) { try { return !!store.get('skystrike_seenMissionType_' + verb); } catch (e) { return true; } }
 function sayLines(lines) {
   if (!lines) return;
-  for (let i = 0; i < lines.length; i++) { const l = lines[i]; if (l && l[1]) radioKeySafe(l[0], 'comms.' + l[1]); }
+  for (let i = 0; i < lines.length; i++) { const l = lines[i]; if (l && l[1]) radioKey(l[0], 'comms.' + l[1]); }
 }
-// radioKey is owned by ui-hud.js (comms panel); guard so the Node-side / headless callers never trip on it
-function radioKeySafe(who, key, vars) { if (typeof radioKey === 'function') radioKey(who, key, vars); }
 
 function startSectorMission(plan, wave) {
   missionSeq = missionSequence(plan.objectives);
@@ -498,7 +486,7 @@ function startSectorMission(plan, wave) {
   applySpawnRequests(p.spawnRequests, mission, wave);
   const b = p.banners;
   announceObjective(b, () => showBanner(tf('banner.missionStart', { name: missionName(type) })));
-  if (b.missionCard && typeof showMissionCard === 'function') showMissionCard(b.missionCard, missionCardBlurbKey());
+  if (b.missionCard) showMissionCard(b.missionCard, missionCardBlurbKey());
 }
 
 function startMissionPhase(seq, wave, isFirst) {
@@ -509,7 +497,7 @@ function startMissionPhase(seq, wave, isFirst) {
   applySpawnRequests(plan.spawnRequests, mission, wave);
   const b = plan.banners;
   announceObjective(b);
-  if (b.missionStart && b.missionCard && typeof showMissionCard === 'function' && !missionTypeSeen(b.missionCard)) showMissionCard(b.missionCard, missionCardBlurbKey());
+  if (b.missionStart && b.missionCard && !missionTypeSeen(b.missionCard)) showMissionCard(b.missionCard, missionCardBlurbKey());
   sayLines(plan.say);
 }
 
@@ -520,10 +508,10 @@ function announceObjective(b, lead) {
   const go = () => {
     if (mission !== m) return;
     if (lead) lead();
-    if (b.callout && typeof fireObjectiveCallout === 'function') fireObjectiveCallout(objectiveText(m), b.callout.phase, b.callout.total);
+    if (b.callout) fireObjectiveCallout(objectiveText(m), b.callout.phase, b.callout.total);
     else if (b.objective) showBanner(objectiveText(m));
   };
-  if (typeof afterMissionIntro === 'function') afterMissionIntro(go); else go();
+  afterMissionIntro(go);
 }
 
 // turn the pure spawnRequests descriptors into real entities/props. Ordered props -> strikeSite ->
@@ -532,11 +520,10 @@ function applySpawnRequests(reqs, m, wave) {
   for (let i = 0; i < reqs.length; i++) {
     const r = reqs[i];
     if (r.kind === 'props') spawnMissionProps(r.verb, m, wave);
-    else if (r.kind === 'strikeSite') { if (typeof queueStrikeSite === 'function') queueStrikeSite(wave, r.size); }
+    else if (r.kind === 'strikeSite') { queueStrikeSite(wave, r.size); }
     else if (r.kind === 'fighters') {
       if (r.raid) { for (let k = 0; k < r.n; k++) pendingSpawns.push(spawnRaider); }
-      else if (typeof queueFighterWave === 'function') queueFighterWave(r.n);
-      else for (let k = 0; k < r.n; k++) pendingSpawns.push(spawnFighter);
+      else queueFighterWave(r.n);
     }
     else if (r.kind === 'aces') { for (let k = 0; k < r.n; k++) pendingSpawns.push(spawnAce); }
     else if (r.kind === 'hostileAce') pendingSpawns.push(spawnHostileAce);
@@ -549,9 +536,9 @@ function applySpawnRequests(reqs, m, wave) {
       pendingSpawns.push(() => {
         const lvl = currentCampaignLevel();
         campaignBossPhases = (lvl && lvl.boss && lvl.boss.phases) || null;
-        if (lvl && lvl.boss && typeof spawnCampaignBoss === 'function') spawnCampaignBoss(lvl);
+        if (lvl && lvl.boss) spawnCampaignBoss(lvl);
         else spawnBoss();
-        if (lvl && lvl.boss && lvl.boss.introKey) radioKeySafe('boss', lvl.boss.introKey);
+        if (lvl && lvl.boss && lvl.boss.introKey) radioKey('boss', lvl.boss.introKey);
       });
     }
   }
@@ -561,7 +548,7 @@ function spawnRaider() {
   const e = createEnemy('fighter', raidSpawnPos(tgt));
   e.raid = tgt; e.raidMode = 'inbound';
   if (tgt) { dirToQuat(t1.copy(tgt.group.position).sub(e.group.position).normalize(), e.logicQuat); e.group.quaternion.copy(e.logicQuat); }
-  if (!missionNotes._raidCall) { missionNotes._raidCall = true; radioKeySafe('ovl', tgt && tgt.kind === 'outpost' ? 'comms.gen.raidersOutpost' : 'comms.gen.raidersConvoy'); }
+  if (!missionNotes._raidCall) { missionNotes._raidCall = true; radioKey('ovl', tgt && tgt.kind === 'outpost' ? 'comms.gen.raidersOutpost' : 'comms.gen.raidersConvoy'); }
   return e;
 }
 function spawnRaidBomber() {
@@ -574,7 +561,7 @@ function spawnRaidBomber() {
   dirToQuat(e.escapeDir, e.logicQuat); e.group.quaternion.copy(e.logicQuat);
   e.marker.material.color.setHex(0xffb060);
   showBanner(t('banner.bomberRun'));
-  radioKeySafe('ovl', 'comms.gen.bomberRun');
+  radioKey('ovl', 'comms.gen.bomberRun');
   return e;
 }
 
@@ -591,7 +578,7 @@ function spawnEscortConvoy(m, wave) {
   const fwd = fwdOf(player.group, t1); const fl = Math.hypot(fwd.x, fwd.z) || 1;
   const fx = fwd.x / fl, fz = fwd.z / fl;
   const lead = air ? 900 : 1400, legLen = air ? 2400 : 1700;
-  const pick = (x, z, r) => air ? { x: x + rand(-r, r), z: z + rand(-r, r) } : (landPoint(x, z, 0, r) || { x: x, z: z });
+  const pick = (x, z, r) => air ? { x: x + rand(-r, r), z: z + rand(-r, r) } : (landPoint(x, z, 0, r) || { x, z });
   const start = pick(p.x + fx * lead, p.z + fz * lead, air ? 200 : 700);
   const route = [];
   let cx = start.x, cz = start.z, hx = fx, hz = fz;
@@ -610,7 +597,7 @@ function spawnEscortConvoy(m, wave) {
     pendingSpawns.push(() => {
       const back = k * (air ? 160 : 70);
       const label = name ? (n > 1 ? t('ally.name.' + name) + ' ' + (k + 1) : t('ally.name.' + name)) : tf('ally.truck', { n: k + 1 });
-      const a = spawnAlly(air ? 'transport' : 'truck', start.x - fx * back + (air ? k * 60 : 0), start.z - fz * back, { route: route, speed: speed, label: label });
+      const a = spawnAlly(air ? 'transport' : 'truck', start.x - fx * back + (air ? k * 60 : 0), start.z - fz * back, { route, speed, label });
       a.group.rotation.y = Math.atan2(-fx, -fz);
       if (k === n - 1) m.params.spawnedAll = true;
     });
@@ -624,7 +611,7 @@ function spawnDefendAsset(m, wave) {
   const cx = p.x + fwd.x / fl * 1900, cz = p.z + fwd.z / fl * 1900;
   const c = ship ? (seaPoint(cx, cz) || { x: cx, z: cz }) : (landPoint(cx, cz, 0, 900) || { x: p.x, z: p.z - 1900 });
   const label = m.params.allyLabel ? t('ally.name.' + m.params.allyLabel) : t(ship ? 'ally.ship' : 'ally.outpost');
-  const a = spawnAlly(ship ? 'ship' : 'outpost', c.x, c.z, { hp: m.params.assetMaxHp, label: label });
+  const a = spawnAlly(ship ? 'ship' : 'outpost', c.x, c.z, { hp: m.params.assetMaxHp, label });
   if (ship) a.group.rotation.y = rand(0, TWO_PI);
   m.params._asset = a;
 }
@@ -632,7 +619,7 @@ function seaPoint(cx, cz) {
   for (let r = 0; r <= 6000; r += 400) {
     for (let i = 0; i < 16; i++) {
       const ang = i / 16 * TWO_PI, x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
-      if (terrainH(x, z) < SEA_LEVEL_Y - 60 && terrainH(x + 200, z) < SEA_LEVEL_Y - 30 && terrainH(x, z + 200) < SEA_LEVEL_Y - 30) return { x: x, z: z };
+      if (terrainH(x, z) < SEA_LEVEL_Y - 60 && terrainH(x + 200, z) < SEA_LEVEL_Y - 30 && terrainH(x, z + 200) < SEA_LEVEL_Y - 30) return { x, z };
     }
   }
   return null;
@@ -671,7 +658,7 @@ function spawnStealthExtraction(m, wave) {
     placeRing((i + 1) / (nGround + 1), (i % 2 ? 1 : -1), ringR, rand(140, 380), (cx, cz, rr) => {
       const e = spawnGroundAt(i === 0 ? 'radar' : 'sam', cx, cz);
       e.stealthThreat = true; e.detectR = rr; e.aggressive = false;
-      if (run) run.spawned = Math.max(0, (run.spawned || 0) - 1);
+      run.spawned = Math.max(0, (run.spawned || 0) - 1);
       if (e.marker) e.marker.material.color.setHex(0xffa23a);
     });
   }
@@ -682,7 +669,7 @@ function spawnStealthExtraction(m, wave) {
       const alt = clamp(p.y + rand(-150, 250), 600, 2000);
       const e = createEnemy('fighter', new THREE.Vector3(cx, alt, cz));
       e.patrol = true; e.stealthThreat = true; e.detectR = rr; e.aggressive = false;
-      if (run) run.spawned = Math.max(0, (run.spawned || 0) - 1);
+      run.spawned = Math.max(0, (run.spawned || 0) - 1);
       e.orbitSign = side; e.patrolAlt = alt; e.patrolSpeed = rand(260, 340);
       if (e.marker) e.marker.material.color.setHex(0xffa23a);
     });
@@ -717,8 +704,8 @@ function blowStealthCover() {
     if (e.marker) e.marker.material.color.setHex(0xff4444);
   }
   showBanner(t('mission.stealth.goLoud'));
-  radioKeySafe('ovl', 'comms.gen.goLoud');
-  if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+  radioKey('ovl', 'comms.gen.goLoud');
+  audio.warn();
 }
 
 // A player kill during a stealth op blows cover AND spawns reinforcements — going loud escalates. The TOTAL
@@ -750,7 +737,7 @@ const _detectIn = { blown: false, firing: false, beingAimed: false, coneLOS: 0, 
 function updateMission(dt) {
   if (allies.length || bombs.length) updateAllies(dt);
   if (!mission || mission.status !== 'active') return;
-  if (typeof campaignEnd !== 'undefined' && campaignEnd) return;
+  if (campaignEnd) return;
   phaseClock += dt;
   tickPhaseEvents();
   if (mission.type === 'escort') {
@@ -765,13 +752,13 @@ function updateMission(dt) {
     const a = mission.params._asset;
     mission.params.assetHp = (a && a.alive) ? a.hp : 0;
     const hold = mission._hold || (mission._hold = mission.timer);
-    if (!missionNotes.half && mission.timer <= hold / 2) { missionNotes.half = true; radioKeySafe('ally', 'comms.gen.defendHalf'); }
-    if (!missionNotes.last && mission.timer <= 15) { missionNotes.last = true; radioKeySafe('ally', 'comms.gen.defendLast'); }
+    if (!missionNotes.half && mission.timer <= hold / 2) { missionNotes.half = true; radioKey('ally', 'comms.gen.defendHalf'); }
+    if (!missionNotes.last && mission.timer <= 15) { missionNotes.last = true; radioKey('ally', 'comms.gen.defendLast'); }
   } else if (mission.type === 'intercept') {
     let alive = 0;
     for (let i = 0; i < enemies.length; i++) if (enemies[i].alive && enemies[i]._missionTarget) alive++;
     mission.params.aliveTargets = alive;
-    if (!missionNotes.t30 && mission.timer <= 30 && mission.progress < mission.target) { missionNotes.t30 = true; radioKeySafe('ovl', 'comms.gen.intercept30'); }
+    if (!missionNotes.t30 && mission.timer <= 30 && mission.progress < mission.target) { missionNotes.t30 = true; radioKey('ovl', 'comms.gen.intercept30'); }
   } else if (mission.type === 'strike') {
     // the site resolves when its CORE (radar/SAM/AAA) is flattened — evaluated every frame, so a fleeing
     // supply truck escaping (or a stray stealth SAM left over from an earlier phase) can never stall it.
@@ -782,7 +769,7 @@ function updateMission(dt) {
     if (core > 0) mission.params._armed = true;
   } else if (mission.type === 'recon') {
     const r = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
-    if (r.hitCount > mission.progress && typeof audio !== 'undefined' && audio.ping) audio.ping();
+    if (r.hitCount > mission.progress) audio.ping();
     mission.progress = r.hitCount;
   } else if (mission.type === 'stealth') {
     const firing = (player.firingT || 0) > 0;
@@ -805,11 +792,11 @@ function updateMission(dt) {
     const cue = stealthBlown ? 0 : Math.max(prox, coneLOS);
     mission.params._beepT = (mission.params._beepT || 0) - dt;
     if (cue > 0.35 && mission.params._beepT <= 0) {
-      if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+      audio.warn();
       mission.params._beepT = 0.9 - cue * 0.6;
     }
     const rs = reconProgress(mission.params.waypoints, player.group.position, mission.params.hitRadius);
-    if (rs.hitCount > (mission._wpHit || 0) && typeof audio !== 'undefined' && audio.ping) audio.ping();
+    if (rs.hitCount > (mission._wpHit || 0)) audio.ping();
     mission._wpHit = rs.hitCount;
   }
   tickMission(mission, dt);
@@ -819,9 +806,9 @@ function updateMission(dt) {
 
 function siteFlattened() {
   if (!mission || mission.type !== 'strike' || !mission.params.siteUp) return;
-  const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
-  player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
-  showBanner(tf('banner.siteFlattened', { rp: pay })); if (typeof audio !== 'undefined' && audio.power) audio.power(); empFlash = Math.max(empFlash, 0.4);
+  const pay = Math.round((60 + wave * 6) * player.rpMul);
+  player.tp += pay; player.score += Math.round(1500 * player.scoreMul);
+  showBanner(tf('banner.siteFlattened', { rp: pay })); audio.power(); empFlash = Math.max(empFlash, 0.4);
   mission.params.siteUp = false;
 }
 
@@ -837,19 +824,19 @@ function onMissionResolved(won, reason) {
         return;
       }
     }
-    if (typeof run !== 'undefined' && run) run.missions = (run.missions || 0) + 1;
+    run.missions = (run.missions || 0) + 1;
     showBanner(t('banner.missionComplete'));
     missionSeq = null; phaseEvents = null;
     audio.power(); empFlash = Math.max(empFlash, 0.35);
-    const bonus = Math.round((40 + wave * 4) * (player.rpMul || 1));
-    player.tp += bonus; player.score += Math.round(1200 * (player.scoreMul || 1));
+    const bonus = Math.round((40 + wave * 4) * player.rpMul);
+    player.tp += bonus; player.score += Math.round(1200 * player.scoreMul);
     clearMissionLeftovers();
   } else {
     missionSeq = null; phaseEvents = null;
-    if (typeof campaignMode !== 'undefined' && campaignMode && typeof beginCampaignEnd === 'function') { beginCampaignEnd('fail', reason || 'objective'); return; }
+    if (campaignMode) { beginCampaignEnd('fail', reason || 'objective'); return; }
     showBanner(t('banner.missionFailedObj'));
     audio.warn();
-    if (typeof gameOver === 'function') { gameOver(); }
+    gameOver();
   }
 }
 
@@ -859,8 +846,7 @@ function clearMissionLeftovers() {
     const e = enemies[i];
     if (!e.alive) continue;
     if (e.type === 'ground' && e.strikeSite && strikeLive) continue;
-    e.alive = false; scene.remove(e.group); disposeGroup(e.group);
-    if (e.marker) scene.remove(e.marker); clearLocks(e);
+    e.alive = false; despawnEnemy(e); clearLocks(e);
   }
   pendingSpawns.length = 0;
   clearAllies();

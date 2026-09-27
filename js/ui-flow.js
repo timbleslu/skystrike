@@ -1,10 +1,32 @@
 let metaTab = 'perks';
+const opById = id => OPERATIONS.find(o => o.id === id);
+const condText = c => tf('stars.cond.' + c.type, { n: c.n || 0 });
+function wireBtn(id, label, fn) { const b = g(id); if (b) { b.textContent = label; b.onclick = fn; } return b; }
+function closeUpgrade() { choosingUpgrade = false; g('upgrade').classList.remove('show'); }
+// shared by Endless/Daily/Weekly/Boss-rush startGame and a new operation run
+function newRunPlayer(i, perks) {
+  wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
+  createPlayer(i);
+  if (perks) applyMetaPerks(player);
+  equipSpecial2(player, special2Id, JETS[i].id);
+  player._cheatUsed = false;
+  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
+}
+function resetRunWorld(seed) {
+  weatherSeed = seed;
+  applyWeather('clear');
+  buildGroundObjects();
+  resetDraftState();
+  resetAwacs();
+  run = freshRun(performance.now());
+}
+const randomSeed = () => (Math.random() * 0x7fffffff) | 0;
 // #meta is a MODAL over the still-visible hangar (state stays 'hangar'), NOT a screen swap — so it is
 // deliberately NOT routed through nav.js showScreen (which would hide the hangar underneath). Direct
 // .show toggle. Same rationale for #manual / #upgrade / #wingpick below.
-function openMetaScreen() { if (state !== 'hangar') return; metaTab = 'perks'; g('meta').classList.add('show'); renderMetaScreen(); if (audio.on) audio.ui(); }
-function closeMetaScreen() { g('meta').classList.remove('show'); if (audio.on) audio.ui(); }
-function showMetaTab(name) { metaTab = name; renderMetaScreen(); if (audio.on) audio.ui(); }
+function openMetaScreen() { if (state !== 'hangar') return; metaTab = 'perks'; g('meta').classList.add('show'); renderMetaScreen(); audio.ui(); }
+function closeMetaScreen() { g('meta').classList.remove('show'); audio.ui(); }
+function showMetaTab(name) { metaTab = name; renderMetaScreen(); audio.ui(); }
 function renderMetaScreen() {
   const sp = g('metaSpVal'); if (sp) sp.textContent = spBalance().toLocaleString();
   document.querySelectorAll('#meta .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === metaTab));
@@ -49,7 +71,7 @@ function onMetaGridClick(e) {
 function startGame(i, daily, rush, weekly) {
   if (state !== 'hangar') return;
   if (!daily && !weekly && !jetUnlocked(JETS[i].id)) { showBanner(tf('meta.jetLocked', { c: jetCost(JETS[i].id) })); audio.ui(); return; }
-  if (!daily && !rush && !weekly && typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first (weekly uses the seed jet, not the hangar preview)
+  if (!daily && !rush && !weekly && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }   // previewing an UNOWNED skin → must BUY it first (weekly uses the seed jet, not the hangar preview)
   hangarPreview.clear();
   if (opMode && !daily && !rush) { selectedJet = i; openOperationsSelect(); return; }
   const _ptag = g('pilotTag');
@@ -62,28 +84,18 @@ function startGame(i, daily, rush, weekly) {
   weeklyMode = !!weekly; if (!weeklyMode) { weeklyMods = null; weeklyWavePlan = null; }
   selectedJet = i; audio.init();
   closeManual();
-  if (previewJet) { if (typeof previewScene !== 'undefined' && previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); previewJet = null; }
+  if (previewJet) { if (previewScene) previewScene.remove(previewJet); disposeGroup(previewJet); previewJet = null; }
   if (platform) { scene.remove(platform); platform = null; }
 
-  wingDmgMul = 1;            // reset BEFORE building the player so a jet passive (F-47) can raise it
-  createPlayer(i);
-  if (!bossRush) applyMetaPerks(player);    // persistent meta-tree edges apply at run start, BEFORE in-run tech tree (F15: boss-rush is a FIXED loadout — no perks)
-  equipSpecial2(player, special2Id, JETS[i].id);
+  newRunPlayer(i, !bossRush);   // boss-rush is a FIXED loadout — no meta perks
   if (weeklyMode && weeklyMods) applyWeeklyMods(player, weeklyMods);
   clearArenaEntities();
   wave = 0; betweenWaves = true; waveTimer = 2.6; crateTimer = 9; strikeWaveActive = false;
   bossWaveNext = 0; bossWaveActive = false; lastWaveWasBoss = false;
-  player._cheatUsed = false;   // APEX PREDATOR cheat-death is now ONCE PER RUN (balance 2026-06); reset here, NOT per wave
-  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   barrelRollLastKeyTap = -999; barrelRollLastTouchTap = -999;
   opSector = null; mission = null;
-  weatherSeed = dailyMode ? dailySeed : weeklyMode ? weeklySeed : ((Math.random() * 0x7fffffff) | 0);
-  if (typeof applyWeather === 'function') applyWeather('clear');
-  if (typeof buildGroundObjects === 'function') buildGroundObjects();
-  choosingUpgrade = false; g('upgrade').classList.remove('show');
-  resetDraftState();
-  resetAwacs();
-  run = freshRun(performance.now());
+  closeUpgrade();
+  resetRunWorld(dailyMode ? dailySeed : weeklyMode ? weeklySeed : randomSeed());
   noDamageWave = false;
   bossRushIndex = 0; bossRushT0 = performance.now();
   showScreen('playing');
@@ -108,8 +120,8 @@ function gameOver() {
     return;
   }
   state = 'dead';
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
-  choosingUpgrade = false; g('upgrade').classList.remove('show');
+  audio.stopEngine();
+  closeUpgrade();
   explode(player.group.position, true);
   player.group.visible = false;
   clearWingmen();
@@ -117,7 +129,7 @@ function gameOver() {
   endRun(t('banner.missionFailed'));
 }
 function endRun(title, win) {
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
+  audio.stopEngine();
   const gw = g('gameover').querySelector('.gowrap');
   if (gw) gw.classList.toggle('win', !!win);
   const h1 = g('gameover').querySelector('h1'); if (h1) h1.textContent = title;
@@ -126,14 +138,14 @@ function endRun(title, win) {
     const rec = dailyToday();
     saveDaily({ date: rec.date, played: true, best: Math.max(rec.best || 0, player.score) });
   }
-  if (weeklyMode && typeof meta !== 'undefined') {
+  if (weeklyMode) {
     recordWeeklyBest(meta, weekIdFor(todayKey()), player.score); saveMeta();
   }
   g('go_score').textContent = player.score.toLocaleString();
   g('go_wave').textContent = wave;
   const secs = Math.max(0, Math.round((performance.now() - run.t0) / 1000));
   const acc = run.shots > 0 ? Math.round(run.hits / run.shots * 100) : 0;
-  const dk = g('go_kills'); if (dk) dk.textContent = (run.kills + run.ground + run.boss);
+  const dk = g('go_kills'); if (dk) dk.textContent = runKills(run);
   const da = g('go_acc'); if (da) da.textContent = acc + '%';
   const dm = g('go_msl'); if (dm) dm.textContent = run.missiles;
   const dt2 = g('go_time'); if (dt2) dt2.textContent = fmtClock(secs);
@@ -146,7 +158,8 @@ function endRun(title, win) {
   const gradedAward = Math.round(award * grade.mult);
   const achRes = checkAchievements(run, player);
   bankSP(gradedAward);                 // achievement SP is banked inside grantAch
-  stampVeterancy((player && player.jet && player.jet.id) || null, run.kills + (run.ground || 0) + (run.boss || 0));
+  const jetId = player.jet.id;
+  stampVeterancy(jetId, runKills(run));
   const total = gradedAward + (achRes.sp || 0);
   const spd = g('go_sp');
   if (spd) {
@@ -175,7 +188,6 @@ function endRun(title, win) {
     const conds = (lastLevelResult && lastLevelResult.conds) || null;
     const stars = (lastLevelResult && typeof lastLevelResult.stars === 'number') ? lastLevelResult.stars : evalStarsFor(run, player, conds);
     lastLevelResult = null;   // consumed — don't leak into a later non-campaign debrief
-    const jetId = (player && player.jet && player.jet.id) || null;
     const best = bestStars(meta, jetId, stars); saveMeta();
     if (sd) {
       const pips = sd.querySelector('.stars-pips'); if (pips) pips.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
@@ -183,11 +195,10 @@ function endRun(title, win) {
       let cl = sd.querySelector('.stars-conds');
       if (conds) {
         if (!cl) { cl = document.createElement('span'); cl.className = 'stars-conds'; sd.appendChild(cl); }
-        cl.innerHTML = conds.slice(0, 3).map(c =>
-          '<span class="' + (starCondMet(c, lr) ? 'met' : 'miss') + '">' +
-          (starCondMet(c, lr) ? '★ ' : '☆ ') + tf('stars.cond.' + c.type, { n: c.n || 0 }) +
-          ' ' + t(starCondMet(c, lr) ? 'campaign.met' : 'campaign.miss') + '</span>'
-        ).join('');
+        cl.innerHTML = conds.slice(0, 3).map(c => {
+          const met = starCondMet(c, lr);
+          return '<span class="' + (met ? 'met' : 'miss') + '">' + (met ? '★ ' : '☆ ') + condText(c) + ' ' + t(met ? 'campaign.met' : 'campaign.miss') + '</span>';
+        }).join('');
         cl.classList.remove('hide');
       } else if (cl) { cl.classList.add('hide'); }
     }
@@ -197,25 +208,25 @@ function endRun(title, win) {
   if (goPilot) {
     const cs = (meta && meta.callsign) || '';
     const emId = (meta && meta.emblem) || 'wings';
-    const glyph = (typeof EMBLEM_GLYPHS !== 'undefined' && EMBLEM_GLYPHS[emId]) || '';
+    const glyph = EMBLEM_GLYPHS[emId] || '';
     goPilot.textContent = (glyph ? glyph + (cs ? ' ' + cs : '') : cs);
   }
   updateBest();
   showScreen('gameover');
   { const pb = lastRunRestartable ? g('redeploy') : g('goHangar'); if (pb && pb.focus) pb.focus({ preventScroll: true }); }
-  if (gw && !prefersReducedMotion()) { gw.classList.remove('reveal'); void gw.offsetWidth; gw.classList.add('reveal'); }
+  if (gw && !prefersReducedMotion()) replayClass(gw, 'reveal');
   else if (gw) gw.classList.add('reveal');
 }
 function operationComplete() {
   if (state !== 'playing') return;
   state = 'dead';
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
-  choosingUpgrade = false; g('upgrade').classList.remove('show');
+  audio.stopEngine();
+  closeUpgrade();
   player.score += 5000;
   if (meta && !meta.bossRushUnlocked) { meta.bossRushUnlocked = true; saveMeta(); }
   showBanner(t('banner.operationComplete'));
   endRun(t('banner.operationComplete'), true);
-  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
+  refreshBossRushEntry();
 }
 
 // SINGLE STAR-TRUTH stash: campaignLevelComplete computes the per-level stars ONCE (delta vs level base,
@@ -226,7 +237,7 @@ let lastLevelResult = null;
 function clearCampaignArena() {
   clearArenaEntities();
   mission = null;
-  if (typeof clearComms === 'function') clearComms();
+  clearComms();
 }
 
 let campaignEnd = null;
@@ -237,23 +248,21 @@ function beginCampaignEnd(kind, reason, frozen) {
   campaignEnd = { kind: kind, reason: reason || null, t: kind === 'win' ? 2.8 : 2.6, frozen: !!frozen };
   if (player) player.invuln = 99;
   waveTimer = 99; betweenWaves = true;
-  if (typeof dismissMissionCard === 'function') dismissMissionCard();
-  if (typeof showOutroStamp === 'function') showOutroStamp(kind === 'win', kind === 'win' ? null : failReasonKey(reason));
-  if (typeof radioKey === 'function') {
-    if (typeof clearComms === 'function') clearComms();
-    radioKey('ovl', kind === 'win' ? 'comms.gen.missionComplete' : (reason === 'shotDown' ? 'comms.gen.pilotDown' : 'comms.gen.missionFailed'));
-  }
+  dismissMissionCard();
+  showOutroStamp(kind === 'win', kind === 'win' ? null : failReasonKey(reason));
+  clearComms();
+  radioKey('ovl', kind === 'win' ? 'comms.gen.missionComplete' : (reason === 'shotDown' ? 'comms.gen.pilotDown' : 'comms.gen.missionFailed'));
 }
 function tickCampaignEnd(dt) {
   if (!campaignEnd) return;
   campaignEnd.t -= dt;
   if (campaignEnd.t > 0) return;
   const c = campaignEnd; campaignEnd = null;
-  if (typeof hideOutroStamp === 'function') hideOutroStamp();
+  hideOutroStamp();
   if (c.kind === 'win') campaignLevelComplete(); else campaignLevelFailed(c.reason);
 }
 function levelDebriefStats(lr) {
-  const kills = (lr.kills || 0) + (lr.ground || 0) + (lr.boss || 0);
+  const kills = runKills(lr);
   const acc = (lr.shots || 0) > 0 ? Math.round((lr.hits || 0) / lr.shots * 100) : 0;
   const secs = Math.max(0, Math.round(lr.timeSecs || 0));
   return { kills: kills, acc: acc, time: fmtClock(secs), dmg: Math.round(lr.damageTaken || 0) };
@@ -275,15 +284,15 @@ function freshSortie(p) {
   p.missiles = p.maxMissiles; p.flares = p.maxFlares; p.bullets = p.maxBullets;
   barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
   resetAwacs();
-  if (typeof stealthBlown !== 'undefined') stealthBlown = false;
+  stealthBlown = false;
 }
 
 function resetArenaForLevel(lvl) {
   clearCampaignArena();   // idempotent: tears down enemies/projectiles/particles/mission (keeps the player)
   const sp = (lvl && lvl.spawn) || {};
-  if (typeof applyTimeOfDay === 'function') applyTimeOfDay(sp.tod || 0);
-  if (typeof applyWeather === 'function') applyWeather(sp.weather || 'clear');
-  if (typeof buildGroundObjects === 'function') buildGroundObjects();
+  applyTimeOfDay(sp.tod || 0);
+  applyWeather(sp.weather || 'clear');
+  buildGroundObjects();
   freshSortie(player);
 }
 
@@ -340,8 +349,8 @@ function openOperationsSelect() {
   renderOperationsSelect();
   showScreen('opsSelect');
   setTxt('opsTitle', t('campaign.operations'));
-  const back = g('opsBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { ov.classList.remove('show'); campaignPlayerOpId = null; returnToHangar(); }; }
-  if (audio.on) audio.ui();
+  wireBtn('opsBack', '◀ ' + t('campaign.back'), () => { ov.classList.remove('show'); campaignPlayerOpId = null; returnToHangar(); });
+  audio.ui();
 }
 function renderOperationsSelect() {
   const wrap = g('opsList'); if (!wrap) return;
@@ -366,7 +375,7 @@ function renderOperationsSelect() {
 }
 
 function openOperationLore(opId, force) {
-  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const op = opById(opId); if (!op) return;
   campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
   const ov = g('opLore'); if (!ov) { openLevelMap(opId); return; }
   setTxt('opLoreTitle', t(op.nameKey));
@@ -376,26 +385,26 @@ function openOperationLore(opId, force) {
   const ch = g('opLoreChart'); if (ch) ch.style.backgroundImage = "url('assets/maps/" + op.id + ".svg')";
   showScreen('opLore');
   const st = opStars(op);
-  const go = g('opLoreGo'); if (go) { go.textContent = '▶ ' + t(st.cleared ? 'campaign.resume' : 'campaign.enter'); go.onclick = () => { openLevelMap(opId); }; }
-  const back = g('opLoreBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }
-  if (audio.on) audio.ui();
+  wireBtn('opLoreGo', '▶ ' + t(st.cleared ? 'campaign.resume' : 'campaign.enter'), () => openLevelMap(opId));
+  wireBtn('opLoreBack', '◀ ' + t('campaign.back'), openOperationsSelect);
+  audio.ui();
 }
 
 let sortieSel = -1;
 function openLevelMap(opId, selIdx) {
   campaignMode = false; campaignOpId = opId; opSector = null; paused = true;
   const ov = g('levelMap'); if (!ov) return;
-  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const op = opById(opId); if (!op) return;
   if (selIdx == null) { selIdx = op.levels.findIndex((l, i) => campaignLevelState(opId, i) === 'unlocked'); if (selIdx < 0) selIdx = op.levels.length - 1; }
   sortieSel = selIdx;
   renderLevelMap(opId);
   showScreen('levelMap');
-  const rd = g('levelMapTech'); if (rd) { rd.textContent = '⚒ ' + t('campaign.rd'); rd.onclick = () => { if (campaignPlayerOpId === opId && player && typeof openTechScreen === 'function') { ov.classList.remove('show'); openTechScreen(); } }; }
-  const back = g('levelMapBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openOperationsSelect(); }; }
-  if (audio.on) audio.ui();
+  wireBtn('levelMapTech', '⚒ ' + t('campaign.rd'), () => { if (campaignPlayerOpId === opId && player) { ov.classList.remove('show'); openTechScreen(); } });
+  wireBtn('levelMapBack', '◀ ' + t('campaign.back'), openOperationsSelect);
+  audio.ui();
 }
 function renderLevelMap(opId) {
-  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const op = opById(opId); if (!op) return;
   setTxt('levelMapTitle', t(op.nameKey));
   const st = opStars(op);
   setTxt('levelMapMeta', tf('campaign.clearedOf', { n: st.cleared, of: st.total }) + '   ★ ' + st.got + '/' + st.max);
@@ -415,7 +424,7 @@ function renderLevelMap(opId) {
     const ico = stt === 'locked' ? cwIcon('LOCK') : stt === 'cleared' ? cwIcon('CHECK') : cwIcon(lvl.type);
     return '<button class="' + cls + '" data-idx="' + i + '" style="left:' + lvl.coords.x + '%;top:' + lvl.coords.y + '%" aria-label="' + cwEsc((i + 1) + ' ' + t(lvl.nameKey)) + '">' +
       '<span class="cw-pin">' + ico + '</span>' +
-      '<span class="cw-tag"><b>' + ('0' + (i + 1)).slice(-2) + '</b> ' + cwEsc(t(lvl.nameKey)) + (stt === 'cleared' ? ' ' + starRow(levelBest(opId, lvl)) : '') + '</span></button>';
+      '<span class="cw-tag"><b>' + pad2(i + 1) + '</b> ' + cwEsc(t(lvl.nameKey)) + (stt === 'cleared' ? ' ' + starRow(levelBest(opId, lvl)) : '') + '</span></button>';
   }).join('');
   wrap.innerHTML = '<div class="cw-chart-art" style="background-image:url(\'assets/maps/' + opId + '.svg\')"></div>' +
     '<svg class="cw-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' + legs + '</svg>' + dots;
@@ -423,7 +432,7 @@ function renderLevelMap(opId) {
     n.addEventListener('click', () => {
       const i = +n.getAttribute('data-idx');
       if (i === sortieSel && states[i] !== 'locked') { openBriefing(opId, i); return; }
-      sortieSel = i; renderLevelMap(opId); if (audio.on) audio.ui();
+      sortieSel = i; renderLevelMap(opId); audio.ui();
     });
   });
   renderSortieCard(op, sortieSel, states);
@@ -437,11 +446,11 @@ function renderSortieCard(op, idx, states) {
   const best = levelBest(op.id, lvl);
   const prev = idx > 0 ? t(op.levels[idx - 1].nameKey) : '';
   card.innerHTML =
-    '<div class="cw-sortie-head">' + cwIcon(lvl.type) + '<span>' + tf('campaign.sectorN', { n: ('0' + (idx + 1)).slice(-2) }) + ' · ' + cwEsc(t('campaign.type.' + lvl.type)) + '</span></div>' +
+    '<div class="cw-sortie-head">' + cwIcon(lvl.type) + '<span>' + tf('campaign.sectorN', { n: pad2(idx + 1) }) + ' · ' + cwEsc(t('campaign.type.' + lvl.type)) + '</span></div>' +
     '<h3 class="cw-sortie-name">' + cwEsc(t(lvl.nameKey)) + '</h3>' +
     '<div class="cw-chips">' + condLabel(lvl).map(c => '<span>' + cwEsc(c) + '</span>').join('') + '</div>' +
     '<ol class="cw-plan cw-plan-mini">' + beats.map(b => '<li>' + cwIcon(b.type) + '<span>' + cwEsc(b.text) + '</span>' + (b.clock ? '<em>' + b.clock + '</em>' : '') + '</li>').join('') + '</ol>' +
-    '<div class="cw-sortie-stars">' + starRow(best) + '<span>' + cwEsc(conds.map(c => tf('stars.cond.' + c.type, { n: c.n || 0 })).join(' / ')) + '</span></div>' +
+    '<div class="cw-sortie-stars">' + starRow(best) + '<span>' + cwEsc(conds.map(c => condText(c)).join(' / ')) + '</span></div>' +
     (stt === 'locked'
       ? '<div class="cw-sortie-lock">' + cwIcon('LOCK') + cwEsc(tf('campaign.clearFirst', { name: prev })) + '</div>'
       : '<button class="cw-go cw-sortie-go" id="sortieBrief">' + t(stt === 'cleared' ? 'campaign.replayBrief' : 'campaign.brief') + ' ▶</button>');
@@ -449,10 +458,10 @@ function renderSortieCard(op, idx, states) {
 }
 
 function openBriefing(opId, idx) {
-  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const op = opById(opId); if (!op) return;
   const lvl = op.levels[idx]; if (!lvl) return;
   const ov = g('briefing'); if (!ov) return;
-  setTxt('briefTitle', ('0' + (idx + 1)).slice(-2) + '  ' + t(lvl.nameKey));
+  setTxt('briefTitle', pad2(idx + 1) + '  ' + t(lvl.nameKey));
   const bc = g('briefCond'); if (bc) bc.innerHTML = '<span>' + cwEsc(t(op.nameKey)) + '</span>' + condLabel(lvl).map(c => '<span>' + cwEsc(c) + '</span>').join('');
   const fallback = t(lvl.isBoss && lvl.boss && lvl.boss.introKey ? lvl.boss.introKey : lvl.loreKey);
   const bk = (typeof levelBlurbKey === 'function') ? levelBlurbKey(lvl) : null;
@@ -467,15 +476,15 @@ function openBriefing(opId, idx) {
   const sl = g('briefStars');
   if (sl) {
     const best = levelBest(opId, lvl);
-    sl.innerHTML = levelConds(lvl).map((c, i) => '<li class="' + (i < best ? 'got' : '') + '">★ ' + cwEsc(tf('stars.cond.' + c.type, { n: c.n || 0 })) + '</li>').join('');
+    sl.innerHTML = levelConds(lvl).map((c, i) => '<li class="' + (i < best ? 'got' : '') + '">★ ' + cwEsc(condText(c)) + '</li>').join('');
   }
   setTxt('briefLoadout', campaignLoadoutSummary(opId));
   setTxt('briefLoreH', t('campaign.situation')); setTxt('briefObjH', t('campaign.flightPlan'));
   setTxt('briefIntelH', t('campaign.enemyIntel')); setTxt('briefLoadoutH', t('campaign.loadout')); setTxt('briefStarsH', t('campaign.starTargets'));
   showScreen('briefing');
-  const play = g('briefPlay'); if (play) { play.textContent = '▶ ' + t('campaign.play'); play.onclick = () => launchLevel(opId, idx); play.focus({ preventScroll: true }); }
-  const back = g('briefBack'); if (back) { back.textContent = '◀ ' + t('campaign.back'); back.onclick = () => { openLevelMap(opId, idx); }; }
-  if (audio.on) audio.ui();
+  const play = wireBtn('briefPlay', '▶ ' + t('campaign.play'), () => launchLevel(opId, idx)); if (play) play.focus({ preventScroll: true });
+  wireBtn('briefBack', '◀ ' + t('campaign.back'), () => openLevelMap(opId, idx));
+  audio.ui();
 }
 function campaignLoadoutSummary(opId) {
   const jet = JETS[selectedJet];
@@ -492,32 +501,20 @@ function enterOperationRun(opId) {
   if (player && player.group) scene.remove(player.group);
   player = null;
   dailyMode = false; bossRush = false; weeklyMode = false;
-  wingDmgMul = 1;
-  createPlayer(selectedJet);
-  applyMetaPerks(player);
-  equipSpecial2(player, special2Id, JETS[selectedJet].id);
-  player._cheatUsed = false;
-  barrelRollCooldown = 0; barrelRollAnim = 0; barrelRollRequest = false;
+  newRunPlayer(selectedJet, true);
   campaignPlayerOpId = opId;
-  run = freshRun(performance.now());
-  weatherSeed = (Math.random() * 0x7fffffff) | 0;
-  if (typeof applyWeather === 'function') applyWeather('clear');
-  if (typeof buildGroundObjects === 'function') buildGroundObjects();
-  resetDraftState();
-  resetAwacs();
+  resetRunWorld(randomSeed());
 }
 
 function launchLevel(opId, idx) {
-  const op = OPERATIONS.find(o => o.id === opId); if (!op) return;
+  const op = opById(opId); if (!op) return;
   const lvl = op.levels[idx]; if (!lvl) return;
-  if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }
+  if (launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }
   hangarPreview.clear();
-  if (typeof showLoading === 'function') showLoading();
+  showLoading();
   if (campaignPlayerOpId !== opId || !player) enterOperationRun(opId);
   campaignOpId = opId; campaignLevelIdx = idx;
   campaignWavesLeft = lvl.waves || campaignWaveCount(idx);
-  player.hp = player.maxHp; if (player.maxShield) player.shield = player.maxShield;
-  player.missiles = player.maxMissiles; player.flares = player.maxFlares;
   if (player.group) player.group.visible = true;
   campaignSnapshot = captureSnapshot(player);
   campaignLevelRunBase = snapshotRunCounters(run);
@@ -525,15 +522,16 @@ function launchLevel(opId, idx) {
   wave = 0; betweenWaves = true; waveTimer = 1.4; strikeWaveActive = false;
   mission = null; campaignBossPhases = null; noDamageWave = false;
   campaignMode = true; opSector = lvl.type;
-  campaignEnd = null; if (typeof hideOutroStamp === 'function') hideOutroStamp();
+  campaignEnd = null; hideOutroStamp();
   resetArenaForLevel(lvl);
   showScreen('playing'); paused = false;
   if (clock) clock.getDelta();
   if (startWingman) spawnWingman(false, 'STD');
-  if (typeof hideLoading === 'function') hideLoading();
-  if (typeof showMissionIntro === 'function') showMissionIntro(op, idx, lvl);
+  hideLoading();
+  showMissionIntro(op, idx, lvl);
 }
 
+const levelSecs = () => campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
 function campaignLevelComplete() {
   const opId = campaignOpId, idx = campaignLevelIdx;
   const lvl = currentCampaignLevel(); if (!lvl) return;
@@ -543,7 +541,7 @@ function campaignLevelComplete() {
   if (player) { player.tp = (player.tp || 0) + rw.rp; player.score += rw.score; }
   const lr = levelRunDelta(run, campaignLevelRunBase);
   lr.waveReached = lvl.waves || campaignWaveCount(idx);
-  lr.timeSecs = campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
+  lr.timeSecs = levelSecs();
   lr.expectedKills = lr.spawned || 0;
   const conds = levelConds(lvl);
   const stars = evalStarsFor(lr, player, conds);
@@ -554,7 +552,7 @@ function campaignLevelComplete() {
   // audio + guns under the overlay — mirrors operationComplete), silence the hum, and show the dedicated
   // LEVEL CLEARED debrief (no SP award / hangar return). Continue → map.
   state = 'dead';
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
+  audio.stopEngine();
   clearCampaignArena();
   showLevelCleared(opId, idx, lvl, rw, firstClear);
 }
@@ -563,19 +561,20 @@ function renderStarList(el, conds, lr) {
   if (!el) return;
   el.innerHTML = (conds || []).slice(0, 3).map(c => {
     const met = starCondMet(c, lr);
-    return '<li class="' + (met ? 'got' : 'miss') + '">' + (met ? '★ ' : '☆ ') + cwEsc(tf('stars.cond.' + c.type, { n: c.n || 0 })) + '</li>';
+    return '<li class="' + (met ? 'got' : 'miss') + '">' + (met ? '★ ' : '☆ ') + cwEsc(condText(c)) + '</li>';
   }).join('');
 }
 function statCells(st) {
   return [['campaign.stat.time', st.time], ['campaign.stat.kills', st.kills], ['campaign.stat.acc', st.acc + '%'], ['campaign.stat.dmg', st.dmg]]
     .map(r => '<div><span>' + cwEsc(t(r[0])) + '</span><b>' + cwEsc(r[1]) + '</b></div>').join('');
 }
+function levelSub(op, idx, lvl) { return ((op && t(op.nameKey)) || '') + '  ·  ' + pad2(idx + 1) + ' ' + (lvl ? t(lvl.nameKey) : ''); }
 function showLevelCleared(opId, idx, lvl, rw, firstClear) {
   const ov = g('levelCleared'); if (!ov) { openLevelMap(opId); return; }
   const res = lastLevelResult || { stars: 0, conds: levelConds(lvl), lr: {} };
   lastLevelResult = null;   // consumed by THIS panel — never let it linger into a later non-campaign endRun debrief
-  const op = OPERATIONS.find(o => o.id === opId);
-  setTxt('lvlcSub', ((op && t(op.nameKey)) || '') + '  ·  ' + ('0' + (idx + 1)).slice(-2) + ' ' + t(lvl.nameKey));
+  const op = opById(opId);
+  setTxt('lvlcSub', levelSub(op, idx, lvl));
   setTxt('lvlcTitle', t('campaign.accomplished'));
   const pips = g('lvlcPips');
   if (pips) { pips.innerHTML = [0, 1, 2].map(i => '<span class="' + (i < res.stars ? 'on' : '') + '" style="--i:' + i + '">★</span>').join(''); pips.setAttribute('aria-label', res.stars + ' / 3'); }
@@ -583,37 +582,36 @@ function showLevelCleared(opId, idx, lvl, rw, firstClear) {
   const sc = g('lvlcStats'); if (sc) sc.innerHTML = statCells(levelDebriefStats(res.lr || {}));
   const rr = g('lvlcRewards'); if (rr) rr.textContent = '+' + (rw ? rw.rp : 0) + ' RP   +' + (rw ? rw.score : 0).toLocaleString() + ' ' + t('campaign.stat.score') + (firstClear ? '' : '   (' + t('campaign.replayRate') + ')');
   const hasNext = op && idx + 1 < op.levels.length;
-  const go = g('lvlcContinue');
-  if (go) { go.textContent = hasNext ? t('campaign.nextMission') + ' ▶' : t('campaign.continueMap'); go.onclick = () => { if (hasNext) openBriefing(opId, idx + 1); else openLevelMap(opId); }; }
-  const mp = g('lvlcMap'); if (mp) { mp.textContent = t('campaign.map'); mp.onclick = () => openLevelMap(opId, hasNext ? idx + 1 : idx); }
-  const rp = g('lvlcReplay'); if (rp) { rp.textContent = t('campaign.replay'); rp.onclick = () => launchLevel(opId, idx); }
+  const go = wireBtn('lvlcContinue', hasNext ? t('campaign.nextMission') + ' ▶' : t('campaign.continueMap'), () => { if (hasNext) openBriefing(opId, idx + 1); else openLevelMap(opId); });
+  wireBtn('lvlcMap', t('campaign.map'), () => openLevelMap(opId, hasNext ? idx + 1 : idx));
+  wireBtn('lvlcReplay', t('campaign.replay'), () => launchLevel(opId, idx));
   showScreen('levelCleared');
   if (go) go.focus({ preventScroll: true });
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 function showLevelFailed(opId, idx, lvl, reason, lr) {
   const ov = g('levelFailed'); if (!ov) { openLevelMap(opId); return; }
-  const op = OPERATIONS.find(o => o.id === opId);
-  setTxt('lvlfSub', ((op && t(op.nameKey)) || '') + '  ·  ' + ('0' + (idx + 1)).slice(-2) + ' ' + (lvl ? t(lvl.nameKey) : ''));
+  const op = opById(opId);
+  setTxt('lvlfSub', levelSub(op, idx, lvl));
   setTxt('lvlfTitle', t('campaign.failed'));
   setTxt('lvlfReason', t(failReasonKey(reason)));
   setTxt('lvlfTip', t('fail.tip.' + (FAIL_REASONS.indexOf(reason) >= 0 ? reason : 'objective')));
   const sc = g('lvlfStats'); if (sc) sc.innerHTML = statCells(levelDebriefStats(lr || {}));
   setTxt('lvlfNote', t('campaign.retryNote'));
-  const rt = g('lvlfRetry'); if (rt) { rt.textContent = '▶ ' + t('campaign.retry'); rt.onclick = () => launchLevel(opId, idx); }
-  const mp = g('lvlfMap'); if (mp) { mp.textContent = t('campaign.map'); mp.onclick = () => openLevelMap(opId, idx); }
+  const rt = wireBtn('lvlfRetry', '▶ ' + t('campaign.retry'), () => launchLevel(opId, idx));
+  wireBtn('lvlfMap', t('campaign.map'), () => openLevelMap(opId, idx));
   showScreen('levelFailed');
   if (rt) rt.focus({ preventScroll: true });
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 
 function campaignLevelFailed(reason) {
   const opId = campaignOpId, idx = campaignLevelIdx;
   const lvl = currentCampaignLevel();
   const lr = levelRunDelta(run, campaignLevelRunBase);
-  lr.timeSecs = campaignLevelT0 ? (performance.now() - campaignLevelT0) / 1000 : 0;
+  lr.timeSecs = levelSecs();
   campaignMode = false; campaignEnd = null;
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
+  audio.stopEngine();
   if (campaignSnapshot && player) {
     const r = rollbackSnapshot(campaignSnapshot);
     player.tp = r.rp; player.score = r.score;
@@ -621,17 +619,15 @@ function campaignLevelFailed(reason) {
   campaignSnapshot = null; opSector = null;
   if (player && player.group) player.group.visible = true;
   clearCampaignArena();
-  if (typeof hideOutroStamp === 'function') hideOutroStamp();
+  hideOutroStamp();
   showLevelFailed(opId, idx, lvl, reason || 'objective', lr);
 }
 
 function startBossRush() {
   if (state !== 'hangar') return;
   if (!meta || (!meta.bossRushUnlocked && !devUnlockAll)) { showBanner(t('bossrush.locked')); audio.ui(); return; }
-  let jetIdx = 0;
-  for (let k = 0; k < JETS.length; k++) { if (JETS[k].id === STARTER_JETS[0]) { jetIdx = k; break; } }
   opMode = false;
-  startGame(jetIdx, false, true);
+  startGame(Math.max(0, JETS.findIndex(j => j.id === STARTER_JETS[0])), false, true);
   if (state === 'playing') { spawnBossRushBoss(); showBanner(t('bossrush.title')); }
 }
 function bossRushComplete() {
@@ -640,12 +636,11 @@ function bossRushComplete() {
   if (meta) { meta.bossRushBest = betterTime(meta.bossRushBest || 0, secs); saveMeta(); }
   player.score += 8000;
   state = 'dead';
-  choosingUpgrade = false; g('upgrade').classList.remove('show');
-  showBanner(tf('bossrush.cleared', { t: bossRushTimeStr(secs) }));
+  closeUpgrade();
+  showBanner(tf('bossrush.cleared', { t: fmtClock(secs) }));
   endRun(t('bossrush.title'), true);
-  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
+  refreshBossRushEntry();
 }
-function bossRushTimeStr(secs) { return (Math.floor(secs / 60)) + ':' + ('0' + (secs % 60)).slice(-2); }
 function refreshBossRushEntry() {
   const btn = g('bossRushBtn'); if (!btn) return;
   const unlocked = devUnlockAll || !!(meta && meta.bossRushUnlocked);
@@ -657,14 +652,14 @@ function refreshBossRushEntry() {
   if (note) {
     const best = (meta && meta.bossRushBest) || 0;
     note.textContent = !unlocked ? t('bossrush.locked')
-      : (best > 0 ? tf('bossrush.best', { t: bossRushTimeStr(best) }) : t('bossrush.sub'));
+      : (best > 0 ? tf('bossrush.best', { t: fmtClock(best) }) : t('bossrush.sub'));
   }
 }
 
 // CRITICAL: the clock is read ONCE here at the call site (browser runtime); the pure fns
 // (dailySeedFor/makeRng in globals.js) never call new Date(). y/m/d are passed in.
 function todayParts() { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }; }
-function todayKey() { const p = todayParts(); return p.y + '-' + ('0' + p.m).slice(-2) + '-' + ('0' + p.d).slice(-2); }
+function todayKey() { const p = todayParts(); return p.y + '-' + pad2(p.m) + '-' + pad2(p.d); }
 // NOT loadHealed: this is a nullable pass-through (returns the stored object or null) — the default
 // record is built date-based in dailyToday (fresh unplayed when the stored date != today), not by
 // typeof-key filling. loadHealed's fill-missing-keys shape does not apply, so it stays hand-rolled.
@@ -688,23 +683,22 @@ function refreshDailyEntry() {
   }
   const note = g('dailyNoteTxt');
   if (note) {
-    if (rec.played) note.textContent = t('daily.best').replace('{best}', rec.best.toLocaleString()) + ' · ' + t('daily.locked');
-    else note.textContent = t('daily.sub').replace('{date}', rec.date);
+    if (rec.played) note.textContent = tf('daily.best', { best: rec.best.toLocaleString() }) + ' · ' + t('daily.locked');
+    else note.textContent = tf('daily.sub', { date: rec.date });
   }
 }
+const seededJet = seed => Math.floor(makeRng(seed)() * JETS.length) % JETS.length;
 function startDaily() {
   if (state !== 'hangar') return;
   const rec = dailyToday();
-  if (rec.played) { showBanner(t('daily.locked')); if (audio.on) audio.ui(); return; }
+  if (rec.played) { showBanner(t('daily.locked')); audio.ui(); return; }
   const p = todayParts();
   const seed = dailySeedFor(p.y, p.m, p.d);
   // mark the attempt as consumed up front (one attempt/day, even if the player bails mid-run)
   saveDaily({ date: rec.date, played: true, best: rec.best || 0 });
   opMode = false;
-  const rng = makeRng(seed);
-  const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;
   dailySeed = seed;
-  startGame(jetIdx, true);
+  startGame(seededJet(seed), true);
 }
 
 // CRITICAL: the clock is read ONCE here at the call site (todayKey, browser runtime); the pure fns
@@ -720,12 +714,12 @@ function weeklyThisWeek() {
   const seed = weeklySeedFor(key);
   return {
     id: weekIdFor(key), seed: seed,
-    mods: weeklyModifiers(seed, packRuntime.modPool).map(function (m) { return m.id; }),
+    mods: weeklyModifiers(seed, packRuntime.modPool).map(m => m.id),
     wavePlan: weeklyWavePattern(seed, packRuntime.wavePatterns),
   };
 }
 function weeklyModNames(ids) {
-  return (ids || []).map(function (id) { return t('weekly.mod.' + id); }).join('  ·  ');
+  return (ids || []).map(id => t('weekly.mod.' + id)).join('  ·  ');
 }
 // apply the 2 stacked modifiers onto the freshly-built player (called from startGame AFTER meta
 // perks). Modifier effects are DATA (core.js WEEKLY_MODIFIERS + pack modifiers, merged by pure
@@ -750,9 +744,9 @@ function refreshWeeklyEntry() {
   if (btn) btn.textContent = t('weekly.play');
   const note = g('weeklyNoteTxt');
   if (note) {
-    const best = (typeof weeklyBest === 'function' && typeof meta !== 'undefined') ? weeklyBest(meta, wk.id) : 0;
-    let line = t('weekly.sub').replace('{mods}', weeklyModNames(wk.mods));
-    if (best > 0) line += '  ·  ' + t('weekly.best').replace('{best}', best.toLocaleString());
+    const best = weeklyBest(meta, wk.id);
+    let line = tf('weekly.sub', { mods: weeklyModNames(wk.mods) });
+    if (best > 0) line += '  ·  ' + tf('weekly.best', { best: best.toLocaleString() });
     note.textContent = line;
   }
 }
@@ -763,8 +757,6 @@ function startWeekly() {
   weeklySeed = wk.seed;
   weeklyMods = wk.mods;
   weeklyWavePlan = wk.wavePlan;
-  const rng = makeRng(wk.seed);
-  const jetIdx = Math.floor(rng() * JETS.length) % JETS.length;
   showBanner(t('weekly.title') + '  ·  ' + weeklyModNames(wk.mods));
-  startGame(jetIdx, false, false, true);
+  startGame(seededJet(wk.seed), false, false, true);
 }

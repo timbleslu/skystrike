@@ -24,7 +24,7 @@ function buildHangar() {
   g('manualClose').addEventListener('click', closeManual);
   g('manualAbort').addEventListener('click', abortMission);
   const mnav = g('manNav'); if (mnav) mnav.addEventListener('click', e => { const b = e.target.closest('.mnavbtn'); if (b) showManualTab(b.dataset.tab); });
-  const ssn = g('ssetNav'); if (ssn) ssn.addEventListener('click', e => { const b = e.target.closest('.ssetbtn'); if (b) { showSettingsSubtab(b.dataset.sset); if (audio.on) audio.ui(); } });
+  const ssn = g('ssetNav'); if (ssn) ssn.addEventListener('click', e => { const b = e.target.closest('.ssetbtn'); if (b) { showSettingsSubtab(b.dataset.sset); audio.ui(); } });
   g('redeploy').addEventListener('click', redeployRun);
   const goH = g('goHangar'); if (goH) goH.addEventListener('click', returnToHangar);
   const td = g('techDeploy'); if (td) td.addEventListener('click', deployFromTech);
@@ -43,49 +43,49 @@ function buildHangar() {
   setTimeOfDay(timeOfDay);
   g('modeEndless').addEventListener('click', () => { opMode = false; saveSettings(); openEndlessSetup(); });
   g('modeOperation').addEventListener('click', () => { opMode = true; saveSettings(); g('modeChoice').classList.remove('show'); openOperationsSelect(); });
-  g('modeBack').addEventListener('click', () => { g('modeChoice').classList.remove('show'); if (audio.on) audio.ui(); });
+  g('modeBack').addEventListener('click', () => { g('modeChoice').classList.remove('show'); audio.ui(); });
   g('endlessBack').addEventListener('click', () => { g('endlessSetup').classList.remove('show'); openModeChoice(); });
   g('endlessStart').addEventListener('click', () => { opMode = false; g('endlessSetup').classList.remove('show'); startGame(selectedJet); });
   const sv = g('setVol'); if (sv) { sv.value = Math.round(volume * 100); sv.addEventListener('input', () => { volume = sv.value / 100; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
-  const si = g('setInvert'); if (si) { si.checked = invertY; si.addEventListener('change', () => { applySetting('invertY', si.checked); }); }
-  const sal = g('setAutoLock'); if (sal) { sal.checked = autoLock; sal.addEventListener('change', () => { applySetting('autoLock', sal.checked); if (audio.on) audio.ui(); }); }
-  const sw = g('setWingman'); if (sw) { sw.checked = startWingman; sw.addEventListener('change', () => { applySetting('startWingman', sw.checked); if (audio.on) audio.ui(); }); }
-  const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; if (audio.on) audio.ui(); saveSettings(); renderJetCard(); }); }
-  const sdl = g('setDevUnlockLevels'); if (sdl) { sdl.checked = devUnlockLevels; sdl.addEventListener('change', () => { applySetting('devUnlockLevels', sdl.checked); if (audio.on) audio.ui(); }); }
+  bindToggle('setInvert', 'invertY', invertY, false);
+  bindToggle('setAutoLock', 'autoLock', autoLock);
+  bindToggle('setWingman', 'startWingman', startWingman);
+  const sdu = g('setDevUnlock'); if (sdu) { sdu.checked = devUnlockAll; sdu.addEventListener('change', () => { devUnlockAll = sdu.checked; audio.ui(); saveSettings(); renderJetCard(); }); }
+  bindToggle('setDevUnlockLevels', 'devUnlockLevels', devUnlockLevels);
   syncDevPanel();
   const dpb = g('devUnlockBtn'), dpf = g('devPass'), dpd = g('devDeny');
   const tryDevUnlock = () => {
     if (!dpf) return;
-    if (dpf.value === 'timbles') { devUnlocked = true; saveSettings(); if (dpd) dpd.hidden = true; dpf.value = ''; syncDevPanel(); if (audio.on) audio.ui(); }
-    else { if (dpd) dpd.hidden = false; if (audio.on) audio.warn(); const dl = g('devLock'); if (dl) { dl.classList.remove('deny-shake'); void dl.offsetWidth; dl.classList.add('deny-shake'); } }
+    if (dpf.value === 'timbles') { devUnlocked = true; saveSettings(); if (dpd) dpd.hidden = true; dpf.value = ''; syncDevPanel(); audio.ui(); }
+    else { if (dpd) dpd.hidden = false; audio.warn(); const dl = g('devLock'); if (dl) replayClass(dl, 'deny-shake'); }
   };
   if (dpb) dpb.addEventListener('click', tryDevUnlock);
   if (dpf) dpf.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); tryDevUnlock(); } });
-  const srv = g('setRival'); if (srv) { srv.checked = rivalEnabled; srv.addEventListener('change', () => { applySetting('rivalEnabled', srv.checked); if (audio.on) audio.ui(); }); }
-  const sgw = g('setGroundWar'); if (sgw) { sgw.checked = groundWar; sgw.addEventListener('change', () => { applySetting('groundWar', sgw.checked); if (audio.on) audio.ui(); }); }
-  const sgl = g('setGunLead'); if (sgl) { sgl.checked = gunLead; sgl.addEventListener('change', () => { applySetting('gunLead', sgl.checked); if (audio.on) audio.ui(); }); }
-  const saa = g('setAimAssist'); if (saa) { saa.checked = aimAssist; saa.addEventListener('change', () => { aimAssist = saa.checked; if (audio.on) audio.ui(); saveSettings(); updateAimStrengthVis(); }); }
-  const sas = g('setAimStrength'); if (sas) { sas.value = aimStrength; sas.addEventListener('input', () => { applySetting('aimStrength', sas.value); }); }
+  bindToggle('setRival', 'rivalEnabled', rivalEnabled);
+  bindToggle('setGroundWar', 'groundWar', groundWar);
+  bindToggle('setGunLead', 'gunLead', gunLead);
+  const saa = g('setAimAssist'); if (saa) { saa.checked = aimAssist; saa.addEventListener('change', () => { aimAssist = saa.checked; audio.ui(); saveSettings(); updateAimStrengthVis(); }); }
+  bindRange('setAimStrength', 'aimStrength', aimStrength, 1);
   updateAimStrengthVis();
   const sm = g('setMute'); if (sm) { sm.checked = muted; sm.addEventListener('change', () => { muted = sm.checked; audio.setMaster(muted ? 0 : volume); saveSettings(); }); }
-  const ss = g('setSens'); if (ss) { ss.value = Math.round(controlSensitivity * 100); ss.addEventListener('input', () => { applySetting('controlSensitivity', ss.value / 100); }); }
+  bindRange('setSens', 'controlSensitivity', controlSensitivity, 100);
   // bindSeg still fires onChange (audio) + its own saveSettings (a harmless redundant write). mobileControl
   // stays bespoke — the 'motion' branch triggers the permission flow (enableMotionFlow).
-  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => applySetting('controlScheme', v), () => { if (audio.on) audio.ui(); });
-  bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => { if (audio.on) audio.ui(); });
-  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => applySetting('motionAggression', v), () => { if (audio.on) audio.ui(); });
-  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => applySetting('buttonLayout', v), () => { if (audio.on) audio.ui(); });
-  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => applySetting('gfx', v), () => { if (audio.on) audio.ui(); });
-  bindSeg('unitsTog', 'un', () => unitSystem, (v) => applySetting('unitSystem', v), () => { if (audio.on) audio.ui(); });
-  const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics && typeof haptic === 'function') haptic(20); saveSettings(); }); }
-  const sbo = g('setBtnOpacity'); if (sbo) { sbo.value = Math.round(buttonOpacity * 100); sbo.addEventListener('input', () => { applySetting('buttonOpacity', sbo.value / 100); }); }
+  bindSeg('controlSchemeTog', 'cs', () => controlScheme, (v) => applySetting('controlScheme', v), () => audio.ui());
+  bindSeg('mobileControlTog', 'mc', () => mobileControl, (v) => { mobileControl = v; if (v === 'motion') enableMotionFlow(); }, () => audio.ui());
+  bindSeg('aggressionTog', 'ag', () => motionAggression, (v) => applySetting('motionAggression', v), () => audio.ui());
+  bindSeg('btnLayoutTog', 'bl', () => buttonLayout, (v) => applySetting('buttonLayout', v), () => audio.ui());
+  bindSeg('gfxQualityTog', 'gq', () => gfxQuality, (v) => applySetting('gfx', v), () => audio.ui());
+  bindSeg('unitsTog', 'un', () => unitSystem, (v) => applySetting('unitSystem', v), () => audio.ui());
+  const sh = g('setHaptics'); if (sh) { sh.checked = haptics; sh.addEventListener('change', () => { haptics = sh.checked; if (haptics) haptic(20); saveSettings(); }); }
+  bindRange('setBtnOpacity', 'buttonOpacity', buttonOpacity, 100);
   const shs = g('setHudScale');
   if (shs) {
     shs.value = String(hudScale);
     shs.addEventListener('change', () => {
       hudScale = Math.max(0.6, Math.min(1.6, parseFloat(shs.value) || 1));
       applyHudScale();
-      if (audio.on) audio.ui();
+      audio.ui();
       saveSettings();
     });
   }
@@ -102,23 +102,23 @@ function buildHangar() {
     sus.addEventListener('change', () => {
       uiScale = Math.max(0.5, Math.min(1.6, parseFloat(sus.value) || 1));
       applyUiScale();
-      if (audio.on) audio.ui();
+      audio.ui();
       saveSettings();
     });
   }
   applyUiScale();
   const storedSkin = store.get('skystrike_skin') || 'standard';
   const storedPalette = store.get('skystrike_palette') || 'amber';
-  if (typeof applySkin === 'function') applySkin(storedSkin);
-  if (typeof applyPalette === 'function') applyPalette(storedPalette);
+  applySkin(storedSkin);
+  applyPalette(storedPalette);
   buildSkinGallery(storedSkin);
   const spal = g('setPalette');
-  if (spal) { spal.value = storedPalette; spal.addEventListener('change', () => { applyPalette(spal.value); if (audio.on) audio.ui(); }); }
-  const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); if (audio.on) audio.ui(); });
-  const srec = g('setRecenter'); if (srec) srec.addEventListener('click', () => { if (typeof recenterMotion === 'function') recenterMotion(); if (audio.on) audio.ui(); });
+  if (spal) { spal.value = storedPalette; spal.addEventListener('change', () => { applyPalette(spal.value); audio.ui(); }); }
+  const sem = g('setEnableMotion'); if (sem) sem.addEventListener('click', () => { mobileControl = 'motion'; enableMotionFlow(); audio.ui(); });
+  const srec = g('setRecenter'); if (srec) srec.addEventListener('click', () => { recenterMotion(); audio.ui(); });
   installMotionStatus();
   syncControlSettingsUI();
-  document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', () => { if (LANG === b.dataset.lang) return; LANG = b.dataset.lang; saveSettings(); applyLang(); if (audio.on) audio.ui(); }));
+  document.querySelectorAll('.langbtn').forEach(b => b.addEventListener('click', () => { if (LANG === b.dataset.lang) return; LANG = b.dataset.lang; saveSettings(); applyLang(); audio.ui(); }));
   applyLang();
   selectJet(selectedJet);
   updateBest();
@@ -127,7 +127,7 @@ function buildHangar() {
   const db = g('dailyBtn'); if (db) db.addEventListener('click', startDaily);
   refreshDailyEntry();
   const wb = g('weeklyBtn'); if (wb) wb.addEventListener('click', startWeekly);
-  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();
+  refreshWeeklyEntry();
   const brb = g('bossRushBtn'); if (brb) brb.addEventListener('click', startBossRush);
   refreshBossRushEntry();
   const mb = g('metaBtn'); if (mb) mb.addEventListener('click', openMetaScreen);
@@ -137,6 +137,17 @@ function buildHangar() {
   const js = g('jetStage'); if (js) { js.addEventListener('click', onJetMetaClick);
     js.addEventListener('mouseover', onJetMetaHover); js.addEventListener('focusin', onJetMetaHover); }
   renderPilotPanel();
+}
+function bindToggle(id, key, on, sfx = true) {
+  const el = g(id); if (!el) return;
+  el.checked = on;
+  el.addEventListener('change', () => { applySetting(key, el.checked); if (sfx) audio.ui(); });
+}
+// the slider shows value*scale; scale 1 passes the raw slider string through, like the original handler
+function bindRange(id, key, v, scale) {
+  const el = g(id); if (!el) return;
+  el.value = scale === 1 ? v : Math.round(v * scale);
+  el.addEventListener('input', () => applySetting(key, scale === 1 ? el.value : el.value / scale));
 }
 function syncDevPanel() {
   const lock = g('devLock'), panel = g('devPanel');
@@ -157,37 +168,31 @@ function renderPilotPanel() {
   const grid = g('emblemGrid');
   if (!grid) return;
   grid.innerHTML = '';
-  EMBLEMS.forEach(function(em) {
+  EMBLEMS.forEach(em => {
     const unlocked = emblemUnlocked(em.id, meta);
     const active = meta && meta.emblem === em.id;
     const btn = document.createElement('button');
     btn.className = 'emblembtn' + (active ? ' active' : '') + (unlocked ? '' : ' elocked');
     btn.title = em.id;
     btn.dataset.eid = em.id;
-    const glyph = EMBLEM_GLYPHS[em.id] || '◆';
-    btn.textContent = glyph;
+    btn.textContent = EMBLEM_GLYPHS[em.id] || '◆';
     if (!unlocked && em.gate === 'sp') {
       const cost = document.createElement('span');
       cost.className = 'emblemcost';
       cost.textContent = em.cost;
       btn.appendChild(cost);
     }
-    btn.addEventListener('click', function() { onEmblemClick(em.id); });
+    btn.addEventListener('click', () => onEmblemClick(em.id));
     grid.appendChild(btn);
   });
   setTxt('lblCallsign', t('pilot.callsign'));
   setTxt('lblEmblem', t('pilot.emblem'));
 }
-function _onCallsignInput(e) {
-  const raw = e.target.value;
-  const clean = sanitizeCallsign(raw);
-  e.target.value = clean;
-}
+function _onCallsignInput(e) { e.target.value = sanitizeCallsign(e.target.value); }
 function _onCallsignBlur(e) {
   if (!meta) return;
-  const clean = sanitizeCallsign(e.target.value);
-  e.target.value = clean;
-  setCallsign(clean);
+  _onCallsignInput(e);
+  setCallsign(e.target.value);
 }
 function onEmblemClick(id) {
   if (!meta) return;
@@ -197,7 +202,7 @@ function onEmblemClick(id) {
   } else {
     const def = EMBLEMS.find(e => e.id === id);
     if (def && def.gate === 'sp') {
-      if (buyPatch(id)) { setEmblem(id); updateSpHud(); renderPilotPanel(); if (typeof audio !== 'undefined' && audio.on) audio.ui(); }
+      if (buyPatch(id)) { setEmblem(id); updateSpHud(); renderPilotPanel(); audio.ui(); }
       else showBanner(t('meta.needSp'));
     } else if (def && def.gate === 'ach') {
       showBanner(tf('pilot.needAch', { a: def.ach }));
@@ -210,7 +215,7 @@ function initOnboarding() {
   if (lv && vt) { const m = vt.textContent.match(/[\d.]+/); lv.textContent = 'Version: ' + (m ? m[0] : ''); }
   if (langDd) langDd.addEventListener('change', () => {
     if (!langDd.value) return;
-    LANG = langDd.value; saveSettings(); applyLang(); if (audio.on) audio.ui();
+    LANG = langDd.value; saveSettings(); applyLang(); audio.ui();
     g('langSelect').classList.remove('show');
     g('onboard').classList.add('show');
   });
@@ -219,7 +224,7 @@ function initOnboarding() {
     g('onboard').classList.remove('show');
     onboarding = false;
     store.set('skystrike_onboarded', '1');
-    if (audio.on) audio.ui();
+    audio.ui();
     startGame(0);
   });
   if (isReturningPlayer) {
@@ -231,11 +236,7 @@ function initOnboarding() {
 }
 function cycleJet(dir) { selectJet((selectedJet + dir + JETS.length) % JETS.length); }
 
-function unlockedJetIds() {
-  const out = [];
-  for (let k = 0; k < JETS.length; k++) if (jetUnlocked(JETS[k].id)) out.push(JETS[k].id);
-  return out;
-}
+function unlockedJetIds() { return JETS.filter(j => jetUnlocked(j.id)).map(j => j.id); }
 // Cooldown starts ready (cd=0); max is the raw SPECIAL_CD (NO OVERCLOCK/GHOST mods — those are slot-1 only).
 function equipSpecial2(p, id, currentJetId) {
   if (!p) return;
@@ -245,21 +246,18 @@ function equipSpecial2(p, id, currentJetId) {
     : { id: null, cd: 0, max: 15 };
 }
 function setSpecial2(id) {
-  special2Id = (id && id !== '') ? id : null;
+  special2Id = id || null;
   saveSettings();
   renderJetCard(selectedJet);
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 
 function renderJetCard(i) {
   const j = JETS[i];
-  const vetKills = (typeof meta !== 'undefined' && meta && meta.veterancy && meta.veterancy[j.id]) || 0;
-  const vetR = (typeof vetRank === 'function') ? vetRank(vetKills) : 0;
+  const vetKills = (meta && meta.veterancy && meta.veterancy[j.id]) || 0;
+  const vetR = vetRank(vetKills);
   const vetChip = vetR > 0
-    ? '<div class="cvet" title="' + t('vet.label') + ' · ' + vetKills + '" style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:2px 9px;border-radius:11px;background:rgba(255,210,63,0.14);border:1px solid rgba(255,210,63,0.55);color:#ffd23f;font-size:11px;font-weight:700;letter-spacing:0.06em;white-space:nowrap">'
-        + '<span style="letter-spacing:-2px;font-size:12px">' + '❯'.repeat(vetR) + '</span>'
-        + '<span>' + t('vet.rank' + vetR) + '</span>'
-      + '</div>'
+    ? '<div class="cvet" title="' + t('vet.label') + ' · ' + vetKills + '"><span class="cvet-ch">' + '❯'.repeat(vetR) + '</span><span>' + t('vet.rank' + vetR) + '</span></div>'
     : '';
   g('jetCard').innerHTML =
     '<div id="jetPreview3D" class="jetpreview3d">' +
@@ -301,22 +299,21 @@ function renderJetCard(i) {
 }
 function renderSpecial2Picker(i) {
   const wrap = g('special2Row'); if (!wrap) return;
+  const head = '<div class="cspeclbl">' + t('card.special2') + '</div>';
   if (!slot2Unlocked()) {
     if (special2Id) { special2Id = null; saveSettings(); }
-    wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
-                     '<div class="cabilitydesc">' + t('card.slot2Locked') + '</div>' +
+    wrap.innerHTML = head + '<div class="cabilitydesc">' + t('card.slot2Locked') + '</div>' +
                      '<button id="slot2Unlock" class="segbtn" style="margin-top:6px">' + tf('card.slot2Unlock', { n: SLOT2_COST }) + '</button>';
     const ub = g('slot2Unlock');
     if (ub) ub.addEventListener('click', () => {
-      if (buySlot2()) { if (audio.on) audio.ui(); renderJetCard(selectedJet); }
-      else { if (audio.on) audio.ui(); ub.textContent = t('card.slot2NoSP'); }
+      audio.ui();
+      if (buySlot2()) renderJetCard(selectedJet); else ub.textContent = t('card.slot2NoSP');
     });
     return;
   }
   const pool = equippableSpecials(unlockedJetIds(), JETS, JETS[i].id);
   if (!pool.length) {
-    wrap.innerHTML = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
-                     '<div class="cabilitydesc">' + t('card.special2NoneAvail') + '</div>';
+    wrap.innerHTML = head + '<div class="cabilitydesc">' + t('card.special2NoneAvail') + '</div>';
     return;
   }
   // drop a stale saved equip from the rendered selection (e.g. now-current jet / locked) without persisting
@@ -327,8 +324,7 @@ function renderSpecial2Picker(i) {
     const nm = jk ? jetText(jk, 'ability') : p.name;
     opts += '<option value="' + p.id + '"' + (curId === p.id ? ' selected' : '') + '>' + nm + '</option>';
   }
-  let html = '<div class="cspeclbl">' + t('card.special2') + '</div>' +
-             '<select id="special2Sel" class="special2sel">' + opts + '</select>';
+  let html = head + '<select id="special2Sel" class="special2sel">' + opts + '</select>';
   const chosen = curId ? JETS.find(j => j.id === curId) : null;
   html += '<div class="cabilitydesc">' + (chosen ? jetText(chosen, 'abilityDesc') : t('card.special2Hint')) + '</div>';
   wrap.innerHTML = html;
@@ -339,41 +335,41 @@ function refreshLaunchSub() {
   const lb = g('launch'); if (lb) { const sub = g('launchSub'); lb.textContent = tf('hangar.selectJet', { n: jetText(JETS[selectedJet], 'name') }); if (sub) { sub.textContent = ''; lb.appendChild(sub); } }
 }
 function openModeChoice() {
-  if (typeof launchBlocked === 'function' && launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }
+  if (launchBlocked()) { showBanner(t('meta.buyNeeded')); audio.ui(); return; }
   // #modeChoice / #endlessSetup are MODALS over the still-visible hangar (they do NOT hide it), tracked in
   // nav.js SCREENS as entry:'manual' so hideAllScreens() resets them, but entered here by hand — a router
   // showScreen would wrongly hide the hangar underneath. They toggle each other's .show directly. (nav.js)
   const ov = g('modeChoice'); if (!ov) return;
   g('endlessSetup') && g('endlessSetup').classList.remove('show');
   ov.classList.add('show');
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 function openEndlessSetup() {
   const ov = g('endlessSetup'); if (!ov) return;
   g('modeChoice') && g('modeChoice').classList.remove('show');
   ov.classList.add('show');
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 function setDifficulty(d) {
   difficulty = clamp(d, 0, 2);
   document.querySelectorAll('.dbtn[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === difficulty));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
   refreshLaunchSub();
-  if (audio.on) audio.ui();
+  audio.ui();
   saveSettings();
 }
 function setTimeOfDay(t) {
   applyTimeOfDay(t);
   document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('on', +b.dataset.t === timeOfDay));
   refreshLaunchSub();
-  if (audio.on) audio.ui();
+  audio.ui();
   saveSettings();
 }
 function showManualTab(name) {
   document.querySelectorAll('#manual .mtab').forEach(t => t.classList.toggle('show', t.dataset.tab === name));
   document.querySelectorAll('#manual .mnavbtn').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   if (name === 'settings') showSettingsSubtab(settingsSubtab);
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 let settingsSubtab = 'display';
 function showSettingsSubtab(name) {
@@ -387,17 +383,13 @@ function showSettingsSubtab(name) {
 // launch flips it to 'playing'.)
 function syncManualBtn() {
   const b = g('manualBtn'); if (!b) return;
-  const blocked = state !== 'hangar'
-    || (g('langSelect') && g('langSelect').classList.contains('show'))
-    || (g('onboard') && g('onboard').classList.contains('show'))
-    || (g('manual') && g('manual').classList.contains('show'));
-  b.classList.toggle('mb-hide', !!blocked);
+  b.classList.toggle('mb-hide', state !== 'hangar' || isShown('langSelect') || isShown('onboard') || isShown('manual'));
   const v = g('versionTag');
   if (v) v.classList.toggle('mb-hide', state === 'playing' || state === 'dead');
 }
 function openManual() { g('manual').classList.add('show'); showManualTab('guide'); paused = true; g('touchControls').classList.remove('show'); }
-function closeManual() { g('manual').classList.remove('show'); paused = false; if (clock) clock.getDelta(); if(isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
-function toggleManual() { if (g('manual').classList.contains('show')) closeManual(); else openManual(); }
+function closeManual() { g('manual').classList.remove('show'); paused = false; clock.getDelta(); if (isTouchEnabled && state === 'playing') g('touchControls').classList.add('show'); }
+function toggleManual() { if (isShown('manual')) closeManual(); else openManual(); }
 function abortMission() { closeManual(); if (state !== 'hangar') returnToHangar(); }
 function statBar(lbl, v) {
   let s = '<div class="sb"><span>' + lbl + '</span><div class="bar">';
@@ -407,9 +399,11 @@ function statBar(lbl, v) {
 /* hangar-preview paint: show the TRANSIENT hangarPreview.skin (owned OR not) on the live jet; fall back to the
    owned/equipped paint. UI-ONLY — never reaches createPlayer/gameplay (which uses jetPaint = owned only). */
 function previewPaint(jet) {
-  if (hangarPreview.skin && JETS[selectedJet] && jet.id === JETS[selectedJet].id && typeof resolveSkin === 'function') return resolveSkin(jet, hangarPreview.skin);
-  return jetPaint(jet);
+  const s = previewSkinFor(jet.id);
+  return s ? resolveSkin(jet, s) : jetPaint(jet);
 }
+// the transient preview skin, only when it belongs to the selected jet
+function previewSkinFor(jetId) { return hangarPreview.skin && JETS[selectedJet] && jetId === JETS[selectedJet].id ? hangarPreview.skin : null; }
 
 /* ---------------- TRACK C2: isolated hangar-preview renderer ----------------
    One singleton WebGLRenderer bound to a dedicated <canvas> that is REPARENTED into the live jet card's
@@ -501,7 +495,7 @@ function wireZoomSlider() {
 }
 function previewLoop() {
   requestAnimationFrame(previewLoop);
-  if (typeof state !== 'undefined' && state !== 'hangar') return;
+  if (state !== 'hangar') return;
   if (!previewRenderer || !previewScene || !previewCamera) return;
   const z = 1 / (hangarPreview.zoom || 1);                                   // F2: dolly toward origin along the look dir (zoom in = closer); no FOV change → no distortion
   previewCamera.position.set(0, PREVIEW_CAM_Y * z, PREVIEW_CAM_Z * z);
@@ -514,7 +508,7 @@ function previewLoop() {
   previewRenderer.render(previewScene, previewCamera);
 }
 function launchBlocked() {
-  return !!(hangarPreview.skin && JETS[selectedJet] && typeof skinOwned === 'function' && !skinOwned(JETS[selectedJet].id, hangarPreview.skin));
+  return !!(hangarPreview.skin && JETS[selectedJet] && !skinOwned(JETS[selectedJet].id, hangarPreview.skin));
 }
 function refreshLaunchGate() {
   const lb = g('launch'); if (lb) { const b = launchBlocked(); lb.classList.toggle('gated', b); lb.disabled = b; }
@@ -525,9 +519,9 @@ function selectJet(i) {
   selectedJet = i;
   renderJetCard(i);
   const dots = g('jetDots'); if (dots) { const ch = dots.children; for (let k = 0; k < ch.length; k++) ch[k].classList.toggle('on', k === i); }
-  const c = g('jetCounter'); if (c) c.textContent = ('0' + (i + 1)).slice(-2) + ' / ' + ('0' + JETS.length).slice(-2);
+  const c = g('jetCounter'); if (c) c.textContent = pad2(i + 1) + ' / ' + pad2(JETS.length);
   ensurePreviewRenderer();
-  if (previewJet) { if (previewScene) previewScene.remove(previewJet); if (typeof disposeGroup === 'function') disposeGroup(previewJet); }   // free the prev preview's per-instance painted/burner clones (shared geo/mats spared)
+  if (previewJet) { if (previewScene) previewScene.remove(previewJet); disposeGroup(previewJet); }   // free the prev preview's per-instance painted/burner clones (shared geo/mats spared)
   const paint = previewPaint(JETS[i]);
   previewJet = buildJetOrGLTF(paint.color, paint.accent, SHAPES[JETS[i].shape], true, { skin: paint });
   previewJet.position.set(0, 0, 0);
@@ -548,7 +542,7 @@ function renderJetMeta(i) {
     const skins = SKINS[j.id];
     if (skins && skins.length > 1) {
       // the skin currently being PREVIEWED but NOT owned (the only state that gates launch + shows the BUY CTA)
-      const pvUnowned = (hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id && !skinOwned(j.id, hangarPreview.skin)) ? hangarPreview.skin : null;
+      const pv = previewSkinFor(j.id), pvUnowned = pv && !skinOwned(j.id, pv) ? pv : null;
       html += '<div class="jmskins"><span class="jmskinlbl">' + t('meta.skins') + '</span>';
       for (let s = 0; s < skins.length; s++) {
         const sk = skins[s], owned = skinOwned(j.id, sk.id), sel = selectedSkin(j.id) === sk.id;
@@ -559,7 +553,7 @@ function renderJetMeta(i) {
                 (owned ? '' : '<span class="jmsklk">' + skinCost(j.id, sk.id) + '</span>') + '</button>';
       }
       html += '</div>';
-      const curId = hangarPreview.skin && JETS[selectedJet] && j.id === JETS[selectedJet].id ? hangarPreview.skin : selectedSkin(j.id);
+      const curId = pv || selectedSkin(j.id);
       html += '<div id="jetSkinName" class="jmskinname">' + metaText({ id: 'skin.' + curId }, 'name') + '</div>';
       if (pvUnowned) html += '<button id="jetMetaBuy" class="jmpvbuy" data-buyskin="' + pvUnowned + '" data-jet="' + j.id + '">' + tf('meta.buyPaint', { c: skinCost(j.id, pvUnowned) }) + '</button>';
     }
@@ -628,7 +622,7 @@ function buildSkinGallery(current) {
 function selectSkinCard(id) {
   applySkin(id);
   refreshSkinGallery(id);
-  if (audio.on) audio.ui();
+  audio.ui();
 }
 function refreshSkinGallery(current) {
   const gal = g('skinGallery');
