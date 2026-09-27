@@ -2,8 +2,8 @@
 function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
 function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
 function currentCampaignLevel() {
-  if (typeof OPERATIONS === 'undefined' || !campaignOpId) return null;
-  const op = OPERATIONS.find(o => o.id === campaignOpId);
+  if (!campaignOpId) return null;
+  const op = opById(campaignOpId);
   return op ? (op.levels[campaignLevelIdx] || null) : null;
 }
 function nextWave() {
@@ -91,12 +91,15 @@ function styleElite(e, bodyHex, emissiveHex, intensity, glowHex, flameHex) {
   for (let i = 0; i < eng.length; i++) { eng[i].glow.material.color.setHex(glowHex); eng[i].flame.material.color.setHex(flameHex); }
   e.marker.material.color.setHex(glowHex);
 }
+function spawnEliteFighter(shapePool) {
+  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool, useGLTF: true });
+  e.elite = true; e.desprintUsed = false; e.sprintTimer = 0;
+  return e;
+}
 function spawnAce() {
-  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool(), useGLTF: true });
-  e.elite = true;
+  const e = spawnEliteFighter(aceShapePool());
   e.aceName = jetNameForShape(e.shapeKey);
   e.callsign = genCallsign('ACE');
-  e.desprintUsed = false; e.sprintTimer = 0;
   e.hp = e.maxHp = 170 + wave * 9;
   e.turnRate = 1.5; e.gunRunCd = rand(1.5, 3);
   e.bulletAmmo = 75; e.missileAmmo = 2; e.flareAmmo = 1;
@@ -106,14 +109,11 @@ function spawnAce() {
 function spawnHostileAce() {
   const aceEntry = hostileAceFor(opSector);
   if (!aceEntry) return;
-  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: aceShapePool(), useGLTF: true });
-  e.elite = true;
+  const e = spawnEliteFighter(aceShapePool());
   e.aceName = jetNameForShape(e.shapeKey);
   e.callsign = aceEntry.callsign;
   e.hostileAce = true;
-  e.desprintUsed = false; e.sprintTimer = 0;
-  const baseHp = 170 + wave * 9;
-  e.hp = e.maxHp = Math.round(baseHp * aceEntry.hpMul);
+  e.hp = e.maxHp = Math.round((170 + wave * 9) * aceEntry.hpMul);
   e.turnRate = aceEntry.turnRate;
   e.speed = (e.speed || 280) * aceEntry.speed;
   e.gunRunCd = rand(1.2, 2.5);
@@ -122,11 +122,10 @@ function spawnHostileAce() {
   showBanner(tf('banner.hostileAceInbound', { name: aceEntry.callsign }));
 }
 function spawnRival() {
-  const e = createEnemy('fighter', airSpawnPos(2800, 4400, -300, 600, 450, 4300), { shapePool: [rival.shape], useGLTF: true });
-  e.elite = true; e.rival = true;
+  const e = spawnEliteFighter([rival.shape]);
+  e.rival = true;
   e.aceName = rival.jetName;
   e.callsign = rival.name;
-  e.desprintUsed = false; e.sprintTimer = 0;
   e.hp = e.maxHp = rivalHpFor(wave, rival.level);
   e.turnRate = 1.55; e.gunRunCd = rand(1.2, 2.5);
   e.bulletAmmo = 120; e.missileAmmo = 3; e.flareAmmo = 2;
@@ -138,6 +137,7 @@ function spawnRival() {
   if (rival.traits.indexOf('VETERAN') !== -1) { e.hp = e.maxHp = Math.round(e.maxHp * 1.2); e.turnRate *= 1.1; }
   styleElite(e, 0xff5a2a, 0x551100, 1.0, 0xff5a2a, 0xff7a3a);
   showBanner(tf('banner.rivalOnStation', { name: rival.name, lvl: rival.level }));
+  return e;
 }
 function spawnFighter() {
   createEnemy('fighter', airSpawnPos(2600, 4600, -400, 650, 400, 4200));
@@ -180,18 +180,13 @@ function spawnBomber() {
   dirToQuat(e.escapeDir, e.logicQuat);
   e.marker.material.color.setHex(0xffb060);
   showBanner(t('banner.bomberDetected'));
+  return e;
 }
-function spawnInterceptTarget() {
-  const before = enemies.length;
-  spawnBomber();
-  const e = enemies[enemies.length - 1];
-  if (e && enemies.length > before) e._missionTarget = true;
-}
+function spawnInterceptTarget() { spawnBomber()._missionTarget = true; }
 function spawnFinalRival() {
-  const before = enemies.length;
-  spawnRival();
-  const e = enemies[enemies.length - 1];
-  if (e && enemies.length > before) { e.finalCap = true; e.noFlee = true; e.hp = e.maxHp = Math.round(e.maxHp * 1.25); if (campaignBossPhases) e._phaseCfg = campaignBossPhases; }
+  const e = spawnRival();
+  e.finalCap = true; e.noFlee = true; e.hp = e.maxHp = Math.round(e.maxHp * 1.25);
+  if (campaignBossPhases) e._phaseCfg = campaignBossPhases;
 }
 const CAMPAIGN_BOSS_SHAPE = { warlord: 'J20', glacier: 'SU57', corsair: 'F22', northWind: 'J50' };
 function spawnCampaignBoss(lvl) {
@@ -208,7 +203,7 @@ function spawnCampaignBoss(lvl) {
   styleElite(e, 0xc8389a, 0x40002a, 1.1, 0xff50dc, 0xff50dc);
   dirToQuat(t1.copy(pp).sub(pos).normalize(), e.logicQuat); e.group.quaternion.copy(e.logicQuat);
   showBanner(tf('banner.bossArrives', { name: e.callsign }));
-  if (typeof audio !== 'undefined' && audio.warn) audio.warn();
+  audio.warn();
   return e;
 }
 function spawnBoss() {
@@ -225,7 +220,7 @@ function spawnGroundAt(gkind, x, z) {
 }
 function queueStrikeSite(w, size) {
   let center = groundSpawnPos(2000, 3200);
-  if (typeof landPoint === 'function') { const lp = landPoint(player.group.position.x, player.group.position.z, 2000, 3400); if (lp) center = new THREE.Vector3(lp.x, terrainH(lp.x, lp.z), lp.z); }
+  { const lp = landPoint(player.group.position.x, player.group.position.z, 2000, 3400); if (lp) center = new THREE.Vector3(lp.x, terrainH(lp.x, lp.z), lp.z); }
   const small = size === 'outpost', big = size === 'fortified';
   const nSam = small ? 1 : (big ? 3 : 2) + Math.min(2, Math.floor(w / 10));
   const nAaa = small ? 1 : (big ? 3 : 2) + Math.min(2, Math.floor(w / 12));
@@ -349,6 +344,14 @@ function buildWingman(cca, shape) {
   if (g.userData.body) { g.userData.body.emissive = new THREE.Color(emis); g.userData.body.emissiveIntensity = cca ? 0.9 : 0.7; }
   return g;
 }
+// shared escort state (wingmen + CCAs); `o` holds the per-kind fields
+function wingmanState(mesh, spd, o) {
+  return Object.assign({
+    group: mesh, vel: fwdOf(player.group, new THREE.Vector3()).multiplyScalar(player.speed || spd),
+    logicQuat: mesh.quaternion.clone(), bank: 0, baseScale: mesh.scale.x, _spd: spd, alive: true,
+    target: null, retargetCd: 0, rtb: 0, hitFlash: 0, trailT: 0, sprintT: 0, priorityCd: 0, flareCd: 0, forced: null, defend: 0,
+  }, o);
+}
 function spawnCCA(spawnPos) {
   if (!player) return null;
   const ccaShape = 'CCAJET';
@@ -361,15 +364,10 @@ function spawnCCA(spawnPos) {
   mesh.quaternion.copy(player.group.quaternion);
   scene.add(mesh);
   const nm = 'CCA-' + (Math.random() * 99 | 0);
-  const w = {
-    group: mesh, vel: fwdOf(player.group, new THREE.Vector3()).multiplyScalar(player.speed || 340),
-    logicQuat: mesh.quaternion.clone(), bank: 0, baseScale: mesh.scale.x, _spd: 340,
-    hp: 100, maxHp: 100, alive: true, side: wingmen.length % 2 === 0 ? 1 : -1,
-    target: null, retargetCd: 0, fireCd: 0.08, missileCd: rand(1.2, 2.5),
-    rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: true, expire: 16, cca: true,
-    shape: ccaShape, jetName: ccaShape, flares: 2, sprintT: 0, priorityCd: 0, flareCd: 0,
-    forced: null, defend: 0,
-  };
+  const w = wingmanState(mesh, 340, {
+    hp: 100, maxHp: 100, side: wingmen.length % 2 === 0 ? 1 : -1, fireCd: 0.08, missileCd: rand(1.2, 2.5),
+    name: nm, temp: true, expire: 16, cca: true, shape: ccaShape, jetName: ccaShape, flares: 2,
+  });
   wingmen.push(w);
   w.target = nearestEnemyForWingman(w);
   return w;
@@ -387,15 +385,11 @@ function spawnWingman(temp, explicit) {
   mesh.quaternion.copy(player.group.quaternion);
   scene.add(mesh);
   const nm = temp ? ('CCA-' + (1 + ((Math.random() * 9) | 0))) : WING_NAMES[(Math.random() * WING_NAMES.length) | 0];
-  wingmen.push({
-    group: mesh, vel: fwdOf(player.group, new THREE.Vector3()).multiplyScalar(player.speed || 320),
-    logicQuat: mesh.quaternion.clone(), bank: 0, baseScale: mesh.scale.x, _spd: 320,
-    hp: temp ? 80 : 130, maxHp: temp ? 80 : 130, alive: true, side: side,
-    target: null, retargetCd: 0, fireCd: rand(0.2, 0.8), missileCd: rand(2, 5),
-    rtb: 0, hitFlash: 0, trailT: 0, name: nm, temp: !!temp, expire: temp ? 15 : 0, cca: !!temp,
-    shape: wShape, jetName: jetNameForShape(wShape), flares: 3, sprintT: 0, priorityCd: 0, flareCd: 0,
-    forced: null, defend: 0, specialCd: rand(25, 40),
-  });
+  wingmen.push(wingmanState(mesh, 320, {
+    hp: temp ? 80 : 130, maxHp: temp ? 80 : 130, side, fireCd: rand(0.2, 0.8), missileCd: rand(2, 5),
+    name: nm, temp: !!temp, expire: temp ? 15 : 0, cca: !!temp,
+    shape: wShape, jetName: jetNameForShape(wShape), flares: 3, specialCd: rand(25, 40),
+  }));
   if (!temp) { showBanner(tf('banner.onStation', { name: wingmen[wingmen.length - 1].name })); audio.ui(); }
 }
 function damageWingman(w, amt) {
@@ -431,12 +425,9 @@ function nearestEnemyForWingman(w) {
   return best;
 }
 function wingCommand(kind) {
-  let n = 0; for (let i = 0; i < wingmen.length; i++) if (wingmen[i].alive) n++;
-  if (!n) { audio.ui(); showBanner(t('banner.wingNone')); return; }
+  if (!firstAliveWingman()) { audio.ui(); showBanner(t('banner.wingNone')); return; }
   if (kind === 'focus') {
-    let tgt = (player.lockedTarget && player.lockedTarget.alive) ? player.lockedTarget
-            : (player.lockTarget && player.lockTarget.alive) ? player.lockTarget
-            : nearestEnemyInFront(0.4);
+    const tgt = wingPlayerLock() || nearestEnemyInFront(0.4);
     if (!tgt) { audio.ui(); showBanner(t('banner.wingNoTarget')); return; }
     for (let i = 0; i < wingmen.length; i++) { const w = wingmen[i]; if (!w.alive) continue; w.forced = tgt; w.target = tgt; w.defend = 0; w.retargetCd = 1.2; }
     showBanner(t('banner.wingFocus')); audio.power();
@@ -653,16 +644,15 @@ function wingmanDeployFlares(w) {
   }
   audio.flare();
 }
+const WING_BURST = { 'F-35': 3, EFT: 4, 'J-36': 6, 'J-50': 3, 'F-22': 3 };
 function wingmanSpecial(w) {
   if (!w.target || !w.target.alive) return;
   const pos = w.group.position;
-  const jet = JETS.find(function(j) { return j.shape === w.shape; });
+  const jet = JETS.find(j => j.shape === w.shape);
   const id = jet ? jet.id : null;
 
   function burstMissiles(count) {
-    const tgts = enemies.filter(function(e) { return e.alive; }).sort(function(a, b) {
-      return pos.distanceToSquared(a.group.position) - pos.distanceToSquared(b.group.position);
-    });
+    const tgts = aliveByDistance(pos);
     if (!tgts.length) return;
     for (let k = 0; k < count; k++) {
       const tgt = tgts[k % tgts.length];
@@ -675,11 +665,7 @@ function wingmanSpecial(w) {
 
   if (id === 'SU-57') {
     spawnShockwave(pos); explode(pos, true);
-    for (let i = 0; i < enemies.length; i++) {
-      const e = enemies[i];
-      if (e.alive && e.type !== 'boss' && pos.distanceToSquared(e.group.position) < 340 * 340)
-        damageEnemy(e, 90, e.group.position);
-    }
+    blastEnemies(pos, 340 * 340, 90, null, true);
     for (let i = 0; i < missiles.length; i++) {
       const m = missiles[i];
       if (m.enemy && pos.distanceToSquared(m.mesh.position) < 420 * 420) { m.decoyed = true; if (Math.random() < 0.7) m.life = 0.05; }
@@ -693,10 +679,6 @@ function wingmanSpecial(w) {
       }
     }
     burstMissiles(2);
-  } else if (id === 'F-35') {
-    burstMissiles(3);
-  } else if (id === 'EFT') {
-    burstMissiles(4);
   } else if (id === 'RAFALE') {
     for (let i = 0; i < missiles.length; i++) {
       const m = missiles[i];
@@ -706,16 +688,12 @@ function wingmanSpecial(w) {
   } else if (id === 'TEJAS') {
     spawnDecoys(2);
     burstMissiles(1);
-  } else if (id === 'J-36') {
-    burstMissiles(6);
   } else if (id === 'F-47') {
     const pt = pos.clone().addScaledVector(fwdQ(w.logicQuat, t1), 200);
     spawnCCA(pt);
     burstMissiles(2);
-  } else if (id === 'J-50') {
-    burstMissiles(3);
   } else {
-    burstMissiles(id === 'F-22' ? 3 : 2);
+    burstMissiles(WING_BURST[id] || 2);
   }
 
   audio.power();
@@ -742,7 +720,7 @@ function handleWaves(dt) {
       if (campaignMode) {
         campaignWavesLeft--;
         const clvl = currentCampaignLevel();
-        if ((clvl && clvl.isBoss) || campaignWavesLeft <= 0) { beginCampaignEnd('win'); return; }
+        if ((clvl && clvl.isBoss) || campaignWavesLeft <= 0) beginCampaignEnd('win');
         return;
       }
       // Tech-screen cadence (balance pass 2026-06): the shop opens on a cadence (skip wave 1, then every 2nd
@@ -781,7 +759,7 @@ function handleBossRush(dt) {
 }
 
 function tickTutorial() {
-  if (typeof tutorial === 'undefined' || !tutorial.active || tutorial.done || !player) return;
+  if (!tutorial.active || tutorial.done || !player) return;
   const step = TUTORIAL_STEPS[tutorial.step];
   if (step === 'pitch') {
     if (Math.abs(player.pitchRate || 0) > 0.25) advanceTutorial('pitched');
@@ -861,7 +839,7 @@ function animate() {
   // AUDIO: gate the synthesized storm rain bed EVERY frame, BEFORE the paused early-return so the
   // bed ducks to silence while paused / in menus / on weather change (tickWeather reads state+paused
   // +weather.type itself; muted/volume apply upstream via the master gain). See AudioEngine.tickWeather.
-  if (typeof audio !== 'undefined' && audio.on) audio.tickWeather();
+  audio.tickWeather();
   // the hangar is an opaque full-viewport panel — once its 0.5s fade-in is done nothing behind it is visible,
   // so skip the world sim + draw (the first frames still draw, which also compiles the scene's shaders at boot)
   const covered = state === 'hangar' && currentScreen === 'hangar' && !g('hangar').classList.contains('hide');
@@ -876,7 +854,7 @@ function animate() {
     const ts = (player && player.slow > 0) ? 0.4 : 1;   // COMBAT TRANCE slows the world, not the player
     readFlightInput();
     updateWeather(dt * ts);
-    if (!(typeof campaignEnd !== 'undefined' && campaignEnd && campaignEnd.frozen)) updatePlayer(dt);
+    if (!(campaignEnd && campaignEnd.frozen)) updatePlayer(dt);
     tickTutorial();
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt * ts); if (e.alive) updateEnemy(e, dt * ts); }
     cullDistantEnemies();
@@ -884,7 +862,7 @@ function animate() {
     updateBullets(dt, ts); updateMissiles(dt, ts); updateFlares(dt * ts); updateDecoys(dt); updateLoot(dt); updateParticles(dt * ts);
     for (let i = enemies.length - 1; i >= 0; i--) if (!enemies[i].alive) enemies.splice(i, 1);
     updateMission(dt * ts);
-    if (typeof tickCampaignEnd === 'function') tickCampaignEnd(dt);
+    tickCampaignEnd(dt);
     if (bossRush) handleBossRush(dt);
     else handleWaves(dt);
     maybeSpawnCrate(dt);
@@ -893,7 +871,7 @@ function animate() {
     audio.setEngineJet(player.jet && player.jet.id, player.throttle, clamp(player.speed / player.stats.maxSpeed, 0, 1));
     const hudView = hudViewState();
     drawHUD(hudView); drawRadar(); updateDom(dt, hudView);
-    if (typeof drawWeatherOverlay === 'function') drawWeatherOverlay(h2d, dt);
+    drawWeatherOverlay(h2d, dt);
   } else if (state === 'dead') {
     updateParticles(dt);
     camera.updateMatrixWorld();
@@ -906,8 +884,7 @@ function initPreviewDrag() {
   let lastX = 0, lastY = 0;
   addEventListener('pointerdown', (e) => {
     if (state !== 'hangar' || hangarPreview.dragging) return;
-    if (typeof previewCanvas === 'undefined' || !previewCanvas) return;
-    if (e.target !== previewCanvas) return;
+    if (!previewCanvas || e.target !== previewCanvas) return;
     hangarPreview.dragging = true; lastX = e.clientX; lastY = e.clientY;
     previewCanvas.style.cursor = 'grabbing'; e.preventDefault();
   });
@@ -922,11 +899,11 @@ function initPreviewDrag() {
   const endDrag = () => {
     if (!hangarPreview.dragging) return;
     hangarPreview.dragging = false; hangarPreview.spinResumeAt = performance.now() + 3000;
-    if (typeof previewCanvas !== 'undefined' && previewCanvas) previewCanvas.style.cursor = 'grab';
+    if (previewCanvas) previewCanvas.style.cursor = 'grab';
   };
   addEventListener('pointerup', endDrag);
   addEventListener('pointercancel', endDrag);
-  addEventListener('resize', () => { if (typeof resizePreview === 'function') resizePreview(); });
+  addEventListener('resize', resizePreview);
 }
 
 function wingPlayerLock() {

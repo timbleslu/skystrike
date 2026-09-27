@@ -65,34 +65,27 @@ class AudioEngine {
     this.eO2.frequency.setTargetAtTime(f * p.ratio, t, 0.2);
     this.eLP.frequency.setTargetAtTime(240 + p.lpAdd + thr * 480 + sf * 220, t, 0.2);
   }
-  lockTone() {
+  // enveloped oscillator: starts at t0 on f0 (ramping to f1 by t0+fT when f1 is set), gain 0 → peak at t0+atk →
+  // silent at t0+end, stopped at t0+stop. Times are relative to t0.
+  tone(type, t0, f0, f1, fT, peak, atk, end, stop) {
+    const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(f1, t0 + fT);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + atk);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + end);
+    o.connect(g); g.connect(this.master); o.start(t0); o.stop(t0 + stop);
+  }
+  lockTone() {   // rising sweep, then a held lock tone
     if (!this.on) return;
-    const ctx = this.ctx, now = ctx.currentTime;
-    const os = ctx.createOscillator(), gs = ctx.createGain();
-    os.type = 'sine'; os.frequency.setValueAtTime(300, now);
-    os.frequency.exponentialRampToValueAtTime(1600, now + 0.30);
-    gs.gain.setValueAtTime(0.0001, now);
-    gs.gain.linearRampToValueAtTime(0.13, now + 0.005);
-    gs.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
-    os.connect(gs); gs.connect(this.master); os.start(now); os.stop(now + 0.35);
-    const ol = ctx.createOscillator(), gl = ctx.createGain();
-    ol.type = 'sine'; ol.frequency.value = 1800;
-    gl.gain.setValueAtTime(0.0001, now + 0.28);
-    gl.gain.linearRampToValueAtTime(0.15, now + 0.30);
-    gl.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
-    ol.connect(gl); gl.connect(this.master); ol.start(now + 0.28); ol.stop(now + 0.50);
+    const now = this.ctx.currentTime;
+    this.tone('sine', now, 300, 1600, 0.30, 0.13, 0.005, 0.32, 0.35);
+    this.tone('sine', now + 0.28, 1800, 0, 0, 0.15, 0.02, 0.18, 0.22);
   }
   killSfx() {
     if (!this.on) return;
-    const ctx = this.ctx, now = ctx.currentTime;
     this.burst(0.18, 0.28, 'bandpass', 1800, 400);
-    const od = ctx.createOscillator(), gd = ctx.createGain();
-    od.type = 'sawtooth'; od.frequency.setValueAtTime(160, now);
-    od.frequency.exponentialRampToValueAtTime(30, now + 0.45);
-    gd.gain.setValueAtTime(0.0001, now);
-    gd.gain.linearRampToValueAtTime(0.12, now + 0.008);
-    gd.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
-    od.connect(gd); gd.connect(this.master); od.start(now); od.stop(now + 0.52);
+    this.tone('sawtooth', this.ctx.currentTime, 160, 30, 0.45, 0.12, 0.008, 0.48, 0.52);
   }
   blip(freq, dur, type, gain, slideTo) {
     if (!this.on) return;
@@ -157,7 +150,7 @@ class AudioEngine {
   thunder(intensity) {
     if (!this.on) return;
     const ctx = this.ctx, now = ctx.currentTime;
-    const k = Math.max(0, Math.min(1, intensity || 0));
+    const k = clamp(intensity || 0, 0, 1);
     const rs = this.noise(), rg = ctx.createGain(), rf = ctx.createBiquadFilter();
     rf.type = 'lowpass'; rf.frequency.setValueAtTime(420, now);
     rf.frequency.exponentialRampToValueAtTime(90, now + 1.3);
@@ -166,13 +159,7 @@ class AudioEngine {
     rg.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
     rs.connect(rf); rf.connect(rg); rg.connect(this.master);
     setTimeout(() => { try { rs.stop(); } catch (e) {} }, 1500);
-    const ob = ctx.createOscillator(), gb = ctx.createGain();
-    ob.type = 'sine'; ob.frequency.setValueAtTime(70, now);
-    ob.frequency.exponentialRampToValueAtTime(30, now + 0.9);
-    gb.gain.setValueAtTime(0.0001, now);
-    gb.gain.linearRampToValueAtTime(0.10 + 0.18 * k, now + 0.04);
-    gb.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
-    ob.connect(gb); gb.connect(this.master); ob.start(now); ob.stop(now + 1.05);
+    this.tone('sine', now, 70, 30, 0.9, 0.10 + 0.18 * k, 0.04, 1.0, 1.05);
     const delay = 0.12 + (1 - k) * 0.5;
     const cStart = now + delay;
     const cs = this.noise(), cg = ctx.createGain(), cf = ctx.createBiquadFilter();
@@ -188,7 +175,7 @@ class AudioEngine {
 }
 const audio = new AudioEngine();
 
-function terrainH(x, z) { return terrainHeight(x, z); }
+const terrainH = terrainHeight;
 
 function initThree() {
   THREE.ColorManagement.enabled = true;
@@ -418,20 +405,12 @@ function buildTerrainGeo(cfg) {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const normals = new Float32Array(pos.count * 3), E = 14;
-  const detail = cfg.detailAmp > 0;
+  const H = cfg.detailAmp > 0 ? (x, z) => terrainH(x, z) + terrainDetailH(x, z, cfg) : terrainH;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
-    const baseH = terrainH(x, z);
-    const h = baseH + (detail ? terrainDetailH(x, z, cfg) : 0);
-    pos.setY(i, h);
-    let dhx, dhz;
-    if (detail) {
-      dhx = (terrainH(x + E, z) + terrainDetailH(x + E, z, cfg) - terrainH(x - E, z) - terrainDetailH(x - E, z, cfg)) / (2 * E);
-      dhz = (terrainH(x, z + E) + terrainDetailH(x, z + E, cfg) - terrainH(x, z - E) - terrainDetailH(x, z - E, cfg)) / (2 * E);
-    } else {
-      dhx = (terrainH(x + E, z) - terrainH(x - E, z)) / (2 * E);
-      dhz = (terrainH(x, z + E) - terrainH(x, z - E)) / (2 * E);
-    }
+    pos.setY(i, H(x, z));
+    const dhx = (H(x + E, z) - H(x - E, z)) / (2 * E);
+    const dhz = (H(x, z + E) - H(x, z - E)) / (2 * E);
     const inv = 1 / Math.hypot(dhx, 1, dhz);
     normals[i * 3] = -dhx * inv; normals[i * 3 + 1] = inv; normals[i * 3 + 2] = -dhz * inv;
   }
@@ -514,19 +493,22 @@ function retuneTerrain() {
   terrainTierBuilt = gfxTier;
 }
 
+// smooth value noise over a random (N+1)² lattice; val(u, v, scale) with u, v in [0, 1)
+function latticeNoise(N) {
+  const L = []; for (let i = 0; i < (N + 1) * (N + 1); i++) L.push(Math.random());
+  return (u, v, sc) => {
+    const gu = Math.min(u * sc, N - 0.001), gv = Math.min(v * sc, N - 0.001);
+    const iu = Math.floor(gu), iv = Math.floor(gv), fu = gu - iu, fv = gv - iv;
+    const su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv);
+    return lerp(lerp(L[iv * (N + 1) + iu], L[iv * (N + 1) + iu + 1], su), lerp(L[(iv + 1) * (N + 1) + iu], L[(iv + 1) * (N + 1) + iu + 1], su), sv);
+  };
+}
 let CLOUDTEX = null;
 function cloudPuffTex() {
   if (CLOUDTEX) return CLOUDTEX;
   const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
   const x = c.getContext('2d'), img = x.createImageData(S, S);
-  const N = 48, L = []; for (let i = 0; i < (N + 1) * (N + 1); i++) L.push(Math.random());
-  const val = (u, v, sc) => {
-    const gu = Math.min(u * sc, N - 0.001), gv = Math.min(v * sc, N - 0.001);
-    const iu = Math.floor(gu), iv = Math.floor(gv), fu = gu - iu, fv = gv - iv;
-    const su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv);
-    const a = L[iv * (N + 1) + iu], b = L[iv * (N + 1) + iu + 1], d = L[(iv + 1) * (N + 1) + iu], e = L[(iv + 1) * (N + 1) + iu + 1];
-    return lerp(lerp(a, b, su), lerp(d, e, su), sv);
-  };
+  const val = latticeNoise(48);
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
     const u = i / S, v = j / S;
     const r = Math.hypot(u - 0.5, v - 0.5) * 2;
@@ -689,7 +671,7 @@ function buildSeaMat(cfg) {
     '  #include <tonemapping_fragment>',
     '  #include <colorspace_fragment>',
     '}',
-  ].filter(function (l) { return l !== ''; }).join('\n');
+  ].filter(l => l !== '').join('\n');
   const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     time: { value: 0 },
     sunDir: { value: new THREE.Vector3(0.5, 1.0, 0.35).normalize() },
@@ -701,7 +683,7 @@ function buildSeaMat(cfg) {
     maskSize: { value: TERRAIN_SIZE },
   }]);
   uniforms.coastMask = { value: foamMaskTex() };   // after merge: UniformsUtils.merge would clone the texture
-  return new THREE.ShaderMaterial({ fog: true, uniforms: uniforms, vertexShader: vert, fragmentShader: frag });
+  return new THREE.ShaderMaterial({ fog: true, uniforms, vertexShader: vert, fragmentShader: frag });
 }
 function seaCfg() { return SEA_TIER[gfxTier] || SEA_TIER.low; }
 function seaGeoFor(cfg) { const g = new THREE.PlaneGeometry(SEA_SIZE, SEA_SIZE, cfg.seg, cfg.seg); g.rotateX(-Math.PI / 2); return g; }
@@ -876,7 +858,7 @@ function groundObjTemplates() {
 // The VISIBLE ground height: gameplay terrainH + the tier's visual-only detail layer. Use it to seat props
 // (scatter, ground units) on the mesh the player actually sees; collision keeps using terrainH.
 function surfaceH(x, z) {
-  const cfg = (typeof TERRAIN_TIER !== 'undefined' && TERRAIN_TIER[terrainTierBuilt || gfxTier]) || null;
+  const cfg = TERRAIN_TIER[terrainTierBuilt || gfxTier];
   return terrainH(x, z) + (cfg ? terrainDetailH(x, z, cfg) : 0);
 }
 const _gobjM4 = new THREE.Matrix4(), _gobjQ = new THREE.Quaternion(), _gobjP = new THREE.Vector3(), _gobjS = new THREE.Vector3(), _gobjC = new THREE.Color();
@@ -928,7 +910,7 @@ function buildGroundObjects() {
   clearGroundObjects();
   if (!scene || gfxTier === 'low') return;
   const B = biomeFor(arenaBiome);
-  const seed = (typeof weatherSeed === 'number' && weatherSeed) ? weatherSeed : 1;
+  const seed = weatherSeed || 1;
   const plan = planGroundObjects(seed, gfxTier, terrainH, B);
   if (!plan.length) return;
   const tpl = groundObjTemplates();
@@ -1069,8 +1051,9 @@ function buildAssets() {
     ASSET.bulletGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     ASSET.bulletGeo.setIndex(idx);
   }
-  ASSET.bulletMat = new THREE.MeshBasicMaterial({ map: tracerTex(), color: 0xffe9a0, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  ASSET.ebulletMat = new THREE.MeshBasicMaterial({ map: tracerTex(), color: 0xff6a50, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const tracer = color => new THREE.MeshBasicMaterial({ map: tracerTex(), color, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  ASSET.bulletMat = tracer(0xffe9a0);
+  ASSET.ebulletMat = tracer(0xff6a50);
 
   {
     const R = 1.05, prof = [];
@@ -1087,10 +1070,9 @@ function buildAssets() {
     }
     ASSET.missileHullGeo = mergeGeos([nose, body, tail].concat(fins));
     const seeker = new THREE.SphereGeometry(0.36, 14, 10); seeker.translate(0, 0, -11.75);
-    const band1 = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); band1.rotateX(Math.PI / 2); band1.translate(0, 0, -5.6);
-    const band2 = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); band2.rotateX(Math.PI / 2); band2.translate(0, 0, 6.6);
+    const band = z => { const b = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); b.rotateX(Math.PI / 2); b.translate(0, 0, z); return b; };
     const exDisc = new THREE.CircleGeometry(0.62, 16); exDisc.translate(0, 0, 11.22);
-    ASSET.missileTrimGeo = mergeGeos([seeker, band1, band2, exDisc]);
+    ASSET.missileTrimGeo = mergeGeos([seeker, band(-5.6), band(6.6), exDisc]);
   }
   ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xc6ccd2, metalness: 0.6, roughness: 0.5, envMapIntensity: 1.1 });
   ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0x4a4640, metalness: 0.55, roughness: 0.6, envMapIntensity: 1.0 });
@@ -1166,13 +1148,7 @@ function fireTex() {
   if (FIRETEX) return FIRETEX;
   const S = 128, c = document.createElement('canvas'); c.width = c.height = S;
   const x = c.getContext('2d'), img = x.createImageData(S, S);
-  const N = 24, L = []; for (let i = 0; i < (N + 1) * (N + 1); i++) L.push(Math.random());
-  const val = (u, v, sc) => {
-    const gu = Math.min(u * sc, N - 0.001), gv = Math.min(v * sc, N - 0.001);
-    const iu = Math.floor(gu), iv = Math.floor(gv), fu = gu - iu, fv = gv - iv;
-    const su = fu * fu * (3 - 2 * fu), sv = fv * fv * (3 - 2 * fv);
-    return lerp(lerp(L[iv * (N + 1) + iu], L[iv * (N + 1) + iu + 1], su), lerp(L[(iv + 1) * (N + 1) + iu], L[(iv + 1) * (N + 1) + iu + 1], su), sv);
-  };
+  const val = latticeNoise(24);
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
     const u = i / S, v = j / S;
     const r = Math.hypot(u - 0.5, v - 0.5) * 2;

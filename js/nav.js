@@ -83,13 +83,12 @@ function menuBackTarget(openPanels) {
 }
 // Capture-phase so it runs BEFORE main.js's bubble handler; claims keys only on menus.
 function installMenuKeys() {
-  const shown = (id) => { const el = g(id); return !!(el && el.classList.contains('show')); };
   const activatable = (el) => !!(el && el !== document.body && el.closest && el.closest('button,a,select,[role="button"],[role="radio"],[tabindex]'));
   window.addEventListener('keydown', function (e) {
     const ae = document.activeElement, tag = ae && ae.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-    if (shown('manual') || shown('upgrade') || shown('wingpick') || onboarding) return;   // those own their keys
-    const open = MENU_BACK.map(r => r[0]).filter(shown);
+    if (isShown('manual') || isShown('upgrade') || isShown('wingpick') || onboarding) return;   // those own their keys
+    const open = MENU_BACK.map(r => r[0]).filter(isShown);
     if (e.code === 'Escape') {
       const b = g(menuBackTarget(open) || '');
       if (b && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); b.click(); }
@@ -97,7 +96,7 @@ function installMenuKeys() {
     }
     const actKey = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
     // debriefs (state 'dead'): focused buttons activate natively
-    if ((shown('gameover') || shown('levelCleared') || shown('levelFailed')) && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }
+    if ((isShown('gameover') || isShown('levelCleared') || isShown('levelFailed')) && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }
     if (state !== 'hangar') return;
     if (open.length) {
       // an overlay is up: hangar carousel shortcuts must not fire beneath it; focused buttons activate natively
