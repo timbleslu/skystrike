@@ -1,7 +1,4 @@
-/* SKYSTRIKE — roster.js: jet roster DATA + ace-pool helpers.
-   Pure & require-safe (no THREE / store / DOM) so Node tests require() the REAL roster
-   instead of carrying a mirror copy. CommonJS footer (below) is inert in the browser.
-   Load order: right after core.js, before globals.js (whose jetStats reads JETS at call-time). */
+/* SKYSTRIKE — roster.js: jet roster JETS (canonical EN text; i18n overrides) + ace-pool helpers. Require-safe. */
 
 const JETS = [
   { id:'FT-1', shape:'STD', name:'FT-1 STANDARD', role:'Multirole Trainer', topSpeed:'Mach 1.4', ceiling:'48,000 ft', cannon:'20mm rotary', gen:'BASELINE',
@@ -77,11 +74,9 @@ const JETS = [
     context:'Shenyang / SAC \u00B7 China (demonstrator). A second Chinese sixth-generation design that surfaced in December 2024 \u2014 smaller and more fighter-like than the J-36. It is a tailless, twin-engine, lambda-wing jet that appears to use swivelling wingtips for control in place of vertical tails, and is rumoured to be aimed in part at future carrier operations.' },
 ];
 
-/* ---- ace pool (pure over JETS; tests/ace-pool.test.js imports the real impl) ---- */
 function aceShapePool() { return JETS.filter(j => j.shape !== 'STD').map(j => j.shape); }
 function jetNameForShape(shape) { const j = JETS.find(x => x.shape === shape); return j ? j.name : shape; }
 
-/* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { JETS, aceShapePool, jetNameForShape };
 }

@@ -4,7 +4,7 @@
 // tested here. Imported from the real implementation in js/core.js (no mirror copy).
 const assert = require('assert');
 const {
-  equippableSpecials, isEquippableSpecial, specialCooldownMax, specialSlotReady,
+  equippableSpecials, isEquippableSpecial, specialCooldownMax,
 } = require('../js/core.js');
 
 // A trimmed roster mirroring the real shape: FT-1 has a null ability; the rest carry one.
@@ -71,15 +71,6 @@ const CD = { 'F-22': 15, 'SU-57': 15, 'J-20': 18, 'F-35': 18 };
   assert.strictEqual(specialCooldownMax('J-20', null, 15), 15, 'missing table falls back to the default');
 })();
 
-// ===== specialSlotReady: an equipped slot fires only when fully recharged; empty slot never fires =====
-(() => {
-  assert.strictEqual(specialSlotReady({ id: 'J-20', cd: 0, max: 18 }), true, 'equipped + cd<=0 is ready');
-  assert.strictEqual(specialSlotReady({ id: 'J-20', cd: -0.1, max: 18 }), true, 'cd just past zero is ready');
-  assert.strictEqual(specialSlotReady({ id: 'J-20', cd: 4.2, max: 18 }), false, 'mid-cooldown is NOT ready');
-  assert.strictEqual(specialSlotReady({ id: null, cd: 0, max: 15 }), false, 'empty slot (no id) is never ready');
-  assert.strictEqual(specialSlotReady(null), false, 'missing slot object is never ready');
-})();
-
 // ===== an unequipped / unknown slot-2 id yields an empty (inert) slot, no effect =====
 (() => {
   // What startGame's equip resolver does: validate, then either equip or leave empty.
@@ -92,12 +83,10 @@ const CD = { 'F-22': 15, 'SU-57': 15, 'J-20': 18, 'F-35': 18 };
   // stale equip: J-20 not unlocked → slot clears to empty/inert
   let s = resolveSlot2('J-20', unlocked, 'F-22');
   assert.strictEqual(s.id, null, 'stale (locked) equip resolves to an empty slot');
-  assert.strictEqual(specialSlotReady(s), false, 'empty resolved slot never fires');
   // valid equip → live slot with the right cooldown
   s = resolveSlot2('SU-57', unlocked, 'F-22');
   assert.strictEqual(s.id, 'SU-57', 'valid equip resolves to a live slot');
   assert.strictEqual(s.max, 15, 'live slot carries the per-id cooldown max');
-  assert.strictEqual(specialSlotReady(s), true, 'a freshly equipped slot (cd 0) is ready');
 })();
 
 console.log('ALL TESTS PASS');

@@ -1,20 +1,9 @@
-/* SKYSTRIKE — globals.js: constants, tech tree, global runtime state, THREE vector helpers. Loaded after the pure data/core files (core/prefs/roster/content-packs), before i18n.js. */
+/* SKYSTRIKE — constants, tech tree, shared runtime state, THREE scratch/helpers. */
 
-/* =====================================================================
-   SKYSTRIKE :: ACE PROTOCOL  —  low-poly arcade flight combat
-   ===================================================================== */
-
-/* ---------------- math helpers ---------------- */
-// TWO_PI, DEG, clamp, lerp, rand, randInt, damp → core.js (pure, require-safe; loaded before this file).
-
-/* ---------------- jet roster ---------------- */
-// JETS roster + aceShapePool/jetNameForShape → js/roster.js (require-safe, loaded before this file). jetStats stays here (call-site uses lerp from core.js).
-// CF content-factory: merge the shipped CONTENT_PACKS (js/content-packs.js, loaded before this
-// file) into the live pools ONCE at load. Valid packs extend FORMATIONS in place (new types join
-// every spawn roll); packRuntime carries the extended weekly-modifier pool + wave patterns (read
-// by ui-flow.js weeklyThisWeek). A rejected candidate contributes nothing and never bricks load.
+// Merge shipped CONTENT_PACKS into the live pools once: FORMATIONS is extended in place; packRuntime carries
+// the extended weekly-modifier pool. A rejected pack contributes nothing and never bricks load.
 var packRuntime = applyContentPacks(CONTENT_PACKS, FORMATIONS, WEEKLY_MODIFIERS);
-if (packRuntime.rejected.length && typeof console !== 'undefined') console.warn('[content-packs] rejected:', packRuntime.rejected);
+if (packRuntime.rejected.length) console.warn('[content-packs] rejected:', packRuntime.rejected);
 function jetStats(j) {
   return {
     maxSpeed: 150 + j.speed * 26,
@@ -29,164 +18,130 @@ function jetStats(j) {
   };
 }
 
-/* ---------------- globals ---------------- */
 let scene, camera, renderer, clock, sun;
 let skyMat, sunDisc, ambientLight, hemiLight, starsMat, rimLight, haloA, haloB;
 let timeOfDay = 0;
 const TODS = [
-  // intensities are physical-light scaled (useLegacyLights = false ≈ legacy × π)
-  // fog matches each sky's horizon haze so distant land + sea dissolve into the sky (no dark seam);
-  // seaK dims the biome's water colour for the light level
+  // intensities are physical-light scaled (useLegacyLights = false ≈ legacy × π); fog matches the horizon
+  // haze so distant land dissolves into the sky; seaK dims the biome's water colour for the light level
   { key: 'DAY',  top: 0x2a5fa8, hor: 0xa4c6d8, bot: 0x6e98ae, fog: 0x98b9cb, sun: 0xfff0d6, sunI: 4.2, amb: 0.95, hemi: 0.75, rim: 1.25, stars: 0.0,  disc: 0xfff3d0, sunY: 1.0, seaK: 1.0 },
   { key: 'DUSK', top: 0x243268, hor: 0xf09a5a, bot: 0x6a4458, fog: 0x9a6a66, sun: 0xffb060, sunI: 3.6, amb: 0.7, hemi: 0.6, rim: 1.1, stars: 0.35, disc: 0xffcf88, sunY: 0.32, seaK: 0.55 },
   { key: 'NIGHT', top: 0x02040f, hor: 0x142440, bot: 0x070d1c, fog: 0x0f1a2e, sun: 0x9fb6ff, sunI: 1.7, amb: 0.55, hemi: 0.5, rim: 0.95, stars: 1.0, disc: 0xcdd8ff, sunY: 0.6, seaK: 0.15 },
 ];
 
-/* ---------------- weather (feature #4: weather + TOD gameplay) ---------------- */
-// Live weather modifiers — engine.js applyWeather writes these; combat.js (lock),
-// the HUD (radar + chip) and engine.js (fog/sky) read them. Default clear = neutral (no-op).
+// Live weather modifiers (engine.js applyWeather writes; lock/radar/fog read). Default = neutral.
 let weather = { type: 'clear', radarMul: 1.0, lockRangeMul: 1.0, lockSpeedMul: 1.0, fogMul: 1.0 };
-let weatherSeed = 1;         // per-run seed for standalone (non-op) weather rolls; reseeded in startGame
+let weatherSeed = 1;
 const FOG_BASE = 0.000058;   // neutral FogExp2 density; weather.fogMul scales from this (matches scene init)
-// weather core (NIGHT_RADAR_MUL, WEATHER, resolveWeather, rollWeather) → core.js.
-// boss-phase core (BOSS_PHASE2_HP, BOSS_PHASE3_HP, bossPhaseFor, nextBossPhase) → core.js.
-// Boss-rush mode (F15): unlockable gauntlet — fight every boss in sequence, fixed loadout,
-// ONE life, no tech tree. Runtime mode flag + progress; best time persists in meta.
-let bossRush = false;        // true while a Boss Rush run is active (gates tech tree / meta perks / loadout)
-let bossRushIndex = 0;       // how many bosses have been DEFEATED so far this run (0..BOSS_RUSH_TOTAL)
+let bossRush = false;
+let bossRushIndex = 0;       // bosses DEFEATED so far this run (0..BOSS_RUSH_TOTAL)
 let bossRushT0 = 0;          // performance.now() at run start, for the timed leaderboard
-// boss-rush core (BOSS_RUSH_POOL, BOSS_RUSH_TOTAL, bossRushNext, bossRushDone, betterTime) → core.js.
-// tutorial step machine (TUTORIAL_STEPS, TUTORIAL_DONE, TUTORIAL_EVENT_FOR_STEP, tutorialNext) → core.js.
-let dailyMode = false;       // true while a Daily Challenge run is active (F7): seed-fixed layout/weather, one life
-let dailySeed = 0;           // the active daily calendar seed; startGame resets weatherSeed from it when dailyMode
-// daily-challenge core (makeRng, dailySeedFor) → core.js.
+let dailyMode = false;
+let dailySeed = 0;
 let W = innerWidth, H = innerHeight;
 let h2d, radarCtx, radarCanvas;
 let state = 'hangar';
-let onboarding = false;   // true while the first-run language-select / controls-brief screens are showing
-// First-run guided tutorial (F5). `active` = run the stepped prompts this session (set for a brand-new
-// player when onboarding starts); `step` indexes TUTORIAL_STEPS (DONE = finished); `done` latches once the
-// player completes or skips. prevShots/prevMissiles baseline the run-stat counters so we detect the NEXT
-// gun/missile action (not ammo already spent). Not persisted separately — reuses skystrike_onboarded.
+let onboarding = false;   // first-run language-select / controls-brief screens showing
+// First-run tutorial. prevShots/prevMissiles baseline the run counters so the NEXT gun/missile action is detected.
 let tutorial = { active: false, step: 0, done: false, prevShots: 0, prevMissiles: 0 };
-// captured before boot writes skystrike_settings (cacheEl -> selectJet -> saveSettings), so the
-// first-run check in initOnboarding() isn't fooled by settings saved during this same boot
+// Captured before boot writes skystrike_settings (cacheEl -> selectJet -> saveSettings), so initOnboarding's
+// first-run check isn't fooled by settings saved during this same boot.
 const isReturningPlayer = !!(store.get('skystrike_onboarded') || store.get('skystrike_settings'));
 let lastDt = 0.016, empFlash = 0;
-let selectedJet = 0, previewJet = null, platform = null;   // default to the FT-1 trainer (roster index 0) — the only jet unlocked at a fresh start; a saved skystrike_settings.selectedJet overrides
-// Hangar 3D-preview interaction — ONE cluster object (was 6 loose preview* globals). `skin` is a TRANSIENT,
-// UI-only skin shown on the preview jet (owned OR not); NEVER persisted, NEVER read by gameplay
-// (createPlayer uses jetPaint = owned only), so an unowned preview can't reach a launched jet.
-const PREVIEW_PITCH_MAX = Math.PI / 3;   // ±60° pitch clamp
+let selectedJet = 0, previewJet = null, platform = null;
+// Hangar 3D preview. `skin` is a transient UI-only skin (owned OR not), never persisted or read by gameplay
+// (createPlayer uses owned-only jetPaint), so an unowned preview can't reach a launched jet.
+const PREVIEW_PITCH_MAX = Math.PI / 3;
 const PREVIEW_YAW0 = 2.45;               // resting yaw: nose toward the camera at a 3/4 angle (π = head-on)
 const hangarPreview = {
-  skin: null,          // transient UI-only skin id on the preview jet (never leaks into a launched jet)
-  yaw: PREVIEW_YAW0, pitch: 0,   // accumulated drag orientation (rad); pitch clamped to ±PREVIEW_PITCH_MAX
-  zoom: 1.0,           // F2 preview zoom: dollies previewCamera toward origin (0.8×–2.5×), reset to 1 on jet switch
-  dragging: false,     // pointer is dragging the preview jet (raycast-gated on pointerdown)
-  spinResumeAt: 0,     // performance.now() ms after which idle spin+bob resume (paused while dragging + ~3s after release)
-  clear() { this.skin = null; this.yaw = PREVIEW_YAW0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },   // the "no preview leaks into a launched jet" reset (skin→null, zoom→1, orientation→rest)
+  skin: null,
+  yaw: PREVIEW_YAW0, pitch: 0,
+  zoom: 1.0,           // dollies previewCamera toward origin (0.8×–2.5×)
+  dragging: false,
+  spinResumeAt: 0,     // performance.now() ms after which idle spin+bob resume
+  clear() { this.skin = null; this.yaw = PREVIEW_YAW0; this.pitch = 0; this.zoom = 1; this.dragging = false; this.spinResumeAt = 0; },
 };
-let jetGLTF = {};   // loaded glTF hero-jet templates by shape id (e.g. F22), cloned per spawn on High tier
-let special2Id = null;   // feature #3: equipped SLOT-2 special (ability/jet id), persisted in skystrike_settings like selectedJet
+let jetGLTF = {};   // loaded glTF hero-jet templates by shape id, cloned per spawn on High tier
+let special2Id = null;   // equipped SLOT-2 special (ability/jet id)
 
 let player = null;
 let enemies = [], bullets = [], missiles = [], flares = [], loots = [], particles = [], clouds = [], decoys = [];
-let wingmen = [];   // AI escort jets that fly with the player
+let wingmen = [];
 const BPOOL = [];
 let hitMarkers = [], dmgNumbers = [];
-// JS twin of the CSS prefers-reduced-motion gate (styles.css:96): when true, the canvas-juice
-// layer (hud.js kill flash / lock-snap / low-HP pulse) renders its calm fallback. Cached + live.
-let _reduceMotionMQ = (typeof matchMedia === 'function') ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-let _reduceMotion = !!(_reduceMotionMQ && _reduceMotionMQ.matches);
-if (_reduceMotionMQ && _reduceMotionMQ.addEventListener) _reduceMotionMQ.addEventListener('change', e => { _reduceMotion = e.matches; });
+// JS twin of the CSS prefers-reduced-motion gate (canvas juice renders its calm fallback). Live.
+const _reduceMotionMQ = matchMedia('(prefers-reduced-motion: reduce)');
+let _reduceMotion = _reduceMotionMQ.matches;
+_reduceMotionMQ.addEventListener('change', e => { _reduceMotion = e.matches; });
 function prefersReducedMotion() { return _reduceMotion; }
-let killFlash = 0;   // VISUAL-ONLY: brief frame timer set on a player kill (hud.js draws a confirm flash). Decays in drawHUD.
+let killFlash = 0;
 let wave = 0, betweenWaves = true, waveTimer = 2.6;
-let strikeWaveActive = false;   // true while the current wave is a ground-war strike wave
-// Endless-mode boss schedule (balance pass 2026-06): the next wave a boss arrives on. Replaces the old
-// `wave % 4` metronome — re-rolled 3-5 waves out by nextBossOffset after each boss spawns. lastWaveWasBoss
-// records whether the just-spawned wave carried a boss (drives the tech-screen cadence after it clears).
-let bossWaveNext = 0;           // wave number the next Endless boss is scheduled for (0 = uninitialized)
-let bossWaveActive = false;     // true while the CURRENT wave contains a boss (Endless metronome replacement)
-let lastWaveWasBoss = false;    // did the wave that just cleared contain a boss? (tech-screen cadence)
-let pendingSpawns = [];          // FIFO of zero-arg spawn closures, drained a few per frame to avoid wave-start hitch
-const SPAWN_PER_FRAME = 2;       // enemies actually built per frame after a wave is announced
+let strikeWaveActive = false;
+let bossWaveNext = 0;           // wave the next Endless boss is scheduled for (0 = uninitialized)
+let bossWaveActive = false;
+let lastWaveWasBoss = false;    // drives the tech-screen cadence after the wave clears
+let pendingSpawns = [];          // FIFO of spawn closures, drained a few per frame to avoid wave-start hitch
+const SPAWN_PER_FRAME = 2;
 let camMode = 0;
 let paused = false;
 let bestScore = 0;
 let invertY = false, volume = 0.55, muted = false;
-let autoLock = false; // when off, the player must press F to designate a lock target
-let startWingman = true; // launch each sortie with a starting AI escort (toggle in Settings)
-let rivalEnabled = true;     // nemesis rival ace appearances (Settings toggle)
-let groundWar = true;        // ground units + strike waves (Settings toggle)
-let opMode = false;          // operation map mode vs endless (Hangar mode select)
-// Operations Map revamp — bounded linear campaign. opMode = "Operations selected in hangar";
-// campaignMode = "currently flying a bounded campaign level" (the distinct in-flight path).
-let campaignMode = false;    // true only while a bounded campaign level's combat is live
-let campaignOpId = null;     // operation id being played (set on entering an operation)
-let campaignLevelIdx = -1;   // level index within the operation currently launched
-let campaignWavesLeft = 0;   // bounded wave-bank countdown for the active level
-let campaignSnapshot = null; // pre-level {tp,score,…} checkpoint for death rollback
-let campaignPlayerOpId = null; // which operation the live player belongs to (null = no op player built)
+let autoLock = false;
+let startWingman = true;
+let rivalEnabled = true;
+let groundWar = true;
+let opMode = false;          // Operations chosen in the hangar (vs Endless)
+let campaignMode = false;    // a bounded campaign level's combat is live
+let campaignOpId = null;
+let campaignLevelIdx = -1;
+let campaignWavesLeft = 0;
+let campaignSnapshot = null; // pre-level checkpoint for death rollback
+let campaignPlayerOpId = null; // operation the live player belongs to (null = no op player built)
 let campaignBossPhases = null; // authored boss phase descriptors handed to spawnBoss → e._phaseCfg
-let gunLead = true;      // lead-computing gunsight (deflection pipper) for the cannon
-let aimAssist = true;    // aim assist: gently steers the nose toward the gun lead point (Settings toggle, on by default)
-let aimStrength = 3;     // aim-assist strength 1..5 (Settings slider, shown only when aimAssist is on; 5 = forcing)
-let controlSensitivity = 1.0; // turn-rate multiplier (0.5–2.0, Settings slider)
-// mobile control settings (Settings tab; persisted via storage seam)
-let mobileControl = 'touch';      // 'touch' | 'motion' — active analog flight source on mobile
-let motionAggression = 'balanced';// 'casual' | 'balanced' | 'direct' — tilt assist preset
-let haptics = true;               // vibration feedback where supported
-let buttonOpacity = 0.8;          // 0.4–1.0 on-screen touch button opacity
-let buttonLayout = 'right';       // 'right' | 'left' | 'compact' — touch button preset layout
-let hudScale = 1.0;               // HUD/readout size multiplier (Settings → HUD size dropdown; in-flight HUD only)
-let uiScale = 1.0;                // Menu-screen size multiplier (Settings → UI size dropdown; zooms every menu/overlay screen)
-let choosingUpgrade = false; // true while the between-wave field-upgrade screen is open
+let gunLead = true;
+let aimAssist = true;
+let aimStrength = 3;     // 1..5 (5 = forcing)
+let controlSensitivity = 1.0;
+let mobileControl = 'touch';      // 'touch' | 'motion'
+let motionAggression = 'balanced';// 'casual' | 'balanced' | 'direct'
+let haptics = true;
+let buttonOpacity = 0.8;
+let buttonLayout = 'right';       // 'right' | 'left' | 'compact'
+let hudScale = 1.0;               // in-flight HUD only
+let uiScale = 1.0;                // every menu/overlay screen
+let choosingUpgrade = false;
 let difficulty = 1;
 const DIFFS = [
   { key: 'ROOKIE',  dmg: 0.6, fire: 1.35, missile: 1.5, count: -1, hp: 1.3,  desc: 'Forgiving — fewer, gentler foes & a tougher hull.' },
   { key: 'VETERAN', dmg: 1.0, fire: 1.0,  missile: 1.0, count: 0,  hp: 1.0,  desc: 'The intended challenge.' },
   { key: 'ACE',     dmg: 1.5, fire: 0.72, missile: 0.7, count: 1,  hp: 0.85, desc: 'Lethal — more foes, faster guns, fragile hull.' },
 ];
-// fresh per-run stat counters (startGame / enterOperationRun start a run with freshRun(performance.now()))
 function freshRun(t0) { return { shots: 0, hits: 0, missiles: 0, kills: 0, ground: 0, boss: 0, missions: 0, t0: t0, escortKills: 0, pMissiles: 0, pGunKills: 0, pFlares: 0, lastRivalWave: 0, damageTaken: 0, sectorAceSpawned: {}, cleanWaves: 0 }; }
 let run = freshRun(0);
-let noDamageWave = false;   // per-wave "no hit taken yet" flag for star objectives — set true at wave start (main.js), cleared in damagePlayer; a wave cleared while still true bumps run.cleanWaves
+let noDamageWave = false;   // set at wave start, cleared in damagePlayer; a wave cleared while true bumps run.cleanWaves
 
-/* per-airframe special-ability cooldown (seconds) */
-const SPECIAL_CD = {
+const SPECIAL_CD = {   // seconds
   'F-22':15, 'SU-57':15, 'J-20':18, 'F-35':18, 'EFT':15, 'RAFALE':18, 'TEJAS':15, 'FA18':18,
   'J-36':20, 'F-47':22, 'J-50':16,
 };
 
-/* ---------------- research-point economy ----------------
-   Points (RP) are earned ONLY from damage, kills and assists the PLAYER personally deals.
-   Wingmen / deployed drones earn the player NOTHING toward the tech tree. */
+// Research points (RP) come ONLY from damage/kills/assists the player personally deals — never wingmen/drones.
 const TP = { dmg: 0.5, fighter: 55, drone: 12, ground: 28, bomber: 150, ace: 140, boss: 380, assistFrac: 0.4 };
-let wingDmgMul = 1;   // FLEET COMMANDER capstone boosts escort firepower
+let wingDmgMul = 1;
 
-/* ---------------- TECH TREE (one connected lattice) ----------------
-   A single research lattice grown from a CORE root. Every node lists its parent(s):
-   `req` may be a single id or an ARRAY (owning ANY one unlocks the node — an OR-gate
-   that lets branches weave into each other), and `reqAll` is an array of ids that must
-   ALL be owned (an AND-gate for hybrid nodes that fuse two branches). Grid position
-   (`x` column, `y` row) drives the on-screen layout. Purchases persist for the run.
-   The CORE node is owned for free at the start of every run.
-   `ok(p)` (optional) gates a node to relevant airframes; `repeat` marks the points-sink. */
-const MAX_WINGMEN = 6;                 // hard cap on escorts in the air
-let pendingWingShape = 'STD';          // airframe the next tech-tree wingman will fly (set by the picker)
+/* TECH TREE lattice: `req` = id or array (ANY owned unlocks — OR-gate); `reqAll` = ids that must ALL be owned
+   (AND-gate); `x`/`y` = grid layout; `ok(p)` optionally gates to airframes; `repeat` = the points-sink.
+   CORE is owned free every run. */
+const MAX_WINGMEN = 6;
+let pendingWingShape = 'STD';          // airframe the next tech-tree wingman will fly
 const FAM_C = { core:'#ffb938', wpn:'#ffb347', gun:'#ff9a3c', msl:'#ff7a4d', mun:'#ff5024', def:'#5dffa0', arm:'#46ff8c', prop:'#5ad1ff', ew:'#ff61cf', cmd:'#ffe14d', sc:'#ffd24d', tac:'#b76bff', wing:'#8ad0ff', sup:'#ffab61', strike:'#ff4444' };
 const TECH_TREE = [
-  // ---- root ----
   { id:'core', x:3, y:0, req:null, fam:'core', cost:0, sym:'\u2756', name:'CORE SYSTEMS', desc:'Boot the upgrade bus. (Owned from the start of every run.)', apply:()=>{} },
-  // ---- three trunks off the root; each fans into three sub-branches ----
   { id:'wpn', x:1, y:1, req:'core', fam:'wpn', cost:160, sym:'\u2724', name:'WEAPONS BUS', desc:'+12% cannon AND +12% missile damage. Opens the Gunnery, Munitions and Missile branches.', apply:p=>{ p.gunDmgMul *= 1.12; p.missileDmgMul *= 1.12; } },
   { id:'def', x:5, y:1, req:'core', fam:'def', cost:110, sym:'\u25C8', name:'AIRFRAME BUS', desc:'+25 max HP and +12 max shield, topped up now. Opens Armour, Propulsion and EW.', apply:p=>{ p.maxHp += 25; p.hp = p.maxHp; p.maxShield += 12; p.shield = p.maxShield; } },
   { id:'cmd', x:9, y:1, req:'core', fam:'cmd', tab:'armory', cost:110, sym:'\u2605', name:'COMMAND BUS', desc:'+12% score from everything. Opens Command/Economy, Tactics and Flight.', apply:p=>{ p.scoreMul *= 1.12; } },
 
-  // ===== WEAPONS group ===========================================================
-  // ---- GUNNERY (cannon line, far left) ----
+  // GUNNERY
   { id:'g1', x:0, y:2, req:'wpn', fam:'gun', cost:150, sym:'\u25C9', name:'HEAVY ROUNDS',     desc:'+25% cannon damage.',                                              ok:p=>!p.noCannon, apply:p=>{ p.gunDmgMul *= 1.25; } },
   { id:'g2', x:0, y:3, req:'g1',  fam:'gun', cost:280, sym:'\u25A4', name:'RAPID FEED',        desc:'+18% cannon rate of fire.',                                        ok:p=>!p.noCannon, apply:p=>{ p.fireRateMul *= 0.85; } },
   { id:'g3', x:0, y:4, req:['g2','u2'], fam:'gun', cost:450, sym:'\u2261', name:'AP PENETRATORS', desc:'Rounds punch THROUGH one extra target, and fly faster. (Reached via Gunnery OR Munitions.)', ok:p=>!p.noCannon, apply:p=>{ p.pierce += 1; p.bulletSpeedMul *= 1.2; } },
@@ -196,14 +151,14 @@ const TECH_TREE = [
   { id:'g6', x:0, y:7, req:'g5', fam:'gun', cost:1180, sym:'♨', name:'INCENDIARY ROUNDS', desc:'Cannon hits set targets ABLAZE — they keep burning for heavy damage over time.', ok:p=>!p.noCannon, apply:p=>{ p.burnDps += 30; p.burnTime = Math.max(p.burnTime, 3.2); } },
   { id:'ic', x:0, y:8, req:'g6', fam:'gun', cost:1320, sym:'❋', name:'INFERNO CASCADE', desc:'CAPSTONE — a foe that BURNS TO DEATH bursts, splashing its fire onto everything nearby. +16 burn damage. The blaze never stops spreading.', ok:p=>!p.noCannon, apply:p=>{ p.burnSpread = true; p.burnDps += 16; } },
 
-  // ---- MUNITIONS (kill-cascade line, centre-left, under the WEAPONS trunk) ----
+  // MUNITIONS
   { id:'u1', x:1, y:2, req:'wpn', fam:'mun', cost:170, sym:'\u229B', name:'SMART FUZING',      desc:'Every kill cooks off in a small blast, damaging nearby foes.',     apply:p=>{ p.chainRadius = Math.max(p.chainRadius, 150); p.chainDmg += 24; } },
   { id:'u2', x:1, y:3, req:'u1',  fam:'mun', cost:300, sym:'\u25C8', name:'OVERPRESSURE',      desc:'+15% cannon AND +15% missile damage.',                             apply:p=>{ p.gunDmgMul *= 1.15; p.missileDmgMul *= 1.15; } },
   { id:'u3', x:1, y:4, req:'u2',  fam:'mun', cost:470, sym:'\u2042', name:'CLUSTER CHARGES',   desc:'Kill blasts are much larger and hit harder.',                      apply:p=>{ p.chainRadius += 100; p.chainDmg += 22; } },
   { id:'u4', x:1, y:5, req:'u3',  fam:'mun', cost:820, sym:'\u2747', name:'CHAIN REACTION',    desc:'CAPSTONE \u2014 kill blasts DETONATE TWICE, reach further, and all your damage rises +20%. Cascading carnage.', apply:p=>{ p.chainProp = true; p.chainRadius += 70; p.chainDmg += 18; p.gunDmgMul *= 1.2; p.missileDmgMul *= 1.2; } },
   { id:'u5', x:1, y:7, req:'u4', fam:'mun', cost:980, sym:'⚡', name:'EMP SUBMUNITIONS', desc:'Every kill bursts an EMP that STUNS nearby foes — cutting their guns, missiles and turns for ~2s.', apply:p=>{ p.empKill = Math.max(p.empKill, 540); } },
 
-  // ---- MISSILES (ordnance line, centre) ----
+  // MISSILES
   { id:'m1', x:2, y:2, req:'wpn', fam:'msl', cost:150, sym:'\u27B9', name:'HE WARHEADS',       desc:'+28% missile damage.',                                             apply:p=>{ p.missileDmgMul *= 1.28; } },
   { id:'m2', x:2, y:3, req:'m1',  fam:'msl', cost:280, sym:'\u25D0', name:'AESA RADAR',        desc:'Missiles lock on 30% faster.',                                     apply:p=>{ p.lockSpeedMul *= 0.7; } },
   { id:'m3', x:2, y:4, req:['m2','u2'], fam:'msl', cost:450, sym:'\u273A', name:'THERMOBARIC', desc:'Missiles burst into a damaging blast on impact. (Reached via Missiles OR Munitions.)', apply:p=>{ p.splashRadius = Math.max(p.splashRadius, 340); p.splashDmg += 24; } },
@@ -211,7 +166,7 @@ const TECH_TREE = [
   { id:'m5', x:2, y:6, req:'m4',  fam:'msl', cost:860, sym:'\u2630', name:'SWARM RACK',        desc:'Each launch looses an extra free missile (specials too), and +6 to the rack.',         apply:p=>{ p.mslSwarm += 1; p.maxMissiles += 6; p.missiles = p.maxMissiles; } },
   { id:'m6', x:2, y:7, req:'m5',  fam:'msl', cost:1150, sym:'\u2723', name:'HYDRA SYSTEM',     desc:'CAPSTONE \u2014 +30% missile damage, +1 more missile per launch, every bird hard-homes, and far bigger blasts.', apply:p=>{ p.missileDmgMul *= 1.3; p.mslSwarm += 1; p.mslHard = true; p.splashRadius = Math.max(p.splashRadius, 340) + 120; p.splashDmg += 22; } },
 
-  // ---- CONVERGENCE SPINE (x3, under the CORE) — hybrid nodes that fuse branches ----
+  // CONVERGENCE SPINE — hybrid nodes that fuse branches
   { id:'dl', x:3, y:3, req:['m1','p1'], fam:'tac', cost:260, sym:'⌖', name:'DATALINK ARRAY',
     desc:'BRIDGE — sensor fusion across the airframe: missiles lock 20% faster AND +6% top speed. (Missiles OR Propulsion.)',
     apply:p=>{ p.lockSpeedMul *= 0.8; p.speedMul *= 1.06; } },
@@ -228,8 +183,7 @@ const TECH_TREE = [
     desc:'ULTRA-CAPSTONE — requires HYDRA SYSTEM + JUGGERNAUT. The airframe transcends: +15% ALL damage, +8% damage reduction, +1 missile per launch, and every kill bends time for a moment.',
     apply:p=>{ p.gunDmgMul *= 1.15; p.missileDmgMul *= 1.15; p.dmgReduce = clamp(p.dmgReduce + 0.08, 0, 0.75); p.mslSwarm += 1; p.slowOnKill = Math.max(p.slowOnKill, 0.7); } },
 
-  // ===== AIRFRAME group ==========================================================
-  // ---- ARMOUR (survivability line, left of AIRFRAME) ----
+  // ARMOUR
   { id:'a1', x:4, y:2, req:'def', fam:'arm', cost:150, sym:'\u25A3', name:'REINFORCED HULL',   desc:'+35 max HP and fully repair the airframe.',                        apply:p=>{ p.maxHp += 35; p.hp = p.maxHp; } },
   { id:'a2', x:4, y:3, req:'a1',  fam:'arm', cost:280, sym:'\u25D2', name:'AEGIS PLATING',     desc:'+22 max shield, +40% shield regen, recharged now.',                apply:p=>{ p.maxShield += 22; p.shield = p.maxShield; p.shieldRegenMul *= 1.4; } },
   { id:'a3', x:4, y:4, req:['a2','p2'], fam:'arm', cost:450, sym:'\u271A', name:'GUARDIAN SYSTEM', desc:'Take 18% less damage from all sources. (Reached via Armour OR Propulsion.)', apply:p=>{ p.dmgReduce = clamp(p.dmgReduce + 0.18, 0, 0.6); } },
@@ -237,7 +191,7 @@ const TECH_TREE = [
   { id:'a5', x:4, y:6, req:'a4',  fam:'arm', cost:860, sym:'\u29BF', name:'REACTIVE ARMOUR',   desc:'When your shield breaks it DETONATES \u2014 concussing foes and blinding incoming missiles.', apply:p=>{ p.reactive = Math.max(p.reactive, 70); } },
   { id:'a6', x:4, y:7, req:'a5',  fam:'arm', cost:1150, sym:'\u2756', name:'JUGGERNAUT',       desc:'CAPSTONE \u2014 +50 max HP, another 12% damage reduction, and overhealing now banks as bonus OVERSHIELD.', apply:p=>{ p.maxHp += 50; p.hp = p.maxHp; p.dmgReduce = clamp(p.dmgReduce + 0.12, 0, 0.7); p.vampShield = Math.max(p.vampShield, 0.5); p.overshieldCap += 60; } },
 
-  // ---- PROPULSION (flight-performance line, centre, under the AIRFRAME trunk) ----
+  // PROPULSION
   { id:'p1', x:5, y:2, req:'def', fam:'prop', cost:170, sym:'\u2191', name:'THRUST VECTORING', desc:'+12% turn rate \u2014 tighter, faster turns.',                     apply:p=>{ p.turnMul *= 1.12; } },
   { id:'p2', x:5, y:3, req:'p1',  fam:'prop', cost:300, sym:'\u25C7', name:'ADAPTIVE INTAKES', desc:'+14% top speed.',                                                  apply:p=>{ p.speedMul *= 1.14; } },
   { id:'p3', x:5, y:4, req:'p2',  fam:'prop', cost:480, sym:'\u2742', name:'ENERGY MANEUVER',  desc:'+12% turn rate and +8% top speed.',                                apply:p=>{ p.turnMul *= 1.12; p.speedMul *= 1.08; } },
@@ -247,7 +201,7 @@ const TECH_TREE = [
   { id:'p4', x:5, y:6, req:'p3',  fam:'prop', cost:820, sym:'\u27A4', name:'SUPERCRUISE',      desc:'CAPSTONE \u2014 +18% speed, +12% turn, and a constant 6% damage reduction from sheer energy.', apply:p=>{ p.speedMul *= 1.18; p.turnMul *= 1.12; p.dmgReduce = clamp(p.dmgReduce + 0.06, 0, 0.7); } },
   { id:'p5', x:5, y:7, req:'p4', fam:'prop', cost:1080, sym:'⇈', name:'SCRAMJET CORE', desc:'+14% top speed, +10% turn rate, and a further 6% damage reduction from sheer energy.', apply:p=>{ p.speedMul *= 1.14; p.turnMul *= 1.10; p.dmgReduce = clamp(p.dmgReduce + 0.06, 0, 0.72); } },
 
-  // ---- ELECTRONIC WARFARE (defence/utility line, right of AIRFRAME) ----
+  // ELECTRONIC WARFARE
   { id:'e1', x:6, y:2, req:'def', fam:'ew', cost:140, sym:'\u2734', name:'DECOY POD',          desc:'+4 max flares (refilled) and they burn longer.',                   apply:p=>{ p.maxFlares += 4; p.flares = p.maxFlares; p.flarePro = 1; } },
   { id:'e2', x:6, y:3, req:'e1',  fam:'ew', cost:270, sym:'\u25CC', name:'RCS COATING',        desc:'Incoming missiles lose your lock far more often.',                 apply:p=>{ p.mslEvade = clamp(p.mslEvade + 0.22, 0, 0.9); } },
   { id:'e3', x:6, y:4, req:['e2','p2'], fam:'ew', cost:430, sym:'\u21BB', name:'OVERCLOCK',    desc:'Special ability recharges 25% faster. (Reached via EW OR Propulsion.)',            apply:p=>{ p.special.max *= 0.75; } },
@@ -261,12 +215,12 @@ const TECH_TREE = [
   { id:'e5', x:6, y:6, req:'e4',  fam:'ew', cost:840, sym:'\u29BF', name:'TRACTOR FIELD',      desc:'Supply pickups are drawn toward you from range.',                  apply:p=>{ p.lootMagnet += 420; } },
   { id:'e6', x:6, y:7, req:'e5',  fam:'ew', cost:1120, sym:'\u2742', name:'GHOST PROTOCOL',    desc:'CAPSTONE \u2014 missiles rarely hold lock, special recharges another 20% faster, and the point-defense laser fires far more aggressively.', apply:p=>{ p.mslEvade = clamp(p.mslEvade + 0.3, 0, 0.95); p.special.max *= 0.8; p.pointDefense += 0.45; } },
 
-  // ===== TACTICAL group (3rd draftable trunk: Recon / Sustain / Warlord) =========
+  // TACTICAL (3rd draftable trunk)
   { id:'tbus', x:9, y:1, req:'core', fam:'sup', cost:140, sym:'⌘', name:'TACTICAL BUS',
     desc:'+10% turn rate and +8% score. Opens the Recon, Sustain and Warlord branches.',
     apply:p=>{ p.turnMul *= 1.10; p.scoreMul *= 1.08; } },
 
-  // ---- RECON (targeting / crit line, left of the TACTICAL trunk) ----
+  // RECON
   { id:'rc1', x:8, y:2, req:'tbus', fam:'sc', cost:160, sym:'◎', name:'SENSOR FUSION',
     desc:'Missiles lock 22% faster and +8% crit chance.', apply:p=>{ p.lockSpeedMul *= 0.78; p.critChance = Math.min(0.6, p.critChance + 0.08); } },
   { id:'rc2', x:8, y:3, req:'rc1', fam:'sc', cost:300, sym:'⌖', name:'TARGET MARKING',
@@ -276,7 +230,7 @@ const TECH_TREE = [
   { id:'rc4', x:8, y:5, req:'rc3', fam:'sc', cost:880, sym:'❂', name:'DEADEYE PROTOCOL',
     desc:'CAPSTONE — +15% crit chance, +15% cannon damage, and critical hits now DETONATE on impact.', apply:p=>{ p.critChance = Math.min(0.6, p.critChance + 0.15); p.gunDmgMul *= 1.15; p.critChain = true; } },
 
-  // ---- SUSTAIN (self-repair line, centre, under the TACTICAL trunk) ----
+  // SUSTAIN
   { id:'ss1', x:9, y:2, req:'tbus', fam:'def', cost:150, sym:'✚', name:'COMBAT MEDIC',
     desc:'Repair 5 HP every time you destroy something.', apply:p=>{ p.lifesteal += 5; } },
   { id:'ss2', x:9, y:3, req:'ss1', fam:'def', cost:290, sym:'⦿', name:'SIPHON CELLS',
@@ -286,7 +240,7 @@ const TECH_TREE = [
   { id:'ss4', x:9, y:5, req:'ss3', fam:'def', cost:900, sym:'❖', name:'PHOENIX CORE',
     desc:'CAPSTONE — +40 max HP, +8 repair per kill, and overhealing now banks as bonus OVERSHIELD.', apply:p=>{ p.maxHp += 40; p.hp = p.maxHp; p.lifesteal += 8; p.vampShield = Math.max(p.vampShield, 0.5); p.overshieldCap += 40; } },
 
-  // ---- WARLORD (tempo / momentum line, right of the TACTICAL trunk) ----
+  // WARLORD
   { id:'wl1', x:10, y:2, req:'tbus', fam:'tac', cost:170, sym:'♫', name:'BATTLE RHYTHM',
     desc:'Every point of COMBO adds +2% damage, up to +30%.', apply:p=>{ p.comboDmg = Math.max(p.comboDmg, 0.02); } },
   { id:'wl2', x:10, y:3, req:'wl1', fam:'tac', cost:300, sym:'↯', name:'ADRENAL SURGE',
@@ -296,19 +250,18 @@ const TECH_TREE = [
   { id:'wl4', x:10, y:5, req:'wl3', fam:'tac', cost:900, sym:'✪', name:'CONQUEROR',
     desc:'CAPSTONE — +25% score, +10% all weapon damage, and instantly destroy any non-boss dropped below 12% health.', apply:p=>{ p.scoreMul *= 1.25; p.gunDmgMul *= 1.10; p.missileDmgMul *= 1.10; p.execThresh = Math.max(p.execThresh, 0.12); } },
 
-  // ---- WAR ROOM (TACTICAL convergence — reachable from either new capstone) ----
+  // WAR ROOM
   { id:'warroom', x:9, y:6, req:['ss4','wl4'], fam:'core', cost:1300, sym:'✧', name:'WAR ROOM',
     desc:'FUSION — total battlefield command: +12% all weapon damage and special ability recharges 20% faster. (Sustain OR Warlord capstone.)', apply:p=>{ p.gunDmgMul *= 1.12; p.missileDmgMul *= 1.12; p.special.max *= 0.8; } },
 
-  // ===== COMMAND group ===========================================================
-  // ---- ECONOMY / ACE (score & research line, left of COMMAND) ----
+  // ECONOMY / ACE
   { id:'s1', x:8, y:2, req:'cmd', fam:'sc', tab:'armory', cost:150, sym:'\u2605', name:'ACE BONUS',          desc:'+25% score from everything.',                                      apply:p=>{ p.scoreMul *= 1.25; } },
   { id:'s2', x:8, y:3, req:'s1',  fam:'sc', tab:'armory', cost:300, sym:'\u25C9', name:'FIELD ANALYTICS',    desc:'+15% research points (RP) earned.',                                apply:p=>{ p.rpMul *= 1.15; } },
   { id:'s3', x:8, y:4, req:'s2',  fam:'sc', tab:'armory', cost:470, sym:'\u00A4', name:'BOUNTY CONTRACTS',   desc:'Every kill you land pays a flat +6 RP bounty, and restock all ammo now.', apply:p=>{ p.rpPerKill += 6; p.bullets = p.maxBullets; p.missiles = p.maxMissiles; p.flares = p.maxFlares; } },
   { id:'s4', x:8, y:5, req:'s3',  fam:'sc', tab:'armory', cost:640, sym:'\u2630', name:'WAR CHEST',          desc:'+25% score, and fully restock guns, missiles & flares.',           apply:p=>{ p.scoreMul *= 1.25; p.bullets = p.maxBullets; p.missiles = p.maxMissiles; p.flares = p.maxFlares; } },
   { id:'s5', x:8, y:6, req:'s4',  fam:'sc', tab:'armory', cost:980, sym:'\u2742', name:'ACE PEDIGREE',       desc:'CAPSTONE \u2014 +35% score, +20% RP, and another +6 RP bounty per kill.', apply:p=>{ p.scoreMul *= 1.35; p.rpMul *= 1.2; p.rpPerKill += 6; } },
 
-  // ---- TACTICS (lethality line, centre, under the COMMAND trunk) ----
+  // TACTICS
   { id:'t1', x:9, y:2, req:'cmd', fam:'tac', tab:'armory', cost:180, sym:'\u2316', name:'MARKSMAN',          desc:'+20% damage to any target still at full health \u2014 reward the alpha strike.', apply:p=>{ p.alphaMul = Math.max(p.alphaMul, 1.2); } },
   { id:'t2', x:9, y:3, req:'t1',  fam:'tac', tab:'armory', cost:320, sym:'\u21AF', name:'ADRENALINE',        desc:'The lower your HP, the harder you hit \u2014 up to +35% damage near death.', apply:p=>{ p.berserk = Math.max(p.berserk, 0.35); } },
   { id:'t3', x:9, y:4, req:'t2',  fam:'tac', tab:'armory', cost:500, sym:'\u25BC', name:'EXECUTIONER',       desc:'Instantly destroy any non-boss dropped below 12% health.',         apply:p=>{ p.execThresh = Math.max(p.execThresh, 0.12); } },
@@ -320,17 +273,16 @@ const TECH_TREE = [
     apply:p=>{ p.rpPerKill += 4; p.lifesteal += 3; } },
   { id:'t4', x:9, y:5, req:'t3',  fam:'tac', tab:'armory', cost:880, sym:'\u272A', name:'APEX PREDATOR',     desc:'CAPSTONE \u2014 +25% score, execute threshold rises to 18%, and once per wave you SURVIVE a lethal blow at 40% HP.', apply:p=>{ p.scoreMul *= 1.25; p.cheatDeath = true; p.execThresh = Math.max(p.execThresh, 0.18); } },
 
-  // ---- FLIGHT / ESCORTS (right of COMMAND) ----
+  // FLIGHT / ESCORTS
   { id:'w1', x:10, y:2, req:'cmd', fam:'wing', tab:'armory', cost:300, sym:'\u25B2', name:'WING COMMANDER',  desc:'Deploy a 2nd AI escort, then repair & up-armour the flight.', ok:()=>permWingmen() < 2, apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(60); } },
   { id:'w2', x:10, y:3, req:'w1',  fam:'wing', tab:'armory', cost:520, sym:'\u25B2', name:'SQUADRON',        desc:'Deploy a 3rd AI escort and heavily up-armour the flight.', ok:()=>permWingmen() < 3, apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(80); } },
   { id:'w3', x:10, y:4, req:'w2',  fam:'wing', tab:'armory', cost:820, sym:'\u2742', name:'FLEET COMMANDER', desc:'CAPSTONE \u2014 +25% score, escorts hit 60% harder, flight fully repaired.', apply:p=>{ p.scoreMul *= 1.25; wingDmgMul *= 1.6; buffFlight(40); } },
-  // ---- the points sink: repeatable, scaling cost ----
   { id:'reserve', x:10, y:5, req:'w3', fam:'wing', tab:'armory', cost:400, costStep:240, repeat:true, sym:'\u22EF', name:'RESERVE SQUADRON',
     desc:'REPEATABLE \u2014 scramble another escort (up to ' + MAX_WINGMEN + ' in the air) and up-armour the whole flight. Cost rises each time. A bottomless place to pour spare RP.',
     apply:()=>{ if (permWingmen() < MAX_WINGMEN) spawnWingman(false, pendingWingShape); buffFlight(55); } },
   { id:'gd', x:11, y:4, req:'w3', fam:'wing', tab:'armory', cost:760, sym:'⛨', name:'GUARDIAN ESCORTS', desc:'Your escorts run their OWN point-defense laser — swatting enemy missiles that stray near the flight.', apply:p=>{ p.escortPD = true; } },
 
-  // ===== ARMORY items (shown as grid in the Armory tab) ==========================
+  // ARMORY items (grid in the Armory tab)
   { id:'fa1', x:0, y:0, tab:'armory', req:null, fam:'sup', cost:300, sym:'⚙', name:'WEAPONS LOCKER',
     desc:'Armory vaults unsealed — +600 max cannon rounds and +20 max missiles, fully restocked now.',
     apply:p=>{ p.maxBullets += 600; p.bullets = p.maxBullets; p.maxMissiles += 20; p.missiles = p.maxMissiles; } },
@@ -344,7 +296,7 @@ const TECH_TREE = [
     desc:'Off-the-books logistics — +6 max flares, +10 max missiles, +400 max cannon rounds, everything restocked now.',
     apply:p=>{ p.maxFlares += 6; p.flares = p.maxFlares; p.maxMissiles += 10; p.missiles = p.maxMissiles; p.maxBullets += 400; p.bullets = p.maxBullets; } },
 
-  // ---- STRIKE branch (ground-war only) ----
+  // STRIKE (ground-war only)
   { id:'agm1', x:12, y:2, req:'core', fam:'strike', tab:'armory', ground:true, cost:260, sym:'▼', name:'AGM RAILS',
     desc:'Air-to-ground missile rails — +75% missile damage against ground targets.',
     apply:p=>{ p.agmMul = 1.75; } },
@@ -361,23 +313,16 @@ function buffFlight(extra) { for (let i = 0; i < wingmen.length; i++) { const w 
 const LOCK_TIME = 1.3;
 const CAM_NAMES = ['CHASE', 'CLOSE', 'COCKPIT'];
 
-// ---- camera shake globals (F1) ----
-// camShake: current shake magnitude; decays to 0 each frame via decayShake.
-// shakeCam(amt): sets camShake = max(current, amt) — strongest pending shake wins, never accumulates unboundedly.
-// decayShake(v, dt): PURE — returns max(0, v - dt * CAMSHAKE_RATE) (core.js; tests/camshake.test.js).
 let camShake = 0;
-function shakeCam(amt) { camShake = Math.max(camShake, amt); }
-// camera-shake core (CAMSHAKE_RATE, CAMSHAKE_K, decayShake) → core.js.
+function shakeCam(amt) { camShake = Math.max(camShake, amt); }   // strongest pending shake wins; never accumulates
 
 const keys = {};
 let mouseRight = false;
 const GAME_CODES = new Set(['KeyW','KeyS','KeyA','KeyD','KeyQ','KeyE','KeyG','KeyX','KeyF','KeyR','KeyB','KeyC','KeyV','KeyT','KeyY','Digit1','Digit2','Digit3','Space','ShiftLeft','ShiftRight','ControlLeft','ControlRight']);
 const down = (c) => !!keys[c];
-let HUDFONT = "'Share Tech Mono', monospace";   // skin-swappable (applySkin)
+let HUDFONT = "'Share Tech Mono', monospace";
 
-/* ---------------- THEMING: 5 color schemes × 5 visual languages ----------------
-   DOM side follows <html data-palette>/<html data-skin> (CSS). The canvas HUD reads
-   the JS `HUD` triplets + HUDFONT, so applyPalette/applySkin keep the canvas in sync. */
+// DOM follows <html data-palette/data-skin> (CSS); the canvas HUD reads the JS `HUD` triplets + HUDFONT.
 const PALETTES = {
   amber:    { primary:'255,185,56',  primaryBright:'255,211,107', danger:'255,59,59',   warn:'255,122,31',  ok:'77,255,160',  reward:'255,225,77',  velvec:'90,255,180',  ink:'207,230,214', dim:'111,145,128', rival:'255,90,42',  boss:'255,80,220' },
   cyan:     { primary:'25,240,212',  primaryBright:'11,213,255',  danger:'255,57,75',   warn:'255,140,43',  ok:'70,255,140',  reward:'255,225,77',  velvec:'0,255,170',   ink:'189,238,230', dim:'91,138,134',  rival:'255,90,42',  boss:'255,80,220' },
@@ -386,7 +331,7 @@ const PALETTES = {
   red:      { primary:'255,92,72',   primaryBright:'255,152,92',  danger:'255,40,40',   warn:'255,122,40',  ok:'255,172,62',  reward:'255,202,82',  velvec:'255,150,90',  ink:'240,182,162', dim:'152,96,82',   rival:'255,70,40',  boss:'255,80,160' },
 };
 const SKIN_HUDFONT = {
-  standard:   "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif",   // default: plain, no character
+  standard:   "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif",
   futuristic: "'Share Tech Mono', monospace",
   analog:     "Georgia, 'Times New Roman', serif",
   manual:     "'Courier New', Courier, monospace",
@@ -396,8 +341,8 @@ const SKIN_HUDFONT = {
 let activeSkin = 'standard';
 function applyPalette(id) {
   if (!PALETTES[id]) id = 'amber';
-  document.documentElement.dataset.palette = id;          // DOM (CSS variables) follows
-  if (typeof HUD !== 'undefined') { const p = PALETTES[id]; for (const k in p) HUD[k] = p[k]; }  // canvas follows
+  document.documentElement.dataset.palette = id;
+  const p = PALETTES[id]; for (const k in p) HUD[k] = p[k];
   store.set('skystrike_palette', id);
 }
 function applySkin(id) {
@@ -408,106 +353,69 @@ function applySkin(id) {
   store.set('skystrike_skin', id);
 }
 
-/* ---------------- AWACS support calls (F10) ---------------- */
-// Core (AWACS_COOLDOWNS, AWACS_USES_MAX, AWACS_JAM_TIME, pure awacsCall resolver) → core.js.
-// AWACS calls are now COOLDOWN-GATED (not RP-costed — balance pass 2026-06). awacsUses is the live
-// per-sector use counter (hard cap, reset per sector + per run); awacsLast is the per-key timestamp
-// (performance.now()/1000) of the last successful call, used for the cooldown gate (reset per sector).
-// combat.js awacsAction wraps awacsResolve reading {uses: awacsUses, last: awacsLast}.
-let awacsUses = { strike: 0, resupply: 0, jam: 0 };   // calls SPENT this sector (reset per sector + per run)
-let awacsLast = { strike: 0, resupply: 0, jam: 0 };   // sec-clock of last successful call per key (cooldown gate)
-// The ONE AWACS reset invariant — zero both maps. Called per sector (main.js nextWave), per run (ui-flow.js
-// startGame), per sortie (freshSortie), and per op-run entry (enterOperationRun). Was 4 hand-copied pairs.
+// AWACS calls are cooldown-gated: awacsUses = calls spent this sector; awacsLast = sec-clock of each key's last call.
+let awacsUses = { strike: 0, resupply: 0, jam: 0 };
+let awacsLast = { strike: 0, resupply: 0, jam: 0 };
 function resetAwacs() { awacsUses = { strike: 0, resupply: 0, jam: 0 }; awacsLast = { strike: 0, resupply: 0, jam: 0 }; }
 
-/* Touch controls state */
 let isTouchEnabled = false;
 let joyActive = false, joyTouchId = null, joyBaseCenter = {x:0, y:0}, touchInput = {x:0, y:0};
-let mouseFlight = false;                            // desktop mouse-pointer flight toggle (default off)
+let mouseFlight = false;
 let mouseInput = { x: 0, y: 0, active: false };     // normalized pointer offset from center, -1..1
-let mouseFiring = false;                             // left mouse button held over the play field → fire gun (combat.js)
+let mouseFiring = false;
 let touchBtns = { gun:false, msl:false, flr:false, spc:false, thr:false, brk:false };
-// unified flight-input seam (controls.js writes it each frame; combat.js consumes + adds keyboard)
-let flightInput = { pitch: 0, roll: 0 };           // normalized analog flight axes, -1..1
+let flightInput = { pitch: 0, roll: 0 };           // analog axes -1..1: controls.js writes, combat.js reads + adds keyboard
 
-// barrel-roll pure helpers (rollDetect, rollCooldownGate) → core.js.
-
-// Barrel-roll evasive maneuver constants
-const BARREL_ROLL_INVULN   = 0.4;   // seconds of i-frames granted
-const BARREL_ROLL_COOLDOWN = 6.0;   // seconds before another roll is allowed
-const BARREL_ROLL_DURATION = 0.65;  // seconds the 360° spin animation plays
-const BARREL_ROLL_THRESHOLD = 0.35; // seconds: max gap for double-tap recognition
-
-// Barrel-roll runtime state (reset each game start)
-let barrelRollCooldown   = 0;   // counts down from BARREL_ROLL_COOLDOWN; >0 = on cooldown
-let barrelRollAnim       = 0;   // counts down from BARREL_ROLL_DURATION; >0 = rolling
-let barrelRollRequest    = false; // set true by controls when double-tap detected; cleared by combat
-let barrelRollLastKeyTap = -999; // time (performance.now()/1000) of last keyboard Q or E press
-let stealthBlown = false;        // STEALTH: cover blown (fired/killed/meter-100%) → GO LOUD (ADR-0006): patrols aggro, escape to the waypoint alive
-let stealthExtraSpawns = 0;      // running count of go-loud reinforcements spawned this sortie (capped at STEALTH_SPAWN_CAP)
-// v1.4 STEALTH patrol tunables (ADR-0006 "go loud") — patrols sweep a vision cone + investigate on suspicion.
-// Centralized here so the feel is easy to retune. Cone half-angle/range, suspicion thresholds, timeouts.
-const STEALTH_CONE_HALF = 0.62;          // rad (~36°) half-angle of a patrol's forward scan cone
-const STEALTH_SUSPICION_RISE = 0.9;      // per-second suspicion gain while a patrol holds you in cone-LOS
-const STEALTH_SUSPICION_DECAY = 0.4;     // per-second suspicion bleed-off when not seen
-const STEALTH_SUSPICION_THRESHOLD = 1.0; // suspicion ≥ this → the nearest suspicious patrol peels off to investigate
-const STEALTH_INVESTIGATE_TIMEOUT = 4.0; // s a patrol hunts the last-seen point before giving up + returning to route
-const STEALTH_INVESTIGATE_SPEED_MUL = 1.5; // patrols move faster while actively investigating
-const STEALTH_SPAWN_CAP = 6;             // hard cap on total go-loud reinforcements (keeps a hot escape survivable)
-let barrelRollLastTouchTap = -999; // time of last joystick roll-direction flick release
-let barrelRollDir = 1;   // +1 right, -1 left; captured at roll initiation
-let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };  // live device-orientation tilt
+const BARREL_ROLL_INVULN   = 0.4;   // s of i-frames
+const BARREL_ROLL_COOLDOWN = 6.0;   // s
+const BARREL_ROLL_DURATION = 0.65;  // s
+const BARREL_ROLL_THRESHOLD = 0.35; // s: max gap for double-tap recognition
+let barrelRollCooldown   = 0;
+let barrelRollAnim       = 0;
+let barrelRollRequest    = false; // set by controls on double-tap; cleared by combat
+let barrelRollLastKeyTap = -999; // performance.now()/1000 of last Q/E press
+let stealthBlown = false;        // cover blown → GO LOUD (ADR-0006)
+let stealthExtraSpawns = 0;      // go-loud reinforcements spawned this sortie
+const STEALTH_CONE_HALF = 0.62;          // rad (~36°) half-angle of a patrol's scan cone
+const STEALTH_SUSPICION_RISE = 0.9;      // per s while in cone-LOS
+const STEALTH_SUSPICION_DECAY = 0.4;     // per s when not seen
+const STEALTH_SUSPICION_THRESHOLD = 1.0;
+const STEALTH_INVESTIGATE_TIMEOUT = 4.0; // s
+const STEALTH_INVESTIGATE_SPEED_MUL = 1.5;
+const STEALTH_SPAWN_CAP = 6;
+let barrelRollLastTouchTap = -999;
+let barrelRollDir = 1;   // +1 right, -1 left
+let motionInput = { beta: 0, gamma: 0, ready: false, attached: false };
 let motionOffset = { beta: 0, gamma: 0 };           // captured neutral attitude (recenter)
 
-// flight control scheme — how combat.js INTERPRETS the flightInput seam (orthogonal to touch/motion source).
-//   'auto'    (default) = "fly toward the stick": gentle bank-hold (capped at autoMaxBank) + a WORLD-axis yaw
-//                         (combat.js, ∝ bank) that turns the heading. Pitch stays fully manual so DIAGONALS work
-//                         (you can dive AND turn at once). Turn is decoupled from pitch on purpose — see combat.js.
-//   'pointer'           = point-to-steer: roll intent -> target BANK ANGLE held; release auto-levels to wings-level.
-//   'rate'              = classic: roll intent -> roll RATE (hold stick = keep rolling). Persisted via saveSettings (owner D).
+// How combat.js INTERPRETS flightInput: 'auto' = bank-hold + world-axis yaw with pitch left manual (so diagonals
+// work); 'pointer' = roll → held bank angle, auto-levels on release; 'rate' = roll → roll rate.
 let controlScheme = 'auto';
-let devUnlockAll = false;   // dev toggle: bypass SP gate on all jets/skins
-let devUnlockLevels = false; // dev toggle: unlock every Operations-map level (v1.3)
-let devUnlocked = false;     // dev panel password gate cleared (persisted once 'timbles' entered, v1.3)
-// v1.3 per-level star scoring: run accumulates across an op's levels (op-end SP stays cumulative), so we
-// snapshot the run counters + a level-start clock at each level launch and score stars on the DELTA.
+let devUnlockAll = false;
+let devUnlockLevels = false;
+let devUnlocked = false;
+// run accumulates across an op's levels, so stars are scored on the delta from this per-level snapshot
 let campaignLevelRunBase = null;
 let campaignLevelT0 = 0;
-// steering core (STEER tunables + pure steerCommand) → core.js. combat.js reads STEER + calls steerCommand.
 
-// graphics quality (F11 mobile perf): 'auto' picks a render tier by a cheap device heuristic; 'low'/'high'
-// force it. VISUAL-ONLY — never changes gameplay (it gates shadow-map resolution, shadow-camera far, and a
-// draw-distance .visible cull on distant enemy meshes; enemies are NEVER despawned, so locks/markers survive).
-// Persisted via the settings seam (saveSettings/loadSettings in ui-settings.js). engine.js owns applyGfxQuality().
+// VISUAL-ONLY render tier: gates shadow quality and a .visible cull of distant enemy meshes (never despawned).
 let gfxQuality = 'auto';
-let unitSystem = 'imperial';   // HUD units: 'imperial' (mph + ft, default) | 'metric' (kph + m). Persisted; drives the speedometer/altimeter readout + labels.
-// gfx-quality core (GFX_TIERS + pure resolveQuality) → core.js. refreshGfxTier (below) is the impure call site.
-// live resolved tier ('low'|'high'); recomputed from gfxQuality whenever the setting changes (engine.js applyGfxQuality
-// reads it). Default 'high' so desktop is untouched until refreshGfxTier() runs at boot/settings-load.
+let unitSystem = 'imperial';   // 'imperial' (mph + ft) | 'metric' (kph + m)
 let gfxTier = 'high';
-// low-tier draw-distance cull radii (world units). Beyond GFX_CULL_FAR an enemy mesh is hidden (.visible=false, NOT
-// despawned — AI/markers/locks keep running); 'inactive' (non-boss, non-rival) jets hide sooner at GFX_CULL_JET as a
-// cheap far-LOD. High tier never hides. These sit well past the radar reach so hidden foes are off-screen specks.
-const GFX_CULL_FAR = 9000, GFX_CULL_JET = 6500;
-// recompute gfxTier from the current setting + a cheap device read. isTouch heuristic mirrors controls.js touch detection;
-// dpr from devicePixelRatio. Pure resolveQuality does the decision; this is the impure call site (could fold an fps
-// sample later). Returns the resolved tier.
+const GFX_CULL_FAR = 9000, GFX_CULL_JET = 6500;   // low-tier cull radii (world units), well past radar reach
 function refreshGfxTier() {
-  const isTouch = (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) ||
-                  (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) || ('ontouchstart' in (typeof window !== 'undefined' ? window : {}));
-  const dpr = (typeof devicePixelRatio === 'number' && devicePixelRatio > 0) ? devicePixelRatio : 1;
-  gfxTier = resolveQuality(gfxQuality, dpr, !!isTouch);
+  const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+  gfxTier = resolveQuality(gfxQuality, devicePixelRatio || 1, isTouch);
   return gfxTier;
 }
 
-/* --- shared THREE scratch (multi-file) --- used across combat/main/entities/engine/hud/ui-hud (avoid per-frame allocation).
-   Single-file scratch was evicted to its owning file: eul + aimT1..3 → combat.js, pp1..3 → ui-hud.js. */
+// Shared multi-file THREE scratch — see CLAUDE.md "Scratch vectors".
 const t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), t3 = new THREE.Vector3(),
       t4 = new THREE.Vector3(), t5 = new THREE.Vector3(), tA = new THREE.Vector3();
-const tLead = new THREE.Vector3();   // interceptPoint `out` for hot per-frame callers (result consumed immediately)
+const tLead = new THREE.Vector3();   // interceptPoint `out` for hot callers (consumed immediately)
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
 const ZERO = new THREE.Vector3(0, 0, 0), UPV = new THREE.Vector3(0, 1, 0), ZAX = new THREE.Vector3(0, 0, 1);
-const m4 = new THREE.Matrix4();   // globals-only: consumed by dirToQuat below
+const m4 = new THREE.Matrix4();
 
 function fwdOf(o, out) { return (out || new THREE.Vector3()).set(0, 0, -1).applyQuaternion(o.quaternion); }
 function rightOf(o, out) { return (out || new THREE.Vector3()).set(1, 0, 0).applyQuaternion(o.quaternion); }

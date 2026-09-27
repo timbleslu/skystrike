@@ -1,8 +1,7 @@
-/* SKYSTRIKE — combat.js: bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials, player update. Loads after missions.js, before hud.js. */
+/* combat.js — player flight & weapons, bullets, missiles, flares, decoys, loot, particles, damage/kill resolution, targeting, specials. */
 
-/* file-local THREE scratch (moved from globals.js — used only here) */
 const eul = new THREE.Euler();
-const aimT1 = new THREE.Vector3(), aimT2 = new THREE.Vector3(), aimT3 = new THREE.Vector3();  // aim-assist scratch (updatePlayer)
+const aimT1 = new THREE.Vector3(), aimT2 = new THREE.Vector3(), aimT3 = new THREE.Vector3();   // aim-assist scratch
 
 /* ---------------- bullets ---------------- */
 function getBullet() {
@@ -13,45 +12,42 @@ function getBullet() {
 }
 function recycleBullet(b) { detachFromScene(b.mesh); BPOOL.push(b); }
 
-// ADRENALINE — bonus damage that scales with how much HP you've lost (1.0 at full HP)
+// ADRENALINE: 1.0 at full HP, grows as HP is lost
 function berserkMul() { return player.berserk ? 1 + player.berserk * (1 - clamp(player.hp / player.maxHp, 0, 1)) : 1; }
-// KILL FRENZY — current intensity 0..1 from the decaying frenzy timer
 function frenzyAmt() { return player.frenzyMax ? clamp(player.frenzy / player.frenzyMax, 0, 1) : 0; }
-const GUN_OFFS = [-2.6, 2.6], GUN_OFFS_OD = [-3.6, -1.2, 1.2, 3.6];   // barrel lateral offsets (overdrive widens to a 4-round burst)
+const GUN_OFFS = [-2.6, 2.6], GUN_OFFS_OD = [-3.6, -1.2, 1.2, 3.6];   // barrel lateral offsets; overdrive fires a 4-round burst
 function fireGun() {
-  if (player.noCannon) { player.gunCd = 0.3; return; }   // J-20 carries no internal gun
+  if (player.noCannon) { player.gunCd = 0.3; return; }
   if (player.gunCd > 0) return;
   if (player.bullets <= 0) { player.gunCd = 0.25; audio.ui(); return; }
   const od = player.overdrive > 0;
   const fz = frenzyAmt();
-  player.gunCd = (od ? 0.05 : 0.07) * (player.fireRateMul || 1) * (1 - 0.4 * fz);   // FRENZY spins the cannon up
+  player.gunCd = (od ? 0.05 : 0.07) * player.fireRateMul * (1 - 0.4 * fz);
   const fwd = fwdOf(player.group, t1), rgt = rightOf(player.group, t2);
   const dmg = player.stats.gunDmg * player.gunDmgMul * (od ? 1.5 : 1) * berserkMul() * (1 + 0.3 * fz);
   const offs = od ? GUN_OFFS_OD : GUN_OFFS;
   for (const off of offs) {
     const b = getBullet(); b.enemy = false; b.dmg = dmg; b.life = 2.0; b.mesh.material = ASSET.bulletMat; b.mesh.scale.setScalar(1);
-    b.pierce = player.pierce || 0; b.passed = null;
+    b.pierce = player.pierce; b.passed = null;
     b.mesh.position.copy(player.group.position).addScaledVector(rgt, off).addScaledVector(fwd, 12);
-    b.vel.copy(fwd).multiplyScalar(1400 * (player.bulletSpeedMul || 1)).addScaledVector(player.vel, 0.9);
-    if (od) b.vel.addScaledVector(rgt, off * 1.4);          // slight fan on the spread
+    b.vel.copy(fwd).multiplyScalar(1400 * player.bulletSpeedMul).addScaledVector(player.vel, 0.9);
+    if (od) b.vel.addScaledVector(rgt, off * 1.4);
     bullets.push(b);
   }
-  const used = offs.length;
-  player.bullets = Math.max(0, player.bullets - used);
+  player.bullets = Math.max(0, player.bullets - offs.length);
   const mz = player.group.userData.muzzle;
   if (mz) { mz.visible = true; mz.scale.setScalar(rand(11, 18)); mz.material.rotation = rand(0, TWO_PI); player.muzzleT = 0.045; }
   player.shake = Math.max(player.shake, 0.12);
-  player.firingT = 0.12;   // "weapon fired this frame" tell for the stealth detection meter (missions.js)
+  player.firingT = 0.12;   // stealth detection tell (missions.js)
   audio.gun();
   haptic(8);
-  run.shots += used;
+  run.shots += offs.length;
 }
 
 function updateBullets(dt, ts) {
-  ts = ts || 1;
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i]; const sdt = b.enemy ? dt * ts : dt;
-    if (!b.oriented) { b.oriented = true; dirToQuat(t3.copy(b.vel).normalize(), b.mesh.quaternion); }   // align tracer with flight path
+    if (!b.oriented) { b.oriented = true; dirToQuat(t3.copy(b.vel).normalize(), b.mesh.quaternion); }
     b.life -= sdt; b.mesh.position.addScaledVector(b.vel, sdt);
     let dead = b.life <= 0;
     if (!dead) {
@@ -64,12 +60,11 @@ function updateBullets(dt, ts) {
           if (b.passed && b.passed.indexOf(e) >= 0) continue;   // AP round already punched through this one
           const r = e.type === 'boss' ? 72 : e.type === 'ground' ? 17 : e.type === 'drone' ? 16 : 22;
           if (b.mesh.position.distanceToSquared(e.group.position) < r * r) {
-            if (!b.ai) e._lastPlayerWp = 'gun';
             let bDmg = b.dmg;
-            if (!b.ai && e.type === 'ground' && player.rktMul) bDmg *= player.rktMul;   // ROCKET PODS
+            if (!b.ai) { e._lastPlayerWp = 'gun'; if (e.type === 'ground' && player.rktMul) bDmg *= player.rktMul; }
             damageEnemy(e, bDmg, b.mesh.position, !b.ai, b.byCCA);
             if (!b.ai) { spawnHitMarker(); run.hits++; if (lastCrit && player.critChain) critBlast(b.mesh.position); }
-            if (!b.ai && player.burnDps && e.alive) { e.burnT = player.burnTime; e.burnDps = player.burnDps; }   // INCENDIARY ROUNDS: light it up
+            if (!b.ai && player.burnDps && e.alive) { e.burnT = player.burnTime; e.burnDps = player.burnDps; }
             if (!b.ai && b.pierce > 0) { b.pierce--; (b.passed || (b.passed = [])).push(e); }
             else dead = true;
             break;
@@ -88,78 +83,69 @@ function fireMissile() {
   if (player.missiles <= 0) { audio.ui(); return; }
   let tgt = (player.lockedTarget && player.lockedTarget.alive && player.lockProgress >= 1) ? player.lockedTarget : null;
   let ambush = false;
-  if (player.stealthField > 0) {
-    // cloaked fire-and-forget: auto-home the nearest enemy in front and ambush-kill it
+  if (player.stealthField > 0) {   // cloaked fire-and-forget: auto-home the nearest enemy in front for an ambush kill
     const near = nearestEnemyInFront(0.72);
     if (near) { tgt = near; ambush = true; }
   }
   const dm = player.missileDmgMul * (player.overdrive > 0 ? 1.4 : 1) * berserkMul() * (1 + 0.3 * frenzyAmt());
   player.missileCd = 0.55;
-  player.firingT = 0.12;   // missile launch also trips the stealth detection meter (missions.js)
-  const salvo = 1 + (player.mslSwarm || 0);   // SWARM RACK looses extra birds — bonus birds are free, only 1 leaves the rack
+  player.firingT = 0.12;
+  const salvo = 1 + player.mslSwarm;   // SWARM RACK birds are free: only one leaves the rack
   const baseDir = fwdOf(player.group, t1).clone();
   for (let s = 0; s < salvo; s++) {
     const dir = baseDir.clone();
     if (salvo > 1) dir.applyAxisAngle(UPV, (s - (salvo - 1) / 2) * 0.16).normalize();
     const m = spawnMissile(player.group.position, dir, tgt, false, dm);
-    if (m) {
-      if (ambush) { m.ambush = true; m.hardHome = true; }
-      if ((player.mslHard || salvo > 1) && tgt) m.hardHome = true;   // MULTI-TRACK capstone / swarm guidance
-      if (player.splashRadius) { m.splash = player.splashRadius; m.splashDmg = player.splashDmg; }
-    }
+    if (ambush) { m.ambush = true; m.hardHome = true; }
+    if ((player.mslHard || salvo > 1) && tgt) m.hardHome = true;
+    if (player.splashRadius) { m.splash = player.splashRadius; m.splashDmg = player.splashDmg; }
   }
   player.missiles -= 1; run.missiles += salvo; run.pMissiles += salvo;
   audio.missile();
   haptic(25);
 }
 function spawnMissile(pos, dir, target, enemy, dmgMul) {
-  // shared-asset airframe with its small rear motor flame baked in (see buildMissileMesh)
   const mesh = buildMissileMesh(enemy);
   mesh.position.copy(pos).addScaledVector(dir, 11);
   scene.add(mesh);
-  const smokeColor = enemy ? 0xd9d2cc : 0xdfe2e6;   // thin warm-grey (foe) / cool-grey (yours) contrail — no neon
   const obj = {
     mesh, exhaust: mesh.userData.exhaust,
     vel: dir.clone().multiplyScalar(enemy ? 500 : 600), speed: enemy ? 500 : 600,
-    maxSpeed: enemy ? 880 : 1050, target, enemy, life: 7, dmg: (enemy ? 16 : 34) * (dmgMul || 1),
-    armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: smokeColor, hardHome: false, ambush: false,
+    maxSpeed: enemy ? 880 : 1050, target, enemy, life: 7, dmg: (enemy ? 16 : 34) * dmgMul,
+    armed: 0.22, decoy: null, decoyed: false, smokeT: 0, trailColor: enemy ? 0xd9d2cc : 0xdfe2e6, hardHome: false, ambush: false,
   };
   missiles.push(obj);
   return obj;
 }
 function updateMissiles(dt, ts) {
-  ts = ts || 1;
   for (let i = missiles.length - 1; i >= 0; i--) {
     const m = missiles[i];
-    const sdt = m.enemy ? dt * ts : dt;        // enemy ordnance slows in bullet-time; yours doesn't
+    const sdt = m.enemy ? dt * ts : dt;        // bullet-time slows enemy ordnance, not yours
     m.life -= sdt; m.armed -= sdt;
     let tgtPos = null;
     if (m.enemy) {
-      const ev = player.mslEvade || 0;
-      // SPECTRA jamming blinds every hostile missile outright
+      const ev = player.mslEvade;
       if (player.jammer > 0) { m.decoyed = true; if (m.maxSpeed > 600) m.maxSpeed = 600; }
-      // holographic decoys (Tejas) soak missiles like irresistible bait
       if (!m.decoyed && !m.holo && decoys.length) {
         for (let k = 0; k < decoys.length; k++) { const d = decoys[k]; if (d.life > 0 && m.mesh.position.distanceToSquared(d.mesh.position) < 250000 && Math.random() < 0.9) { m.holo = d; m.decoyed = true; break; } }
       }
-      // flares: high, stealth- & SPECTRA-boosted spoof chance over a generous radius
       if (!m.decoyed && !m.decoy) {
         const pr = clamp(0.82 + ev * 0.4 + (player.flarePro ? 0.12 : 0), 0, 0.99);
         for (let k = 0; k < flares.length; k++) { const f = flares[k]; if (f.owner !== 'enemy' && m.mesh.position.distanceToSquared(f.mesh.position) < 144400 && Math.random() < pr) { m.decoy = f; m.decoyed = true; break; } }
       }
       if (m.holo && m.holo.life > 0) tgtPos = m.holo.mesh.position;
       else if (m.decoy && m.decoy.life > 0) tgtPos = m.decoy.mesh.position;
-      else if (m.decoyed) tgtPos = null;        // spoofed/jammed → fly ballistic, never reacquire
+      else if (m.decoyed) tgtPos = null;        // spoofed/jammed: fly ballistic, never reacquire
       else if (!player.stealth) tgtPos = player.group.position;
     } else {
-      // === F4 defensive-ai: enemy flares spoof PLAYER missiles (mirror of the player-flare spoof above) ===
+      // enemy flares spoof player missiles
       if (!m.decoy) { for (let k = 0; k < flares.length; k++) { const f = flares[k]; if (f.owner === 'enemy' && m.mesh.position.distanceToSquared(f.mesh.position) < 67600 && Math.random() < EVADE.flareSpoofChance) { m.decoy = f; break; } } }
       if (m.decoy && m.decoy.life > 0) tgtPos = m.decoy.mesh.position;
       else if (m.target && m.target.alive && !m.target.isInCloud) tgtPos = m.target.group.position;
     }
     const cur = t2.copy(m.vel).normalize();
     if (tgtPos) {
-      const rate = m.enemy ? 2.6 * (1 - 0.5 * (player.mslEvade || 0)) : (m.hardHome ? 5.5 : 3.4);
+      const rate = m.enemy ? 2.6 * (1 - 0.5 * player.mslEvade) : (m.hardHome ? 5.5 : 3.4);
       const des = t1.copy(tgtPos).sub(m.mesh.position).normalize();
       cur.lerp(des, clamp(rate * sdt, 0, 1)).normalize();
     }
@@ -168,17 +154,17 @@ function updateMissiles(dt, ts) {
     m.mesh.position.addScaledVector(m.vel, sdt);
     dirToQuat(cur, m.mesh.quaternion);
 
-    if (m.exhaust) m.exhaust.scale.setScalar(5.5 + 1.6 * (m.speed / m.maxSpeed) + rand(-0.5, 0.5));   // small rear flame, gentle flicker
+    if (m.exhaust) m.exhaust.scale.setScalar(5.5 + 1.6 * (m.speed / m.maxSpeed) + rand(-0.5, 0.5));
     m.smokeT -= sdt; if (m.smokeT <= 0) { spawnMissileTrail(m.mesh.position, m.trailColor); m.smokeT = 0.02; }
 
     let hit = false;
     if (m.enemy) {
-      // POINT-DEFENSE LASER — a chance to swat an incoming missile out of the air before it connects
+      // POINT-DEFENSE LASER
       if (player.pointDefense && m.armed <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 810000 && Math.random() < player.pointDefense * sdt * 3.2) {
         firePdBeam(player.group.position, m.mesh.position, 0x9ff0ff);
         explode(m.mesh.position, false); audio.blip(1500, 0.05, 'square', 0.07, 900); hit = true;
       }
-      // GUARDIAN ESCORTS — your wingmen run their own point-defense over the flight
+      // GUARDIAN ESCORTS: wingmen run their own point-defense
       if (!hit && player.escortPD && m.armed <= 0) {
         for (let wi = 0; wi < wingmen.length; wi++) {
           const w = wingmen[wi]; if (!w.alive) continue;
@@ -190,7 +176,7 @@ function updateMissiles(dt, ts) {
       }
       if (!hit && m.armed <= 0 && player.invuln <= 0 && m.mesh.position.distanceToSquared(player.group.position) < 3600) {
         let mDmg = m.dmg;
-        if (m.fromGround && player.bellyArmor) mDmg *= player.bellyArmor;   // BELLY ARMOR
+        if (m.fromGround && player.bellyArmor) mDmg *= player.bellyArmor;
         shakeCam(0.5); damagePlayer(mDmg, m.mesh.position); explode(m.mesh.position, true); hit = true;
       }
     } else {
@@ -203,13 +189,13 @@ function updateMissiles(dt, ts) {
           else if (e.type === 'boss' || e.elite || e.type === 'bomber') { damageEnemy(e, m.dmg * 1.6, m.mesh.position, !m.ai, m.byCCA); }
           else if (e.type === 'ground') {
             let gDmg = m.dmg * 1.6;
-            if (!m.ai && player.agmMul) gDmg *= player.agmMul;   // AGM RAILS
+            if (!m.ai && player.agmMul) gDmg *= player.agmMul;
             damageEnemy(e, gDmg, m.mesh.position, !m.ai, m.byCCA);
           }
-          else { if (!m.ai) { player.combo++; player.comboTimer = 2.2; player.score += Math.round(60 * (player.scoreMul || 1)); } killEnemy(e, !m.ai, m.byCCA); }
+          else { if (!m.ai) { player.combo++; player.comboTimer = 2.2; player.score += Math.round(60 * player.scoreMul); } killEnemy(e, !m.ai, m.byCCA); }
           if (!m.ai) spawnHitMarker();
           explode(m.mesh.position, true);
-          if (!m.ai && m.splash) missileSplash(m.mesh.position, m.splashDmg, m.splash, e);   // THERMOBARIC blast
+          if (!m.ai && m.splash) missileSplash(m.mesh.position, m.splashDmg, m.splash, e);
           hit = true; break;
         }
       }
@@ -228,7 +214,7 @@ function deployFlares() {
   player.flareCd = 0.45; player.flares--;
   run.pFlares++;
   const back = fwdOf(player.group, t1).multiplyScalar(-1), up = upOf(player.group, t2);
-  const count = 3 + (player.flarePro ? 2 : 0);   // SPECTRA airframes throw a denser cloud
+  const count = 3 + (player.flarePro ? 2 : 0);
   const fresh = [];
   for (let i = 0; i < count; i++) {
     const m = new THREE.Mesh(ASSET.flareGeo, ASSET.flareMat); scene.add(m);
@@ -237,8 +223,8 @@ function deployFlares() {
     const f = { mesh: m, vel: v, life: player.flarePro ? 4.0 : 3.2, owner: 'player' };
     flares.push(f); fresh.push(f);
   }
-  // actively seduce any missile currently tracking the player so popping flares feels decisive
-  const grab = clamp(0.85 + (player.mslEvade || 0) * 0.3 + (player.flarePro ? 0.1 : 0), 0, 0.99);
+  // actively seduce missiles already tracking the player so popping flares feels decisive
+  const grab = clamp(0.85 + player.mslEvade * 0.3 + (player.flarePro ? 0.1 : 0), 0, 0.99);
   for (let i = 0; i < missiles.length; i++) {
     const m = missiles[i];
     if (!m.enemy || m.decoyed) continue;
@@ -252,24 +238,20 @@ function updateFlares(dt) {
   for (let i = flares.length - 1; i >= 0; i--) {
     const f = flares[i]; f.life -= dt; f.vel.y -= 120 * dt; f.vel.multiplyScalar(1 - 0.5 * dt);
     f.mesh.position.addScaledVector(f.vel, dt);
-    f.smokeT = (f.smokeT || 0) - dt;   // time-based so smoke density is frame-rate independent
+    f.smokeT = (f.smokeT || 0) - dt;
     if (f.smokeT <= 0) { spawnSmoke(f.mesh.position, 0xffcc66, 0.45); f.smokeT = 0.028; }
     if (f.life <= 0) {
-      if (f.owner === 'player' && player.flakFlares) missileSplash(f.mesh.position, player.flakFlares, 260, null);   // FLAK BLOOM — flares burn out as HE bursts
+      if (f.owner === 'player' && player.flakFlares) missileSplash(f.mesh.position, player.flakFlares, 260, null);   // FLAK BLOOM
       detachFromScene(f.mesh); flares.splice(i, 1);
     }
   }
 }
 
 /* ---------------- holographic decoys (Tejas) ---------------- */
-function buildDecoy() {
-  const g = buildJet(0x39e6ff, 0x9af6ff, SHAPES[player.jet.shape]);
-  holoTint(g);   // render layer owns the holographic material mutation
-  return g;
-}
 function spawnDecoys(n) {
   for (let i = 0; i < n; i++) {
-    const g = buildDecoy();
+    const g = buildJet(0x39e6ff, 0x9af6ff, SHAPES[player.jet.shape]);
+    holoTint(g);
     const ang = (i / n) * TWO_PI + rand(-0.4, 0.4);
     g.position.copy(player.group.position).add(new THREE.Vector3(Math.cos(ang) * rand(45, 95), rand(-25, 25), Math.sin(ang) * rand(45, 95)));
     g.quaternion.copy(player.group.quaternion);
@@ -297,7 +279,6 @@ function updateDecoys(dt) {
 let crateTimer = 9;
 const MAX_CRATES = 3;
 
-/* small pickup dropped when an enemy dies */
 function spawnLoot(pos) {
   const m = new THREE.Mesh(ASSET.lootGeo, ASSET.lootMat);
   m.position.copy(pos); scene.add(m);
@@ -305,20 +286,16 @@ function spawnLoot(pos) {
     give: { bullets: 120, missiles: 4, flares: 4, hp: 14 } });
 }
 
-/* big free-floating crate the player flies into to rearm */
 function spawnCrate(pos) {
   const grp = buildCrate(); grp.position.copy(pos); scene.add(grp);
   loots.push({ mesh: grp, kind: 'crate', life: 34, t: rand(0, TWO_PI), radius: 95,
     give: { bullets: 260, missiles: 6, flares: 6, hp: 18 } });
 }
 
-/* periodically drop crates near the player at a reachable altitude */
 function maybeSpawnCrate(dt) {
   crateTimer -= dt;
   if (crateTimer > 0) return;
-  // Crate cadence scales UP over the run (balance pass 2026-06): early waves get frequent restocks
-  // (~11-17s) but the gap stretches toward ~18-28s by ~wave 14, so late-game resource pressure returns
-  // (constant fast resupply was erasing the loss-aversion tension). Linear ramp, clamped both ends.
+  // gap stretches from ~11-17s to ~18-28s by wave 14 so late-game resource pressure returns
   const lateF = clamp((wave - 4) / 10, 0, 1);
   crateTimer = rand(11 + 7 * lateF, 17 + 11 * lateF);
   let count = 0; for (let i = 0; i < loots.length; i++) if (loots[i].kind === 'crate') count++;
@@ -331,7 +308,7 @@ function maybeSpawnCrate(dt) {
 }
 
 function collectLoot(l) {
-  const give = l.give || {};
+  const give = l.give;
   if (give.bullets)  player.bullets  = Math.min(player.maxBullets,  player.bullets  + give.bullets);
   if (give.missiles) player.missiles = Math.min(player.maxMissiles, player.missiles + give.missiles);
   if (give.flares)   player.flares   = Math.min(player.maxFlares,   player.flares   + give.flares);
@@ -355,7 +332,7 @@ function updateLoot(dt) {
       l.mesh.rotation.y += dt * 2; l.mesh.rotation.x += dt * 1.3;
       l.mesh.position.y += Math.sin(now * 0.003 + l.t) * 6 * dt;
     }
-    // TRACTOR FIELD upgrade: draw small pickups toward the player
+    // TRACTOR FIELD: draw small pickups toward the player
     if (player.lootMagnet && l.kind === 'drop') {
       const dx = player.group.position.x - l.mesh.position.x;
       const dy = player.group.position.y - l.mesh.position.y;
@@ -368,8 +345,7 @@ function updateLoot(dt) {
         l.mesh.position.z += dz / dd * pull;
       }
     }
-    const rr = l.radius || 70;
-    if (l.mesh.position.distanceToSquared(player.group.position) < rr * rr) {
+    if (l.mesh.position.distanceToSquared(player.group.position) < l.radius * l.radius) {
       collectLoot(l); detachFromScene(l.mesh); loots.splice(i, 1); continue;
     }
     if (l.life <= 0) { detachFromScene(l.mesh); loots.splice(i, 1); }
@@ -377,18 +353,18 @@ function updateLoot(dt) {
 }
 
 /* ---------------- particles ---------------- */
-const _xpV = new THREE.Vector3();   // explode()-only scratch — callers may pass the shared t1 as `pos` (flakBurst)
+const _xpV = new THREE.Vector3();   // explode()-only scratch: callers may pass the shared t1 as `pos` (flakBurst)
 function explode(pos, big) {
   audio.explode(big);
   // white-hot core flash
   const f = particleSprite(glowTex(), true, false, 0xfff2cc, 1);
   f.position.copy(pos); f.scale.setScalar(big ? 110 : 55); scene.add(f);
   particles.push({ mesh: f, life: 0.22, max: 0.22, type: 'flash', grow: big ? 320 : 180 });
-  // additive fireball bloom — sells the blast at any distance
+  // additive fireball bloom
   const glow = particleSprite(glowTex(), true, false, 0xff8a30, 0.5);
   glow.position.copy(pos); glow.scale.setScalar(big ? 190 : 100); scene.add(glow);
   particles.push({ mesh: glow, life: 0.5, max: 0.5, type: 'flash', grow: big ? 110 : 60, op: 0.5 });
-  // churning fireball: textured flame sprites tumbling outward
+  // churning fireball
   const nf = big ? 7 : 4;
   for (let i = 0; i < nf; i++) {
     const fb = particleSprite(fireTex(), true, false, 0xffffff, 0.95, rand(0, TWO_PI));
@@ -407,7 +383,6 @@ function explode(pos, big) {
     particles.push({ mesh: s, vel: v, life: rand(0.5, 1.1), max: 1.1, type: 'spark' });
   }
 
-  // Physical debris chunks, trailing embers while hot
   const numDebris = !rich ? 0 : big ? randInt(7, 14) : randInt(3, 7);
   for (let i = 0; i < numDebris; i++) {
     const m = new THREE.Mesh(ASSET.fragGeo, ASSET.fragMat);
@@ -430,47 +405,45 @@ function explode(pos, big) {
       particles.push({ mesh: d, vel: new THREE.Vector3(Math.cos(a) * 28, rand(6, 16), Math.sin(a) * 28), life: rand(1.2, 2.0), max: 2.0, type: 'smokeS', grow: 30, rot: rand(-0.8, 0.8) });
     }
   }
-  if (big) spawnShockwave(pos, 15, 0.5);   // blast front: a crisp ring around the fireball
+  if (big) spawnShockwave(pos, 15, 0.5);
 }
 function spawnSmoke(pos, color, scl) {
   if (particles.length > 620) return;
-  const m = particleSprite(cloudPuffTex(), false, true, color || 0x888888, 0.55, rand(0, TWO_PI));
+  const m = particleSprite(cloudPuffTex(), false, true, color, 0.55, rand(0, TWO_PI));
   m.position.copy(pos).add(t1.set(rand(-4, 4), rand(-4, 4), rand(-4, 4)));
-  m.scale.setScalar((scl || 1) * rand(16, 26)); scene.add(m);
+  m.scale.setScalar(scl * rand(16, 26)); scene.add(m);
   particles.push({ mesh: m, vel: new THREE.Vector3(rand(-8, 8), rand(8, 22), rand(-8, 8)), life: rand(1.0, 1.9), max: 1.9, type: 'smokeS', grow: 26, rot: rand(-1.2, 1.2) });
 }
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i]; p.life -= dt; const t = clamp(p.life / p.max, 0, 1);
     if (p.vel) p.mesh.position.addScaledVector(p.vel, dt);
-    
     if (p.type === 'flash') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * (p.op || 0.9); }
     else if (p.type === 'spark') { p.vel.multiplyScalar(1 - 2 * dt); p.mesh.material.opacity = t; }
     else if (p.type === 'ring') { const k = 1 + (1 - t) * (p.ringK || 46); p.mesh.scale.setScalar(k); p.mesh.material.opacity = t * t * (p.ringOp || 0.85); if (camera) p.mesh.lookAt(camera.position); }
     else if (p.type === 'trail') { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.4; }
-    else if (p.type === 'fire') {   // textured fireball: churn, swell, burn out fast
-        p.mesh.scale.addScalar(p.grow * dt);
-        p.mesh.material.rotation += p.rot * dt;
-        p.mesh.material.opacity = t * t * 0.95;
-        p.vel.multiplyScalar(1 - 1.2 * dt);
+    else if (p.type === 'fire') {
+      p.mesh.scale.addScalar(p.grow * dt);
+      p.mesh.material.rotation += p.rot * dt;
+      p.mesh.material.opacity = t * t * 0.95;
+      p.vel.multiplyScalar(1 - 1.2 * dt);
     }
-    else if (p.type === 'smokeS') { // textured smoke: drift up, slow roll, long fade
-        p.mesh.scale.addScalar(p.grow * dt);
-        p.mesh.material.rotation += p.rot * dt;
-        p.mesh.material.opacity = t * 0.55;
-        p.vel.multiplyScalar(1 - 0.9 * dt);
+    else if (p.type === 'smokeS') {
+      p.mesh.scale.addScalar(p.grow * dt);
+      p.mesh.material.rotation += p.rot * dt;
+      p.mesh.material.opacity = t * 0.55;
+      p.vel.multiplyScalar(1 - 0.9 * dt);
     }
     else if (p.type === 'debris') {
-        p.vel.y -= 150 * dt; // gravity
-        p.vel.multiplyScalar(1 - 0.5 * dt); // drag
-        p.mesh.rotation.x += dt * 3;
-        p.mesh.rotation.y += dt * 4;
-        p.mesh.scale.setScalar(t * 1.2);
-        p.emberT -= dt;     // hot fragments shed a glowing trail for the first half of their life
-        if (p.emberT <= 0 && t > 0.5) { spawnTrail(p.mesh.position, 0xff9540, 0.5, 0.45); p.emberT = 0.07; }
+      p.vel.y -= 150 * dt;
+      p.vel.multiplyScalar(1 - 0.5 * dt);
+      p.mesh.rotation.x += dt * 3;
+      p.mesh.rotation.y += dt * 4;
+      p.mesh.scale.setScalar(t * 1.2);
+      p.emberT -= dt;   // hot fragments shed embers for the first half of their life
+      if (p.emberT <= 0 && t > 0.5) { spawnTrail(p.mesh.position, 0xff9540, 0.5, 0.45); p.emberT = 0.07; }
     }
     else { p.mesh.scale.addScalar(p.grow * dt); p.mesh.material.opacity = t * 0.5; if (p.vel) p.vel.multiplyScalar(1 - 1.5 * dt); }
-    
     if (p.life <= 0) { releaseParticle(p.mesh); particles.splice(i, 1); }
   }
 }
@@ -479,9 +452,9 @@ function updateParticles(dt) {
 function damagePlayer(amt, src) {
   if (player.invuln > 0) return;
   amt *= DIFFS[difficulty].dmg;
-  if (player.dmgReduce) amt *= (1 - player.dmgReduce);   // GUARDIAN SYSTEM upgrade
-  run.damageTaken = (run.damageTaken || 0) + amt;
-  noDamageWave = false;   // a hit landed this wave — the no-damage star is off for it (star objectives)
+  if (player.dmgReduce) amt *= (1 - player.dmgReduce);
+  run.damageTaken += amt;
+  noDamageWave = false;
   player.shieldT = 4.0;
   const hadShield = player.shield > 0;
   if (player.shield > 0) { const s = Math.min(player.shield, amt); player.shield -= s; amt -= s; }
@@ -489,52 +462,49 @@ function damagePlayer(amt, src) {
   if (src) { (player.hurtDir || (player.hurtDir = new THREE.Vector3())).copy(src).sub(player.group.position).normalize(); player.hurtT = 1.0; }
   audio.hurt();
   haptic(60);
-  if (player.reactive && hadShield && player.shield <= 0) reactivePulse();   // REACTIVE ARMOUR — the shield going down detonates
+  if (player.reactive && hadShield && player.shield <= 0) reactivePulse();
   if (player.hp <= 0) {
-    if (player.cheatDeath && !player._cheatUsed) {   // APEX PREDATOR — cheat the reaper once per RUN (balance 2026-06; _cheatUsed reset only in startGame)
+    if (player.cheatDeath && !player._cheatUsed) {   // once per RUN: _cheatUsed resets only in startGame
       player._cheatUsed = true; player.hp = player.maxHp * 0.4; player.shield = player.maxShield;
       player.invuln = 2.5; player.damageFlash = 0; empFlash = Math.max(empFlash, 0.6);
       showBanner(t('banner.guardianAngel')); audio.power(); return;
     }
-    player.hp = 0; player.streak = streakStep(player.streak, 'death', 0); gameOver();   // F5: player death resets the kill-streak (death branch ignores the clock arg)
+    player.hp = 0; player.streak = streakStep(player.streak, 'death', 0); gameOver();
   }
 }
-/* ---- tech-driven effect helpers (crits, chains, splash, reactive armour) ---- */
+// player-credited damage to every live enemy within sqrt(r2) of pos, sparing `skip` (and bosses when spareBoss)
+function blastEnemies(pos, r2, dmg, skip, spareBoss) {
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (e.alive && e !== skip && !(spareBoss && e.type === 'boss') && pos.distanceToSquared(e.group.position) < r2) damageEnemy(e, dmg, e.group.position, true);
+  }
+}
 let chaining = false;
 function critBlast(pos) {
-  // ANNIHILATION ROUNDS — an exploding crit throws a small concussive blast at the impact point
   explode(pos, false);
-  const r2 = 155 * 155, d = player.stats.gunDmg * player.gunDmgMul * 1.3;
-  for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (pos.distanceToSquared(e.group.position) < r2) damageEnemy(e, d, e.group.position, true); }
+  blastEnemies(pos, 155 * 155, player.stats.gunDmg * player.gunDmgMul * 1.3);
 }
 function chainBlast(origin) {
   spawnShockwave(origin);
-  const r2 = player.chainRadius * player.chainRadius;
-  for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (origin.distanceToSquared(e.group.position) < r2) damageEnemy(e, player.chainDmg, e.group.position, true); }
+  blastEnemies(origin, player.chainRadius * player.chainRadius, player.chainDmg);
 }
 function missileSplash(pos, dmg, radius, primary) {
   if (!dmg || !radius) return;
   spawnShockwave(pos);
-  const r2 = radius * radius;
-  for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive || e === primary) continue; if (pos.distanceToSquared(e.group.position) < r2) damageEnemy(e, dmg, e.group.position, true); }
+  blastEnemies(pos, radius * radius, dmg, primary);
 }
-function reactivePulse() {
-  // REACTIVE ARMOUR — a broken shield detonates: concuss nearby foes and blind incoming missiles
+function reactivePulse() {   // a broken shield concusses nearby foes and blinds incoming missiles
   empFlash = Math.max(empFlash, 0.45); spawnShockwave(player.group.position);
   const pp = player.group.position, r2 = 640 * 640;
-  for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; if (e.type !== 'boss' && pp.distanceToSquared(e.group.position) < r2) damageEnemy(e, player.reactive, e.group.position, true); }
+  blastEnemies(pp, r2, player.reactive, null, true);
   for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && pp.distanceToSquared(m.mesh.position) < r2) m.decoyed = true; }
   showBanner(t('banner.reactivePulse')); audio.power();
 }
-let lastCrit = false;   // set per-hit by damageEnemy so the cannon can spawn an exploding-crit blast
-function damageEnemy(e, amt, wp, byPlayer, byCCA) {
-  if (byPlayer === undefined) byPlayer = true;
-  lastCrit = false;
-  // Pure arithmetic/decision (core.js resolveDamage): multipliers, hp, RP, EXECUTE + death.
-  // The crit roll is injected (Math.random()) so the core stays pure; we APPLY the result below.
+let lastCrit = false;   // set per hit by damageEnemy so the cannon can spawn an exploding-crit blast
+function damageEnemy(e, amt, wp, byPlayer = true, byCCA) {
   const dr = resolveDamage(
     { hp: e.hp, maxHp: e.maxHp, type: e.type, playerDmg: e.playerDmg },
-    { amt: amt, byPlayer: byPlayer, rand: Math.random(),
+    { amt, byPlayer, rand: Math.random(),
       alphaMul: player.alphaMul, comboDmg: player.comboDmg, combo: player.combo,
       critChance: player.critChance, critMul: player.critMul,
       execThresh: player.execThresh, rpMul: player.rpMul, tpDmg: TP.dmg }
@@ -542,59 +512,46 @@ function damageEnemy(e, amt, wp, byPlayer, byCCA) {
   amt = dr.amt; lastCrit = dr.crit;
   e.hp = dr.hp; e.hitFlash = 0.12;
   spawnDamageNumber(wp || e.group.position, Math.round(amt), lastCrit);
-  // Pure hit-reward (core.js awardHit): combo bump + timer reset + combo-scaled hit score.
-  const hr = awardHit({ combo: player.combo }, { amt: amt, scoreMul: player.scoreMul || 1 });
+  const hr = awardHit({ combo: player.combo }, { amt, scoreMul: player.scoreMul });
   player.combo = hr.combo; player.comboTimer = hr.comboTimer; player.score += hr.score;
-  if (byPlayer) { e.playerDmg = dr.playerDmg; player.tp += dr.rp; e.lastHitT = performance.now(); }   // RP from damage YOU deal; lastHitT: a raider you hit turns to fight you (updateRaider)
+  if (byPlayer) { e.playerDmg = dr.playerDmg; player.tp += dr.rp; e.lastHitT = performance.now(); }   // lastHitT: a raider you hit turns to fight (updateRaider)
   audio.hit();
   if (lastCrit) audio.blip(1700, 0.05, 'sine', 0.09, 1250);
-  // EXECUTIONER — finish a wounded non-boss outright
   if (dr.executed) {
     spawnDamageNumber(e.group.position, '\u2620 EXECUTE', true);
-    if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);   // HEADSMAN \u2014 the execution detonates
+    if (player.execBlast) missileSplash(e.group.position, player.execBlast, 320, e);
   }
   if ((e.type === 'boss' || e.campaignBoss) && e.hp > 0) {
-    // HP thresholds drive a once-per-phase state machine (bossPhaseFor/nextBossPhase, core.js).
-    // nextBossPhase never regresses and only advances, so a transition fires exactly once even if
-    // HP oscillates near a boundary (lifesteal etc.) — and a big hit can skip straight to phase 3.
+    // nextBossPhase only advances, so each transition fires once even if HP oscillates; a big hit may skip phases
     const np = nextBossPhase(e.phase, e.hp / e.maxHp);
-    while (e.phase < np) bossEnterPhase(e, e.phase + 1);   // step through each crossed phase in order
+    while (e.phase < np) bossEnterPhase(e, e.phase + 1);
   }
   if (e.hp <= 0) killEnemy(e, byPlayer, byCCA);
-  else if (byPlayer) haptic(6);   // light buzz on landing a non-fatal hit (kills buzz via killEnemy)
+  else if (byPlayer) haptic(6);
 }
-// Boss crosses an HP threshold -> escalate. Idempotent per phase (the caller guards via
-// nextBossPhase). Applies the resolved phase-state (turnRate) + arena weather/tod, then fires a
-// visual cue + banner + screen shake.
 function bossEnterPhase(e, ph) {
   e.phase = ph;
-  bossApplyPhase(e, ph);                                 // turnRate + e.phaseState + authored weather/tod
-  empFlash = Math.max(empFlash, ph >= 3 ? 0.6 : 0.45);  // afterburner-ignition screen flash
+  bossApplyPhase(e, ph);
+  empFlash = Math.max(empFlash, ph >= 3 ? 0.6 : 0.45);
   if (e.group.userData.body) e.group.userData.body.emissiveIntensity = ph >= 3 ? 2.4 : 1.8;
   if (e.group.userData.core) e.group.userData.core.material.emissiveIntensity = ph >= 3 ? 5.5 : 3.5;
   if (ph >= 3) for (let i = 0; i < 6; i++) spawnSmoke(e.group.position, 0xff5a8a, 2.2);   // armor shed
   showBanner(t(ph >= 3 ? 'banner.bossPhase3' : 'banner.bossPhase2'));
-  { const pc = e._phaseCfg && e._phaseCfg[ph - 1]; if (pc && pc.say) radioKey('boss', 'comms.' + pc.say); }   // campaign boss taunt on each phase shift
+  const pc = e._phaseCfg && e._phaseCfg[ph - 1];
+  if (pc && pc.say) radioKey('boss', 'comms.' + pc.say);
   audio.power(); audio.warn();
   haptic([40, 30, 60]);
   shakeCam(ph >= 3 ? 1.0 : 0.8);
 }
-// IMPURE state applicator (no transition FX — shared by bossEnterPhase AND the lazy phase-1 init in
-// entities.js updateEnemy). Computes the phase-state via the PURE resolveBossPhase (core.js) and stows
-// it as the SINGLE e.phaseState field: {turnRate, fireMul, extraMissiles, pattern, flags, baseTurnRate}.
-// The boss's ORIGINAL turnRate is captured once (first call, when e.phaseState is unset) and carried
-// forward via phaseState.baseTurnRate so per-phase turn multipliers compose off the true base instead
-// of a separate _baseTurnRate field. e.turnRate is set from the resolved state (composes for campaign
-// bosses; byte-identical ×1.18-per-phase ramp for legacy). Campaign descriptors may carry weather/tod
-// which shift the arena via the engine.js hooks. Endless/boss-rush/rivals have no e._phaseCfg ->
-// resolver returns the legacy defaults and no weather/tod is applied.
+// No transition FX: also used by the lazy phase-1 init in entities.js updateEnemy. The boss's original turnRate
+// is captured once in phaseState.baseTurnRate so per-phase multipliers compose off the true base.
 function bossApplyPhase(e, ph) {
   const base = (e.phaseState && e.phaseState.baseTurnRate != null) ? e.phaseState.baseTurnRate : e.turnRate;
   e.phaseState = resolveBossPhase(e._phaseCfg || null, ph, base);
   e.turnRate = e.phaseState.turnRate;
   const cfg = e._phaseCfg && e._phaseCfg[ph - 1];
   if (cfg) {
-    if (cfg.weather) applyWeather(cfg.weather);   // e.g. WARLORD p2 -> storm
+    if (cfg.weather) applyWeather(cfg.weather);
     if (cfg.tod != null) applyTimeOfDay(cfg.tod);
   }
 }
@@ -602,49 +559,46 @@ function tpBaseFor(e) {
   return e.type === 'boss' ? TP.boss : e.type === 'bomber' ? TP.bomber : e.elite ? TP.ace
        : e.type === 'ground' ? TP.ground : e.type === 'drone' ? TP.drone : TP.fighter;
 }
-function killEnemy(e, byPlayer, byCCA) {
-  if (byPlayer === undefined) byPlayer = true;
-  missionKill(mission, e);   // credit objective progress (intercept targets, etc.) before the entity is torn down
-  if (byPlayer && mission && mission.type === 'stealth') onStealthKill(e);   // v1.3: a kill blows cover → aggro + reinforcements
-  e.alive = false; explode(e.group.position, e.type === 'boss' || e.type === 'bomber');
-  if (byPlayer) { haptic(e.type === 'boss' || e.type === 'bomber' ? [30, 30, 30] : 20); shakeCam(e.type === 'boss' || e.type === 'bomber' ? 0.42 : 0.25); audio.killSfx(); killFlash = (e.type === 'boss' || e.type === 'bomber') ? 0.5 : 0.28; }   // killFlash = VISUAL-ONLY kill-confirm timer (hud.js); shake bumped for big targets only
-  let pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
-  // F5 kill-streak: extend the chain (window/tiers in core.js streakStep); the resulting mult scales THIS kill's score below.
+function killEnemy(e, byPlayer = true, byCCA) {
+  missionKill(mission, e);   // credit objectives before the entity is torn down
+  if (byPlayer && mission && mission.type === 'stealth') onStealthKill(e);
+  const big = e.type === 'boss' || e.type === 'bomber';
+  e.alive = false; explode(e.group.position, big);
+  if (byPlayer) { haptic(big ? [30, 30, 30] : 20); shakeCam(big ? 0.42 : 0.25); audio.killSfx(); killFlash = big ? 0.5 : 0.28; }
+  const pts = e.type === 'boss' ? 6000 : e.type === 'bomber' ? 3000 : e.elite ? 2500 : e.type === 'ground' ? 450 : e.type === 'drone' ? 250 : 1000;
   player.streak = streakStep(player.streak, 'kill', performance.now() / 1000);
-  // Pure kill-reward (core.js awardKill): kill score (combo-scaled) + RP by source + killstreak.
   const kr = awardKill(
     { combo: player.combo, killStreak: player.killStreak },
-    { pts: pts, scoreMul: player.scoreMul || 1, byPlayer: byPlayer, byCCA: byCCA,
-      tpBase: tpBaseFor(e), rpPerKill: player.rpPerKill || 0, rpMul: player.rpMul || 1,
+    { pts, scoreMul: player.scoreMul, byPlayer, byCCA,
+      tpBase: tpBaseFor(e), rpPerKill: player.rpPerKill, rpMul: player.rpMul,
       assistFrac: TP.assistFrac, playerDmg: e.playerDmg || 0 }
   );
-  player.score += Math.round(kr.score * player.streak.mult); player.tp += kr.rp;   // F5: kill-streak multiplier scales the kill's score contribution
-  if (player.streak.tierUp) { showBanner(tf('banner.streak', { mult: player.streak.mult })); haptic([30, 40, 30]); }   // F5: banner + haptic once per tier crossing (x1.5 / x2 / x3)
+  player.score += Math.round(kr.score * player.streak.mult); player.tp += kr.rp;
+  if (player.streak.tierUp) { showBanner(tf('banner.streak', { mult: player.streak.mult })); haptic([30, 40, 30]); }
   if (byPlayer) { if (e._lastPlayerWp === 'gun') run.pGunKills++; }
   else if (byCCA) { run.escortKills++; }
-  // field-upgrade payoffs
-  const shieldCap = player.maxShield + (player.overshieldCap || 0);          // JUGGERNAUT lets shields bank past their normal ceiling
+  const shieldCap = player.maxShield + player.overshieldCap;
   if (player.lifesteal) {
     const room = player.maxHp - player.hp;
     player.hp = Math.min(player.maxHp, player.hp + player.lifesteal);
-    if (player.vampShield && player.lifesteal > room) player.shield = Math.min(shieldCap, player.shield + (player.lifesteal - room) * player.vampShield);  // overheal bleeds into overshield
+    if (player.vampShield && player.lifesteal > room) player.shield = Math.min(shieldCap, player.shield + (player.lifesteal - room) * player.vampShield);   // overheal banks as overshield
   }
   if (player.shieldOnKill) player.shield = Math.min(shieldCap, player.shield + player.shieldOnKill);
-  if (player.gunScavenge) player.bullets = Math.min(player.maxBullets, player.bullets + player.gunScavenge);   // BRASS SCAVENGER
-  if (byPlayer && player.slowOnKill) player.slow = Math.max(player.slow, player.slowOnKill);                   // KILL CLOCK — a beat of bullet-time
+  if (player.gunScavenge) player.bullets = Math.min(player.maxBullets, player.bullets + player.gunScavenge);
+  if (byPlayer && player.slowOnKill) player.slow = Math.max(player.slow, player.slowOnKill);
   if (player.mslRefund && Math.random() < player.mslRefund) player.missiles = Math.min(player.maxMissiles, player.missiles + 1);
-  if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }  // CHAIN REACTION: a kill cooks off into its neighbours
-  if (byPlayer && player.empKill) {   // EMP SUBMUNITIONS — the kill bursts a stunning shock over nearby foes
+  if (player.chainDmg && !chaining) { chaining = true; chainBlast(e.group.position); if (player.chainProp) chainBlast(e.group.position); chaining = false; }
+  if (byPlayer && player.empKill) {   // EMP SUBMUNITIONS: stun nearby foes
     spawnShockwave(e.group.position);
     const er2 = player.empKill * player.empKill;
     for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (!o.alive || o === e) continue; if (e.group.position.distanceToSquared(o.group.position) < er2) o.stun = Math.max(o.stun || 0, 2.0); }
     empFlash = Math.max(empFlash, 0.3);
   }
-  if (player.burnSpread && e.burnT > 0) {   // INFERNO CASCADE — a burning death splashes fire onto neighbours
+  if (player.burnSpread && e.burnT > 0) {   // INFERNO CASCADE: a burning death spreads fire
     const br2 = 240 * 240;
     for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (!o.alive || o === e) continue; if (e.group.position.distanceToSquared(o.group.position) < br2) { o.burnT = player.burnTime; o.burnDps = player.burnDps; } }
   }
-  if (byPlayer && player.frenzyOnKill) player.frenzy = Math.min(player.frenzyMax, player.frenzy + player.frenzyOnKill);   // KILL FRENZY stacks up
+  if (byPlayer && player.frenzyOnKill) player.frenzy = Math.min(player.frenzyMax, player.frenzy + player.frenzyOnKill);
   if (e.type === 'boss' || e.campaignBoss) { run.boss++; showBanner(e.campaignBoss ? tf('banner.aceDown', { name: e.callsign }) : t('banner.bossDestroyed')); empFlash = 0.5; }
   if (e.campaignBoss) { /* counted as a boss above */ }
   else if (e.rival) { const pay = rivalDefeated(wave); player.tp += pay; showBanner(tf('banner.rivalDown', { rp: pay })); run.kills++; }
@@ -652,11 +606,10 @@ function killEnemy(e, byPlayer, byCCA) {
     run.ground++;
     if (strikeSiteResolves(strikeWaveActive, mission ? mission.type : null)) {
       if (e.gkind === 'radar') showBanner(t('banner.radarDown'));
-      // campaign strike phases resolve on the site CORE every frame (missions.js siteFlattened); this
-      // "last ground unit" payout is the Endless strike-wave path only.
-      if (!campaignMode && !enemies.some(o => o.alive && o.type === 'ground')) {   // last site element down → payout
-        const pay = Math.round((60 + wave * 6) * (player.rpMul || 1));
-        player.tp += pay; player.score += Math.round(1500 * (player.scoreMul || 1));
+      // Endless strike-wave payout only; campaign strike phases resolve on the site core (missions.js siteFlattened)
+      if (!campaignMode && !enemies.some(o => o.alive && o.type === 'ground')) {
+        const pay = Math.round((60 + wave * 6) * player.rpMul);
+        player.tp += pay; player.score += Math.round(1500 * player.scoreMul);
         showBanner(tf('banner.siteFlattened', { rp: pay })); audio.power(); empFlash = Math.max(empFlash, 0.4);
       }
     }
@@ -668,8 +621,8 @@ function killEnemy(e, byPlayer, byCCA) {
   despawnEnemy(e);
   clearLocks(e);
 
-  player.killStreak = kr.killStreak;             // killstreak count from awardKill (core.js)
-  if (kr.streakReward) killStreakReward();        // interval boundary → fire the streak bonus
+  player.killStreak = kr.killStreak;
+  if (kr.streakReward) killStreakReward();
 }
 function killStreakReward() {
   const n = player.killStreak;
@@ -694,7 +647,7 @@ function nearestEnemyInFront(coneDot) {
   }
   return best;
 }
-// nearest LIVE non-boss enemy in any direction (AWACS orbital strike targets it; bosses are immune).
+// nearest live non-boss enemy in any direction (AWACS strike target; bosses are immune)
 function nearestNonBossEnemy() {
   let best = null, bd = Infinity;
   for (let i = 0; i < enemies.length; i++) {
@@ -704,25 +657,22 @@ function nearestNonBossEnemy() {
   }
   return best;
 }
+function aliveByDistance(pos) {
+  return enemies.filter(e => e.alive).sort((a, b) => pos.distanceToSquared(a.group.position) - pos.distanceToSquared(b.group.position));
+}
 
-/* ---------------- AWACS support calls (F10/F11/F12) ---------------- */
-// Cooldown-gated, capped-per-sector radio call (balance pass 2026-06: NO LONGER costs RP — calls used
-// to draw from player.tp, the same pool as the permanent TECH_TREE, so they were never rational vs. a
-// compounding upgrade and the feature was dead. Now they're free but gated by a per-call cooldown +
-// the unchanged per-sector use cap). The allow/effect/banner decision is the pure awacsResolve()
-// (core.js, tested in tests/awacs.test.js + tests/awacs-adapter.test.js); this glue applies the effect.
+/* ---------------- AWACS support calls ---------------- */
+// Free but cooldown-gated and capped per sector; the decision is the pure awacsResolve (core.js).
 function awacsAction(key) {
   if (!player) return false;
-  const now = performance.now() / 1000;   // seconds clock for the cooldown gate
-  // Pure decision (core.js awacsResolve): cooldown + per-sector cap + which effect + which banner.
+  const now = performance.now() / 1000;
   const res = awacsResolve({ uses: awacsUses, last: awacsLast }, AWACS_COOLDOWNS, AWACS_USES_MAX, key, now);
   if (!res.ok) {
     if (res.banner) { showBanner(t(res.banner)); audio.warn(); }   // cooldown / empty
-    else audio.ui();                                               // unknown key — neutral blip
+    else audio.ui();                                               // unknown key
     return false;
   }
-  awacsUses = res.uses; awacsLast = res.last;   // commit the use spend + cooldown stamp
-  // imperative application of the resolved effect (game-state mutation only; decision already made)
+  awacsUses = res.uses; awacsLast = res.last;
   if (res.effect === 'strike') {
     const tgt = nearestNonBossEnemy();
     if (tgt) { explode(tgt.group.position, true); killEnemy(tgt, true); }
@@ -732,7 +682,7 @@ function awacsAction(key) {
     player.flares = player.maxFlares;
     player.missiles = player.maxMissiles;
   } else if (res.effect === 'jam') {
-    player.jammer = Math.max(player.jammer, AWACS_JAM_TIME);   // reuse the SPECTRA jam pathway (updateMissiles blinds enemy missiles while jammer>0)
+    player.jammer = Math.max(player.jammer, AWACS_JAM_TIME);   // reuses the SPECTRA jam path in updateMissiles
   }
   showBanner(t(res.banner)); audio.power();
   return true;
@@ -742,7 +692,7 @@ function cycleLock() {
   const cand = [];
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i]; if (!e.alive) continue;
-    if (e._ghostT > 0) continue;   // GHOST special: rival cannot be cycled to while cloaked
+    if (e._ghostT > 0) continue;   // cloaked rival
     const to = t4.copy(e.group.position).sub(player.group.position); const d = to.length();
     if (d > 6500) continue; to.multiplyScalar(1 / d);
     const ang = Math.acos(clamp(fwd.dot(to), -1, 1));
@@ -755,38 +705,36 @@ function cycleLock() {
   player.lockTarget = cand[idx].e; player.lockProgress = 0; player.lockedTarget = null; audio.ui();
 }
 function updateLockOn(dt) {
-  // auto-designate the nearest target only when Auto-Lock is enabled; otherwise the player must press F
   if (!player.lockTarget || !player.lockTarget.alive) {
     if (autoLock) player.lockTarget = nearestEnemyInFront(0.94);
     player.lockProgress = 0; player.lockedTarget = null;
   }
   const tgt = player.lockTarget;
   if (!tgt || !tgt.alive) { player.lockProgress = 0; player.lockedTarget = null; return; }
-  if (tgt._ghostT > 0) { player.lockTarget = null; player.lockProgress = 0; player.lockedTarget = null; return; }   // GHOST: drop lock while cloaked
+  if (tgt._ghostT > 0) { player.lockTarget = null; player.lockProgress = 0; player.lockedTarget = null; return; }   // cloaked rival drops lock
   const fwd = fwdOf(player.group, t3);
   const to = t4.copy(tgt.group.position).sub(player.group.position);
   const dist = to.length(); to.multiplyScalar(1 / Math.max(dist, 0.001));
   const aligned = fwd.dot(to);
-  const acquiring = aligned > 0.92 && dist < 5200 * (weather.lockRangeMul || 1) && !tgt.isInCloud;   // weather cuts lock acquisition range
-  // PURE progress/promote math lives in core.js (advanceLock); THREE geometry (aligned/dist) stays here.
+  const acquiring = aligned > 0.92 && dist < 5200 * (weather.lockRangeMul || 1) && !tgt.isInCloud;
   const adv = advanceLock(
     { progress: player.lockProgress, target: player.lockedTarget },
     { acquiring: acquiring,
       dt: dt,
-      rate: LOCK_TIME * (player.lockSpeedMul || 1) * (weather.lockSpeedMul || 1),   // weather slows lock-on
+      rate: LOCK_TIME * player.lockSpeedMul * (weather.lockSpeedMul || 1),
       decayRate: LOCK_TIME * 0.5 }
   );
   player.lockProgress = adv.progress;
   if (acquiring) {
     player._lockT -= dt;
     if (player._lockT <= 0) { audio.blip(820 + player.lockProgress * 700, 0.04, 'square', 0.05); player._lockT = lerp(0.34, 0.07, player.lockProgress); }
-    if (adv.justLocked) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); player.lockFlash = 0.42; }   // lockFlash = VISUAL-ONLY snap timer for hud.js (no balance/timing impact)
+    if (adv.justLocked) { player.lockedTarget = tgt; audio.lockTone(); haptic([18, 40, 18]); player.lockFlash = 0.42; }
   } else {
     if (!adv.locked) player.lockedTarget = null;
     if (aligned < 0.55 || dist > 6500) player.lockTarget = null;
   }
 }
-// `out` (optional) receives the lead point; omit it to get a fresh vector. Never pass tA (used internally).
+// Writes the lead point into `out` (never tA, used internally); null when there is no solution within 6 s.
 function interceptPoint(shooter, tp, tv, bs, out) {
   const D = tA.copy(tp).sub(shooter);
   const a = tv.dot(tv) - bs * bs, b = 2 * D.dot(tv), c = D.dot(D);
@@ -794,108 +742,90 @@ function interceptPoint(shooter, tp, tv, bs, out) {
   if (Math.abs(a) < 1e-3) { if (Math.abs(b) < 1e-6) return null; t = -c / b; }
   else { const disc = b * b - 4 * a * c; if (disc < 0) return null; const sq = Math.sqrt(disc); const r1 = (-b - sq) / (2 * a), r2 = (-b + sq) / (2 * a); t = Math.min(r1, r2); if (t < 0) t = Math.max(r1, r2); }
   if (!(t > 0) || t > 6) return null;
-  return (out || new THREE.Vector3()).copy(tp).addScaledVector(tv, t);
+  return out.copy(tp).addScaledVector(tv, t);
 }
 
 /* ---------------- special abilities ---------------- */
 function hasSpecial(jet) { return !!(jet && jet.ability); }
 
-// useSpecial(slot): slot 1 (default) = the NATIVE jet special (KeyR / tb-spc — behaviour unchanged);
-// slot 2 = the equipped secondary special (KeyB / tb-spc2). Each slot owns its own cooldown state
-// (player.special / player.special2); both fire the SAME id-keyed effect via applySpecialEffect, so an
-// effect is fully portable — it works no matter which airframe is currently flown.
+// slot 1 = the native jet special (KeyR), slot 2 = the equipped secondary (KeyB); each slot owns its cooldown
 function useSpecial(slot) {
   const st = (slot === 2) ? player.special2 : player.special;
-  if (!st || !st.id) { audio.ui(); return; }          // empty slot (FT-1 native, or nothing equipped) is inert
+  if (!st || !st.id) { audio.ui(); return; }
   if (st.cd > 0) { audio.ui(); return; }
   st.cd = st.max; audio.power();
   applySpecialEffect(st.id);
 }
 
-// applySpecialEffect(id): fires a special's EFFECT keyed purely on the ability/jet id, INDEPENDENT of
-// player.jet — this is what lets slot 2 run another jet's ability (the per-slot cooldown gate lives in useSpecial).
+// n hard-homing player missiles fanned ±yaw, spread round-robin over the nearest live enemies (lock as fallback)
+function missileBarrage(n, yaw, yLo, yHi, dmgMul) {
+  const pp = player.group.position, tg = aliveByDistance(pp);
+  for (let k = 0; k < n; k++) {
+    const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
+    const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-yaw, yaw)); dir.y += rand(yLo, yHi); dir.normalize();
+    const m = spawnMissile(pp, dir, target, false, dmgMul * player.missileDmgMul);
+    if (target) m.hardHome = true;
+  }
+  run.missiles += n;
+}
+
+// Keyed purely on the ability id (not player.jet), so slot 2 can run another jet's ability.
 function applySpecialEffect(id) {
   const pp = player.group.position;
 
-  if (id === 'F-22') {
-    // OVERDRIVE — afterburner surge: +speed, +gun dmg, 4-round spread cannon (see fireGun)
+  if (id === 'F-22') {   // OVERDRIVE: +speed, +gun dmg, 4-round spread cannon (fireGun)
     player.overdrive = 6; showBanner('OVERDRIVE'); empFlash = 0.3;
 
-  } else if (id === 'SU-57') {
-    // COBRA + KINETIC SHOCKWAVE — post-stall reversal that also blasts anyone close
+  } else if (id === 'SU-57') {   // COBRA: post-stall reversal + close-range shockwave
     player.speed *= 0.2; player.pitchRate = player.stats.turnRate * 3.6; player.invuln = 1.5;
     spawnShockwave(pp); explode(pp, true);
-    for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.type !== 'boss' && e.group.position.distanceToSquared(pp) < 102400) damageEnemy(e, 120, e.group.position); }
+    blastEnemies(pp, 102400, 120, null, true);
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && m.mesh.position.distanceToSquared(pp) < 490000) { m.decoyed = true; if (Math.random() < 0.85) m.life = 0.05; } }
     showBanner('COBRA');
 
-  } else if (id === 'J-20') {
-    // EMP PULSE — wide-area systems kill + free instant lock on the nearest contact (it has no gun)
+  } else if (id === 'J-20') {   // EMP PULSE: kills nearby missiles + free instant lock (no gun)
     player.empBurst = 6; empFlash = 0.85;
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && m.mesh.position.distanceToSquared(pp) < 2890000) { explode(m.mesh.position, false); m.life = 0; } }
-    const near = nearestEnemyInFront(0.4) || (enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position))[0]);
+    const near = nearestEnemyInFront(0.4) || aliveByDistance(pp)[0];
     if (near) { player.lockTarget = near; player.lockProgress = 1; player.lockedTarget = near; }
     showBanner('EMP PULSE');
 
-  } else if (id === 'F-35') {
-    // STEALTH FIELD — vanish; missiles fired while cloaked become guaranteed ambush kills (see fireMissile)
+  } else if (id === 'F-35') {   // STEALTH FIELD: missiles fired while cloaked are ambush kills (fireMissile)
     player.stealthField = 7; showBanner(t('banner.cloakAmbush'));
 
-  } else if (id === 'EFT') {
-    // MISSILE SALVO — 6 hard-homing missiles, +40% damage, spread across the nearest threats
-    // SWARM RACK / HYDRA multiply the barrage just like a normal launch (x2 / x3)
-    const count = 6 * (1 + (player.mslSwarm || 0));
-    const tg = enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position));
-    for (let k = 0; k < count; k++) {
-      const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
-      const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.4, 0.4)); dir.y += rand(-0.1, 0.18); dir.normalize();
-      const m = spawnMissile(pp, dir, target, false, 1.4 * player.missileDmgMul); if (m && target) m.hardHome = true;
-    }
-    showBanner('MISSILE SALVO'); audio.missile(); run.missiles += count;
+  } else if (id === 'EFT') {   // MISSILE SALVO; SWARM RACK / HYDRA multiply it like a normal launch
+    missileBarrage(6 * (1 + player.mslSwarm), 0.4, -0.1, 0.18, 1.4);
+    showBanner('MISSILE SALVO'); audio.missile();
 
-  } else if (id === 'RAFALE') {
-    // SPECTRA JAMMER — 6s of total missile immunity: incoming go blind, enemies can't launch
+  } else if (id === 'RAFALE') {   // SPECTRA JAMMER: incoming go blind, enemies can't launch
     player.jammer = 6; empFlash = 0.4;
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy) { m.decoyed = true; if (m.maxSpeed > 600) m.maxSpeed = 600; } }
     showBanner('SPECTRA JAMMER'); audio.power();
 
-  } else if (id === 'TEJAS') {
-    // HOLO-DECOYS — 3 holographic doubles draw enemy guns & missiles, and pull current shots off you
+  } else if (id === 'TEJAS') {   // HOLO-DECOYS draw fire and pull current missiles off you
     spawnDecoys(3);
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && !m.decoyed && decoys.length) { m.holo = decoys[(Math.random() * decoys.length) | 0]; m.decoyed = true; } }
     showBanner('HOLO-DECOYS'); empFlash = 0.25;
 
-  } else if (id === 'FA18') {
-    // COMBAT TRANCE — bullet-time: the world drops to 40% while you fly & fire at full speed
+  } else if (id === 'FA18') {   // COMBAT TRANCE: the world drops to 40% speed, you don't
     player.slow = 4; empFlash = 0.3; showBanner('COMBAT TRANCE'); audio.power();
 
-  } else if (id === 'J-36') {
-    // ORDNANCE STORM — empty the bays: a 10-missile saturation barrage + a heavy ablative shield
-    // SWARM RACK / HYDRA multiply the storm just like a normal launch (x2 / x3)
-    const stormCount = 10 * (1 + (player.mslSwarm || 0));
-    const tg = enemies.filter(e => e.alive).sort((a, b) => pp.distanceToSquared(a.group.position) - pp.distanceToSquared(b.group.position));
-    let fired = 0;
-    for (let k = 0; k < stormCount; k++) {
-      const target = tg[k % Math.max(1, tg.length)] || player.lockedTarget;
-      const dir = fwdOf(player.group, new THREE.Vector3()).applyAxisAngle(UPV, rand(-0.55, 0.55)); dir.y += rand(-0.12, 0.22); dir.normalize();
-      const m = spawnMissile(pp, dir, target, false, 1.55 * player.missileDmgMul); if (m) { if (target) m.hardHome = true; fired++; }
-    }
-    player.shield = Math.max(player.shield, player.maxShield) + 90; player.shieldT = 6;   // ablative over-shield
-    empFlash = 0.4; showBanner('ORDNANCE STORM'); audio.missile(); run.missiles += fired;
+  } else if (id === 'J-36') {   // ORDNANCE STORM: saturation barrage + ablative over-shield
+    missileBarrage(10 * (1 + player.mslSwarm), 0.55, -0.12, 0.22, 1.55);
+    player.shield = Math.max(player.shield, player.maxShield) + 90; player.shieldT = 6;
+    empFlash = 0.4; showBanner('ORDNANCE STORM'); audio.missile();
 
-  } else if (id === 'F-47') {
-    // CCA SWARM — launch vivid electric-blue drones far ahead where you can see them
-    // SWARM RACK / HYDRA scale the swarm just like a missile salvo (3 / 6 / 9), extra ranks fanned out so they stay visible
+  } else if (id === 'F-47') {   // CCA SWARM far ahead; SWARM RACK / HYDRA add ranks (3 / 6 / 9)
     const fwd = fwdOf(player.group, new THREE.Vector3()), right = rightOf(player.group, new THREE.Vector3());
-    const mult = 1 + (player.mslSwarm || 0);
-    const base = [                                // staggered fan per rank: centre + left + right
+    const mult = 1 + player.mslSwarm;
+    const base = [   // per rank: centre + left + right
       { ahead: 320, lateral:   0, vert: 10 },
       { ahead: 240, lateral:-185, vert: 30 },
       { ahead: 240, lateral: 185, vert: 30 },
     ];
     let launched = 0;
     for (let r = 0; r < mult; r++) {
-      const spread = (r - (mult - 1) / 2) * 95;   // fan extra ranks left/right of centre so they don't overlap
+      const spread = (r - (mult - 1) / 2) * 95;   // fan extra ranks sideways so they don't overlap
       for (let k = 0; k < base.length; k++) {
         const o = base[k];
         const pt = pp.clone()
@@ -911,8 +841,7 @@ function applySpecialEffect(id) {
     audio.power();
     showBanner(tf('banner.ccaSwarm', { n: launched }));
 
-  } else if (id === 'J-50') {
-    // VECTOR SURGE — supermaneuver: agility & thrust soar, missiles lose lock, a plasma wake guts close passes
+  } else if (id === 'J-50') {   // VECTOR SURGE: agility + thrust, missiles lose lock, plasma wake (updatePlayer)
     player.vectorSurge = 6; player.invuln = 0.4; empFlash = 0.3;
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy) { m.decoyed = true; if (m.maxSpeed > 640) m.maxSpeed = 640; } }
     showBanner('VECTOR SURGE'); audio.power();
@@ -920,59 +849,38 @@ function applySpecialEffect(id) {
 }
 
 /* ---------------- player update ---------------- */
+const PLAYER_TIMERS = ['overdrive', 'empBurst', 'stealthField', 'invuln', 'jammer', 'slow', 'vectorSurge', 'damageFlash', 'lockFlash', 'firingT', 'shake'];
 function updatePlayer(dt) {
-  const st = player.stats;
+  const st = player.stats, pos = player.group.position;
   player.gunCd -= dt; player.missileCd -= dt; player.flareCd -= dt;
-  if (player.overdrive > 0) player.overdrive -= dt;
-  if (player.empBurst > 0) player.empBurst -= dt;
-  if (player.stealthField > 0) player.stealthField -= dt;
-  if (player.invuln > 0) player.invuln -= dt;
+  for (let i = 0; i < PLAYER_TIMERS.length; i++) { const k = PLAYER_TIMERS[i]; if (player[k] > 0) player[k] -= dt; }
   if (barrelRollCooldown > 0) barrelRollCooldown -= dt;
   if (barrelRollAnim > 0) barrelRollAnim -= dt;
-  if (player.jammer > 0) player.jammer -= dt;
-  if (player.slow > 0) player.slow -= dt;
-  if (player.vectorSurge > 0) player.vectorSurge -= dt;
-  if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);   // KILL FRENZY bleeds off when you stop scoring
+  if (player.frenzy > 0) player.frenzy = Math.max(0, player.frenzy - dt);
   if (player.special.cd > 0) player.special.cd -= dt;
-  if (player.special2 && player.special2.cd > 0) player.special2.cd -= dt;   // SLOT 2 recharge (feature #3)
-  if (player.damageFlash > 0) player.damageFlash -= dt;
-  if (player.lockFlash > 0) player.lockFlash -= dt;   // VISUAL-ONLY lock-snap overshoot timer (hud.js drawLockReticle)
+  if (player.special2.cd > 0) player.special2.cd -= dt;
   if (player.muzzleT > 0) { player.muzzleT -= dt; if (player.muzzleT <= 0 && player.group.userData.muzzle) player.group.userData.muzzle.visible = false; }
-  if (player.firingT > 0) player.firingT -= dt;   // decays the stealth "firing" tell set in fireGun/fireMissile
-  if (player.shake > 0) player.shake -= dt;
   if (player.comboTimer > 0) { player.comboTimer -= dt; if (player.comboTimer <= 0) player.combo = 0; }
   if (player.shieldT > 0) player.shieldT -= dt;
-  else if (player.shield < player.maxShield) player.shield = Math.min(player.maxShield, player.shield + 16 * (player.shieldRegenMul || 1) * dt);
+  else if (player.shield < player.maxShield) player.shield = Math.min(player.maxShield, player.shield + 16 * player.shieldRegenMul * dt);
 
-  // Unified flight input: digital keyboard (here) + analog flightInput (touch/motion, via readFlightInput).
-  let pitchIn = 0, rollIn = 0, yawIn = 0;
-  if (down('KeyW')) pitchIn -= 1;
-  if (down('KeyS')) pitchIn += 1;
-  if (down('KeyQ')) rollIn += 1;
-  if (down('KeyE')) rollIn -= 1;
-  if (down('KeyA')) yawIn += 1;
-  if (down('KeyD')) yawIn -= 1;
-  if (invertY) pitchIn = -pitchIn;   // KEYBOARD invert = pitch only (laptop). Touch invert flips the whole stick (controls.js).
+  // keyboard in engine signs; the analog flightInput (point-to-fly signs) is folded in below
+  let pitchIn = down('KeyS') - down('KeyW'), rollIn = down('KeyQ') - down('KeyE'), yawIn = down('KeyA') - down('KeyD');
+  if (invertY) pitchIn = -pitchIn;   // keyboard invert = pitch only; touch invert flips the whole stick (controls.js)
 
-  // add the shaped analog source on top so a plugged-in key always works alongside it, then clamp.
-  // flightInput uses point-to-fly signs (+pitch=climb, +roll=bank right); convert to engine signs here.
-  // controlScheme reinterprets the seam: 'rate' = today's mapping (rollCmd = roll intent); 'pointer' = bank-hold + auto-level.
-  // currentBank = atan2(-right.y, up.y): SAME sign frame as roll intent (+roll bank-right reads positive) -> stable feedback.
+  // currentBank = atan2(-right.y, up.y): same sign frame as roll intent (+ = bank right) for stable feedback
   const _rgt = rightOf(player.group, t1), _up = upOf(player.group, t2);
   const currentBank = Math.atan2(-_rgt.y, _up.y);
   const cmd = steerCommand(controlScheme, flightInput, currentBank, STEER);
-  pitchIn = clamp(pitchIn - cmd.pitchCmd, -1, 1);   // +pitchCmd (climb) -> -pitchIn (nose up, = W)
-  rollIn = clamp(rollIn - cmd.rollCmd, -1, 1);      // +rollCmd (bank right / bank-hold) -> -rollIn (= E)
+  pitchIn = clamp(pitchIn - cmd.pitchCmd, -1, 1);
+  rollIn = clamp(rollIn - cmd.rollCmd, -1, 1);
 
-  // Barrel-roll evasive maneuver: consume the request flag set by controls/main keydown
   if (barrelRollRequest) {
     barrelRollRequest = false;
-    barrelRollDir = (rollIn !== 0) ? Math.sign(rollIn) : 1;   // capture roll intent at trigger
+    barrelRollDir = (rollIn !== 0) ? Math.sign(rollIn) : 1;
     barrelRollAnim = BARREL_ROLL_DURATION;
     barrelRollCooldown = BARREL_ROLL_COOLDOWN;
-    // capture the orientation at trigger; the roll is anchored to it so a full 360° returns EXACTLY here
-    if (!player._brQuat0) player._brQuat0 = player.group.quaternion.clone();
-    else player._brQuat0.copy(player.group.quaternion);
+    (player._brQuat0 || (player._brQuat0 = new THREE.Quaternion())).copy(player.group.quaternion);   // the roll is anchored here
     player.invuln = Math.max(player.invuln, BARREL_ROLL_INVULN);
     haptic(80);
     showBanner(t('banner.evade'), 1.2);
@@ -982,7 +890,7 @@ function updatePlayer(dt) {
   const thr = down('ShiftLeft') || down('ShiftRight') || touchBtns.thr;
   player.highG = brake && (down('KeyS') || (isTouchEnabled && flightInput.pitch < -0.5));
 
-  const tb = st.turnRate * controlSensitivity * (player.turnMul || 1) * (player.vectorSurge > 0 ? 1.85 : 1);   // sensitivity + PROPULSION agility + VECTOR SURGE supermaneuver
+  const tb = st.turnRate * controlSensitivity * player.turnMul * (player.vectorSurge > 0 ? 1.85 : 1);
   const tgtPitch = pitchIn * tb * (player.highG ? 2.0 : 1.0);
   const tgtRoll = rollIn * tb * 1.6;
   const tgtYaw = yawIn * tb * 0.5;
@@ -990,80 +898,69 @@ function updatePlayer(dt) {
   player.rollRate = damp(player.rollRate, tgtRoll, 5.5, dt);
   player.yawRate = damp(player.yawRate, tgtYaw, 4.5, dt);
 
-  // ANALOG DIRECTIONAL MODE: when a joystick / mouse-flight / motion source is driving, the jet flies
-  // TOWARD the stick in screen space and auto-levels. Pitch is referenced to the WORLD horizon and the
-  // turn is a WORLD-up yaw, so steering is identical regardless of bank/inversion (never flips upside-down).
+  // Directional mode (stick / mouse-flight / motion): fly TOWARD the stick with world-horizon pitch and
+  // world-up yaw, so steering is identical at any bank and never flips inverted; wings auto-level.
   const motionOn = mobileControl === 'motion';
   const directional = (motionOn && motionInput.ready) || mouseFlight || (isTouchEnabled && !motionOn);
 
   if (barrelRollAnim > 0) {
-    // Barrel roll: a PURE body-Z roll ANCHORED to the orientation captured at trigger (player._brQuat0).
-    // Drive it by progress so the rotation is exactly barrelRollDir·2π·prog — at prog=1 that's a full turn
-    // back to the start, so heading AND pitch are UNCHANGED when it completes. The pitch/yaw integrate AND
-    // the auto-scheme heading yaw are both frozen for the duration, so nothing can drift the final facing.
-    player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);   // tells (wingtip vapor, HUD) still read rollRate
-    player.invuln = Math.max(player.invuln, barrelRollAnim);   // keep i-frames topped up to the remaining roll time so projectile immunity spans the WHOLE roll, not just BARREL_ROLL_INVULN
+    // pure body-Z roll driven by progress from _brQuat0: at prog=1 it's exactly a full turn, so heading and
+    // pitch are unchanged; pitch/yaw integration and auto-yaw are frozen meanwhile
+    player.rollRate = barrelRollDir * (TWO_PI / BARREL_ROLL_DURATION);   // wingtip vapor / HUD still read rollRate
+    player.invuln = Math.max(player.invuln, barrelRollAnim);   // i-frames span the whole roll
     const prog = clamp(1 - barrelRollAnim / BARREL_ROLL_DURATION, 0, 1);
     player.group.quaternion.copy(player._brQuat0).multiply(q1.setFromAxisAngle(ZAX, barrelRollDir * prog * TWO_PI));
     player._brEnding = true;
   } else {
-    if (player._brEnding && player._brQuat0) {   // roll just finished: pin EXACTLY back to the captured orientation
+    if (player._brEnding && player._brQuat0) {   // roll just finished: pin exactly back to the captured orientation
       player.group.quaternion.copy(player._brQuat0);
       player._brEnding = false;
-      player.rollRate = player.pitchRate = player.yawRate = 0;   // zero rates so this frame's integrate is identity (no drift)
-      player._brSettle = true;   // skip auto-yaw THIS frame: currentBank (read at the top of updatePlayer) is still the
-                                 // stale mid-roll bank, and feeding it to the coordinated-turn yaw would nudge heading
+      player.rollRate = player.pitchRate = player.yawRate = 0;
+      player._brSettle = true;   // skip auto-yaw this frame: currentBank is still the stale mid-roll bank
     }
     if (directional && !player._brSettle) {
-      // World-relative "fly toward the stick" + auto-level. stick in point-to-fly signs: +sx = steer right,
-      // +sy = climb (flightInput.pitch is negative-for-climb, so negate). Keyboard still folds in on top.
+      // +sx = steer right, +sy = climb (flightInput.pitch is negative-for-climb)
       let sx = flightInput.roll, sy = -flightInput.pitch;
       if (down('KeyW')) sy += 1; if (down('KeyS')) sy -= 1;
       if (down('KeyD')) sx += 1; if (down('KeyA')) sx -= 1;
       sx = clamp(sx, -1, 1); sy = clamp(sy, -1, 1);
-      player.yawRate   = damp(player.yawRate,   sx * tb * 1.15, 6.0, dt);   // heading-turn magnitude
-      player.pitchRate = damp(player.pitchRate, sy * tb * 1.00, 5.5, dt);   // climb/dive magnitude
+      player.yawRate   = damp(player.yawRate,   sx * tb * 1.15, 6.0, dt);
+      player.pitchRate = damp(player.pitchRate, sy * tb * 1.00, 5.5, dt);
       const fwd = fwdOf(player.group, t3);
       const hr  = t4.copy(fwd).cross(UPV);                  // world-horizontal axis ⟂ heading → bank-independent pitch
       if (hr.lengthSq() < 1e-5) hr.copy(rightOf(player.group, t4));   // near-vertical: fall back to body right
       hr.normalize();
-      player.group.quaternion.premultiply(q1.setFromAxisAngle(hr, player.pitchRate * dt));   // pitch toward world up/down (no inversion)
-      player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, -player.yawRate * dt));   // turn heading (right stick = right)
-      const tgtBank = sx * STEER.autoMaxBank;               // cosmetic bank INTO the turn; 0 when centered → wings auto-level
+      player.group.quaternion.premultiply(q1.setFromAxisAngle(hr, player.pitchRate * dt));
+      player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, -player.yawRate * dt));
+      const tgtBank = sx * STEER.autoMaxBank;               // cosmetic bank into the turn; 0 when centred → auto-level
       const rollStep = clamp((tgtBank - currentBank) * STEER.bankGain, -8, 8) * dt;
-      player.group.quaternion.multiply(q1.setFromAxisAngle(ZAX, -rollStep));                 // body roll toward target bank / level
-      player.rollRate = -rollStep / Math.max(dt, 1e-4);     // keep the wingtip-vapor / HUD roll tell in sync
+      player.group.quaternion.multiply(q1.setFromAxisAngle(ZAX, -rollStep));
+      player.rollRate = -rollStep / Math.max(dt, 1e-4);
     } else if (!directional) {
       eul.set(player.pitchRate * dt, player.yawRate * dt, player.rollRate * dt, 'XYZ');
       q1.setFromEuler(eul);
       player.group.quaternion.multiply(q1);
     }
   }
-  // AUTO scheme heading turn: a WORLD-axis yaw proportional to the current bank. Applied here (not in steerCommand)
-  // and about the WORLD up axis so it's DECOUPLED from pitch — you can dive/climb while turning (diagonals work).
-  // sign: bank right (currentBank>0) -> negative world yaw -> nose right. Scaled by tb so it tracks airframe agility.
-  // Gated OFF during a barrel roll: otherwise the 360° bank sweep feeds this term a net heading yaw (drift).
+  // 'auto' scheme: world-up yaw ∝ bank, decoupled from pitch so diagonals work. Off during a barrel roll,
+  // whose 360° bank sweep would otherwise feed it a net heading drift.
   if (controlScheme === 'auto' && !directional && barrelRollAnim <= 0 && !player._brSettle) {
     const autoYaw = -STEER.autoYawGain * Math.sin(currentBank) * tb * dt;
     if (autoYaw) player.group.quaternion.premultiply(q2.setFromAxisAngle(UPV, autoYaw));
   }
-  player._brSettle = false;   // one-frame settle guard consumed; next frame reads a fresh (level) currentBank
+  player._brSettle = false;
 
-  // AIM ASSIST — gently steer the nose toward the gun lead pip of the nearest forward target (the SAME
-  // interceptPoint drawGunPipper draws). Optional, ON by default. A bounded world-axis nudge: it only acts
-  // inside a forward cone within gun range, eases out with distance, is rate-capped (never a hard snap), and
-  // yields entirely during a barrel roll — player input always dominates. Mirrors the autoYaw premultiply above.
+  // AIM ASSIST: bounded, rate-capped world-axis nudge toward the gun lead pip (same interceptPoint the HUD
+  // pipper draws); yields during a barrel roll so player input always dominates
   if (aimAssist && !player.noCannon && barrelRollAnim <= 0) {
     const at = pickGunTarget();
     if (at && at.alive) {
-      // strongest tier "forces" toward the lead UNLESS the player is actively orienting elsewhere
       const manualAim = down('KeyW') || down('KeyS') || down('KeyQ') || down('KeyE') || down('KeyA') || down('KeyD') || Math.hypot(flightInput.pitch || 0, flightInput.roll || 0) > 0.12;
       const cfg = aimAssistCfg(aimStrength, manualAim);
-      const pp = player.group.position;
       const relV = aimT1.copy(at.vel || ZERO).addScaledVector(player.vel, -0.9);   // rounds inherit 0.9 of jet vel
-      const ip = interceptPoint(pp, at.group.position, relV, 1400 * (player.bulletSpeedMul || 1), tLead);
+      const ip = interceptPoint(pos, at.group.position, relV, 1400 * player.bulletSpeedMul, tLead);
       if (ip) {
-        const desired = aimT2.copy(ip).sub(pp);
+        const desired = aimT2.copy(ip).sub(pos);
         const dist = desired.length();
         if (dist > 1) {
           desired.multiplyScalar(1 / dist);
@@ -1071,7 +968,7 @@ function updatePlayer(dt) {
           const angErr = Math.acos(clamp(fwdv.dot(desired), -1, 1));
           const step = aimAssistStep(angErr, dist, dt, cfg);
           if (step > 0) {
-            const axis = aimT1.crossVectors(fwdv, desired);   // aimT1 free now (relV consumed)
+            const axis = aimT1.crossVectors(fwdv, desired);   // relV consumed, aimT1 free
             if (axis.lengthSq() > 1e-9) player.group.quaternion.premultiply(q2.setFromAxisAngle(axis.normalize(), step));
           }
         }
@@ -1083,39 +980,34 @@ function updatePlayer(dt) {
   if (thr) tT += dt * (0.35 + st.accel * 0.22);
   if (brake) tT -= dt * (0.5 + st.accel * 0.3);
   player.throttle = clamp(tT, 0, 1);
-  let maxS = st.maxSpeed * (player.speedMul || 1) * (player.overdrive > 0 ? 1.75 : player.vectorSurge > 0 ? 1.4 : 1);
+  let maxS = st.maxSpeed * player.speedMul * (player.overdrive > 0 ? 1.75 : player.vectorSurge > 0 ? 1.4 : 1);
   if (player.highG) maxS *= 0.42;
   const tgtSpeed = lerp(st.minSpeed, maxS, player.throttle);
   player.speed = damp(player.speed, tgtSpeed, (player.highG ? 3.0 : 0.9) * st.accel, dt);
 
   const fwd = fwdOf(player.group, t1);
   const rgt = rightOf(player.group, t3);
-  
   player.vel.lerp(t2.copy(fwd).multiplyScalar(player.speed), 1 - Math.exp(-3.5 * dt));
-  player.group.position.addScaledVector(player.vel, dt);
+  pos.addScaledVector(player.vel, dt);
 
-  const gh = terrainH(player.group.position.x, player.group.position.z);
-  const agl = player.group.position.y - gh;
+  const gh = terrainH(pos.x, pos.z);
+  const agl = pos.y - gh;
   player.gpws = agl < 270 && fwd.y < 0.06;
   if (agl < 130) player.pitchRate = Math.max(player.pitchRate, tb * 1.7);
-  if (agl < 22) { player.group.position.y = gh + 22; player.vel.y = Math.max(player.vel.y, 30); }
+  if (agl < 22) { pos.y = gh + 22; player.vel.y = Math.max(player.vel.y, 30); }
 
   const B = 12000;
-  if (player.group.position.x > B) player.group.position.x = B;
-  if (player.group.position.x < -B) player.group.position.x = -B;
-  if (player.group.position.z > B) player.group.position.z = B;
-  if (player.group.position.z < -B) player.group.position.z = -B;
-  if (player.group.position.y > 5200) player.group.position.y = 5200;
+  pos.x = clamp(pos.x, -B, B); pos.z = clamp(pos.z, -B, B);
+  if (pos.y > 5200) pos.y = 5200;
 
-  player.stealth = player.stealthField > 0 || inCloud(player.group.position);
+  player.stealth = player.stealthField > 0 || inCloud(pos);
 
-  // wingtip vortices: condensation streamers whenever the airframe is pulling hard
+  // wingtip vortices while pulling hard
   if ((player.highG || Math.abs(player.pitchRate) > tb * 0.8) && player.speed > 240) {
     player.vaporT = (player.vaporT || 0) - dt;
     if (player.vaporT <= 0) {
       player.vaporT = 0.022;
-      spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, 9), 0xcfe2f2, 0.3);
-      spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, -9), 0xcfe2f2, 0.3);
+      for (let s = 1; s >= -1; s -= 2) spawnTrail(t4.copy(pos).addScaledVector(rgt, 9 * s), 0xcfe2f2, 0.3);
     }
   }
 
@@ -1132,29 +1024,23 @@ function updatePlayer(dt) {
       en.flame.material.color.setHex(player.overdrive > 0 ? 0xff7a2a : player.jet.accent);
     }
   }
-  
-  // Trails and wingtip vortices — kept sparse so they don't clutter the view in level flight
+
+  // contrails + wingtip vapor, kept sparse so level flight stays uncluttered
   player._trailT -= dt;
   if (player._trailT <= 0) {
-      // Engine contrails ONLY on afterburner (overdrive) or near full throttle at high speed — short & faint
-      if (player.overdrive > 0 || (player.throttle > 0.95 && player.speed > st.maxSpeed * 0.92)) {
-        const bk = fwdOf(player.group, t4).multiplyScalar(-1);
-        const op = player.overdrive > 0 ? 0.32 : 0.18;
-        spawnTrail(t5.copy(player.group.position).addScaledVector(rgt, 6).addScaledVector(bk, 4), 0xbfeaff, op);
-        spawnTrail(t5.copy(player.group.position).addScaledVector(rgt, -6).addScaledVector(bk, 4), 0xbfeaff, op);
-      }
-      // Wingtip vapor ONLY during genuine hard maneuvering
-      if (player.highG || Math.abs(player.pitchRate) > st.turnRate * 1.5 || Math.abs(player.rollRate) > st.turnRate * 1.7) {
-          const span = (player.group.userData.cfg && player.group.userData.cfg.wingspan) || 9;
-          spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, span), 0xffffff, 0.32);
-          spawnTrail(t4.copy(player.group.position).addScaledVector(rgt, -span), 0xffffff, 0.32);
-      }
-      player._trailT = 0.07;
+    if (player.overdrive > 0 || (player.throttle > 0.95 && player.speed > st.maxSpeed * 0.92)) {
+      const bk = fwdOf(player.group, t4).multiplyScalar(-1);
+      const op = player.overdrive > 0 ? 0.32 : 0.18;
+      for (let s = 1; s >= -1; s -= 2) spawnTrail(t5.copy(pos).addScaledVector(rgt, 6 * s).addScaledVector(bk, 4), 0xbfeaff, op);
+    }
+    if (player.highG || Math.abs(player.pitchRate) > st.turnRate * 1.5 || Math.abs(player.rollRate) > st.turnRate * 1.7) {
+      const span = (player.group.userData.cfg && player.group.userData.cfg.wingspan) || 9;
+      for (let s = 1; s >= -1; s -= 2) spawnTrail(t4.copy(pos).addScaledVector(rgt, span * s), 0xffffff, 0.32);
+    }
+    player._trailT = 0.07;
   }
 
-  // F1 gun-overheat: sustained fire builds gun heat; at 1.0 the cannon locks out (banner + haptic)
-  // and cools — fire is gated below — until it re-arms under HEAT.rearm. State lives on the player and
-  // auto-resets each run (?? fallbacks; no createPlayer edit needed).
+  // gun overheat: gunHeat/gunLocked aren't in createPlayer, hence the ?? defaults
   const wantFire = down('Space') || touchBtns.gun || mouseFiring;
   const heatRes = heatStep({ heat: player.gunHeat ?? 0, locked: player.gunLocked ?? false }, wantFire && !player.noCannon, dt);
   player.gunHeat = heatRes.heat; player.gunLocked = heatRes.locked;
@@ -1162,21 +1048,18 @@ function updatePlayer(dt) {
   if (wantFire && !heatRes.locked) fireGun();
   updateLockOn(dt);
 
-  updatePdBeams(dt);   // fade any point-defense laser bolts
+  updatePdBeams(dt);
 
-  // ---- VECTOR SURGE (J-50): plasma wake guts anything you cut close past; missiles keep losing lock ----
+  // VECTOR SURGE: plasma wake guts anything you cut close past; missiles keep losing lock
   if (player.vectorSurge > 0) {
     for (let i = 0; i < missiles.length; i++) { const m = missiles[i]; if (m.enemy && Math.random() < 0.6) m.decoyed = true; }
     player._wakeT -= dt;
     if (player._wakeT <= 0) {
       const bk = fwdOf(player.group, t4).multiplyScalar(-1);
-      spawnTrail(t5.copy(player.group.position).addScaledVector(bk, 5), 0x46ffd0, 0.5);
+      spawnTrail(t5.copy(pos).addScaledVector(bk, 5), 0x46ffd0, 0.5);
       player._wakeT = 0.03;
     }
-    for (let i = 0; i < enemies.length; i++) {
-      const e = enemies[i]; if (!e.alive || e.type === 'boss') continue;
-      if (e.group.position.distanceToSquared(player.group.position) < 38000) damageEnemy(e, 110 * dt, e.group.position, true);
-    }
+    blastEnemies(pos, 38000, 110 * dt, null, true);
   }
 
   animEngines(player.group, player.throttle);
@@ -1186,14 +1069,14 @@ function updatePlayer(dt) {
   player._missT -= dt; if (player.incoming && player._missT <= 0) { audio.blip(900, 0.1, 'square', 0.13); player._missT = 0.55; }
 }
 
-/* POINT-DEFENSE LASER visuals — brief additive bolts fired from the airframe (or an escort) to a missile it swats */
+/* ---------------- point-defense laser bolts ---------------- */
 const PD_POOL = [];
-let pdBeams = [];
+const pdBeams = [];
 function getPdBeam() {
   let b = PD_POOL.pop();
   if (!b) {
     const geo = new THREE.CylinderGeometry(0.7, 0.7, 1, 6, 1, true);
-    geo.rotateX(Math.PI / 2); geo.translate(0, 0, -0.5);   // unit length running from origin toward -Z (Object3D.lookAt's forward)
+    geo.rotateX(Math.PI / 2); geo.translate(0, 0, -0.5);   // unit length from origin toward -Z (Object3D.lookAt's forward)
     const mat = new THREE.MeshBasicMaterial({ color: 0x9ff0ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     b = new THREE.Mesh(geo, mat); scene.add(b);
   }
@@ -1202,20 +1085,20 @@ function getPdBeam() {
 function firePdBeam(from, to, color) {
   const len = from.distanceTo(to); if (len < 1) return;
   const b = getPdBeam();
-  b.material.color.setHex(color != null ? color : 0x9ff0ff);
+  b.material.color.setHex(color);
   b.position.copy(from);
-  b.lookAt(to);                 // local -Z now points at the missile
+  b.lookAt(to);
   b.scale.set(1, 1, len);
   b.material.opacity = 0.95;
   pdBeams.push({ mesh: b, t: 0.13, max: 0.13 });
-  spawnTrail(to, color != null ? color : 0x9ff0ff, 0.9);   // bright hit flash at the intercept point
+  spawnTrail(to, color, 0.9);   // hit flash at the intercept point
 }
 function updatePdBeams(dt) {
   for (let i = pdBeams.length - 1; i >= 0; i--) {
     const p = pdBeams[i]; p.t -= dt;
     const k = clamp(p.t / p.max, 0, 1);
     p.mesh.material.opacity = 0.95 * k;
-    p.mesh.scale.x = p.mesh.scale.y = 0.5 + (1 - k) * 1.8;   // bloom outward as it dies
+    p.mesh.scale.x = p.mesh.scale.y = 0.5 + (1 - k) * 1.8;
     if (p.t <= 0) { p.mesh.visible = false; PD_POOL.push(p.mesh); pdBeams.splice(i, 1); }
   }
 }

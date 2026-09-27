@@ -1,10 +1,6 @@
-/* SKYSTRIKE — airframes.js: per-airframe SHAPES geometry-spec table + enemy shape pools.
-   Pure literal config + flag-normalization (no THREE / store / DOM) — require-safe.
-   Consumed at call-time by buildJet (entities/combat/main) + the hangar preview; the CommonJS
-   footer lets tests/plain-shapes.test.js + tests/npc-airframes.test.js import the REAL tables
-   instead of regex-scraping entities.js source. Load order: before entities.js. */
+/* SKYSTRIKE — airframes.js: per-airframe SHAPES geometry spec for buildJet (require-safe). */
 
-/* per-aircraft data. forward = -Z. wing/canard/htail are right-half planforms [span, chordZ] */
+/* forward = -Z. wing/canard/htail are right-half planforms [span, chordZ] */
 const SHAPES = {
   F22:  { len:18, noseLen:6.5, frontR:1.5, rearR:1.15, flat:0.6,
           wing:[[1.6,-1.6],[9.3,6.2],[9.3,7.5],[1.6,5.0]], wingY:-0.2, wingThick:0.55,
@@ -29,7 +25,7 @@ const SHAPES = {
           htail:[[1.0,5.2],[4.4,7.5],[4.4,8.9],[1.0,8.8]],
           vtail:{type:'twin', base:3.4, tip:1.2, h:3.9, sweep:1.6, x:1.8, z:4.8, cant:0.42},
           lerx:true, engines:1, gap:0, intake:'side', wingspan:7.8,
-          boomRecept:true, gunPort:'shoulder', sawtoothDoors:true },
+          boomRecept:true, gunPort:'shoulder', sawtoothDoors:true, sawtoothTE:true },
   EFT:  { len:17, noseLen:7, frontR:1.3, rearR:1.2, flat:0.62,
           wing:[[1.3,-1.6],[10.4,6.6],[10.4,7.8],[1.5,8.3]], wingY:-0.15, wingThick:0.55,
           canard:[[1.3,-6.6],[3.5,-5.3],[3.5,-4.7],[1.4,-4.9]], canardY:0.35,
@@ -52,8 +48,8 @@ const SHAPES = {
           htail:[[1.0,5.2],[4.9,6.9],[4.9,8.3],[1.0,8.6]],
           vtail:{type:'twin', base:3.4, tip:1.1, h:3.9, sweep:1.7, x:1.9, z:3.0, cant:0.35},
           lerx:true, bigLerx:true, engines:2, gap:1.8, intake:'side', wingspan:8.4,
-          wingFold:true, tipRails:true, refuelProbe:true },
-  // ---- 6th-gen tailless designs (no vertical tails) ----
+          wingFold:true, tipRail:'big', refuelProbe:true },
+  // 6th-gen tailless designs (no vertical tails)
   J36:  { len:24, noseLen:9, frontR:1.8, rearR:1.55, flat:0.5,
           wing:[[1.8,-6.0],[6.0,1.5],[13.0,8.0],[13.0,9.8],[7.0,9.2],[6.2,11.2],[2.0,11.6]],
           wingY:-0.1, wingThick:0.7,
@@ -62,12 +58,13 @@ const SHAPES = {
   F47:  { len:19.5, noseLen:8, frontR:1.65, rearR:1.35, flat:0.54,
           wing:[[1.5,-1.0],[10.8,5.2],[10.8,7.0],[5.4,6.2],[1.8,8.2]], wingY:-0.18, wingThick:0.56,
           canard:[[1.5,-6.8],[4.6,-4.6],[4.6,-3.8],[1.7,-4.4]], canardY:0.2, canardCant:0.35,
-          lerx:false, engines:2, gap:2.0, intake:'side', wingspan:10.8 },
+          lerx:false, engines:2, gap:2.0, intake:'side', wingspan:10.8,
+          dorsalHump:true, chineRidge:true },
   J50:  { len:18, noseLen:7.5, frontR:1.45, rearR:1.2, flat:0.55,
           wing:[[1.4,-2.0],[9.4,4.3],[9.4,5.4],[5.2,5.0],[3.4,8.0],[1.6,8.4]],
           wingY:-0.12, wingThick:0.55,
           lerx:false, engines:2, gap:1.9, intake:'side', wingspan:9.4,
-          tipPivot:true, lambdaFairing:true, noseChineBlend:true, canopyFlush:true },
+          tipPivot:true, lambdaFairing:true, chineRidge:true, canopyFlush:true },
   ENEMY:{ len:16.5, noseLen:7.5, frontR:1.25, rearR:1.05, flat:0.58,
           wing:[[1.3,0.0],[7.6,5.2],[7.6,6.4],[1.5,7.2]], wingY:-0.2, wingThick:0.48,
           htail:[[0.9,6.0],[4.0,8.2],[4.0,9.2],[0.9,9.4]],
@@ -88,7 +85,7 @@ const SHAPES = {
           vtail:{type:'single', base:3.2, tip:1.1, h:3.6, sweep:1.6, z:4.6} },
   CCAJET:{ len:11, noseLen:4.5, frontR:0.95, rearR:0.8, flat:0.55,
           wing:[[0.9,-1.2],[6.8,2.6],[6.8,3.8],[3.0,3.2],[1.1,4.6]], wingY:-0.08, wingThick:0.38,
-          ccaVtail:{type:'twin', base:1.8, tip:0.6, h:2.2, sweep:1.2, x:0.9, z:3.6, cant:0.7},
+          vtail:{type:'twin', base:1.8, tip:0.6, h:2.2, sweep:1.2, x:0.9, z:3.6, cant:0.7},
           lerx:false, engines:1, gap:0, intake:'dorsal', wingspan:6.8,
           clean:true, noCanopy:true, facetNose:true },
   BOMBER:{ len:21, noseLen:4, frontR:2.2, rearR:1.7, flat:0.5,
@@ -99,32 +96,22 @@ const SHAPES = {
           flyingWing:true, dorsalIntake:true, bayDoors:true },
 };
 
-/* stable id per shape — used as the geometry-cache key prefix */
+// id doubles as the geometry-cache key prefix
 Object.keys(SHAPES).forEach(k => { SHAPES[k].id = k; });
 
-/* per-airframe accuracy flags (stealth jets fly clean; others carry tip missiles) */
+// stealth jets fly clean (internal bays); the rest carry tip missiles
 ['F22', 'F35', 'J20', 'SU57', 'J36', 'F47', 'J50'].forEach(k => { SHAPES[k].clean = true; });
-// rectangular 2D nozzles: F-22 thrust vectoring, flat 6th-gen stealth exhausts
+// rectangular 2D nozzles
 ['F22', 'F47', 'J50'].forEach(k => { SHAPES[k].nozzle = '2d'; });
 // DSI (diverterless) inlet bumps
 ['J20', 'F35', 'F47', 'J36', 'J50'].forEach(k => { SHAPES[k].dsi = true; });
-// electro-optical sensors: forward IRST ball (Flanker/Typhoon/Rafale) vs faceted under-nose EOTS / aperture (F-35, J-20, 6th-gen)
+// forward IRST ball vs faceted under-nose EOTS
 ['SU57', 'EFT', 'RAFALE'].forEach(k => { SHAPES[k].irst = true; });
 ['F35', 'J20', 'F47', 'J36', 'J50'].forEach(k => { SHAPES[k].eots = true; });
-// 6th-gen US blended-body details
-SHAPES.F47.dorsalHump = true; SHAPES.F47.chineRidge = true;
-// flag aliasing — unify near-duplicate spec names onto one generic implementation each
-Object.keys(SHAPES).forEach(k => {
-  const s = SHAPES[k];
-  if (s.chineLine || s.noseChineBlend) s.chineRidge = true;   // one chine-strip block
-  if (s.sawtooth || s.sawtoothDoors) s.sawtoothTE = true;     // one TE-serration block
-  if (s.tipRails) s.tipRail = true;                            // one wingtip-rail block
-});
 
-/* enemy shape pool — fodder all fly STD (aces pick named real jets via roster.js aceShapePool) */
+// fodder all fly STD (aces pick named jets via roster.js aceShapePool)
 const FIGHTER_SHAPES = ['STD'];
 
-/* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SHAPES, FIGHTER_SHAPES };
 }

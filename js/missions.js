@@ -22,7 +22,7 @@ if (typeof require === 'function' && typeof campaignClearTarget === 'undefined')
   try {
     var _core = require('./core.js');
     ['campaignClearTarget', 'nextObjectivePhase', 'objectiveTypes', 'reconProgress', 'nextWaypoint',
-      'detectionDelta', 'reconWon', 'stealthWon', 'stealthFailed', 'escortOutcome', 'interceptDoomed'].forEach(function (k) {
+      'detectionDelta', 'reconWon', 'stealthWon', 'escortOutcome', 'interceptDoomed'].forEach(function (k) {
       if (typeof globalThis[k] === 'undefined' && _core[k]) globalThis[k] = _core[k];
     });
   } catch (e) { /* core.js not resolvable — pure fns needing it simply won't run in this env */ }

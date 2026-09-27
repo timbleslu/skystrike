@@ -6,7 +6,7 @@
 const assert = require('assert');
 const {
   LEVEL_WAVE_MIN, LEVEL_WAVE_CAP, campaignWaveCount, levelCleared,
-  isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared, furthestLevel,
+  isOpUnlocked, isLevelUnlocked, levelState, markLevelCleared,
   captureSnapshot, rollbackSnapshot, grantLevelRewards, CAMPAIGN_REPLAY_REWARDS,
 } = require('../js/core.js');
 
@@ -49,7 +49,7 @@ const afterA1 = markLevelCleared(fresh, OPS, 'a', 0, 1500, 2);
 assert.deepStrictEqual(fresh, {}, 'input campaign is NOT mutated (pure)');
 assert.strictEqual(levelState(afterA1, OPS, 'a', 0), 'cleared');
 assert.strictEqual(levelState(afterA1, OPS, 'a', 1), 'unlocked', 'clearing L1 unlocks L2');
-assert.strictEqual(furthestLevel(afterA1, 'a'), 1, 'furthest advanced to index 1');
+assert.strictEqual(afterA1.a.furthest, 1, 'furthest advanced to index 1');
 assert.strictEqual(afterA1.a.levels.a1.bestScore, 1500);
 assert.strictEqual(afterA1.a.levels.a1.bestStars, 2);
 
@@ -57,7 +57,7 @@ assert.strictEqual(afterA1.a.levels.a1.bestStars, 2);
 const replay = markLevelCleared(afterA1, OPS, 'a', 0, 900, 1);
 assert.strictEqual(replay.a.levels.a1.bestScore, 1500, 'bestScore monotonic');
 assert.strictEqual(replay.a.levels.a1.bestStars, 2, 'bestStars monotonic');
-assert.strictEqual(furthestLevel(replay, 'a'), 1, 'furthest unchanged on replay');
+assert.strictEqual(replay.a.furthest, 1, 'furthest unchanged on replay');
 
 // clear A2 then the A boss -> op B unlocks; furthest caps at the last index (no overflow)
 let c = markLevelCleared(afterA1, OPS, 'a', 1, 2000, 3);
@@ -65,7 +65,7 @@ c = markLevelCleared(c, OPS, 'a', 2, 9000, 3);
 assert.strictEqual(levelState(c, OPS, 'a', 2), 'cleared', 'boss level cleared');
 assert.strictEqual(isOpUnlocked(c, OPS, 'b'), true, 'clearing op A boss unlocks op B');
 assert.strictEqual(isLevelUnlocked(c, OPS, 'b', 0), true, 'op B level 1 now open');
-assert.strictEqual(furthestLevel(c, 'a'), 2, 'furthest caps at the last index');
+assert.strictEqual(c.a.furthest, 2, 'furthest caps at the last index');
 
 // ===== snapshot / rollback: PURE copies with no shared refs =====
 const player = { tp: 120, score: 3400, tech: ['gun1', 'msl1'], techRepeat: { gun1: 2 }, upgrades: ['u1'], loadout: { jetId: 'F-22' } };

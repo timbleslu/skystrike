@@ -1,9 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { GFX_TIERS, resolveQuality } = require('../js/core.js');
-
-// ---- tier list invariants ----
-assert.deepStrictEqual(GFX_TIERS, ['auto', 'low', 'medium', 'high'], 'four tiers: auto/low/medium/high');
+const { resolveQuality } = require('../js/core.js');
 
 // ---- explicit settings pass through, ignoring the heuristic inputs ----
 assert.strictEqual(resolveQuality('low', 1, false), 'low', "explicit 'low' wins on desktop");

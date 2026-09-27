@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { MISSIONS, MISSION_TYPES, missionForSector, startMission, missionKill, tickMission } = require('../js/missions.js');
+const { MISSIONS, missionForSector, startMission, missionKill, tickMission } = require('../js/missions.js');
 
 // ===== sector -> mission mapping (deterministic) =====
 assert.strictEqual(missionForSector('FURBALL'), 'sweep');

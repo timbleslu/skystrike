@@ -1,28 +1,13 @@
-/* SKYSTRIKE — screen router (Candidate 3 "Screen router"). Browser globals; loaded AFTER hud.js and
-   BEFORE ui-hud.js. Consolidates the smeared classList add/remove('show'|'hide') screen-navigation
-   that used to live across ui-flow.js / ui-hangar.js / ui-tech.js / ui-settings.js.
+/* SKYSTRIKE — nav.js: full-screen router. Owns only the mutually-exclusive screens that REPLACE one another;
+   modal overlays drawn over the current screen (meta, manual, tech, wingpick, langSelect, onboard) stay
+   hand-rolled at their call sites. Require-safe: no DOM/globals touched at load. */
 
-   SCOPE: this router owns the FULL-SCREEN flow — the mutually-exclusive screens that REPLACE one
-   another (hangar ⇄ campaign-nav chain, hangar → playing → gameover). It does NOT own modal overlays
-   that render ON TOP of the current screen without hiding it (meta, manual, tech/upgrade, wingpick,
-   langSelect, onboard) — those stay hand-rolled at their call sites (a "hide current + show
-   new" model would wrongly hide the screen underneath the modal). #modeChoice / #endlessSetup are
-   also modal-over-hangar (entered by hand-rolled code) but are listed here so hideAllScreens() can
-   reset them; see their `entry:'manual'` rows.
-
-   ADR-0001/0002: NO import/export — the ONLY module syntax is the inert CommonJS footer, guarded so
-   it never runs in the browser. NOTHING here touches the DOM / `state` / `isTouchEnabled` at LOAD
-   time (the table is pure data; all DOM application is inside functions) so the file stays
-   require-safe for tests/nav.test.js. */
-
-/* SCREENS: screenName → row.
-   panel    : DOM overlay id, or null for the panel-less flight screen ('playing').
-   state    : `state` global to write on enter ('hangar'|'playing'|'dead'), or null = leave state alone.
-   touch    : 'show' (show touch controls IF isTouchEnabled) | 'hide' (always hide) | null (leave alone).
-   inverted : hangar only — it is shown by REMOVING 'hide' and hidden by ADDING 'hide' (opposite of the
-              overlays, which toggle 'show'). Encodes the pre-existing hangar semantics exactly.
-   entry    : 'router' = navigated via showScreen(); 'manual' = a menu overlay entered by hand-rolled
-              code (over the still-visible hangar) but tracked here so hideAllScreens() can clear it. */
+/* panel    : DOM overlay id, or null for the panel-less flight screen.
+   state    : `state` value written on enter, or null = leave alone.
+   touch    : 'show' (if isTouchEnabled) | 'hide' | null.
+   inverted : hangar only — shown by REMOVING 'hide' rather than adding 'show'.
+   entry    : 'manual' = menu overlay over the hangar, entered by hand (openModeChoice/openEndlessSetup) and
+              listed only so hideAllScreens() resets it. Never showScreen() these — it would hide the hangar. */
 const SCREENS = {
   hangar:       { panel: 'hangar',       state: 'hangar',  touch: 'hide', inverted: true,  entry: 'router' },
   playing:      { panel: null,           state: 'playing', touch: 'show', inverted: false, entry: 'router' },
@@ -32,20 +17,14 @@ const SCREENS = {
   levelMap:     { panel: 'levelMap',     state: null,      touch: null,   inverted: false, entry: 'router' },
   briefing:     { panel: 'briefing',     state: null,      touch: null,   inverted: false, entry: 'router' },
   levelCleared: { panel: 'levelCleared', state: 'dead',    touch: 'hide', inverted: false, entry: 'router' },
-  levelFailed:  { panel: 'levelFailed',  state: 'dead',    touch: 'hide', inverted: false, entry: 'router' },   // campaign overhaul: failure debrief (reason + RETRY / MAP)
-  // menu overlays over the hangar — entered hand-rolled (openModeChoice/openEndlessSetup); here only
-  // so hideAllScreens() resets them. Do NOT drive these via showScreen (it would hide the hangar).
+  levelFailed:  { panel: 'levelFailed',  state: 'dead',    touch: 'hide', inverted: false, entry: 'router' },
   modeChoice:   { panel: 'modeChoice',   state: null,      touch: null,   inverted: false, entry: 'manual' },
   endlessSetup: { panel: 'endlessSetup', state: null,      touch: null,   inverted: false, entry: 'manual' },
 };
 
-// the active screen. Boots into the hangar (which is visible with no 'hide' class at page load, and
-// `state` starts 'hangar' in globals.js). Updated only by showScreen().
 let currentScreen = 'hangar';
 
-/* PURE transition computation: given the current row and the target row, decide which panel to hide,
-   which to show, the state write, and the touch action. No DOM / globals — testable in isolation.
-   Returns { hide, show, state, touch }; hide/show are { panel, inverted } or null. */
+// Pure: { hide, show, state, touch }; hide/show are { panel, inverted } or null.
 function navPlan(fromRow, toRow) {
   if (!toRow) return { hide: null, show: null, state: null, touch: null };
   const hide = (fromRow && fromRow.panel && fromRow.panel !== toRow.panel)
@@ -55,19 +34,13 @@ function navPlan(fromRow, toRow) {
   return { hide: hide, show: show, state: toRow.state || null, touch: toRow.touch || null };
 }
 
-// IMPURE: apply one panel plan { panel, inverted } to the DOM. Non-inverted panels toggle 'show';
-// the inverted hangar toggles 'hide' (visible = no 'hide').
 function applyPanel(p, visible) {
   if (!p) return;
   const el = g(p.panel);
-  if (!el) return;
   if (p.inverted) el.classList.toggle('hide', !visible);
   else el.classList.toggle('show', visible);
 }
 
-/* Navigate to a screen: hide the currently-active screen's panel, apply the target row (show panel +
-   state write + touch-control visibility), and track currentScreen. Pixel-identical to the old
-   hand-rolled hide-current/show-new + state + touch clusters. */
 function showScreen(name) {
   const toRow = SCREENS[name];
   if (!toRow) return;
@@ -80,25 +53,18 @@ function showScreen(name) {
   currentScreen = name;
 }
 
-/* Hide every overlay panel + the touch controls (belt-and-suspenders reset used by returnToHangar).
-   Skips the inverted hangar (we want it shown) and the panel-less flight screen. */
+// Hide every overlay panel + touch controls (the hangar and the panel-less flight screen are skipped).
 function hideAllScreens() {
   for (const key in SCREENS) {
     const row = SCREENS[key];
     if (row.inverted || !row.panel) continue;
-    const el = g(row.panel);
-    if (el) el.classList.remove('show');
+    g(row.panel).classList.remove('show');
   }
-  const tc = g('touchControls');
-  if (tc) tc.classList.remove('show');
+  g('touchControls').classList.remove('show');
 }
 
-/* ---------------- menu keyboard: consistent Esc = BACK (UX pass) ----------------
-   Before: Esc on EVERY menu toggled the flight manual (main.js), so it never meant "back"; Enter on the hangar
-   launched straight into Endless (bypassing the mode choice the SELECT button opens) — even from underneath an
-   open overlay; and Space/Enter on a focused hangar button were swallowed by the game-key handler.
-   MENU_BACK: overlay panel id → the id of the button whose click handler already implements that screen's
-   BACK (so Esc is exactly the on-screen BACK — no second code path). Topmost-first precedence. */
+/* Esc = BACK: overlay panel id → the id of the button whose click already implements that screen's BACK.
+   Topmost-first precedence. */
 const MENU_BACK = [
   ['gameover',     'goHangar'],
   ['levelCleared', 'lvlcMap'],
@@ -111,44 +77,39 @@ const MENU_BACK = [
   ['modeChoice',   'modeBack'],
   ['meta',         'metaClose'],
 ];
-// PURE: given the ids of the currently-open overlays, the back-button id Esc should press (or null).
 function menuBackTarget(openPanels) {
   for (let i = 0; i < MENU_BACK.length; i++) if (openPanels.indexOf(MENU_BACK[i][0]) !== -1) return MENU_BACK[i][1];
   return null;
 }
-// IMPURE glue: one capture-phase keydown listener that runs BEFORE main.js's bubble handler and only
-// claims keys on menus (flight input, the open manual, the tech tree and text fields are left untouched).
+// Capture-phase so it runs BEFORE main.js's bubble handler; claims keys only on menus.
 function installMenuKeys() {
-  const $ = (id) => document.getElementById(id);
-  const shown = (id) => { const el = $(id); return !!(el && el.classList.contains('show')); };
+  const shown = (id) => { const el = g(id); return !!(el && el.classList.contains('show')); };
   const activatable = (el) => !!(el && el !== document.body && el.closest && el.closest('button,a,select,[role="button"],[role="radio"],[tabindex]'));
   window.addEventListener('keydown', function (e) {
     const ae = document.activeElement, tag = ae && ae.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;          // typing / native widgets
-    if (shown('manual') || shown('upgrade') || shown('wingpick')) return;         // those own their keys (main.js)
-    if (typeof onboarding !== 'undefined' && onboarding) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (shown('manual') || shown('upgrade') || shown('wingpick') || onboarding) return;   // those own their keys
     const open = MENU_BACK.map(r => r[0]).filter(shown);
     if (e.code === 'Escape') {
-      const b = $(menuBackTarget(open) || '');
+      const b = g(menuBackTarget(open) || '');
       if (b && !e.repeat) { e.preventDefault(); e.stopImmediatePropagation(); b.click(); }
       return;
     }
     const actKey = e.code === 'Enter' || e.code === 'Space' || e.code === 'NumpadEnter';
-    if ((shown('gameover') || shown('levelCleared') || shown('levelFailed')) && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }   // debriefs (state 'dead'): focused buttons activate natively
-    if (typeof state === 'undefined' || state !== 'hangar') return;               // flight keys: untouched
+    // debriefs (state 'dead'): focused buttons activate natively
+    if ((shown('gameover') || shown('levelCleared') || shown('levelFailed')) && actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }
+    if (state !== 'hangar') return;
     if (open.length) {
-      // an overlay is up: the hangar carousel shortcuts (←/→ browse, Enter launch) must not fire beneath it,
-      // and Space/Enter on a focused button must reach the button (native activation) — not the game handler.
+      // an overlay is up: hangar carousel shortcuts must not fire beneath it; focused buttons activate natively
       if (actKey || e.code === 'ArrowLeft' || e.code === 'ArrowRight') e.stopImmediatePropagation();
       return;
     }
-    if (actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }     // let the focused control activate
-    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat && typeof openModeChoice === 'function') {
-      e.preventDefault(); e.stopImmediatePropagation(); openModeChoice();         // same path as the SELECT button
+    if (actKey && activatable(ae)) { e.stopImmediatePropagation(); return; }
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) {
+      e.preventDefault(); e.stopImmediatePropagation(); openModeChoice();
     }
   }, true);
 }
-if (typeof window !== 'undefined' && typeof document !== 'undefined' && window.addEventListener) installMenuKeys();
+if (typeof window !== 'undefined') installMenuKeys();
 
-// require-safe footer (inert in the browser): export the pure table + transition fn for tests.
-if (typeof module !== 'undefined' && module.exports) module.exports = { SCREENS: SCREENS, navPlan: navPlan, MENU_BACK: MENU_BACK, menuBackTarget: menuBackTarget };
+if (typeof module !== 'undefined' && module.exports) module.exports = { SCREENS, navPlan, MENU_BACK, menuBackTarget };

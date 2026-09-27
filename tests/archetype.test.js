@@ -5,8 +5,9 @@
 // THREE/DOM-coupled — not exercised here; only the pure decision logic is.
 const assert = require('assert');
 const {
-  ARCHETYPES, pickArchetype, shouldJink, pincerSign,
+  pickArchetype, shouldJink, pincerSign,
 } = require('../js/core.js');
+const ARCHETYPES = ['duelist', 'baiter', 'decoy', 'pincer'];
 
 // ===== pickArchetype: always returns a valid archetype across the whole rng range =====
 for (const v of [0, 0.0001, 0.25, 0.5, 0.75, 0.999999]) {

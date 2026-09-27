@@ -5,7 +5,7 @@
 const assert = require('assert');
 const {
   reconProgress, nextWaypoint, detectionDelta,
-  reconWon, stealthWon, stealthFailed,
+  reconWon, stealthWon,
 } = require('../js/core.js');
 
 // helper: build a fresh waypoint list (plain {x,y,z,hit} — the primitive is THREE-free)
@@ -113,8 +113,7 @@ const wps = (...pts) => pts.map(p => ({ x: p[0], y: p[1], z: p[2], hit: !!p[3] }
 /* ===== stealth win/fail predicates (ADR-0006 "go loud" contract) =====
    The detection meter is PRE-DETECTION PRESSURE only: reaching 1.0 triggers go-loud (handled by the impure
    caller via blowStealthCover), it NEVER fails the mission. The ONLY stealth fail is death. So:
-   - stealthWon is reaching the extraction waypoint, irrespective of the meter (alive-ness is enforced by death).
-   - stealthFailed is ALWAYS false (the meter is not a loss condition). */
+   stealthWon is reaching the extraction waypoint, irrespective of the meter (alive-ness is enforced by death). */
 {
   // reach the extraction waypoint = win, at ANY detection level (the meter no longer cancels the win)
   assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, true]), detect: 0.4 } }), true, 'reached extraction = win (low detection)');
@@ -122,12 +121,6 @@ const wps = (...pts) => pts.map(p => ({ x: p[0], y: p[1], z: p[2], hit: !!p[3] }
   // not yet reached → not a win regardless of meter
   assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, false]), detect: 0.3 } }), false, 'not won before reaching extraction');
   assert.strictEqual(stealthWon({ params: { waypoints: wps([0, 0, 0, false]), detect: 1 } }), false, 'a full meter alone is not a win (must reach the waypoint)');
-
-  // detect reaching 1.0 ⇒ NOT failed (it triggers blown, handled by the caller). The meter never fails the mission.
-  assert.strictEqual(stealthFailed({ params: { waypoints: wps([0, 0, 0, false]), detect: 1 } }), false, 'detect == 1 does NOT fail (triggers go-loud, not a loss)');
-  assert.strictEqual(stealthFailed({ params: { detect: 0.999 } }), false, 'sub-threshold meter never fails');
-  assert.strictEqual(stealthFailed({ params: { detect: 0 } }), false, 'an empty meter never fails');
-  assert.strictEqual(stealthFailed({ params: { blown: true, detect: 1 } }), false, 'blown ⇒ still not failed (only death fails)');
 }
 
 console.log('ok - recon/stealth non-combat mission cores (waypoint primitive + detection model)');
