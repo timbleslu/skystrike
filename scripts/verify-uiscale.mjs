@@ -19,7 +19,6 @@ await page.waitForTimeout(300);
 const setUi = (v) => page.evaluate((val) => { uiScale = val; applyUiScale(); }, v);
 const fail = (m) => errs.push('ASSERT ' + m);
 
-// settings selects present + labels
 await page.evaluate(() => { if (typeof openManual === 'function') openManual(); if (typeof showManualTab === 'function') showManualTab('settings'); if (typeof showSettingsSubtab === 'function') showSettingsSubtab('display'); });
 await page.waitForTimeout(250);
 const sel = await page.evaluate(() => ({
@@ -33,7 +32,6 @@ if (sel.uiOpts !== 5) fail(`#setUiScale opts ${sel.uiOpts} != 5`);
 if (sel.hudLbl !== 'HUD size') fail(`HUD label "${sel.hudLbl}" != "HUD size"`);
 if (sel.uiLbl !== 'UI size') fail(`UI label "${sel.uiLbl}" != "UI size"`);
 
-// decoupling: --ui-content moves, --hud-scale doesn't (and vice versa)
 await setUi(0.65);
 const dec = await page.evaluate(() => ({
   uiVar: getComputedStyle(document.documentElement).getPropertyValue('--ui-content').trim(),
@@ -42,7 +40,6 @@ const dec = await page.evaluate(() => ({
 if (dec.uiVar !== '0.65') fail(`--ui-content ${dec.uiVar} != 0.65`);
 if (dec.hudVar && dec.hudVar !== '1' && dec.hudVar !== '') fail(`--hud-scale moved with UI size: ${dec.hudVar}`);
 
-// CORE PROOF on #briefing: box fixed, .ui-dense content shrinks at 0.65
 await page.evaluate(() => { const m = document.getElementById('manual'); if (m) m.classList.remove('show'); });
 await page.evaluate(() => { opMode = true; const op = (typeof OPERATIONS !== 'undefined') && OPERATIONS[0]; if (op && typeof openBriefing === 'function') openBriefing(op.id, 0); });
 await page.waitForTimeout(450);
@@ -59,8 +56,6 @@ await setUi(0.65); await page.waitForTimeout(150); const at65 = await measure();
 if (!at10.hasDense) fail('#briefing has no .ui-dense core to scale');
 if (at10.boxW == null) fail('could not find #briefing box');
 if (at10.boxW != null) {
-  // box footprint stays fixed (width) while the dense core's vertical footprint shrinks => more content per box.
-  // (.ui-dense-fill keeps visual WIDTH constant by design — width compensates the zoom — so density shows as height.)
   if (Math.abs(at65.boxW - at10.boxW) > 2) fail(`box WIDTH changed with UI size: ${at10.boxW} -> ${at65.boxW} (must stay fixed)`);
   if (at65.denseH == null || !(at65.denseH < at10.denseH * 0.9)) fail(`dense content height did NOT shrink: denseH ${at10.denseH} -> ${at65.denseH}`);
 }

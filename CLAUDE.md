@@ -4,9 +4,8 @@ Arcade jet combat. Three.js r159 (vendored), one HTML page, plain browser-global
 **Source of truth: GitHub `timbleslu/skystrike` via this clone — `git fetch`/`pull` first. Ignore any Obsidian Vault or `~/Downloads` copy.**
 
 This file is the always-loaded map. Deeper, on-demand references (read only when the task needs them):
-- `docs/architecture-notes.md` — long per-file notes + history of every subsystem
 - `docs/level-authoring.md` — campaign level/beat schema, radio lines, bosses, stars (read before touching `OPERATIONS`)
-- `docs/CHANGELOG.md` — what shipped when · `docs/adr/` — architecture decisions
+- `docs/CHANGELOG.md` — one line per release · `docs/adr/` — architecture decisions
 - `graphify query "<question>"` / `graphify path "<A>" "<B>"` — scoped call-graph answers (graph in `graphify-out/`, auto-rebuilt by git hooks)
 
 ## Commands
@@ -78,4 +77,4 @@ v1.9 — feature-complete web game: Endless / Daily / Weekly / Boss Rush modes, 
 **Open:** device smoke tests (touch/motion/fps can't be simulated headless); ZH/KO strings are model-reviewed but not yet native-reviewed.
 
 ## Keep this file current — and small
-It is loaded every session: keep it a map, not a history. On a change, update the file-map row / convention / recipe it affects in the same commit; release notes go in `docs/CHANGELOG.md`, deep detail in `docs/architecture-notes.md`.
+It is loaded every session: keep it a map, not a history. On a change, update the file-map row / convention / recipe it affects in the same commit; one line per release in `docs/CHANGELOG.md`; detail belongs in code comments (WHY only) and `git log`.

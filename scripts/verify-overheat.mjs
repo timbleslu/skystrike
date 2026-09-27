@@ -9,10 +9,8 @@ import { launchGame, bootToHangar } from './lib/boot.mjs';
 const { page, port, close } = await launchGame();
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
-// drive past the first-run language gate into the hangar (as shot.mjs does)
 await bootToHangar(page, { port, continueWait: 400 });
 
-// start a run; keep the player alive + airborne so the flight loop keeps ticking for the whole test
 await page.evaluate(() => {
   startGame(selectedJet);
   player.hp = 1e9; player.invuln = 1e4; player.group.position.y = 2500;
@@ -32,10 +30,9 @@ const s0 = await read();
 check(!s0.noCannon, 'default jet has a cannon (overheat applies)');
 check(s0.heat < 0.05, 'gun starts cold (heat ~0)');
 
-// ---- force continuous fire: heat must RISE, then LOCK at 1.0 ----
 await page.evaluate(() => { touchBtns.gun = true; });
 let rose = false, locked = false, shotsAtLock = 0, lockHeat = 0;
-for (let i = 0; i < 220; i++) {                     // up to ~22s (generous for reduced headless fps)
+for (let i = 0; i < 220; i++) {
   await page.waitForTimeout(100);
   if (i % 8 === 0) await keepAlive();
   const s = await read();
@@ -44,21 +41,16 @@ for (let i = 0; i < 220; i++) {                     // up to ~22s (generous for 
 }
 check(rose, 'gun heat RISES under continuous fire');
 check(locked, 'gun LOCKS OUT under sustained fire');
-// The lock itself proves heat crossed 1.0 (heatStep only locks at heat>=1 — exact-1.0 is unit-tested).
-// The observed value is sampled up to a poll-interval AFTER the crossing, by which point a locked
-// gun has already begun cooling (0.4/s), so it reads a touch under 1.0 rather than exactly 1.0.
 check(lockHeat >= 0.9, 'lockout occurs near heat 1.0 (freshly locked, pre-cooldown)');
 
-// ---- gun is GATED while locked: no new shots fire during lockout ----
 await page.waitForTimeout(160);
 const sg = await read();
 check(sg.locked, 'still locked immediately after lockout');
 check(sg.shots === shotsAtLock, 'gun is GATED while overheated (no shots fired during lockout)');
 
-// ---- release fire: heat DECAYS + RE-ARMS below the 0.35 threshold ----
 await page.evaluate(() => { touchBtns.gun = false; });
 let rearmed = false, rearmHeat = 1, decayed = false, prevHeat = sg.heat;
-for (let i = 0; i < 120; i++) {                     // up to ~12s
+for (let i = 0; i < 120; i++) {
   await page.waitForTimeout(100);
   if (i % 8 === 0) await keepAlive();
   const s = await read();
@@ -70,7 +62,6 @@ check(decayed, 'gun heat DECAYS after releasing fire');
 check(rearmed, 'gun RE-ARMS after cooling');
 check(rearmHeat < 0.35, 're-arm happens below the 0.35 hysteresis threshold');
 
-// ---- gauge screenshot: force heat ~0.8 and capture the partly-filled HUD bar ----
 await keepAlive();
 await page.evaluate(() => { touchBtns.gun = false; player.gunHeat = 0.8; player.gunLocked = false; });
 await page.waitForTimeout(70);

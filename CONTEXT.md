@@ -17,7 +17,7 @@ All code is browser globals; **availability is defined by `<script>` load order 
 - **Ace** — a named enemy fighter flying a real airframe (vs. plain `STD` fodder). **Hostile ace** = one named antagonist per sector type (`rival.js` `HOSTILE_ACES`). **Rival** — the persistent nemesis that escalates across runs (`rival.js`).
 - **Roster (`JETS`)** — the playable airframes (`roster.js`): stats, ability, per-airframe paint colours.
 - **RP (`player.tp`)** — in-run currency for the tech tree. **SP** — persistent meta currency (`meta.js`) for jet/skin/perk unlocks. Separate pools.
-- **Operation / level** — the linear campaign (`opmap.js` `OPERATIONS`): 3 operations × 8/8/9 authored levels, bounded waves, checkpoint economy.
+- **Operation / level** — the linear campaign (`opmap.js` `OPERATIONS`): 4 operations × 8/8/9/8 authored levels, bounded waves, checkpoint economy.
 - **Skin vs HUDFONT / palette** — *skin* = per-airframe paint (`meta.js` `SKINS`); *HUDFONT* / *palette* = orthogonal visual language for menu + HUD chrome (`globals.js`).
 - **Special slot** — equipped jet ability (slot 1); the SP-gated 2nd slot fires with **B**.
 - **Boss phase** — multi-phase boss state (`e.phase` 1→3, `core.js` `bossPhaseFor`).

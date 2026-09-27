@@ -14,7 +14,6 @@ await page.evaluate(() => {
   if (typeof returnToHangar === 'function') returnToHangar();
   const h = document.getElementById('hangar'); if (h) { h.classList.remove('hide'); h.style.removeProperty('display'); }
   if (typeof state !== 'undefined') state = 'hangar';
-  // ensure SP is spendable for the buy step, and the FT-1 (jet 0) is selected fresh
   if (typeof meta !== 'undefined') { meta.sp = 9999; if (typeof saveMeta === 'function') saveMeta(); }
   selectJet(0);
 });
@@ -26,7 +25,6 @@ const R = await page.evaluate(async () => {
   const jetId = JETS[selectedJet].id;
   const store0 = JSON.parse(store.get('skystrike_meta') || '{}');
 
-  // 1) tap an UNOWNED chip → previews, gates launch, shows BUY, never writes meta
   const lockedChip = document.querySelector('#jetMeta .jmskin.locked');
   ok('an unowned (locked) chip exists', lockedChip);
   const previewId = lockedChip && lockedChip.dataset.skin;
@@ -42,13 +40,11 @@ const R = await page.evaluate(async () => {
   const storeAfterPreview = JSON.parse(store.get('skystrike_meta') || '{}');
   ok('NO meta/store write on mere preview (sel unchanged)', JSON.stringify(storeAfterPreview.sel || {}) === JSON.stringify(store0.sel || {}));
 
-  // 2) tap an OWNED chip (default) → equips, clears the gate
   const ownedChip = document.querySelector('#jetMeta .jmskin:not(.locked)');
   if (ownedChip) ownedChip.click();
   ok('tapping owned chip clears the block', launchBlocked() === false);
   ok('owned chip equips (selectedSkin persists)', selectedSkin(jetId) === ownedChip.dataset.skin);
 
-  // 3) preview unowned again, then BUY via the inline CTA → owns + equips + unblocks
   document.querySelector('#jetMeta .jmskin.locked').click();
   ok('re-blocked after previewing unowned again', launchBlocked() === true);
   const buyBtn = document.getElementById('jetMetaBuy');
@@ -59,7 +55,6 @@ const R = await page.evaluate(async () => {
   ok('#launch enabled after BUY', !document.getElementById('launch').disabled);
   ok('bought skin now equipped', selectedSkin(jetId) === buyId);
 
-  // 4) revert on leave: previewing unowned then returnToHangar clears previewSkin
   const stillLocked = document.querySelector('#jetMeta .jmskin.locked');
   if (stillLocked) stillLocked.click();
   ok('previewing an unowned skin again', launchBlocked() === true);
@@ -70,7 +65,6 @@ const R = await page.evaluate(async () => {
   return out;
 });
 
-// ---- Feature 2: drag-to-rotate (raycast-gated; synthetic pointer events) ----
 const D = await page.evaluate(async () => {
   const out = []; const ok = (name, cond) => out.push({ name, pass: !!cond });
   returnToHangar(); selectJet(0);
@@ -79,7 +73,6 @@ const D = await page.evaluate(async () => {
   const wp = new THREE.Vector3(); previewJet.getWorldPosition(wp);
   const v = wp.clone().project(camera);
   const cx = (v.x * 0.5 + 0.5) * rect.width + rect.left, cy = (-v.y * 0.5 + 0.5) * rect.height + rect.top;
-  // find a screen pixel actually OVER the jet (a tall-tail model's bbox centre can sit in empty air)
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   let sx = null, sy = null;
   for (let oy = -70; oy <= 70 && sx === null; oy += 8) for (let ox = -90; ox <= 90; ox += 8) {
@@ -91,12 +84,8 @@ const D = await page.evaluate(async () => {
   ok('the preview jet is grabbable on the canvas (raycast finds it)', sx !== null);
   if (sx === null) { sx = cx; sy = cy; }
   const fire = (type, x, y) => window.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
-  // the drag contract is CANVAS-TARGET (main.js initPreviewDrag: pointerdown must land ON previewCanvas;
-  // no raycast — the whole canvas is grabbable), so the down event is dispatched on the canvas itself
   const fireOnCanvas = (type, x, y) => previewCanvas.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 1, bubbles: true, cancelable: true }));
-  // off-canvas → no drag
   fire('pointerdown', 4, 4); ok('pointerdown OFF the canvas does NOT start a drag', hangarPreview.dragging === false); fire('pointerup', 4, 4);
-  // on-canvas → drag starts
   const yaw0 = hangarPreview.yaw;
   fireOnCanvas('pointerdown', sx, sy); ok('pointerdown ON the preview canvas starts a drag', hangarPreview.dragging === true);
   fire('pointermove', sx + 100, sy); ok('horizontal drag yaws the jet', Math.abs(hangarPreview.yaw - (yaw0 + 1.0)) < 0.001);

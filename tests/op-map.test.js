@@ -3,7 +3,6 @@ const assert = require('assert');
 const { OPERATIONS, levelPlan, levelBlurbKey, sectorMission } = require('../js/opmap.js');
 const { LEVEL_WAVE_CAP } = require('../js/core.js');
 
-// ---- sectorMission: sector type -> typed-mission descriptor (LIVE — levelPlan reads it) ----
 assert.strictEqual(sectorMission('FURBALL'), 'sweep', 'FURBALL → sweep');
 assert.strictEqual(sectorMission('INTERCEPT'), 'intercept', 'INTERCEPT → intercept');
 assert.strictEqual(sectorMission('STRIKE'), 'strike', 'STRIKE → strike');
@@ -15,29 +14,24 @@ assert.strictEqual(sectorMission('ELITE'), 'none', 'ELITE → none (elite-ace fu
 assert.strictEqual(sectorMission('DEPOT'), 'none', 'DEPOT → none');
 assert.strictEqual(sectorMission('FINAL'), 'boss', 'FINAL → boss');
 
-// ---- OPERATIONS table validation (Operations Map revamp) ----
 assert.ok(Array.isArray(OPERATIONS), 'OPERATIONS is an array');
 assert.strictEqual(OPERATIONS.length, 4, 'four operations (op4 POLAR VORTEX added)');
 assert.deepStrictEqual(OPERATIONS.map(function (o) { return o.id; }), ['ironVeil', 'midnightMeridian', 'sunfireHorizon', 'polarVortex'], 'op ids in order');
 assert.deepStrictEqual(OPERATIONS.map(function (o) { return o.levels.length; }), [8, 8, 9, 8], 'level counts 8/8/9/8');
 
-// set of types that sectorMission accepts as a valid (non-boss) typed-mission input
 const MISSION_TYPES = ['RECON', 'FURBALL', 'STEALTH', 'INTERCEPT', 'DEFEND', 'ESCORT', 'STRIKE'];
 
 OPERATIONS.forEach(function (op) {
-  // op header carries string i18n keys
   assert.strictEqual(typeof op.nameKey, 'string', op.id + ' has a nameKey');
   assert.strictEqual(typeof op.loreKey, 'string', op.id + ' has a loreKey');
   assert.ok(op.levels.length > 0, op.id + ' has levels');
 
   op.levels.forEach(function (lvl, i) {
     const where = op.id + '.' + lvl.id;
-    // every level carries the i18n key quad as strings
     assert.strictEqual(typeof lvl.nameKey, 'string', where + ' nameKey is a string');
     assert.strictEqual(typeof lvl.loreKey, 'string', where + ' loreKey is a string');
     assert.strictEqual(typeof lvl.objectivesKey, 'string', where + ' objectivesKey is a string');
     assert.strictEqual(typeof lvl.enemyIntelKey, 'string', where + ' enemyIntelKey is a string');
-    // spawn object with numeric core counts
     assert.ok(lvl.spawn && typeof lvl.spawn === 'object', where + ' has a spawn object');
     assert.strictEqual(typeof lvl.spawn.fighters, 'number', where + ' spawn.fighters is numeric');
     assert.strictEqual(typeof lvl.spawn.aces, 'number', where + ' spawn.aces is numeric');
@@ -45,27 +39,23 @@ OPERATIONS.forEach(function (op) {
 
     const isLast = (i === op.levels.length - 1);
     if (isLast) {
-      // last level of every op is the boss
       assert.strictEqual(lvl.type, 'FINAL', where + ' (last) is a FINAL boss');
       assert.strictEqual(lvl.isBoss, true, where + ' (last) isBoss');
       assert.ok(lvl.boss && Array.isArray(lvl.boss.phases), where + ' has boss.phases');
       assert.strictEqual(lvl.boss.phases.length, 3, where + ' has exactly 3 boss phases');
     } else {
-      // every non-boss level's type is a valid sectorMission input (resolves to a non-boss mission)
       assert.ok(MISSION_TYPES.indexOf(lvl.type) !== -1, where + ' type is a valid sectorMission input (' + lvl.type + ')');
       assert.notStrictEqual(sectorMission(lvl.type), 'boss', where + ' non-boss type does not resolve to boss');
       assert.ok(!lvl.isBoss, where + ' non-last level is not a boss');
     }
 
-    // RECON & STEALTH levels are single-wave (bounded; recon/stealth: 1)
     if (lvl.type === 'RECON' || lvl.type === 'STEALTH') {
       assert.strictEqual(lvl.waves, 1, where + ' (' + lvl.type + ') has waves === 1');
     }
   });
 });
 
-// ---- levelPlan: authored-absolute plan built from the level row ----
-const recon = OPERATIONS[0].levels[0]; // ironVeil firstLight
+const recon = OPERATIONS[0].levels[0];
 const rPlan = levelPlan(recon);
 assert.notStrictEqual(rPlan, recon.spawn, 'levelPlan returns a NEW object (not the spawn row)');
 assert.strictEqual(rPlan.fighters, 2, 'firstLight plan carries authored fighters');
@@ -73,18 +63,15 @@ assert.strictEqual(rPlan.mission, 'recon', 'firstLight plan mission = recon');
 assert.strictEqual(rPlan.boss, false, 'firstLight plan is not a boss');
 assert.strictEqual(rPlan.weather, 'clear', 'firstLight plan carries authored weather');
 assert.strictEqual(rPlan.tod, 0, 'firstLight plan carries authored tod');
-const bossLvl = OPERATIONS[0].levels[7]; // ironVeil warlord
+const bossLvl = OPERATIONS[0].levels[7];
 const bPlan = levelPlan(bossLvl);
 assert.strictEqual(bPlan.boss, true, 'warlord plan flags boss:true (type FINAL)');
 assert.strictEqual(bPlan.mission, 'boss', 'warlord plan mission = boss');
 
-// ---- table-shape invariants covering ALL ops incl. op4 (F6 add) ----
-// valid starCondMet descriptor types (js/meta.js starCondMet switch) — starUnique/stars must use only these
 const VALID_STAR_TYPES = ['kills', 'clean', 'objective', 'noDamage', 'accuracy', 'flawless', 'gunOnly', 'noFlares', 'fastClear', 'killsN', 'alliesIntact'];
-const KNOWN_BOSS_PATTERNS = ['standoff', 'headOn', 'dive', 'mirror'];   // authored boss-phase pattern vocabulary (undefined = default)
+const KNOWN_BOSS_PATTERNS = ['standoff', 'headOn', 'dive', 'mirror'];
 const KNOWN_BOSS_FLAGS = ['chaff', 'mirror'];
 
-// (a) every level id is unique across ALL operations (meta keys on ${opId}.${id}; ids must not collide)
 const allLevelIds = [];
 OPERATIONS.forEach(function (op) { op.levels.forEach(function (lvl) { allLevelIds.push(lvl.id); }); });
 assert.strictEqual(new Set(allLevelIds).size, allLevelIds.length, 'every level id is unique across all operations');
@@ -92,18 +79,14 @@ assert.strictEqual(new Set(allLevelIds).size, allLevelIds.length, 'every level i
 OPERATIONS.forEach(function (op) {
   op.levels.forEach(function (lvl, i) {
     const where = op.id + '.' + lvl.id;
-    // (b) waves is an integer within 1..LEVEL_WAVE_CAP
     assert.ok(Number.isInteger(lvl.waves) && lvl.waves >= 1 && lvl.waves <= LEVEL_WAVE_CAP,
       where + ' waves is an int in 1..' + LEVEL_WAVE_CAP + ' (got ' + lvl.waves + ')');
-    // (c) starUnique present on every row + its type is a valid starCondMet type (repo v1.3 pattern)
     assert.ok(lvl.starUnique && typeof lvl.starUnique === 'object', where + ' has a starUnique descriptor');
     assert.ok(VALID_STAR_TYPES.indexOf(lvl.starUnique.type) !== -1,
       where + ' starUnique.type is a valid starCondMet type (' + lvl.starUnique.type + ')');
-    // any optional stars[] override entries must ALSO be valid starCondMet types
     if (Array.isArray(lvl.stars)) lvl.stars.forEach(function (c) {
       assert.ok(c && VALID_STAR_TYPES.indexOf(c.type) !== -1, where + ' stars[] type is a valid starCondMet type (' + (c && c.type) + ')');
     });
-    // (d) the boss node is the LAST level with a 3-phase signature; each phase carries the _phaseCfg shape
     const isLast = (i === op.levels.length - 1);
     if (isLast) {
       assert.strictEqual(lvl.type, 'FINAL', where + ' (last) is FINAL');
@@ -123,7 +106,6 @@ OPERATIONS.forEach(function (op) {
   });
 });
 
-// ---- op4 (polarVortex) i18n parity: every *Key referenced by op4 rows resolves in EN+ZH+KO ----
 const I18N = require('./lib/i18n.js').loadI18N();
 const langKeys = { EN: new Set(Object.keys(I18N.EN)), ZH: new Set(Object.keys(I18N.ZH)), KO: new Set(Object.keys(I18N.KO)) };
 assert.ok(langKeys.EN.size > 100 && langKeys.ZH.size > 100 && langKeys.KO.size > 100, 'i18n scrape found all three language dicts');
@@ -134,7 +116,7 @@ const op4Keys = new Set();
 [op4.nameKey, op4.theaterKey, op4.loreKey].forEach(function (k) { if (k) op4Keys.add(k); });
 op4.levels.forEach(function (lvl) {
   [lvl.nameKey, lvl.loreKey, lvl.objectivesKey, lvl.enemyIntelKey].forEach(function (k) { if (k) op4Keys.add(k); });
-  const bk = levelBlurbKey(lvl); if (bk) op4Keys.add(bk);   // in-flight/briefing blurb key (derived)
+  const bk = levelBlurbKey(lvl); if (bk) op4Keys.add(bk);
   if (lvl.boss) {
     if (lvl.boss.callsignKey) op4Keys.add(lvl.boss.callsignKey);
     if (lvl.boss.introKey) op4Keys.add(lvl.boss.introKey);

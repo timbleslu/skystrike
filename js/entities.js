@@ -1,30 +1,22 @@
 /* SKYSTRIKE — entities.js: jet/boss/ground/drone mesh construction, player & enemy creation, enemy AI updates & weapons. Loads after airframes.js (SHAPES). */
 
-/* ---------------- geometry cache ----------------
-   Jet geometry is deterministic per (shape, hero). Triangulating LatheGeometry +
-   ExtrudeGeometry on every spawn caused the wave-start freeze, so build each shape's
-   geometry once and share it across all instances. Materials stay per-instance, so
-   runtime colour/emissive mutations are unaffected. Cached geometry is tagged
-   userData.shared so disposeGroup never frees geometry still used by living enemies.
-   A falsy key bypasses the cache (defensive — every SHAPES entry has an id). */
+/* Jet geometry is deterministic per key, so build it once and share it (per-spawn triangulation
+   caused the wave-start freeze). Tagged userData.shared so disposeGroup never frees geometry still
+   used by living jets; materials stay per-instance so colour/emissive mutations don't leak. */
 const GEO_CACHE = new Map();
 function cacheGeo(key, factory) {
-  if (!key) return factory();
   let g = GEO_CACHE.get(key);
   if (!g) { g = factory(); g.userData.shared = true; GEO_CACHE.set(key, g); }
   return g;
 }
 
-/* flag every opaque mesh in a built model as a shadow caster (glows, flames and
-   the tinted canopy stay non-casting so additive/transparent parts don't block light) */
+/* opaque meshes cast shadows; additive/transparent parts (glows, flames, canopy) don't */
 function markShadowCasters(g) {
   g.traverse(o => { if (o.isMesh && o.material && !o.material.transparent && o.material.blending !== THREE.AdditiveBlending) o.castShadow = true; });
 }
 
-/* object-space noise patch for airframe skins: subtle panel-grime albedo breakup +
-   roughness variation so sun glints streak across the hull instead of reading flat.
-   UV-free, so it works on lathe and extrude geometry alike; identical shader source
-   keeps one compiled program shared across every patched material. */
+/* object-space (UV-free) panel grime + roughness breakup for hull skins. The shader source must stay
+   identical across materials so they share one compiled program. */
 function patchJetSurface(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
@@ -56,8 +48,7 @@ function patchJetSurface(mat) {
   };
 }
 
-/* per-frame engine animation: afterburner flame stretches and flickers with throttle;
-   nozzle interior heats up, the white core lengthens, and shock diamonds fade in at burner */
+/* per-frame afterburner: flame/core stretch + flicker with throttle, shock diamonds fade in at burner */
 function animEngines(group, thr) {
   const eng = group.userData.engines; if (!eng) return;
   const hm = group.userData.heatMat;
@@ -76,40 +67,36 @@ function animEngines(group, thr) {
   }
 }
 
-/* ---------------- jet meshes (high-poly parametric) ---------------- */
-/* extruded, swept wing/canard/stab built from a half-planform [span, chordZ] (chordZ<0 = forward) */
-function extrudeWing(pts, thick, mat, y, bevelSeg, cacheKey) {
-  const bs = bevelSeg || 1;
+/* extruded wing/canard/stab from a half-planform [span, chordZ] (chordZ<0 = forward), mirrored */
+function extrudeWing(pts, thick, mat, y, bs, cacheKey) {
   const geo = cacheGeo(cacheKey, () => {
     const sh = new THREE.Shape();
     sh.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
     sh.closePath();
     const g2 = new THREE.ExtrudeGeometry(sh, { depth: thick, bevelEnabled: true, bevelThickness: thick * 0.46, bevelSize: 0.26, bevelSegments: bs, steps: 1, curveSegments: bs > 2 ? 10 : 6 });
-    g2.translate(0, 0, -thick / 2); g2.rotateX(Math.PI / 2);   // geometry-space transforms run once
+    g2.translate(0, 0, -thick / 2); g2.rotateX(Math.PI / 2);
     return g2;
   });
   const grp = new THREE.Group();
   const r = new THREE.Mesh(geo, mat);
   const l = new THREE.Mesh(geo, mat); l.scale.x = -1;
-  grp.add(r, l); grp.position.y = y || 0; return grp;
+  grp.add(r, l); grp.position.y = y; return grp;
 }
 /* swept vertical fin from {base,tip,h,sweep,thick} */
-function buildFin(p, mat, bevelSeg, cacheKey) {
+function buildFin(p, mat, bs, cacheKey) {
   const th = p.thick || 0.3;
-  const bs = bevelSeg || 1;
   const geo = cacheGeo(cacheKey, () => {
     const sh = new THREE.Shape();
     sh.moveTo(0, 0); sh.lineTo(p.base, 0); sh.lineTo(p.sweep + p.tip, p.h); sh.lineTo(p.sweep, p.h); sh.closePath();
     const g2 = new THREE.ExtrudeGeometry(sh, { depth: th, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: bs, steps: 1, curveSegments: bs > 2 ? 8 : 5 });
-    g2.translate(0, 0, -th / 2); g2.rotateY(-Math.PI / 2);   // geometry-space transforms run once
+    g2.translate(0, 0, -th / 2); g2.rotateY(-Math.PI / 2);
     return g2;
   });
   return new THREE.Mesh(geo, mat);
 }
-/* compact wingtip missile (nose toward -Z): the real shared missile airframe scaled
-   down on a launch rail. ASSET geometry/trim material are shared-tagged, so jet
-   teardown via disposeGroup leaves the live missile pool untouched. */
+/* wingtip missile on a launch rail: the shared ASSET missile scaled down (shared-tagged, so jet
+   teardown leaves the live missile pool untouched) */
 function buildTipMissile(x, y, z, mat, glowColor) {
   const g = new THREE.Group();
   const rail = new THREE.Mesh(cacheGeo('tipmsl:rail', () => new THREE.BoxGeometry(0.16, 0.34, 2.4)), mat);
@@ -122,8 +109,6 @@ function buildTipMissile(x, y, z, mat, glowColor) {
   g.position.set(x, y, z);
   return g;
 }
-
-/* per-airframe SHAPES spec table + flag-normalization → js/airframes.js (require-safe, loaded before this file). */
 
 /* outermost planform point (max span; first one wins a tie) — the wingtip */
 function wingTip(pts) { let tip = pts[0]; for (const p of pts) if (p[0] > tip[0]) tip = p; return tip; }
@@ -146,12 +131,12 @@ function buildHingeSeam(pts, y, thick, mat) {
   return grp;
 }
 
-/* ---- lofted fuselage: superellipse cross-sections swept nose→tail ----
+/* lofted fuselage: superellipse cross-sections swept nose→tail.
    Per-station the hull blends: rounder forebody → squarer engine section; stealth
    shapes pick up a soft forebody chine; twin/tri jets widen aft into a flat engine
    deck that swallows the nozzles. Height is pre-flattened, so no mesh-level Y scale. */
 function loftFuselage(cfg, hero) {
-  const L = cfg.len, half = L / 2, fR = cfg.frontR, rR = cfg.rearR, flat = cfg.flat || 0.62;
+  const L = cfg.len, half = L / 2, fR = cfg.frontR, rR = cfg.rearR, flat = cfg.flat;
   const z0 = -half - cfg.noseLen + 0.5, zNose = -half + 0.5, zBody = half - 0.3, z1 = half + 2.3;
   const ST = hero ? 64 : 28, RAD = hero ? 48 : 24;
   const ss = (a, b, x) => { x = clamp((x - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); };
@@ -210,9 +195,7 @@ function buildJet(color, accent, cfg, hero) {
   cfg = cfg || SHAPES.ENEMY;
   const g = new THREE.Group();
   const bs = hero ? 4 : 2;
-  const SID = cfg.id || '';                 // '' => cacheGeo bypasses (no shared key)
-  const H = hero ? 1 : 0;
-  const gk = part => (SID ? SID + ':' + part + ':' + H : '');   // geometry cache key for this shape/part/hero
+  const gk = part => cfg.id + ':' + part + ':' + (hero ? 1 : 0);   // geometry cache key
   // hero airframes wear a clearcoated show finish; the fodder flies flat paint
   const body = hero
     ? new THREE.MeshPhysicalMaterial({ color, metalness: 0.55, roughness: 0.34, clearcoat: 0.55, clearcoatRoughness: 0.22, envMapIntensity: 1.25, side: THREE.DoubleSide })
@@ -227,16 +210,14 @@ function buildJet(color, accent, cfg, hero) {
     ? new THREE.MeshPhysicalMaterial({ color: 0x2a4a66, metalness: 0.25, roughness: 0.03, clearcoat: 1.0, clearcoatRoughness: 0.06, iridescence: 0.55, iridescenceIOR: 1.9, emissive: 0x0a1622, envMapIntensity: 2.4, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
     : new THREE.MeshStandardMaterial({ color: 0x213a52, metalness: 0.4, roughness: 0.04, emissive: 0x0a1622, envMapIntensity: 2.0, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
   patchJetSurface(body); patchJetSurface(dark);
-  const L = cfg.len, half = L / 2, fR = cfg.frontR, rR = cfg.rearR, flat = cfg.flat || 0.62;
-  const wy = (cfg.wingY != null ? cfg.wingY : -0.2);
+  const L = cfg.len, half = L / 2, fR = cfg.frontR, rR = cfg.rearR, flat = cfg.flat, wy = cfg.wingY;
+  const wt = cfg.wingThick, hy = cfg.htailY != null ? cfg.htailY : -0.1;
 
-  // ---- fuselage: lofted superellipse hull (ogive nose → chined/area-ruled body → engine deck) ----
   const z0 = -half - cfg.noseLen + 0.5;   // nose tip (same station loftFuselage starts at)
   const fgeo = cacheGeo(gk('fuse'), () => loftFuselage(cfg, hero));
   const fuse = new THREE.Mesh(fgeo, body); g.add(fuse);
 
-  // dorsal spine: blended capsule fairing instead of a slab (suppressed on flying wings;
-  // dorsalHump swaps in a wide stealth fairing)
+  // dorsal spine capsule (none on flying wings; dorsalHump = wide stealth fairing instead)
   if (cfg.dorsalHump) {
     const hump = new THREE.Mesh(cacheGeo(gk('dorsalhump'), () => { const s = new THREE.SphereGeometry(fR * 1.1, hero ? 18 : 10, hero ? 12 : 7); s.scale(1.5, 0.45, 2.6); return s; }), body);
     hump.position.set(0, fR * flat * 0.55, L * 0.08); g.add(hump);
@@ -256,37 +237,34 @@ function buildJet(color, accent, cfg, hero) {
       vane.position.set(sx * fR * 0.75, 0, z0 + 1.6); g.add(vane);
     }
   }
-  // menacing nose boom (all LODs) — replaces hero pitot
+  // nose boom / faceted EO nose (all LODs) replace the hero pitot
   if (cfg.noseSpike) {
     const spike = new THREE.Mesh(cacheGeo(gk('nosespike'), () => new THREE.CylinderGeometry(0.04, 0.16, 2.6, 6)), dark);
     spike.rotation.x = Math.PI / 2; spike.position.set(0, 0, z0 - 1.2); g.add(spike);
   }
-  // faceted EO sensor nose (all LODs) — replaces hero pitot
   if (cfg.facetNose) {
     const fn = new THREE.Mesh(cacheGeo(gk('facetnose'), () => { const o = new THREE.OctahedronGeometry(fR * 0.85, 0); o.scale(0.9, 0.6, 2.2); return o; }), sensor);
     fn.position.set(0, -fR * flat * 0.1, z0 + 1.0); g.add(fn);
   }
 
-  // ---- electro-optical sensors ----
-  if (hero && cfg.irst) {           // forward IRST ball, offset to starboard ahead of the windscreen
+  if (hero && cfg.irst) {           // IRST ball, offset to starboard ahead of the windscreen
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 16), sensor);
     ball.scale.set(0.9, 0.9, 1.1); ball.position.set(fR * 0.34, fR * flat * 0.62, -half + 0.8); g.add(ball);
   }
-  if (hero && cfg.eots) {           // faceted under-nose EO targeting / aperture
+  if (hero && cfg.eots) {
     const eo = new THREE.Mesh(new THREE.SphereGeometry(0.62, 8, 5), sensor);
     eo.scale.set(1, 0.7, 1.25); eo.position.set(0, -fR * flat * 0.62, -half + 1.4); g.add(eo);
   }
 
-  // ---- canopy: windscreen wedge + bubble + frame (+ interior for hero) ----
-  const canopyZ = cfg.canopyZ != null ? cfg.canopyZ : (-half + cfg.noseLen * 0.1 + 2.6);
-  const noCanopy = cfg.noCanopy || cfg.flyingWing;
-  if (!noCanopy) {
+  // canopy: sill + bubble (+ cockpit interior, windscreen and frame for hero)
+  const canopyZ = -half + cfg.noseLen * 0.1 + 2.6;
+  if (!cfg.noCanopy && !cfg.flyingWing) {
   const sill = new THREE.Mesh(cacheGeo(gk('sill'), () => {
     const cg = new THREE.CapsuleGeometry(cfg.frontR * 0.6, 2.8, hero ? 6 : 3, hero ? 16 : 8);
     cg.rotateX(Math.PI / 2); return cg;
   }), body);
   sill.scale.set(1.0, 0.52, 1); sill.position.set(0, fR * flat * 0.55, canopyZ + 0.4); g.add(sill);
-  if (hero) { // ejection seat + tub, visible through the tinted canopy
+  if (hero) {
     const tub = new THREE.Mesh(new THREE.BoxGeometry(fR * 0.9, fR * 0.5, 3.0), dark);
     tub.position.set(0, fR * flat * 0.35, canopyZ + 0.2); g.add(tub);
     const seat = new THREE.Mesh(new THREE.BoxGeometry(fR * 0.5, fR * 0.55, 0.7), dark);
@@ -301,7 +279,7 @@ function buildJet(color, accent, cfg, hero) {
   else { can.scale.set(0.92, 0.74, 1.9); can.position.set(0, fR * flat + 0.3, canopyZ); }
   if (cfg.wideCanopy) { can.scale.x *= cfg.wideCanopy; can.scale.y = 0.6; }
   g.add(can);
-  if (hero) { // forward windscreen wedge for a sharper canopy line
+  if (hero) {
     const ws = new THREE.Mesh(new THREE.SphereGeometry(fR * 0.78, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.55), glass);
     ws.scale.set(0.9, 0.8, 1.3); ws.position.set(0, fR * flat + 0.18, canopyZ - 1.7); g.add(ws);
     for (const sx of [-1, 1]) {
@@ -312,7 +290,7 @@ function buildJet(color, accent, cfg, hero) {
     bow.position.set(0, fR * flat + 0.42, canopyZ - 1.45); g.add(bow);
   }
   }
-  // dorsal fairing in place of the canopy (drones)
+  // drones: dorsal fairing in place of the canopy
   if (cfg.noCanopy && !cfg.flyingWing) {
     const fair = new THREE.Mesh(cacheGeo(gk('ccanfair'), () => { const c = new THREE.CapsuleGeometry(fR * 0.55, 2.2, 4, 10); c.rotateX(Math.PI / 2); c.scale(1, 0.5, 1); return c; }), body);
     fair.position.set(0, fR * flat * 0.6, canopyZ); g.add(fair);
@@ -327,7 +305,6 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- LERX / chine strakes ----
   if (cfg.lerx) {
     const lz = cfg.wing[0][1];
     const lpts = cfg.bigLerx
@@ -335,7 +312,6 @@ function buildJet(color, accent, cfg, hero) {
       : [[0.75, lz + 0.4], [2.8, lz - 0.6], [0.75, lz - cfg.noseLen * 0.42]];
     g.add(extrudeWing(lpts, cfg.bigLerx ? 0.26 : 0.28, body, wy + (cfg.bigLerx ? 0.16 : 0.14), bs, gk('lerx')));
   }
-  // ---- LEVCON strakes (Su-57) ----
   if (cfg.levcon) {
     const wRoot = cfg.wing[0][1];
     const lpts = [[0.9, wRoot - 0.4], [3.4, wRoot - 0.2], [0.9, wRoot - 4.2]];
@@ -346,12 +322,11 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- lifting surfaces ----
-  g.add(extrudeWing(cfg.wing, cfg.wingThick || 0.5, body, wy, bs, gk('wing')));
+  g.add(extrudeWing(cfg.wing, wt, body, wy, bs, gk('wing')));
   if (cfg.canard) {
-    const cY = cfg.canardY != null ? cfg.canardY : 0.12;
+    const cY = cfg.canardY;
     if (cfg.canardDihedral || cfg.canardCant) {
-      // mirrored canted/dihedral foreplanes — each half pivots about its root
+      // canted/dihedral foreplanes: each half pivots about its root
       const ang = cfg.canardDihedral || cfg.canardCant;
       const rootX = cfg.canard[0][0];
       const halfGeo = cacheGeo(gk('canardhalf'), () => {
@@ -369,52 +344,40 @@ function buildJet(color, accent, cfg, hero) {
       g.add(extrudeWing(cfg.canard, 0.34, body, cY, bs, gk('canard')));
     }
   }
-  if (cfg.htail) g.add(extrudeWing(cfg.htail, 0.36, body, cfg.htailY != null ? cfg.htailY : -0.1, bs, gk('htail')));
+  if (cfg.htail) g.add(extrudeWing(cfg.htail, 0.36, body, hy, bs, gk('htail')));
 
-  // control-surface seams (hero only) — elevons on the main wing & all-moving tail
-  if (hero) {
-    g.add(buildHingeSeam(cfg.wing, wy, cfg.wingThick || 0.5, panel));
-    if (cfg.htail) g.add(buildHingeSeam(cfg.htail, cfg.htailY != null ? cfg.htailY : -0.1, 0.36, panel));
-  }
-
-  // wingtip navigation lights (port = red, starboard = green) — hero only
-  if (hero) {
+  if (hero) {   // elevon/tail hinge seams + nav lights (port red, starboard green)
+    g.add(buildHingeSeam(cfg.wing, wy, wt, panel));
+    if (cfg.htail) g.add(buildHingeSeam(cfg.htail, hy, 0.36, panel));
     const [tx, tz] = wingTip(cfg.wing);
-    const lp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b3b, fog: false }));
-    lp.position.set(-tx, wy, tz - 0.6); g.add(lp);
-    const ls = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color: 0x46ff8c, fog: false }));
-    ls.position.set(tx, wy, tz - 0.6); g.add(ls);
+    for (const [sx, color] of [[-1, 0xff3b3b], [1, 0x46ff8c]]) {
+      const nl = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ color, fog: false }));
+      nl.position.set(sx * tx, wy, tz - 0.6); g.add(nl);
+    }
   }
 
-  // ---- vertical tails (with a rudder seam for hero) ----
-  const vt = cfg.vtail || cfg.ccaVtail;   // ccaVtail: drone V-tails (kept off the `vtail` key for the plain-shapes test)
+  const vt = cfg.vtail;
   if (vt) {
-    const baseY = fR * flat * 0.4;
-    const finXs = vt.type === 'single' ? [0] : [-1, 1];
-    for (const s of finXs) {
+    const baseY = fR * flat * 0.4, single = vt.type === 'single';
+    for (const s of single ? [0] : [-1, 1]) {
+      const fx = single ? 0 : s * vt.x, cant = single ? 0 : -s * vt.cant;
       const f = buildFin(vt, body, bs, gk('vtail'));
-      const fz = vt.z != null ? vt.z : half - vt.base - (vt.type === 'single' ? 1 : 1.5);
-      f.position.set(vt.type === 'single' ? 0 : s * vt.x, baseY, fz);
-      if (vt.type !== 'single') f.rotation.z = -s * (vt.cant || 0.3);
-      g.add(f);
-      if (hero) {   // rudder hinge line on the trailing edge of the fin
+      f.position.set(fx, baseY, vt.z); f.rotation.z = cant; g.add(f);
+      if (hero) {   // rudder hinge line on the fin's trailing edge
         const rud = new THREE.Mesh(new THREE.BoxGeometry((vt.thick || 0.3) + 0.06, vt.h * 0.92, 0.14), panel);
-        const rx = vt.type === 'single' ? 0 : s * vt.x;
-        rud.position.set(rx, baseY + vt.h * 0.5, fz + Math.min(vt.base, vt.sweep) * 0.5 + 0.2);
-        if (vt.type !== 'single') rud.rotation.z = -s * (vt.cant || 0.3);
-        g.add(rud);
+        rud.position.set(fx, baseY + vt.h * 0.5, vt.z + Math.min(vt.base, vt.sweep) * 0.5 + 0.2);
+        rud.rotation.z = cant; g.add(rud);
       }
     }
   }
 
-  // ---- tail booms carrying fins/ventrals (J-20) ----
+  // J-20 tail booms carrying fins/ventrals
   if (cfg.finBoom) {
     for (const sx of [-1, 1]) {
       const boom = new THREE.Mesh(cacheGeo(gk('finboom'), () => { const c = new THREE.CapsuleGeometry(0.45, 4.5, 3, 8); c.rotateX(Math.PI / 2); c.scale(1, 0.7, 1); return c; }), body);
       boom.position.set(sx * (cfg.gap / 2 + rR * 0.8), -0.1, half - 1.2); g.add(boom);
     }
   }
-  // ---- ventral fins (J-20 / hostile darts) ----
   if (hero && cfg.ventral) {
     const vf = { base: 1.6, tip: 0.5, h: 1.8, sweep: 1.0, thick: 0.25 };
     const vx = cfg.finBoom ? (cfg.gap / 2 + rR * 0.8) : rR * 0.7;
@@ -426,11 +389,11 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- intakes: beveled caret ducts canted into the hull (+ lips, splitters & DSI bumps for hero) ----
+  // intakes: caret ducts canted into the hull (+ lips, splitters & DSI bumps for hero)
   if (cfg.intake === 'side') {
     for (const sx of [-1, 1]) {
       if (cfg.semiIntake) {
-        // Rafale: semicircular un-splittered side duct — no splitter plate
+        // Rafale: semicircular duct, no splitter
         const duct = new THREE.Mesh(cacheGeo(gk('semiintake'), () => { const c = new THREE.CylinderGeometry(1.0, 1.05, 4.0, 16, 1, false, 0, Math.PI); c.rotateX(Math.PI / 2); return c; }), dark);
         duct.rotation.z = sx * Math.PI / 2; duct.position.set(sx * (fR + 0.35), -fR * flat * 0.30, -half + 3.6); g.add(duct);
         if (hero) {
@@ -450,13 +413,12 @@ function buildJet(color, accent, cfg, hero) {
         continue;
       }
       const ik = new THREE.Mesh(cacheGeo(gk('intake'), () => intakeDuctGeo(1.5, 1.7 * flat + 0.5, 4.2)), dark);
-      ik.scale.x = sx;   // mirror so the caret leans outward on both sides
+      ik.scale.x = sx;   // caret leans outward on both sides
       ik.position.set(sx * (fR + 0.45), -fR * flat * 0.35, -half + 3.6); ik.rotation.z = sx * 0.08; g.add(ik);
       if (hero) {
         const lip = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.12, 10, 26), steel);
         lip.position.set(sx * (fR + 0.45), -fR * flat * 0.35, -half + 1.5);
         lip.scale.set(0.62, (1.7 * flat + 0.5) / 1.85, 1); g.add(lip);
-        // boundary-layer splitter plate between intake & fuselage
         const split = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.7 * flat + 0.4, 2.6), panel);
         split.position.set(sx * (fR - 0.05), -fR * flat * 0.32, -half + 3.4); g.add(split);
         if (cfg.dsi) {
@@ -465,7 +427,7 @@ function buildJet(color, accent, cfg, hero) {
         }
       }
     }
-  } else if (cfg.intake === 'belly' || cfg.intake === 'chin') {
+  } else if (cfg.intake === 'chin') {
     const ik = new THREE.Mesh(cacheGeo(gk('intake'), () => intakeDuctGeo(cfg.frontR * 1.9, 1.4, 3.8)), dark);
     ik.position.set(0, -fR * flat - 0.2, -half + 3.2); g.add(ik);
     if (hero) {
@@ -473,14 +435,14 @@ function buildJet(color, accent, cfg, hero) {
       lip.rotation.x = Math.PI / 2; lip.position.set(0, -fR * flat - 0.2, -half + 1.4); lip.scale.set(1, 0.5, 1); g.add(lip);
     }
     if (hero && cfg.chinSplit) {
-      // Typhoon rectangular chin intake: horizontal splitter + drooped lip
+      // Typhoon: horizontal splitter + drooped lip
       const plate = new THREE.Mesh(new THREE.BoxGeometry(fR * 1.8, 0.1, 2.6), panel);
       plate.position.set(0, -fR * flat - 0.2, -half + 3.0); g.add(plate);
       const lowLip = new THREE.Mesh(new THREE.BoxGeometry(fR * 1.9, 0.16, 0.5), steel);
       lowLip.position.set(0, -fR * flat - 0.95, -half + 1.5); lowLip.rotation.x = 0.25; g.add(lowLip);
     }
   } else if (cfg.intake === 'dorsal') {
-    // top-mounted NACA-style hump duct (drones)
+    // drones: top-mounted hump duct
     const ik = new THREE.Mesh(cacheGeo(gk('intake'), () => intakeDuctGeo(fR * 1.6, 1.0, 3.0)), dark);
     ik.position.set(0, fR * flat * 0.75, -half + cfg.noseLen * 0.2 + 2.2); g.add(ik);
     if (hero) {
@@ -488,10 +450,9 @@ function buildJet(color, accent, cfg, hero) {
       lip.rotation.x = Math.PI / 2; lip.position.set(0, fR * flat * 0.75, -half + cfg.noseLen * 0.2 + 0.7); g.add(lip);
     }
   }
-  // ---- dorsal over-spine intake (J-36 center engine / B-2 over-wing inlets) ----
+  // dorsal intakes: J-36 centre engine / flying-wing twin over-wing inlets
   if (cfg.dorsalIntake) {
     if (cfg.flyingWing) {
-      // twin buried over-wing inlets + humps
       for (const sx of [-1, 1]) {
         const duct = new THREE.Mesh(cacheGeo(gk('dorsalduct'), () => intakeDuctGeo(2.2, 0.9, 3.0)), dark);
         duct.position.set(sx * (cfg.gap / 2 + 0.6), fR * flat * 0.55, -half + 2.5); g.add(duct);
@@ -499,7 +460,6 @@ function buildJet(color, accent, cfg, hero) {
         hump.position.set(sx * (cfg.gap / 2 + 0.6), fR * flat * 0.7, -half + 2.5); g.add(hump);
       }
     } else {
-      // single caret duct opening upward on the spine behind the canopy
       const duct = new THREE.Mesh(cacheGeo(gk('dorsalduct'), () => intakeDuctGeo(fR * 1.5, 1.3, 4.5)), dark);
       duct.rotation.z = Math.PI; duct.position.set(0, fR * flat * 0.85, -half + cfg.noseLen * 0.35 + 3.0); g.add(duct);
       if (hero) {
@@ -509,9 +469,8 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- stores: weapon-bay door outlines (stealth jets) or underwing pylons + tip missiles (others) ----
+  // stores: weapon-bay door outlines (stealth) or pylons + tip missiles (others)
   if (hero && cfg.bayDoors) {
-    // BOMBER: twin long belly bay rails + cross seams
     for (const sx of [-1, 1]) {
       for (const bx of [1.2, 3.0]) {
         const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 7.5), panel);
@@ -527,7 +486,6 @@ function buildJet(color, accent, cfg, hero) {
     const doorX = cfg.bayWide ? fR * 0.62 : fR * 0.5;
     const doorZ = cfg.bayWide ? -half * 0.02 : -half * 0.05;
     if (cfg.sawtoothDoors) {
-      // F-35: zigzag bay-door seams instead of straight slabs
       for (const sx of [-1, 1]) for (let k = 0; k < 4; k++) {
         const seg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, L * 0.06), panel);
         seg.rotation.y = (k % 2 ? 1 : -1) * 0.5;
@@ -543,17 +501,16 @@ function buildJet(color, accent, cfg, hero) {
     cross1.position.set(0, -fR * flat - 0.01, doorZ - doorLen * 0.5); g.add(cross1);
     const cross2 = cross1.clone(); cross2.position.z = doorZ + doorLen * 0.5; g.add(cross2);
   }
-  if (hero && !cfg.clean && !cfg.flyingWing && cfg.wing) {
+  if (hero && !cfg.clean && !cfg.flyingWing) {
     const [tx, tz] = wingTip(cfg.wing);
     for (const sx of [-1, 1]) {
       g.add(buildTipMissile(sx * tx, wy, tz + 1.5, dark, accent));
-      // an inboard underwing pylon
       const py = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 1.6), dark);
       py.position.set(sx * tx * 0.5, wy - 0.45, tz * 0.3 + 1.2); g.add(py);
     }
   }
 
-  // blade antenna on the spine (hero) + formation/recognition lights
+  // blade antenna + formation lights
   if (hero && !cfg.flyingWing) {
     const ant = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.55, 0.9), dark);
     ant.position.set(0, fR * flat * 0.55 + 0.5, canopyZ + 3.2); ant.rotation.x = -0.12; g.add(ant);
@@ -565,14 +522,14 @@ function buildJet(color, accent, cfg, hero) {
     const sstrip = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.05, 1.9), slime);
     sstrip.position.set(0, fR * flat * 0.52 + 0.62, half * 0.32); g.add(sstrip);
   }
-  // hostile under-nose recognition strip (all LODs when flagged)
+  // hostile under-nose recognition strip (all LODs)
   if (cfg.hostileLights) {
     const hstrip = new THREE.Mesh(cacheGeo(gk('hostilestrip'), () => new THREE.BoxGeometry(0.42, 0.05, 1.6)),
       new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.85, fog: false }));
     hstrip.position.set(0, -fR * flat * 0.7, -half + 1.6); g.add(hstrip);
   }
 
-  // ---- forebody chine strips (generic; J20/J50/F47) ----
+  // forebody chine strips
   if (cfg.chineRidge) {
     const cl = cfg.noseLen;
     for (const sx of [-1, 1]) {
@@ -581,7 +538,7 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- F-22 tail booms (stingers flanking the 2D nozzles) ----
+  // F-22 tail stingers flanking the 2D nozzles
   if (cfg.tailBoom) {
     for (const sx of [-1, 1]) {
       const boom = new THREE.Mesh(cacheGeo(gk('tailboom'), () => new THREE.BoxGeometry(0.9, rR * flat * 1.1, 4.2)), body);
@@ -591,14 +548,13 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- dorsal refueling receptacle (F-22/F-35) ----
   if (cfg.boomRecept) {
     const spineTopY = fR * flat * 0.52 + fR * 0.31;
     const rec = new THREE.Mesh(cacheGeo(gk('boomrecept'), () => new THREE.BoxGeometry(0.9, 0.04, 1.3)), panel);
     rec.position.set(0, spineTopY + 0.02, canopyZ + (cfg.id === 'F22' ? 4.2 : 3.6)); g.add(rec);
   }
 
-  // ---- gun port fairing (F-22 starboard root / F-35 port shoulder) ----
+  // gun port fairing (F-22 starboard root / F-35 port shoulder)
   if (cfg.gunPort === 'shoulder') {
     const gp = new THREE.Mesh(cacheGeo(gk('gunportsh'), () => { const s = new THREE.SphereGeometry(0.34, 10, 8); s.scale(0.8, 0.6, 2.6); return s; }), body);
     gp.position.set(-fR * 0.8, fR * flat * 0.5, -half + 3.0); g.add(gp);
@@ -607,7 +563,7 @@ function buildJet(color, accent, cfg, hero) {
     gp.position.set(fR * 0.95, fR * flat * 0.35, -half + 3.2); g.add(gp);
   }
 
-  // ---- SU-57 inter-engine tunnel + stinger + nacelle pods ----
+  // SU-57 inter-engine tunnel + nacelle pods + stinger
   if (cfg.tunnel) {
     const ch = new THREE.Mesh(cacheGeo(gk('tunnel'), () => new THREE.BoxGeometry(cfg.gap - rR * 0.6, rR * flat * 0.9, L * 0.45)), body);
     ch.position.set(0, -rR * flat * 0.25, half * 0.30); g.add(ch);
@@ -625,7 +581,7 @@ function buildJet(color, accent, cfg, hero) {
     st.scale.set(1.5, 0.45, 1); st.position.set(0, 0, half + 2.6); g.add(st);
   }
 
-  // ---- J-50 lambda centre-body fairing + beaver tail ----
+  // J-50 lambda centre-body fairing + beaver tail
   if (cfg.lambdaFairing) {
     const fair = new THREE.Mesh(cacheGeo(gk('lambdafair'), () => new THREE.BoxGeometry(cfg.gap + rR * 1.6, rR * flat * 1.1, 4.5)), body);
     fair.scale.set(1, 0.8, 1); fair.position.set(0, -0.05, half - 1.0); g.add(fair);
@@ -633,41 +589,40 @@ function buildJet(color, accent, cfg, hero) {
     bt.scale.set(2.0, 0.35, 1); bt.position.set(0, 0, half + 2.0); g.add(bt);
   }
 
-  // ---- J-50 swiveling wingtip panels ----
+  // J-50 swiveling wingtip panels
   if (cfg.tipPivot) {
     const tpts = [[0, 0], [1.8, 0.9], [1.8, 1.6], [0, 1.4]];
     for (const sx of [-1, 1]) {
       const pv = new THREE.Group();
-      pv.add(extrudeWing(tpts, (cfg.wingThick || 0.5) * 0.8, body, 0, bs, gk('tippivot')));
+      pv.add(extrudeWing(tpts, wt * 0.8, body, 0, bs, gk('tippivot')));
       pv.position.set(sx * (9.4 - 1.8), wy, 4.3 + 1.1 * 0.8); pv.rotation.x = sx * 0.10;
       pv.scale.x = sx; g.add(pv);
       if (hero) {
-        const seam = new THREE.Mesh(cacheGeo(gk('tippivotseam'), () => new THREE.BoxGeometry(0.12, (cfg.wingThick || 0.5) * 1.4, 1.4)), panel);
+        const seam = new THREE.Mesh(cacheGeo(gk('tippivotseam'), () => new THREE.BoxGeometry(0.12, wt * 1.4, 1.4)), panel);
         seam.position.set(sx * (9.4 - 1.8), wy, 4.3 + 0.7); g.add(seam);
       }
     }
   }
 
-  // ---- generic TE sawtooth serrations (J36/F35-style stealth deck trim) ----
+  // trailing-edge sawtooth: J-36 serrations / F-35 W-deck trim strips
   if (cfg.sawtoothTE && hero) {
     if (cfg.id === 'J36') {
       for (const sx of [-1, 1]) for (const sp of [[4.2, 11.0], [9.5, 9.5]]) {
         const tri = new THREE.Mesh(cacheGeo(gk('sawtri'), () => {
           const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(1.6, 0); sh.lineTo(0.8, 1.1); sh.closePath();
-          const g2 = new THREE.ExtrudeGeometry(sh, { depth: (cfg.wingThick || 0.5) * 0.8, bevelEnabled: false }); g2.rotateX(-Math.PI / 2); return g2;
+          const g2 = new THREE.ExtrudeGeometry(sh, { depth: wt * 0.8, bevelEnabled: false }); g2.rotateX(-Math.PI / 2); return g2;
         }), body);
         tri.scale.x = sx; tri.position.set(sx * sp[0], wy, sp[1]); g.add(tri);
       }
     } else {
-      // W-deck crank trim strips (F35-style sawtooth bay-door trim)
       for (const sx of [-1, 1]) for (const sp of [[7.0, 7.0], [3.6, 9.8]]) {
-        const strip = new THREE.Mesh(cacheGeo(gk('sawstrip'), () => new THREE.BoxGeometry(0.6, (cfg.wingThick || 0.5) * 1.4, 0.1)), panel);
+        const strip = new THREE.Mesh(cacheGeo(gk('sawstrip'), () => new THREE.BoxGeometry(0.6, wt * 1.4, 0.1)), panel);
         strip.position.set(sx * sp[0], wy, sp[1]); g.add(strip);
       }
     }
   }
 
-  // ---- J-36 split drag rudders at the wingtips ----
+  // J-36 split drag rudders at the wingtips
   if (cfg.splitRudderTips && hero) {
     for (const sx of [-1, 1]) for (const sy of [1, -1]) {
       const plate = new THREE.Mesh(cacheGeo(gk('dragrudder'), () => new THREE.BoxGeometry(2.2, 0.06, 1.1)), panel);
@@ -675,19 +630,19 @@ function buildJet(color, accent, cfg, hero) {
     }
   }
 
-  // ---- FA-18 wing-fold hinges + wingtip rails ----
+  // FA-18 wing-fold hinges
   if (cfg.wingFold) {
     for (const sx of [-1, 1]) {
-      const fair = new THREE.Mesh(cacheGeo(gk('wingfold'), () => new THREE.BoxGeometry(0.22, (cfg.wingThick || 0.5) * 1.7, 2.4)), panel);
-      fair.position.set(sx * 5.2, wy + (cfg.wingThick || 0.5) * 0.5, 2.9); g.add(fair);
+      const fair = new THREE.Mesh(cacheGeo(gk('wingfold'), () => new THREE.BoxGeometry(0.22, wt * 1.7, 2.4)), panel);
+      fair.position.set(sx * 5.2, wy + wt * 0.5, 2.9); g.add(fair);
       const hinge = new THREE.Mesh(cacheGeo(gk('wingfoldpin'), () => { const c = new THREE.CylinderGeometry(0.09, 0.09, 2.4, 6); c.rotateX(Math.PI / 2); return c; }), steel);
-      hinge.position.set(sx * 5.2, wy + (cfg.wingThick || 0.5) * 0.5 + 0.2, 2.9); g.add(hinge);
+      hinge.position.set(sx * 5.2, wy + wt * 0.5 + 0.2, 2.9); g.add(hinge);
     }
   }
-  // wingtip launch rails (generic tipRail; airframes.js aliases FA-18 tipRails onto it, `big` keeps the heavier rail)
+  // wingtip launch rails ('big' = FA-18's heavier rail)
   if (cfg.tipRail) {
     const [tx, tz] = wingTip(cfg.wing);
-    const big = !!cfg.tipRails;
+    const big = cfg.tipRail === 'big';
     for (const sx of [-1, 1]) {
       const rail = new THREE.Mesh(cacheGeo(gk('tiprail'), () => new THREE.BoxGeometry(big ? 0.22 : 0.14, big ? 0.3 : 0.18, big ? 3.2 : 2.2)), dark);
       rail.position.set(sx * tx, wy + (big ? 0 : 0.05), tz + (big ? 0.4 : -0.4)); g.add(rail);
@@ -704,7 +659,7 @@ function buildJet(color, accent, cfg, hero) {
     pr.position.set(fR * 0.45, fR * flat * 0.55, z0 + 1.4); g.add(pr);
   }
 
-  // ---- single-fin dorsal fillet (EFT/TEJAS/STD) ----
+  // single-fin dorsal fillet
   if (cfg.finFillet && cfg.vtail && cfg.vtail.type === 'single') {
     const vh = cfg.vtail.h, runLen = (cfg.id === 'TEJAS' || cfg.id === 'STD') ? vh * 1.0 : vh * 1.4;
     const fil = new THREE.Mesh(cacheGeo(gk('finfillet'), () => {
@@ -713,17 +668,17 @@ function buildJet(color, accent, cfg, hero) {
     }), body);
     fil.position.set(0, fR * flat * 0.45, cfg.vtail.z - runLen + 0.2); g.add(fil);
   }
-  // ---- single-fin tip EW pod (Rafale Spectra) ----
+  // Rafale fin-tip EW pod
   if (cfg.finTipPod && cfg.vtail && cfg.vtail.type === 'single') {
     const pod = new THREE.Mesh(cacheGeo(gk('fintippod'), () => { const c = new THREE.CapsuleGeometry(0.16, 0.9, 4, 8); c.rotateX(Math.PI / 2); return c; }), sensor);
     pod.position.set(0, fR * flat * 0.4 + cfg.vtail.h - 0.1, cfg.vtail.z + cfg.vtail.sweep + 0.3); g.add(pod);
   }
-  // ---- spine airbrake seam (EFT) ----
+  // EFT spine airbrake seam
   if (cfg.dorsalBrake && hero) {
     const br = new THREE.Mesh(cacheGeo(gk('dorsalbrake'), () => new THREE.BoxGeometry(1.1, 0.06, 1.9)), panel);
     br.position.set(0, fR * flat * 0.62 + 0.05, canopyZ + 3.4); g.add(br);
   }
-  // ---- dorsal turret blister (BOSS) ----
+  // BOSS dorsal turret blister
   if (cfg.spineGun && hero) {
     const blister = new THREE.Mesh(cacheGeo(gk('spinegun'), () => { const s = new THREE.SphereGeometry(0.9, 14, 10); s.scale(1, 0.6, 1); return s; }), dark);
     blister.position.set(0, fR * flat * 0.62 + 0.3, L * 0.05); g.add(blister);
@@ -731,13 +686,9 @@ function buildJet(color, accent, cfg, hero) {
     barrel.position.set(0, fR * flat * 0.62 + 0.55, L * 0.05 - 1.4); g.add(barrel);
   }
 
-  // ---- engines: nozzle detail + afterburner glow/flame (userData.engines contract preserved) ----
+  // engines: nozzles + afterburner (userData.engines is the animEngines contract)
   const engines = [];
-  const exZ = half + 1.6 - (cfg.buriedExhaust ? 1.2 : 0);
-  if (cfg.buriedExhaust) {
-    const shelf = new THREE.Mesh(cacheGeo(gk('exhaustshelf'), () => new THREE.BoxGeometry(cfg.gap + rR * 1.6, 0.18, 2.4)), body);
-    shelf.position.set(0, rR * flat * 0.55, half + 0.4); g.add(shelf);
-  }
+  const exZ = half + 1.6;
   const xs = cfg.engines === 1 ? [0] : cfg.engines === 3 ? [-cfg.gap, 0, cfg.gap] : [-cfg.gap / 2, cfg.gap / 2];
   for (const ex of xs) {
     if (cfg.nozzle === '2d') {
@@ -768,7 +719,7 @@ function buildJet(color, accent, cfg, hero) {
         const can2 = new THREE.Mesh(cacheGeo(gk('excan2'), () => new THREE.CylinderGeometry(rR * 0.5, rR * 0.55, 0.6, segN)), new THREE.MeshBasicMaterial({ color: 0x331008, fog: false }));
         can2.rotation.x = Math.PI / 2; can2.scale.y = flat; can2.position.set(ex, 0, exZ + 0.7); g.add(can2);
       }
-      // throttle-heated nozzle interior on every jet (animEngines drives the emissive)
+      // nozzle interior: animEngines heats its emissive with throttle
       const inner = new THREE.Mesh(cacheGeo(gk('exinner'), () => new THREE.CylinderGeometry(rR * 0.6, rR * 0.7, 1.6, segN)), nozIn);
       inner.rotation.x = Math.PI / 2; inner.scale.y = flat; inner.position.set(ex, 0, exZ + 0.2); g.add(inner);
     }
@@ -778,7 +729,7 @@ function buildJet(color, accent, cfg, hero) {
     flame.rotation.x = Math.PI / 2; flame.position.set(ex, 0, exZ + 2.4); g.add(flame);
     const eng = { glow, flame };
     if (hero) {
-      // white-hot inner tongue + a ladder of shock diamonds, lit by animEngines at burner
+      // white-hot inner tongue + shock-diamond ladder
       const core = new THREE.Mesh(new THREE.ConeGeometry(rR * 0.4, 3.8, 14), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
       core.rotation.x = Math.PI / 2; core.position.set(ex, 0, exZ + 1.8); g.add(core);
       const diaMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
@@ -797,14 +748,9 @@ function buildJet(color, accent, cfg, hero) {
   return g;
 }
 
-/* ---- glTF hero models (High tier): real modeled jets in place of the procedural builder ----
-   Loaded once, oriented (length → -Z) / centered / scaled to the procedural footprint, then cloned
-   per spawn. Geometry + materials are tagged userData.shared so disposeGroup never frees the shared
-   template. Falls back to buildJet on Low tier or until the model finishes loading. */
-/* shape id → { file, rotY (radians, to point nose → game forward -Z), len (target max-dim) }.
-   rotY was derived + verified per model via a top-down contact-sheet render (the models do NOT
-   share a native orientation): nose -X → -π/2, +X → +π/2, +Z → π. Fighters scale to len 26
-   (the proven F-22 footprint); the BOMBER flying wing is bigger (≈ the old procedural ×1.7). */
+/* glTF hero models (High tier; buildJet until loaded / on Low): loaded once, centred, oriented and
+   scaled, then cloned per spawn. rotY points the nose at -Z — the models don't share a native
+   orientation (verified per model on a top-down contact sheet). len = target max dimension. */
 const JET_MODELS = {
   F22:    { file: 'f22.glb',    rotY: -Math.PI / 2, len: 26 },
   SU57:   { file: 'su57.glb',   rotY:  Math.PI / 2, len: 26 },
@@ -820,38 +766,33 @@ const JET_MODELS = {
   STD:    { file: 'std.glb',    rotY:  Math.PI / 2, len: 26 },
   BOMBER: { file: 'bomber.glb', rotY: -Math.PI / 2, len: 44 },
 };
-/* per-jet afterburner anchor tweaks over the auto-derived defaults (xw = half twin-nozzle spacing,
-   default 1.1; dy = raise(+)/lower(-) the plume; dz = aft(+)/forward(-) the plume). Tuned visually
-   against the model nozzles (scripts/verify-jets.mjs top+rear). */
+/* afterburner anchor tweaks, tuned visually against the model nozzles: xw = half twin-nozzle spacing
+   (default 1.1), dy = plume up(+)/down(-), dz = plume aft(+)/forward(-) */
 const BURN_OVERRIDE = {
-  SU57:   { xw: 2.0, dy: 0.6, dz: -1.5 }, // wide nozzles; raised + pulled forward
-  EFT:    { dy: -0.8, dz: -1.6 },         // lowered + pulled forward
+  SU57:   { xw: 2.0, dy: 0.6, dz: -1.5 },
+  EFT:    { dy: -0.8, dz: -1.6 },
   RAFALE: { dy: -0.8, dz: -1.6 },
-  FA18:   { dz: -1.2 },                    // pulled forward a touch
-  F47:    { xw: 2.0, dy: 1.4 },           // wider + raised
-  J36:    { xw: 0.95, dy: 1.6 },          // trijet: slightly narrow splay + raised
-  J50:    { dy: 1.3, dz: -1.5 },          // raised + pulled forward
+  FA18:   { dz: -1.2 },
+  F47:    { xw: 2.0, dy: 1.4 },
+  J36:    { xw: 0.95, dy: 1.6 },
+  J50:    { dy: 1.3, dz: -1.5 },
 };
-/* shapes that render colourless in-game (geometry-only OR flat-albedo exports) → recolour them in-code
-   via the SKINS paint (applyPaint). The other airframes carry real baked liveries and must NOT be repainted. */
+/* colourless exports get the SKINS paint in-code (applyPaint); the rest carry baked liveries — never repaint them */
 const TEXTURELESS_SHAPES = { F47: 1, J20: 1, J36: 1, J50: 1, STD: 1, EFT: 1, FA18: 1 };
 function loadJetModels() {
-  if (typeof THREE === 'undefined' || typeof THREE.GLTFLoader !== 'function') return;
-  if (typeof gfxTier !== 'undefined' && gfxTier === 'low') return;   // low/mobile tier = procedural only; skip the model memory entirely
+  if (gfxTier === 'low') return;   // procedural only; skip the model memory entirely
   const loader = new THREE.GLTFLoader();
-  if (typeof THREE.DRACOLoader === 'function') {                      // some models ship Draco-compressed (vendor/draco decoder)
-    const draco = new THREE.DRACOLoader();
-    draco.setDecoderPath('vendor/draco/');
-    loader.setDRACOLoader(draco);
-  }
+  const draco = new THREE.DRACOLoader();   // some models ship Draco-compressed
+  draco.setDecoderPath('vendor/draco/');
+  loader.setDRACOLoader(draco);
   Object.keys(JET_MODELS).forEach(id => {
     const spec = JET_MODELS[id];
     loader.load('assets/jets/' + spec.file, (gl) => {
       const obj = gl.scene;
       const box = new THREE.Box3().setFromObject(obj);
-      obj.position.sub(box.getCenter(new THREE.Vector3()));     // centre model at its own origin
+      obj.position.sub(box.getCenter(new THREE.Vector3()));
       const wrap = new THREE.Group(); wrap.add(obj);
-      wrap.rotation.y = spec.rotY;                              // verified per-model: nose → game forward (-Z)
+      wrap.rotation.y = spec.rotY;
       const size = box.getSize(new THREE.Vector3());
       wrap.scale.setScalar(spec.len / Math.max(size.x, size.y, size.z));
       wrap.traverse(o => {                                      // shared template — disposeGroup must never free it
@@ -861,69 +802,58 @@ function loadJetModels() {
           if (!o.material || !o.material.transparent) o.castShadow = true;
         }
       });
-      wrap.userData.textureless = !!TEXTURELESS_SHAPES[id];     // geometry-only export → recolour in-code via skins (applyPaint)
-      // afterburner anchors derived from the oriented template: nozzles at the tail (+Z), spread by engine count
+      wrap.userData.textureless = !!TEXTURELESS_SHAPES[id];
+      // afterburner anchors from the oriented bbox: just inside the tail (+Z), slightly below centre
       const bb = new THREE.Box3().setFromObject(wrap);
       const bs = bb.getSize(new THREE.Vector3()), bc = bb.getCenter(new THREE.Vector3());
-      const sp = SHAPES[id] || {};                               // airframes.js loads before this file
-      const cnt = sp.engines || 2;
-      const buried = !!(sp.buriedExhaust || sp.flyingWing);
+      const sp = SHAPES[id], cnt = sp.engines;
       const tw = BURN_OVERRIDE[id] || {};
-      const xw = tw.xw != null ? tw.xw : 1.1;                    // half the twin-nozzle spacing (≈ the F-22's ±1.0)
+      const xw = tw.xw != null ? tw.xw : 1.1;
       wrap.userData.burn = {
-        z: bb.max.z - 0.5 + (tw.dz || 0),                        // just inside the tail (dz: aft+/forward-)
-        y: bc.y - bs.y * 0.12 + (tw.dy || 0),                    // slightly below the centreline (dy: up+/down-)
+        z: bb.max.z - 0.5 + (tw.dz || 0),
+        y: bc.y - bs.y * 0.12 + (tw.dy || 0),
         xs: cnt === 1 ? [0] : cnt === 3 ? [-2 * xw, 0, 2 * xw] : [-xw, xw],
-        rad: buried ? 0.5 : 1,                                   // stealth flying-wing exhaust is subtle
+        rad: sp.flyingWing ? 0.5 : 1,   // subtle flying-wing exhaust
       };
       jetGLTF[id] = wrap;
-      // if the hangar is previewing this exact shape, re-run selectJet so the model swaps in once loaded
-      if (typeof previewJet !== 'undefined' && previewJet && typeof JETS !== 'undefined' && JETS[selectedJet] && JETS[selectedJet].shape === id && typeof selectJet === 'function') selectJet(selectedJet);
+      // hangar previewing this shape → re-select so the model swaps in
+      if (previewJet && JETS[selectedJet].shape === id) selectJet(selectedJet);
     }, undefined, (err) => { try { console.warn('jet glTF load failed:', spec.file, (err && err.message) || err); } catch (e) {} });
   });
 }
 
-/* afterburner plume attached directly to the game-space clone group at the jet's tail nozzle(s).
-   burn = { z (tail, +Z aft), y, xs[] (per-engine X centre), rad (size scale) } — computed per template
-   in loadJetModels from its oriented bbox + SHAPES.engines. Builds the userData.engines contract that
-   animEngines drives (player/wingmen modulate by throttle; enemies keep this cruise level). Meshes are
-   PER-INSTANCE (never userData.shared) so disposeGroup frees them. */
+/* afterburner plume on the game-space clone group at burn = { z, y, xs[], rad } (see loadJetModels);
+   builds the userData.engines contract animEngines drives. Geometry is cached per radius; materials
+   are per-instance so disposeGroup frees them. */
 function addBurner(g, burn, accent) {
   const engines = [];
   const acc = (typeof accent === 'number') ? accent : 0xff7a2a;
-  const r = burn.rad || 1;
-  const rk = 'burn:' + r;   // afterburner plume geometry is deterministic per nozzle radius → cache+share it (userData.shared) so per-spawn teardown can't leak it
+  const r = burn.rad, rk = 'burn:' + r;
   const heatMat = new THREE.MeshBasicMaterial({ color: 0xffcaa0, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   for (const ex of burn.xs) {
-    const ny = burn.y, nz = burn.z;                   // nozzle exit (game space; aft = +Z)
-    // additive glow puff right at the nozzle lip
+    const ny = burn.y, nz = burn.z;
     const glow = new THREE.Mesh(cacheGeo(rk + ':glow', () => new THREE.SphereGeometry(0.9 * r, 12, 10)), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     glow.position.set(ex, ny, nz + 0.3); glow.scale.set(1, 1, 1.8); g.add(glow);
-    // afterburner flame cone — apex at the nozzle, plume streaming aft (+Z)
     const flame = new THREE.Mesh(cacheGeo(rk + ':flame', () => new THREE.ConeGeometry(0.62 * r, 6.0 * r, 16)), new THREE.MeshBasicMaterial({ color: acc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-    flame.rotation.x = Math.PI / 2;                   // cone +Y -> +Z (point the base downstream)
+    flame.rotation.x = Math.PI / 2;
     flame.position.set(ex, ny, nz + 2.6 * r); g.add(flame);
-    // white-hot inner tongue
     const core = new THREE.Mesh(cacheGeo(rk + ':core', () => new THREE.ConeGeometry(0.34 * r, 4.0 * r, 14)), new THREE.MeshBasicMaterial({ color: 0xfff4dc, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     core.rotation.x = Math.PI / 2; core.position.set(ex, ny, nz + 1.9 * r); g.add(core);
-    // shock-diamond ladder (fades in at burner via animEngines)
     const diaMat = new THREE.MeshBasicMaterial({ color: 0xfff0c8, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
     const dia = new THREE.Group();
     for (let d = 0; d < 4; d++) {
       const m = new THREE.Mesh(cacheGeo(rk + ':dia' + d, () => new THREE.OctahedronGeometry((0.3 - d * 0.045) * r, 1)), diaMat);
-      m.scale.z = 1.6; m.position.z = (0.9 + d * 1.05) * r; dia.add(m);   // march downstream (+Z)
+      m.scale.z = 1.6; m.position.z = (0.9 + d * 1.05) * r; dia.add(m);
     }
     dia.position.set(ex, ny, nz + 1.0 * r); dia.visible = false; g.add(dia);
     engines.push({ glow, flame, core, dia, diaMat });
   }
   g.userData.engines = engines;
-  g.userData.heatMat = heatMat;   // harmless emissive sink (no nozzle-interior mesh on the fused models)
+  g.userData.heatMat = heatMat;   // emissive sink: glTF models have no nozzle-interior mesh
 }
 
-/* enemy glTF clones can't take the game's red enemy paint (textures are baked), so friend/foe is
-   unreadable in a furball. Give each enemy INSTANCE a red emissive sheen. The template's materials
-   are userData.shared and must never be mutated, so clone the material per mesh and tag the clone
-   shared:false (disposeGroup frees it; the player's same-type jet stays normal-coloured). */
+/* textured enemy glTF can't take red paint, so give each instance a red emissive sheen for friend/foe
+   readability. Template materials are shared — clone per mesh, tagged shared:false so disposeGroup frees it. */
 function applyFoeTint(obj) {
   const tintOne = (m) => {
     const c = m.clone();
@@ -937,11 +867,8 @@ function applyFoeTint(obj) {
   });
 }
 
-/* in-code paint for the texture-less jets. `paint` is EITHER a plain colour NUMBER (enemy-red / legacy) OR a
-   skin descriptor {color, zones?}: `zones` maps material.name → colour so distinct hull sections paint
-   differently (splinter / two-tone / desert — no texture/UVs needed), `color` is the fallback for any
-   material not named in zones. Clones materials PER INSTANCE (templates are userData.shared — never mutate
-   them) and tags the clone shared:false so disposeGroup frees it. */
+/* paint a textureless jet: `paint` is a colour number or a skin {color, zones?} where zones maps
+   material.name → colour (fallback color). Clones materials per instance like applyFoeTint. */
 function applyPaint(obj, paint) {
   if (typeof paint === 'number') paint = { color: paint };
   const base = paint.color, zones = paint.zones || null;
@@ -957,26 +884,23 @@ function applyPaint(obj, paint) {
   });
 }
 
-/* clone a loaded glTF template for one spawn (shares the tagged geo/materials). The scaled model
-   nests in a NEW outer game-space group; the afterburner attaches there in un-scaled game coords. */
+/* clone a loaded template; the scaled model nests in an outer game-space group so the burner
+   attaches in un-scaled game coords */
 function cloneJetGLTF(id, color, accent, opts) {
-  opts = opts || {};
   const inner = jetGLTF[id].clone(true);
   const g = new THREE.Group();
   g.add(inner);
-  if (jetGLTF[id].userData.textureless && (opts.skin || typeof color === 'number')) applyPaint(inner, opts.skin || color);   // skin descriptor (player, may carry zones) / enemy-red number (foe)
-  else if (opts.enemy) applyFoeTint(inner);            // textured enemy: per-instance red sheen for foe readability
+  if (jetGLTF[id].userData.textureless && (opts.skin || typeof color === 'number')) applyPaint(inner, opts.skin || color);
+  else if (opts.enemy) applyFoeTint(inner);
   const burn = jetGLTF[id].userData.burn;
-  if (burn) addBurner(g, burn, accent);                // afterburner per jet (player: animEngines drives it; enemies: static cruise plume)
+  if (burn) addBurner(g, burn, accent);
   g.userData.gltf = true;
   return g;
 }
 
-/* hero jets use the glTF model on High tier once loaded; everything else uses the procedural builder */
+/* hero jets use the glTF model on High tier once loaded */
 function buildJetOrGLTF(color, accent, cfg, hero, opts) {
-  opts = opts || {};
-  if (hero && cfg && jetGLTF[cfg.id] && (typeof gfxTier === 'undefined' || gfxTier !== 'low'))
-    return cloneJetGLTF(cfg.id, color, accent, { enemy: !!opts.enemy, skin: opts.skin });
+  if (hero && jetGLTF[cfg.id] && gfxTier !== 'low') return cloneJetGLTF(cfg.id, color, accent, opts);
   return buildJet(color, accent, cfg, hero);
 }
 function buildBoss() {
@@ -1029,13 +953,12 @@ function buildTruck() {
   return g;
 }
 
-/* ---------------- kamikaze drone ---------------- */
 function buildDrone() {
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2a0e12, metalness: 0.6, roughness: 0.5, flatShading: true });
   const shell = new THREE.Mesh(new THREE.OctahedronGeometry(4.4, 0), bodyMat);
   g.add(shell);
-  for (let k = 0; k < 4; k++) {                       // X-frame fins
+  for (let k = 0; k < 4; k++) {   // X-frame fins
     const fin = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.35, 1.5), bodyMat);
     fin.rotation.z = k * Math.PI / 2 + Math.PI / 4; g.add(fin);
   }
@@ -1049,12 +972,11 @@ function buildDrone() {
   return g;
 }
 
-/* ---------------- player ---------------- */
 function createPlayer(idx) {
   const j = JETS[idx], st = jetStats(j);
-  const paint = (typeof jetPaint === 'function') ? jetPaint(j) : { color: j.color, accent: j.accent };
-  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true, { skin: paint }); scene.add(mesh);   // OWNED skin only (jetPaint never reads hangarPreview.skin) → unowned preview can't reach gameplay
-  // muzzle flash: one persistent sprite at the nose, blinked on by fireGun
+  const paint = jetPaint(j);   // OWNED skin only — an unowned hangar preview must never reach gameplay
+  const mesh = buildJetOrGLTF(paint.color, paint.accent, SHAPES[j.shape], true, { skin: paint }); scene.add(mesh);
+  // muzzle flash: one persistent sprite, blinked on by fireGun
   const muzzle = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffd76a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false, fog: false }));
   muzzle.position.set(0, 0, -14); muzzle.scale.setScalar(14); muzzle.visible = false; mesh.add(muzzle);
   mesh.userData.muzzle = muzzle;
@@ -1076,85 +998,76 @@ function createPlayer(idx) {
     noCannon: false, gunDmgMul: 1, missileDmgMul: 1, mslEvade: 0, lockSpeedMul: 1, shieldRegenMul: 1, flarePro: 0,
     fireRateMul: 1, bulletSpeedMul: 1, scoreMul: 1, lifesteal: 0, mslRefund: 0, lootMagnet: 0, dmgReduce: 0,
     mslHard: false, upgrades: [],
-    // ---- advanced combat systems (driven by tech tree + jet passives) ----
-    critChance: 0, critMul: 1.7, critChain: false,   // GUNNERY: lucky hits, exploding crits
-    pierce: 0,                                        // rounds punch through this many extra targets
-    splashRadius: 0, splashDmg: 0,                    // MISSILES: thermobaric blast on impact
-    mslSwarm: 0,                                      // MISSILES: extra missiles loosed per launch
-    chainRadius: 0, chainDmg: 0, chainProp: false,    // MUNITIONS: kills detonate, chains can cascade
-    shieldOnKill: 0, overshieldCap: 0, vampShield: 0, // ARMOUR: kills feed the shield; overheal banks as overshield
-    reactive: 0,                                      // ARMOUR: shield-break emits a damaging pulse
-    pointDefense: 0,                                  // EW: chance/s to swat an incoming missile
-    burnDps: 0, burnTime: 0, burnSpread: false,       // INCENDIARY: cannon hits ignite a DoT; INFERNO CASCADE spreads it on burn-death
-    empKill: 0,                                       // EMP SUBMUNITIONS: kills burst a stunning shock (radius)
-    escortPD: false,                                  // GUARDIAN ESCORTS: wingmen run their own point-defense
-    frenzyOnKill: 0, frenzy: 0, frenzyMax: 0,         // KILL FRENZY: kills stoke a decaying fire-rate/damage surge
-    speedMul: 1, turnMul: 1,                          // PROPULSION: raw flight performance
-    alphaMul: 1,                                      // TACTICS: bonus damage vs undamaged targets
-    berserk: 0,                                       // TACTICS: bonus damage that grows as HP falls
-    execThresh: 0,                                    // TACTICS: instantly finish low-HP non-boss foes
-    rpPerKill: 0,                                     // COMMAND: flat research bounty per kill
-    comboDmg: 0,                                      // RHYTHM OF WAR: bonus damage per combo point (capped)
-    gunScavenge: 0,                                   // BRASS SCAVENGER: cannon rounds recovered per kill
-    slowOnKill: 0,                                    // KILL CLOCK / OMEGA: seconds of bullet-time per kill
-    flakFlares: 0,                                    // FLAK BLOOM: flares detonate for this damage on burnout
-    execBlast: 0,                                     // HEADSMAN: executions detonate for this damage
-    cheatDeath: false, _cheatUsed: false,             // TACTICS capstone: survive one lethal blow per wave
-    tp: 0, tech: ['core'], techRepeat: {}, rpMul: 1,   // research points + purchased nodes (root owned free)
-    special: { id: j.ability ? j.id : null, cd: 0, max: SPECIAL_CD[j.id] || 15 },   // SLOT 1 = native jet special (id null on FT-1 → inert)
-    special2: { id: null, cd: 0, max: 15 },            // SLOT 2 = equipped secondary special; startGame fills id+max from the saved equip
+    // tech-tree / passive modifiers
+    critChance: 0, critMul: 1.7, critChain: false,
+    pierce: 0,                                        // extra targets a round punches through
+    splashRadius: 0, splashDmg: 0,
+    mslSwarm: 0,                                      // extra missiles per launch
+    chainRadius: 0, chainDmg: 0, chainProp: false,    // kill detonations (chainProp: cascade)
+    shieldOnKill: 0, overshieldCap: 0, vampShield: 0,
+    reactive: 0,                                      // shield-break pulse damage
+    pointDefense: 0,                                  // chance/s to swat an incoming missile
+    burnDps: 0, burnTime: 0, burnSpread: false,
+    empKill: 0,                                       // kill shock radius
+    escortPD: false,                                  // wingmen run their own point-defense
+    frenzyOnKill: 0, frenzy: 0, frenzyMax: 0,
+    speedMul: 1, turnMul: 1,
+    alphaMul: 1,                                      // damage vs undamaged targets
+    berserk: 0,                                       // bonus damage as HP falls
+    execThresh: 0,                                    // finish low-HP non-boss foes
+    rpPerKill: 0,
+    comboDmg: 0,                                      // damage per combo point (capped)
+    gunScavenge: 0,                                   // rounds recovered per kill
+    slowOnKill: 0,                                    // seconds of bullet-time per kill
+    flakFlares: 0,                                    // flare burnout damage
+    execBlast: 0,                                     // execution detonation damage
+    cheatDeath: false, _cheatUsed: false,             // survive one lethal blow per wave
+    tp: 0, tech: ['core'], techRepeat: {}, rpMul: 1,
+    special: { id: j.ability ? j.id : null, cd: 0, max: SPECIAL_CD[j.id] || 15 },   // slot 1: native special (null on FT-1)
+    special2: { id: null, cd: 0, max: 15 },            // slot 2: startGame fills from the saved equip
 
     damageFlash: 0, shake: 0, hurtDir: null, hurtT: 0,
     incoming: false, _gpwsT: 0, _missT: 0, _lockT: 0, _trailT: 0, _look: null, _lbPrev: false, _wakeT: 0,
   };
-  // ---------- per-jet passive identity (trade-offs beyond raw stats) ----------
   applyJetPassives(player, j);
   mesh.position.set(0, terrainH(0, 3200) + 950, 3200);
   mesh.quaternion.identity();
 }
-/* Each airframe gets a memorable strength and a matching weakness, now drawing on the
-   advanced combat systems (crits, pierce, splash, point-defense, berserk, agility...). */
+/* per-jet passive: one strength + a matching weakness (hpMul folds into current + max HP) */
 function applyJetPassives(p, j) {
   switch (j.id) {
-    case 'FT-1': break;   // plain trainer — no passive identity
-    case 'F-22': // PRECISION GUNS — twin cannon + standing crit chance
+    case 'F-22': // PRECISION GUNS
       p.gunDmgMul = 1.2; p.critChance = 0.1; break;
-    case 'SU-57': // SUPERMANEUVER — vectored agility, fights harder hurt, lighter hull
+    case 'SU-57': // SUPERMANEUVER
       p.turnMul = 1.12; p.berserk = Math.max(p.berserk, 0.2); p.lockSpeedMul = 0.85; p.hpMul = 0.95; break;
-    case 'J-20': // PL-15 SNIPER — no gun, brutal long-range missiles that burst on impact
+    case 'J-20': // PL-15 SNIPER
       p.noCannon = true; p.bullets = 0; p.maxBullets = 0;
       p.missileDmgMul = 1.5; p.lockSpeedMul = 0.55; p.mslEvade = 0.25;
       p.splashRadius = 220; p.splashDmg = 14;
       p.missiles += 10; p.maxMissiles += 10; break;
-    case 'F-35': // SENSOR FUSION — slippery to missiles, fused targeting hard-homes, soft gun
+    case 'F-35': // SENSOR FUSION
       p.mslEvade = 0.45; p.lockSpeedMul = 0.85; p.gunDmgMul = 0.9; p.mslHard = true; break;
-    case 'EFT': // ENERGY FIGHTER — strong gun, ferocious turn & locks, sparse flares
+    case 'EFT': // ENERGY FIGHTER
       p.gunDmgMul = 1.15; p.turnMul = 1.1; p.lockSpeedMul = 0.85;
       p.flares = Math.max(2, p.flares - 4); p.maxFlares = Math.max(2, p.maxFlares - 4); break;
-    case 'RAFALE': // SPECTRA SUITE — extra long-burning flares + a point-defense reflex
+    case 'RAFALE': // SPECTRA SUITE
       p.flares += 6; p.maxFlares += 6; p.flarePro = 1; p.pointDefense = 0.25; p.lockSpeedMul = 0.9; break;
-    case 'TEJAS': // FEATHERWEIGHT — fragile, but blistering shield regen and a darting turn
-      p.shieldRegenMul = 2.2; p.turnMul = 1.14; break;
-    case 'FA18': // ORDNANCE TRUCK — vast magazines, tough hull, mends itself on every kill
-      p.missiles += 6; p.maxMissiles += 6; p.bullets += 400; p.maxBullets += 400; p.lifesteal += 6; break;
-    case 'J-36': // SATURATION PLATFORM — flying magazine, heavy blast missiles, sluggish turn
+    case 'TEJAS': // FEATHERWEIGHT
+      p.shieldRegenMul = 2.2; p.turnMul = 1.14; p.hpMul = 0.7; break;
+    case 'FA18': // ORDNANCE TRUCK
+      p.missiles += 6; p.maxMissiles += 6; p.bullets += 400; p.maxBullets += 400; p.lifesteal += 6; p.hpMul = 1.15; break;
+    case 'J-36': // SATURATION PLATFORM
       p.missiles += 16; p.maxMissiles += 20; p.bullets += 300; p.maxBullets += 300;
-      p.gunDmgMul = 1.1; p.lockSpeedMul = 0.85; p.splashRadius = 300; p.splashDmg = 18; p.turnMul = 0.9; break;
-    case 'F-47': // WING QUARTERBACK — balanced, stealthy, and a force multiplier for escorts
+      p.gunDmgMul = 1.1; p.lockSpeedMul = 0.85; p.splashRadius = 300; p.splashDmg = 18; p.turnMul = 0.9; p.hpMul = 1.22; break;
+    case 'F-47': // WING QUARTERBACK
       p.gunDmgMul = 1.1; p.missileDmgMul = 1.1; p.lockSpeedMul = 0.7; p.mslEvade = 0.2;
-      wingDmgMul = Math.max(wingDmgMul, 1.25); break;   // your AI escorts & CCAs hit 25% harder
-    case 'J-50': // PHANTOM AGILITY — supremely nimble & slippery, lands crits, lightly built
+      wingDmgMul = Math.max(wingDmgMul, 1.25); break;
+    case 'J-50': // PHANTOM AGILITY
       p.mslEvade = 0.38; p.lockSpeedMul = 0.8; p.turnMul = 1.15; p.critChance = 0.1; p.hpMul = 0.9; break;
   }
-  // hull multipliers fold into current + max HP
-  if (j.id === 'TEJAS') { p.maxHp = Math.round(p.maxHp * 0.7); p.hp = p.maxHp; }
-  if (j.id === 'FA18')  { p.maxHp = Math.round(p.maxHp * 1.15); p.hp = p.maxHp; }
-  if (j.id === 'J-36')  { p.maxHp = Math.round(p.maxHp * 1.22); p.hp = p.maxHp; }
   if (p.hpMul) { p.maxHp = Math.round(p.maxHp * p.hpMul); p.hp = p.maxHp; }
 }
 
-/* ---------------- enemies ---------------- */
-// FIGHTER_SHAPES → js/airframes.js (require-safe).
 const CALLPFX = ['BANDIT','BOGEY','TANGO','VENOM','GHOST','REAPER','TALON','VIPER','RAVEN','SPECTRE'];
 function genCallsign(pfx) { return (pfx || CALLPFX[randInt(0, CALLPFX.length - 1)]) + '-' + randInt(1, 99).toString().padStart(2, '0'); }
 
@@ -1167,28 +1080,27 @@ function createEnemy(type, pos, opts) {
     mesh = gk === 'aaa' ? buildAAA() : gk === 'radar' ? buildRadar() : gk === 'truck' ? buildTruck() : buildGround();
     hp = gk === 'radar' ? 110 : gk === 'truck' ? 45 : gk === 'aaa' ? 90 : 75;
   }
-  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // steep per-wave growth keeps late-run swarms threatening (not one-tapped past ~wave 10)
+  else if (type === 'drone') { mesh = buildDrone(); hp = 16 + wave * 2.2; }   // steep growth keeps late swarms from being one-tapped
   else if (type === 'bomber') {
-    mesh = buildJetOrGLTF(0x8a9468, 0xffb060, SHAPES.BOMBER, true, { enemy: true });   // always glTF-eligible on High tier
-    if (!mesh.userData.gltf) mesh.scale.setScalar(1.7);   // procedural fallback still needs the ×1.7 bump; glTF is pre-scaled
+    mesh = buildJetOrGLTF(0x8a9468, 0xffb060, SHAPES.BOMBER, true, { enemy: true });
+    if (!mesh.userData.gltf) mesh.scale.setScalar(1.7);   // glTF is pre-scaled
     hp = 240 + wave * 8;
   }
   else {
     const pool = opts.shapePool || FIGHTER_SHAPES;
     shapeKey = pool[randInt(0, pool.length - 1)];
-    mesh = buildJetOrGLTF(0xff5a5a, 0xff2a2a, SHAPES[shapeKey] || SHAPES.ENEMY, !!opts.useGLTF, { enemy: true });   // aces/rivals set useGLTF; mooks stay procedural
+    mesh = buildJetOrGLTF(0xff5a5a, 0xff2a2a, SHAPES[shapeKey] || SHAPES.ENEMY, !!opts.useGLTF, { enemy: true });   // only aces/rivals set useGLTF
     hp = 46 + wave * 4;
   }
   scene.add(mesh); mesh.position.copy(pos);
-  if (type === 'ground') mesh.position.y = Math.max(pos.y, surfaceH(pos.x, pos.z));   // seat on the visible mesh, never below the gameplay surface
+  if (type === 'ground') mesh.position.y = Math.max(pos.y, surfaceH(pos.x, pos.z));   // never below the visible surface
   if (mesh.userData.body) { mesh.userData.body.emissive = new THREE.Color(type === 'boss' ? 0x550033 : 0x3a0606); mesh.userData.body.emissiveIntensity = 0.7; }
-  // Fighter temperament: ~40% are AGGRESSIVE knife-fighters (sharper turn, tighter fire cadence); the rest
-  // are STANDOFF (wider, looser). Orthogonal to the behavioural `archetype` rolled below.
+  // ~40% of fighters are aggressive (sharper turn, tighter cadence) — orthogonal to `archetype`
   const aggressive = type === 'fighter' && Math.random() < 0.4;
   const fighterTurn = type === 'fighter'
-    ? (aggressive ? rand(1.18, 1.5) : rand(0.85, 1.15))   // aggressive out-turns the player harder; standoff is lazier
-    : rand(0.95, 1.32);                                   // non-fighters: one flat roll
-  const fighterFireCd = aggressive ? rand(0.45, 1.1) : rand(0.6, 2);   // aggressive fighters re-engage faster
+    ? (aggressive ? rand(1.18, 1.5) : rand(0.85, 1.15))
+    : rand(0.95, 1.32);
+  const fighterFireCd = aggressive ? rand(0.45, 1.1) : rand(0.6, 2);
   const e = {
     group: mesh, type, hp, maxHp: hp, aggressive, aimingPlayer: false,
     vel: new THREE.Vector3(), speed: type === 'ground' ? 0 : rand(150, 205),
@@ -1197,10 +1109,7 @@ function createEnemy(type, pos, opts) {
     fireCd: fighterFireCd, missileCd: rand(3, 7), flareCd: 0, trailT: 0,
     gunRun: 0, gunRunCd: rand(2.5, 5.5),
     orbitSign: Math.random() < 0.5 ? -1 : 1,
-    // fighter behavioral archetype: duelist (baseline, keeps the `aggressive` sub-roll)
-    // / baiter (jukes to break player lock) / decoy (proactive flares + standoff) / pincer (pairs up
-    // to flank). Non-fighters always fly the duelist routine. jinkCd/pincerPartner are per-archetype
-    // scratch used by updateEnemy; pickArchetype is the PURE selector in core.js.
+    // duelist / baiter (jukes off locks) / decoy (proactive flares) / pincer (pairs up to flank)
     archetype: type === 'fighter' ? pickArchetype(Math.random, wave, { elite: !!opts.elite }) : 'duelist',
     jinkCd: 0, pincerPartner: null,
     state: 'engage', alive: true, isInCloud: false, hitFlash: 0,
@@ -1209,19 +1118,14 @@ function createEnemy(type, pos, opts) {
     shapeKey: shapeKey || null,
     gkind: type === 'ground' ? (opts.gkind || 'sam') : null,
   };
-  // ----- per-type ammunition loadouts -----
-  //  regular fighter : limited cannon, 1 missile, no flares
-  //  bomber          : heavier cannon, 2 missiles, a few flares
-  //  boss            : huge cannon,    many missiles, medium flares
-  //  ground turret   : missile-only SAM site
   if (type === 'boss')        { e.bulletAmmo = 600; e.missileAmmo = 24; e.flareAmmo = 10; e.phase = 1; }
   else if (type === 'bomber') { e.bulletAmmo = 90;  e.missileAmmo = 2;  e.flareAmmo = 4;  }
   else if (type === 'ground') { e.bulletAmmo = 0; e.missileAmmo = e.gkind === 'sam' ? 4 : 0; e.flareAmmo = 0; }
   else if (type === 'drone')  { e.bulletAmmo = 0;   e.missileAmmo = 0;  e.flareAmmo = 0;  }
   else                        { e.bulletAmmo = 42;  e.missileAmmo = 1;  e.flareAmmo = 0;  }
-  e.flares = type === 'boss' ? 0 : type === 'fighter' ? (opts.useGLTF ? randInt(2, 3) : 1) : 0;   // === F4 defensive-ai: finite evade flares (ace 2-3 / mook 1 / boss 0 — bosses break-turn only) ===
+  e.flares = type === 'fighter' ? (opts.useGLTF ? randInt(2, 3) : 1) : 0;   // applyEvade's pool, separate from flareAmmo
   if (e.marker) scene.add(e.marker);
-  if (typeof run !== 'undefined' && run) run.spawned = (run.spawned || 0) + 1;   // campaign kill-efficiency star measures against what actually spawned
+  run.spawned = (run.spawned || 0) + 1;   // kill-efficiency star denominator
   enemies.push(e); return e;
 }
 function updateMarker(e) {
@@ -1244,10 +1148,9 @@ function playerMissileNear(e, r2) {
   return false;
 }
 
+/* enemy death/despawn: the pure clearLockIf decides the player's new lock (lockTarget = candidate,
+   lockedTarget = promoted lock) */
 function clearLocks(e) {
-  // Enemy death SIGNALS; it does not reach into player lock internals. The pure core
-  // (clearLockIf, core.js) decides the new lock from the dead target's identity, and the
-  // owner (here) applies the plain result back. lockTarget == acquire candidate, lockedTarget == promoted lock.
   const next = clearLockIf({ target: player.lockedTarget, candidate: player.lockTarget, progress: player.lockProgress }, e);
   player.lockedTarget = next.target;
   player.lockTarget = next.candidate;
@@ -1261,14 +1164,11 @@ function fireRivalSpecial(e) {
   if (kind === 'OVERDRIVE') { e.sprintTimer = 4; }
   else if (kind === 'VOLLEY') { e._volley = 3; e._volleyT = 0; }
   else if (kind === 'FLARESTORM') { enemyFlares(e); enemyFlares(e); enemyFlares(e); }
-  else if (kind === 'GHOST') {
-    e._ghostT = 3;
-    clearLocks(e);
-  }
+  else if (kind === 'GHOST') { e._ghostT = 3; clearLocks(e); }
 }
 
-/* Rival escape run: burn straight away from the player, flare against locks, vanish past 5000u.
-   Returns true when the rival despawned (caller must stop processing the enemy this frame). */
+/* rival escape run: burn away from the player, flare against missiles, vanish past 5000u.
+   Returns true once despawned (caller must stop processing it this frame). */
 function updateRivalFlee(e, dt) {
   const away = t1.copy(e.group.position).sub(player.group.position);
   const dist = away.length();
@@ -1294,32 +1194,28 @@ function updateRivalFlee(e, dt) {
   return false;
 }
 
-/* status effects applied to EVERY enemy type (ticked before the per-type AI so a burn can finish a foe) */
+/* status effects for every enemy type (ticked before the per-type AI so a burn can finish a foe) */
 function tickEnemyStatus(e, dt) {
   if (e.stun > 0) {
     e.stun -= dt;
     e.stunSparkT = (e.stunSparkT || 0) - dt;
-    if (e.stunSparkT <= 0) { e.stunSparkT = 0.08; spawnTrail(e.group.position, 0x6cc8ff, 0.7); }   // crackling EMP arcs
+    if (e.stunSparkT <= 0) { e.stunSparkT = 0.08; spawnTrail(e.group.position, 0x6cc8ff, 0.7); }
   }
   if (e.burnT > 0) {
     e.burnT -= dt;
     e.burnTickT = (e.burnTickT || 0) - dt;
     if (e.burnTickT <= 0) {
       e.burnTickT = 0.4;
-      damageEnemy(e, e.burnDps * 0.4, e.group.position, true);   // INCENDIARY DoT counts as your damage
-      if (e.alive) spawnSmoke(e.group.position, 0xff7a2a, 0.6);   // licking flames
+      damageEnemy(e, e.burnDps * 0.4, e.group.position, true);   // DoT counts as player damage
+      if (e.alive) spawnSmoke(e.group.position, 0xff7a2a, 0.6);
     }
   }
 }
 const _patrolQ = new THREE.Quaternion();
-// STEALTH patrol (ADR-0006 "go loud"): a sentry fighter that SWEEPS a forward vision cone while flying its
-// telegraphed orbit and INVESTIGATES on suspicion. It never fires until cover is blown (it only feeds the
-// detection meter). Player inside the cone WITH line-of-sight → `e.coneLOS` (0..1, how centred you are) fills
-// the meter fast (missions.js reads the max across patrols) and raises `e.suspicion`. When suspicion crosses
-// STEALTH_SUSPICION_THRESHOLD the patrol peels off its route to hunt the player's last-seen point (`e.lastSeen`);
-// re-acquiring LOS there → blowStealthCover() (go loud); losing the trail for STEALTH_INVESTIGATE_TIMEOUT →
-// return to route and bleed off suspicion. The instant cover is blown the caller clears e.patrol → aggressive AI.
-// cone-LOS test: planar (horizontal) angle from the patrol's facing to the player, within the cone + ring range.
+/* STEALTH patrol (ADR-0006): sweeps a forward vision cone on its orbit and never fires. Cone LOS
+   (e.coneLOS, 0..1) feeds the detection meter and raises e.suspicion; past the threshold it hunts
+   e.lastSeen — re-acquiring LOS there blows cover (go loud), a timeout returns it to route.
+   stealthConeLOS: planar angle from facing to player within cone + ring range → centred × close. */
 function stealthConeLOS(e) {
   const dx = player.group.position.x - e.group.position.x;
   const dz = player.group.position.z - e.group.position.z;
@@ -1328,43 +1224,38 @@ function stealthConeLOS(e) {
   if (dist < 1 || dist > range) return 0;
   const fwd = fwdQ(e.logicQuat, t3);
   const fl = Math.hypot(fwd.x, fwd.z); if (fl < 1e-4) return 0;
-  const dot = (fwd.x * dx + fwd.z * dz) / (fl * dist);       // cos(angle between facing and player)
-  const ang = Math.acos(clamp(dot, -1, 1));
-  if (ang > STEALTH_CONE_HALF) return 0;                     // outside the scan cone → no LOS
-  // centred-ness (1 dead-ahead → 0 at the cone edge) × closeness (1 at the patrol → 0 at ring edge)
+  const ang = Math.acos(clamp((fwd.x * dx + fwd.z * dz) / (fl * dist), -1, 1));
+  if (ang > STEALTH_CONE_HALF) return 0;
   const centred = 1 - ang / STEALTH_CONE_HALF;
   const close = 1 - dist / range;
   return clamp(centred * (0.4 + 0.6 * close), 0, 1);
 }
-/* Campaign overhaul — RAIDER AI. A fighter with e.raid (a friendly ally: convoy truck / outpost) flies
-   attack runs on it: INBOUND (low approach) → STRAFE (shallow dive, cannon on the target) → EXTEND (pull
-   off, climb) → INBOUND again. The pure raidMode (core.js) drops it to 'engage' the moment the player
-   closes in or lands a hit, and only resumes the run once the player is well clear — so the counterplay
-   is simply "go put your nose on the raiders". Returns true while it's raiding (normal AI skipped). */
-const RAID_DMG = { truck: 2.3, transport: 1.45, outpost: 0.75, ship: 0.85 };   // per strafe tick (0.2s) — a full pass costs a truck ~35%, a transport ~23%, the outpost ~12%
+/* RAIDER: a fighter with e.raid (an ally) flies inbound → strafe → extend runs on it; the pure raidMode
+   drops it to 'engage' when the player threatens it. Returns true while raiding (normal AI skipped). */
+const RAID_DMG = { truck: 2.3, transport: 1.45, outpost: 0.75, ship: 0.85 };   // per 0.2s strafe tick
 function updateRaider(e, dt) {
   let tg = e.raid;
-  if (!tg || !tg.alive || tg.delivered) { tg = e.raid = (typeof pickRaidTarget === 'function') ? pickRaidTarget(e.group.position) : null; }
+  if (!tg || !tg.alive || tg.delivered) tg = e.raid = pickRaidTarget(e.group.position);
   if (!tg) { e.raid = null; e.raidMode = null; return false; }
   const tp = tg.group.position, ep = e.group.position;
   const dx = tp.x - ep.x, dz = tp.z - ep.z, dT = Math.hypot(dx, dz);
   const dP = ep.distanceTo(player.group.position);
   const hitAgo = e.lastHitT ? (performance.now() - e.lastHitT) / 1000 : 99;
-  const pf = fwdOf(player.group, t4);   // is the player's nose on this raider? (~22° cone)
+  const pf = fwdOf(player.group, t4);   // player's nose on this raider? (~22° cone)
   const threatened = dP > 1 && ((ep.x - player.group.position.x) * pf.x + (ep.y - player.group.position.y) * pf.y + (ep.z - player.group.position.z) * pf.z) / dP > 0.93;
   const r = raidMode(e.raidMode || 'inbound', { dTarget: dT, dPlayer: dP, hitAgo: hitAgo, threatened: threatened, extendT: e.raidExtendT, dt: dt });
   e.raidMode = r.mode; e.raidExtendT = r.extendT;
   if (r.mode === 'engage') return false;
   e.aimingPlayer = false;
-  const groundY = tg.air ? tp.y - 30 : Math.max(terrainH(tp.x, tp.z), SEA_LEVEL_Y);   // strafe height: the ground under it, or the airframe itself
+  const groundY = tg.air ? tp.y - 30 : Math.max(terrainH(tp.x, tp.z), SEA_LEVEL_Y);
   const desired = t2;
-  if (r.mode === 'extend') {                       // pull off: away from the target + climb
+  if (r.mode === 'extend') {                       // pull off + climb
     desired.set(-dx / (dT || 1), 0.45, -dz / (dT || 1));
     e.speed = lerp(e.speed, 250, dt);
-  } else if (r.mode === 'strafe') {                // shallow dive straight down the target's throat
+  } else if (r.mode === 'strafe') {                // shallow dive at the target
     desired.set(dx, (groundY + 30) - ep.y, dz).normalize();
     e.speed = lerp(e.speed, 235, dt);
-  } else {                                          // inbound: low approach toward a point above the target
+  } else {                                          // inbound: toward a point above the target
     desired.set(dx, (groundY + 380) - ep.y, dz).normalize();
     e.speed = lerp(e.speed, 245, dt);
   }
@@ -1385,7 +1276,7 @@ function updateRaider(e, dt) {
   animEngines(e.group, 0.85);
   e.trailT -= dt;
   if (e.trailT <= 0 && !e.isInCloud) { spawnTrail(ep, 0xffb4b4, 0.4); e.trailT = 0.06; }
-  // strafe: real tracers down at the target (visual) + deterministic damage while lined up and in range
+  // strafe: tracers are visual; damage is deterministic while lined up and in range
   if (r.mode === 'strafe' && dT < 950) {
     const toT = t5.set(dx, groundY + 4 - ep.y, dz).normalize();
     if (nf.dot(toT) > 0.93) {
@@ -1395,7 +1286,7 @@ function updateRaider(e, dt) {
         const b = getBullet(); b.enemy = true; b.dmg = 4; b.life = 1.1; b.mesh.material = ASSET.ebulletMat; b.mesh.scale.setScalar(1.8);
         b.mesh.position.copy(ep).addScaledVector(nf, 12);
         b.vel.copy(toT).multiplyScalar(1150); bullets.push(b);
-        if (typeof damageAlly === 'function') damageAlly(tg, (RAID_DMG[tg.kind] || 2) * ((DIFFS[difficulty] && DIFFS[difficulty].dmg) || 1));   // difficulty scales raids like it scales hits on you
+        damageAlly(tg, (RAID_DMG[tg.kind] || 2) * DIFFS[difficulty].dmg);
         if (Math.random() < 0.35) spawnSmoke(t1.set(tp.x + rand(-14, 14), tp.y + 4, tp.z + rand(-14, 14)), 0x3a3a3a, 0.8);
         audio.enemyGun();
       }
@@ -1409,31 +1300,29 @@ function updateStealthPatrol(e, dt) {
   e.aimingPlayer = false;
   if (e.suspicion == null) e.suspicion = 0;
 
-  // 1) sweep: how clearly does this patrol see the player right now?
   const los = stealthConeLOS(e);
-  e.coneLOS = los;   // missions.js detection meter reads the max coneLOS across all live patrols
+  e.coneLOS = los;   // missions.js meter reads the max across live patrols
   if (los > 0) {
     e.suspicion = Math.min(2, e.suspicion + STEALTH_SUSPICION_RISE * dt);
-    const ls = e.lastSeen || (e.lastSeen = { x: 0, y: 0, z: 0 });   // reused per patrol — no per-frame alloc
+    const ls = e.lastSeen || (e.lastSeen = { x: 0, y: 0, z: 0 });
     ls.x = player.group.position.x; ls.y = player.group.position.y; ls.z = player.group.position.z;
   } else {
     e.suspicion = Math.max(0, e.suspicion - STEALTH_SUSPICION_DECAY * dt);
   }
 
-  // 2) state: investigate once suspicion trips the threshold; re-acquire LOS → go loud; timeout → return.
   if (!e.investigating && e.suspicion >= STEALTH_SUSPICION_THRESHOLD && e.lastSeen) {
     e.investigating = true; e.investigateT = STEALTH_INVESTIGATE_TIMEOUT;
   }
   if (e.investigating) {
-    if (los > 0.15 && typeof blowStealthCover === 'function') { blowStealthCover(); return; }  // re-acquired → GO LOUD
+    if (los > 0.15) { blowStealthCover(); return; }
     e.investigateT -= dt;
-    if (e.investigateT <= 0 || e.suspicion <= 0.05) { e.investigating = false; }   // lost the trail → back to route
+    if (e.investigateT <= 0 || e.suspicion <= 0.05) e.investigating = false;
   }
 
-  // 3) steering: investigate = turn toward last-seen point at boosted speed; else lazy orbit of the post.
+  // investigate: yaw toward the last-seen point at boosted speed; else lazy orbit of the post
   if (e.investigating && e.lastSeen) {
     const tx = e.lastSeen.x - e.group.position.x, tz = e.lastSeen.z - e.group.position.z;
-    const desired = Math.atan2(tx, tz);                          // world yaw toward the last-seen point
+    const desired = Math.atan2(tx, tz);
     const fwd = fwdQ(e.logicQuat, t3); const cur = Math.atan2(fwd.x, fwd.z);
     let dA = desired - cur; while (dA > Math.PI) dA -= TWO_PI; while (dA < -Math.PI) dA += TWO_PI;
     _patrolQ.setFromAxisAngle(UPV, clamp(dA, -1.4 * dt, 1.4 * dt));
@@ -1450,7 +1339,7 @@ function updateStealthPatrol(e, dt) {
   animEngines(e.group, e.investigating ? 0.85 : 0.55);
   updateMarker(e);
 }
-/* reused input objects for the pure core.js deciders called per enemy per frame (none retain their input) */
+/* reused inputs for the pure per-frame deciders (none retain their input) */
 const _tacIn = { dist: 0, incoming: false, archetype: 'duelist', lockedByPlayer: false, prefRange: 0, nearRange: 0 };
 const _jinkIn = { lockedByPlayer: false, jinkCd: 0 };
 const _aimIn = { ang: 0, dist: 0, gunCone: 0, gunRange: 0, engaged: true, canSee: false };
@@ -1459,11 +1348,8 @@ function updateEnemy(e, dt) {
   if (e.type === 'ground') { updateGround(e, dt); return; }
   if (e.type === 'drone') { updateDrone(e, dt); return; }
   if (e.type === 'bomber') { updateBomber(e, dt); return; }
-  if (e.patrol && typeof stealthBlown !== 'undefined' && !stealthBlown) { updateStealthPatrol(e, dt); return; }
-  if (e.raid && updateRaider(e, dt)) return;   // campaign overhaul: attack run on a friendly convoy/outpost (drops to dogfight when engaged)
-  // === F2 enemy-formations hook: a formation FOLLOWER holds its leader-relative slot. applyFormationSteer
-  // runs the marker/ring/hit-flash housekeeping itself, so this early return skips ONLY the normal-AI
-  // steering + fire below (leaders and broken followers return false and fall through unchanged). ===
+  if (e.patrol && !stealthBlown) { updateStealthPatrol(e, dt); return; }
+  if (e.raid && updateRaider(e, dt)) return;
   if (applyFormationSteer(e, dt)) return;
   const toP = t1.copy(player.group.position).sub(e.group.position);
   const dist = toP.length();
@@ -1474,7 +1360,7 @@ function updateEnemy(e, dt) {
   const prev = e.state;
   const incoming = playerMissileNear(e, 640000);
   if (e.elite && !e.desprintUsed && e.hp / e.maxHp < 0.3) { e.desprintUsed = true; e.sprintTimer = 2.5; e.orbitSign *= -1; }
-  if (e.rival && !e.noFlee && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }   // FINAL-cap rivals (noFlee) fight to the death
+  if (e.rival && !e.noFlee && !e.fleeing && e.hp / e.maxHp < 0.2) { e.fleeing = true; e.sprintTimer = 9; showBanner('☠ ' + e.callsign + ' IS BREAKING OFF ☠'); }
   if (e.rival && e.fleeing) { if (updateRivalFlee(e, dt)) return; }
   if (e.rival && !e.fleeing) {
     e.rivalSpCd -= dt;
@@ -1491,29 +1377,24 @@ function updateEnemy(e, dt) {
     else if (e.marker && !e.marker.visible) e.marker.visible = true;
   }
   if (e.elite && e.flareCd <= 0 && e.flareAmmo > 0 && playerMissileNear(e, 1440000)) { enemyFlares(e); e.flareCd = 2.0; }
-  applyEvade(e, dt);   // === F4 defensive-ai: cooldown-gated break-turn / finite-flare evasion (see tail fn) ===
-  // ----- archetype scratch: all behavior below is gated on e.archetype, so duelists run the
-  // plain routine. lockedByPlayer = the player is acquiring or fully locked onto THIS enemy. -----
+  applyEvade(e, dt);
   e.jinkCd -= dt;
   const lockedByPlayer = (player.lockTarget === e) || (player.lockedTarget === e);
   if (e.archetype === 'pincer') {
-    // lazy pairing: createEnemy spawns one enemy per call, so partners link up here. Find another
-    // partnerless live pincer and bracket the player by taking the OPPOSITE orbit sign.
+    // lazy pairing (enemies spawn one at a time): link with a partnerless pincer, bracket via opposite orbit sign
     if (!e.pincerPartner || !e.pincerPartner.alive) {
       e.pincerPartner = null;
       for (let i = 0; i < enemies.length; i++) { const o = enemies[i]; if (o !== e && o.alive && o.type === 'fighter' && o.archetype === 'pincer' && (!o.pincerPartner || !o.pincerPartner.alive)) { e.pincerPartner = o; o.pincerPartner = e; break; } }
     }
     if (e.pincerPartner && e.pincerPartner.alive) e.orbitSign = pincerSign(e.pincerPartner.orbitSign);
-    // a partnerless pincer just flies the duelist routine (no flank) — exactly per spec.
   } else if (e.archetype === 'decoy' && lockedByPlayer && e.flareCd <= 0 && e.flareAmmo > 0) {
-    // proactive decoy: pop chaff the MOMENT it's locked (not only when a missile is already inbound),
-    // making the player's missiles unreliable vs it. Counter: close to gun range.
+    // decoy pops chaff the moment it's locked, not only when a missile is inbound
     enemyFlares(e); e.flareCd = 2.3;
   }
   const PREF = e.type === 'boss' ? 1700 : 1250;
   const NEAR = e.type === 'boss' ? 1150 : 760;
   const ti = _tacIn; ti.dist = dist; ti.incoming = incoming; ti.archetype = e.archetype; ti.lockedByPlayer = lockedByPlayer; ti.prefRange = PREF; ti.nearRange = NEAR;
-  e.state = enemyTacticalState(prev, ti);   // pure evade/extend/engage decision (core.js)
+  e.state = enemyTacticalState(prev, ti);
 
   let desired = t2;
   if (e.state === 'evade') {
@@ -1526,7 +1407,7 @@ function updateEnemy(e, dt) {
     t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * 0.6); desired.add(t5).normalize(); desired.y += 0.04;
     e.speed = lerp(e.speed, 242, dt);
   } else {
-    const cad = gunRunCadence(e, dt);   // pure gun-run timer (core.js): tick + fresh-window roll
+    const cad = gunRunCadence(e, dt);
     e.gunRun = cad.gunRun; e.gunRunCd = cad.gunRunCd;
     const tracking = cad.tracking;
     const rangeErr = clamp((dist - PREF) / PREF, -1, 1);
@@ -1539,39 +1420,32 @@ function updateEnemy(e, dt) {
   }
   const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
   if (agl < 220) desired.y = Math.max(desired.y, 0.45);
-  // ----- campaign boss phase descriptors (Operations map). Gated on e._phaseCfg (set at spawn by
-  // main.js); absent for endless/boss-rush/rivals, so their AI is byte-identical. Phase 1's state is
-  // resolved lazily here once (bossEnterPhase in combat.js only fires for crossed thresholds 2/3) —
-  // the `!e.phaseState` guard makes it fire exactly once — then phaseState.pattern/flags bias the
-  // ALREADY-computed `desired` heading rather than rewriting the AI. -----
+  // campaign boss: phase 1 is applied lazily here (bossEnterPhase only fires on crossing 2/3)
   if (e._phaseCfg) {
-    if (e.phase === 1 && !e.phaseState && typeof bossApplyPhase === 'function') bossApplyPhase(e, 1);
+    if (e.phase === 1 && !e.phaseState) bossApplyPhase(e, 1);
     bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer);
   }
-  // ----- baiter break-turn: when the player is locking this enemy, juke HARD sideways on a
-  // short cooldown to break the lock, then settle back. Adds a big lateral offset to the heading +
-  // a transient turn-rate boost so the juke actually snaps. Counter: stay on it / lead the juke. -----
+  // _jinkT = hard lateral break + turn boost (baiter jukes, boss mirror, evade break-turns)
   let turnMul = 1;
   _jinkIn.lockedByPlayer = lockedByPlayer; _jinkIn.jinkCd = e.jinkCd;
   if (e.archetype === 'baiter' && shouldJink(_jinkIn)) {
-    e.jinkCd = rand(1.4, 2.2);            // re-engage window between jukes (player gets a beat to re-acquire)
-    e.orbitSign = -e.orbitSign;           // flip the break direction each juke (unpredictable)
-    e._jinkT = 0.5;                       // hold the boosted turn for the snap
+    e.jinkCd = rand(1.4, 2.2);
+    e.orbitSign = -e.orbitSign;
+    e._jinkT = 0.5;
   }
   if (e._jinkT > 0) {
     e._jinkT -= dt;
-    t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * 1.1); desired.add(t5);   // hard lateral break
+    t5.copy(toP).cross(UPV).multiplyScalar(e.orbitSign * 1.1); desired.add(t5);
     turnMul = 1.6;
   }
   desired.normalize();
   if (e.elite && e.sprintTimer > 0) { e.sprintTimer -= dt; e.speed = lerp(e.speed, 340, dt * 2.5); }
 
   dirToQuat(desired, q1);
-  e.logicQuat.rotateTowards(q1, e.turnRate * turnMul * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun makes them wallow; baiter jukes boost turnMul
+  e.logicQuat.rotateTowards(q1, e.turnRate * turnMul * dt * (e.stun > 0 ? 0.35 : 1));   // EMP stun wallows
   const nf = fwdQ(e.logicQuat, t4);
   const cross = t5.copy(fwd).cross(nf);
-  const wantBank = clamp(-cross.y * 6, -1, 1);
-  e.bank = damp(e.bank, wantBank, 6, dt);
+  e.bank = damp(e.bank, clamp(-cross.y * 6, -1, 1), 6, dt);
   q2.setFromAxisAngle(ZAX, e.bank);
   e.group.quaternion.copy(e.logicQuat).multiply(q2);
 
@@ -1580,7 +1454,6 @@ function updateEnemy(e, dt) {
   e.isInCloud = inCloud(e.group.position);
   e.trailT -= dt;
   if (e.trailT <= 0 && !e.isInCloud && e.speed > 160) { spawnTrail(e.group.position, e.type === 'boss' ? 0xff9adf : 0xffb4b4, 0.4); e.trailT = 0.06; }
-  
   updateMarker(e);
 
   if (e.group.userData.ring) e.group.userData.ring.rotation.z += dt * 2;
@@ -1591,16 +1464,14 @@ function updateEnemy(e, dt) {
   const jammed = player.jammer > 0;
 
   const visible = !player.stealth;
-  e.aimingPlayer = false;   // recomputed below when the enemy is an active gun threat to the player this frame
+  e.aimingPlayer = false;
   if (e.state === 'engage' && visible && !scrambled) {
     const ang = nf.angleTo(toP);
     const df = DIFFS[difficulty].fire, dms = DIFFS[difficulty].missile;
     const enr = e.phase >= 3 ? 0.42 : e.phase >= 2 ? 0.55 : 1;   // boss phases tighten fire cadence
-    // ----- cannon: flat effective range so enemies actually strafe (stealth still gates them via `visible`) -----
     e.fireCd -= dt;
     const gunCone = e.gunRun > 0 ? 0.34 : 0.24;
     const gunRange = e.type === 'boss' ? 2200 : 1750;
-    // threat reticle (§4b): flag when this fighter/boss is aligned + in gun range — i.e. aiming at the player NOW
     const ai = _aimIn; ai.ang = ang; ai.dist = dist; ai.gunCone = gunCone; ai.gunRange = gunRange; ai.canSee = visible;
     e.aimingPlayer = enemyIsAimingPlayer(ai);
     if (ang < gunCone && dist < gunRange && e.fireCd <= 0 && e.bulletAmmo > 0) {
@@ -1608,62 +1479,56 @@ function updateEnemy(e, dt) {
       enemyFireGun(e, wm);
       if (e.type === 'boss') { enemyFireGun(e); enemyFireGun(e); }
       else if (e.elite && e.gunRun > 0 && dist < 900) { enemyFireGun(e); }
-      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr * (e.aggressive ? 0.78 : 1);   // aggressive fighters keep up a tighter cadence
+      e.fireCd = (e.type === 'boss' ? rand(0.24, 0.5) : (e.gunRun > 0 ? rand(0.14, 0.26) : rand(0.4, 0.75))) * df * enr * (e.aggressive ? 0.78 : 1);
     }
-    // ----- missiles (jamming shuts down launches) -----
+    // jamming shuts down launches
     e.missileCd -= dt;
     const cap = e.type === 'boss' ? 8 : 6;
     const mslRange = e.type === 'boss' ? 3000 : 2600;
     if (!jammed && dist < mslRange && dist > 360 && ang < 0.6 && e.missileCd <= 0 && e.missileAmmo > 0 && activeEnemyMissiles() < cap) {
       enemyFireMissile(e);
       if (e.type === 'boss') { enemyFireMissile(e); if (e.phase >= 2) enemyFireMissile(e); if (e.phase >= 3) enemyFireMissile(e); }
-      else if (e.campaignBoss) { if (e.phase >= 2) enemyFireMissile(e); for (let k = 0; k < ((e.phaseState && e.phaseState.extraMissiles) || 0) / 2; k++) enemyFireMissile(e); }   // campaign ace: phase + authored salvo bonus
+      else if (e.campaignBoss) { if (e.phase >= 2) enemyFireMissile(e); for (let k = 0; k < ((e.phaseState && e.phaseState.extraMissiles) || 0) / 2; k++) enemyFireMissile(e); }
       e.missileCd = (e.type === 'boss' ? rand(3.5, 6) : rand(5, 9)) * dms * enr;
     }
   }
   if (e.type === 'boss' && !(e.stun > 0)) updateBossSpecials(e, dt, dist);
 }
 
-// Campaign-boss movement polish (Operations map). Reads e.phaseState.pattern / .flags (resolved from
-// the phase descriptor in combat.js bossApplyPhase). Biases the ALREADY-computed `desired` heading and
-// reuses existing systems (enemyFlares for chaff, the baiter _jinkT break for mirror) — no new engine.
-// Only touches scratch tA, which updateEnemy no longer reads after this call. Inert when no pattern/flag set.
+/* campaign boss: e.phaseState.pattern/flags bias the already-computed `desired`. Only touches scratch
+   tA, which updateEnemy no longer reads after this call. */
 function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
   const pat = e.phaseState ? e.phaseState.pattern : null;
   if (pat === 'standoff') {
-    // GLACIER p1 — BVR: hold missile range, refuse the gun merge. Push away when inside ~2400u.
+    // BVR: refuse the gun merge
     if (dist < 2400) { desired.copy(e.group.position).sub(player.group.position).normalize(); desired.y += 0.05; desired.normalize(); }
   } else if (pat === 'headOn') {
-    // WARLORD p3 / CORSAIR p3 — commit to a high-closure head-on merge at the player's predicted position.
     const lead = interceptPoint(e.group.position, player.group.position, player.vel, 1400, tLead);
     if (lead) { tA.copy(lead).sub(e.group.position).normalize(); desired.lerp(tA, 0.85).normalize(); }
     else { desired.lerp(toP, 0.85).normalize(); }
-    e.speed = lerp(e.speed, 300, dt);                    // bore in hard
+    e.speed = lerp(e.speed, 300, dt);
   } else if (pat === 'dive') {
-    // GLACIER p3 — climb for altitude, then a steep diving attack. Hysteresis on _diving so it commits.
+    // climb to a perch, then dive (hysteresis so it commits)
     const agl = e.group.position.y - terrainH(e.group.position.x, e.group.position.z);
-    if (!e._diving && agl > 2000) e._diving = true;       // reached perch -> roll into the dive
-    else if (e._diving && agl < 700) e._diving = false;   // bottomed out -> climb again
+    if (!e._diving && agl > 2000) e._diving = true;
+    else if (e._diving && agl < 700) e._diving = false;
     if (e._diving) { desired.copy(toP); desired.y = Math.min(desired.y, -0.55); desired.normalize(); e.speed = lerp(e.speed, 320, dt); }
     else { desired.y = Math.max(desired.y, 0.6); desired.normalize(); e.speed = lerp(e.speed, 230, dt); }
   }
   const flags = e.phaseState ? e.phaseState.flags : null;
   if (flags && flags.length) {
-    // chaff (WARLORD p2): periodically seed decoys from the boss via the EXISTING enemy flare pathway.
     if (flags.indexOf('chaff') >= 0) {
       e._chaffCd = (e._chaffCd || 0) - dt;
       if (e._chaffCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e._chaffCd = 1.8; }
     }
-    // mirror (CORSAIR p1): a small canned-counter feel — on a cooldown, when the player locks the boss,
-    // fire one of 3 scripted reactions by reusing the baiter break (flip orbit + a transient turn boost
-    // via _jinkT, which the block below already turns into a hard lateral juke). Reads as adaptive briefly.
+    // mirror: on lock, cycle 3 canned reactions, each also flipping into a _jinkT break
     if (flags.indexOf('mirror') >= 0) {
       e._mirrorCd = (e._mirrorCd || 0) - dt;
       if (lockedByPlayer && e._mirrorCd <= 0) {
         e._mirrorCd = 2.4;
         e._mirrorMove = ((e._mirrorMove || 0) + 1) % 3;   // 0=break left/right, 1=hard break + dump chaff, 2=extend
         e.orbitSign = -e.orbitSign;
-        e._jinkT = 0.5;                                   // reuse baiter snap (turnMul=1.6 in the block below)
+        e._jinkT = 0.5;
         if (e._mirrorMove === 1 && e.flareAmmo > 0) enemyFlares(e);
         else if (e._mirrorMove === 2) { desired.copy(e.group.position).sub(player.group.position).normalize(); desired.y += 0.04; desired.normalize(); }
       }
@@ -1672,15 +1537,15 @@ function bossPatternSteer(e, dt, desired, toP, dist, lockedByPlayer) {
 }
 
 function updateBomber(e, dt) {
-  if (e.raid) {   // campaign overhaul: raiding bomber — bore in on the ally, release a stick over it, then egress
-    const tg = (e.raid.alive && !e.raid.delivered) ? e.raid : (typeof pickRaidTarget === 'function' ? pickRaidTarget(e.group.position) : null);
+  if (e.raid) {   // raiding bomber: bore in on the ally, release a stick over it, then egress
+    const tg = (e.raid.alive && !e.raid.delivered) ? e.raid : pickRaidTarget(e.group.position);
     e.raid = tg || null;
     if (tg && !e.bombed) {
       const dx = tg.group.position.x - e.group.position.x, dz = tg.group.position.z - e.group.position.z;
       const dh = Math.hypot(dx, dz);
       e.escapeDir.set(dx / (dh || 1), 0, dz / (dh || 1));
       e.raidDist = dh;
-      if (dh < 230 + e.speed * 0.9) { e.bombed = true; if (typeof dropBombs === 'function') dropBombs(e, tg); }   // lead the release by ~0.9s of travel
+      if (dh < 230 + e.speed * 0.9) { e.bombed = true; dropBombs(e, tg); }   // lead the release by ~0.9s of travel
     }
   }
   const desired = t2.copy(e.escapeDir);
@@ -1704,36 +1569,33 @@ function updateBomber(e, dt) {
   tickHitFlash(e, dt, 0.08);
   const d = e.group.position.distanceTo(player.group.position);
   const canShoot = !player.stealth && player.empBurst <= 0 && !(e.stun > 0);
-  // guns (medium magazine)
   if (d < 1500 && canShoot && e.bulletAmmo > 0) { e.fireCd -= dt; if (e.fireCd <= 0) { enemyFireGun(e); e.fireCd = rand(0.5, 1.0) * DIFFS[difficulty].fire; } }
-  // missiles fired straight at the player (2 in the magazine)
   e.missileCd -= dt;
   if (d < 2600 && canShoot && player.jammer <= 0 && e.missileAmmo > 0 && e.missileCd <= 0 && activeEnemyMissiles() < 6) {
     const dir = t1.copy(player.group.position).sub(e.group.position).normalize();
     spawnMissile(e.group.position, dir, null, true, 1); e.missileAmmo--; audio.missile();
     e.missileCd = rand(4, 7) * DIFFS[difficulty].missile;
   }
-  // pop a few flares when a player missile is chasing it
   if (playerMissileNear(e, 640000)) { e.flareCd -= dt; if (e.flareCd <= 0 && e.flareAmmo > 0) { enemyFlares(e); e.flareCd = 2.2; } }
   if (e.group.position.distanceToSquared(e.spawnPos) > 144000000) {
     e.alive = false; despawnEnemy(e);
     clearLocks(e);
-    if (!e.bombed) showBanner(t('banner.bomberEscaped'));   // a raid bomber egressing after its drop just leaves quietly
+    if (!e.bombed) showBanner(t('banner.bomberEscaped'));
   }
 }
 function radarUp() { for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (e.alive && e.type === 'ground' && e.gkind === 'radar') return true; } return false; }
 function updateGround(e, dt) {
-  if (e.group.userData.turret) {   // traverse to face the player (+Z, same heading lookAt gave) — yaw only, the site stays level
+  if (e.group.userData.turret) {   // yaw-only traverse to face the player
     const pp = player.group.position, gp = e.group.position; e.group.rotation.set(0, Math.atan2(pp.x - gp.x, pp.z - gp.z), 0);
   }
   const d = e.group.position.distanceTo(player.group.position);
   if (e.gkind === 'radar') {
     if (e.group.userData.dish) e.group.userData.dish.rotation.y += dt * 1.2;
   } else if (e.gkind === 'truck') {
-    if (!e.truckDir) { e.truckDir = new THREE.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize(); }
+    if (!e.truckDir) e.truckDir = new THREE.Vector3(rand(-1, 1), 0, rand(-1, 1)).normalize();
     e.group.position.addScaledVector(e.truckDir, dt * (e.convoy ? (e.convoySpeed || 46) : 28));
     e.group.position.y = Math.max(terrainH(e.group.position.x, e.group.position.z), surfaceH(e.group.position.x, e.group.position.z));
-    if (e.convoy && d > 7800) {   // convoy truck outruns the radar — gone for good
+    if (e.convoy && d > 7800) {   // escaped
       e.alive = false; despawnEnemy(e);
       clearLocks(e);
       showBanner(t('banner.convoyEscaped'));
@@ -1760,7 +1622,7 @@ function updateGround(e, dt) {
   updateMarker(e);
 }
 function flakBurst(e) {
-  // burst at a point near the player's predicted position; proximity damage, no homing
+  // proximity burst near the player's predicted position
   const aim = t1.copy(player.group.position).addScaledVector(player.vel, rand(0.4, 0.9));
   aim.x += rand(-90, 90); aim.y += rand(-70, 70); aim.z += rand(-90, 90);
   explode(aim, false);
@@ -1768,8 +1630,7 @@ function flakBurst(e) {
   if (d2 < 120 * 120) damagePlayer(rand(5, 9) * (1 - Math.sqrt(d2) / 120), aim);
 }
 
-/* Kamikaze drones home straight in and detonate on contact. Fragile, but lethal in a pack.
-   Cloak / clouds / EMP all break their tracking, giving the player real counters. */
+/* kamikaze drone: homes in and detonates on contact; cloak / EMP break its tracking */
 function updateDrone(e, dt) {
   const toP = t1.copy(player.group.position).sub(e.group.position);
   const dist = toP.length(); toP.multiplyScalar(1 / Math.max(dist, 0.001));
@@ -1777,7 +1638,7 @@ function updateDrone(e, dt) {
 
   const scrambled = (player.empBurst > 0 && e.group.position.distanceToSquared(player.group.position) < 1960000) || (e.stun > 0);
   const canSee = !player.stealth && !scrambled;
-  e.speed = lerp(e.speed, canSee ? 320 : 70, dt * (canSee ? 0.9 : 1.6));   // surge toward the player
+  e.speed = lerp(e.speed, canSee ? 320 : 70, dt * (canSee ? 0.9 : 1.6));
 
   let desired = t2;
   if (canSee) {
@@ -1807,14 +1668,13 @@ function updateDrone(e, dt) {
   if (u.glow) u.glow.material.opacity = 0.6 + 0.35 * pulse;
   tickHitFlash(e, dt, 0.2);
 
-  // contact detonation
   if (canSee && player.invuln <= 0 && dist < 36) {
     damagePlayer(16, e.group.position);
     e.alive = false; explode(e.group.position, false);
     clearLocks(e);
     return;
   }
-  // self-destruct after a lifetime so they can never soft-lock a wave
+  // lifetime self-destruct so drones can never soft-lock a wave
   e.droneLife -= dt;
   if (e.droneLife <= 0) {
     e.alive = false; explode(e.group.position, false);
@@ -1845,17 +1705,10 @@ function enemyFlares(e) {
   }
 }
 
-// === F4 defensive-ai ===
-// Enemy reaction to being locked or shot at. Called once per frame from updateEnemy (fighters + boss
-// only — drones/bombers/ground early-return before the hook). Gathers the threat, asks the pure
-// evadeDecision (core.js) what to do, and applies it: a cooldown-gated BREAK-TURN (reuses the engine's
-// _jinkT lateral-break primitive — the same turnMul boost the baiter and boss-mirror use, so there is
-// NO bespoke turnRate write to fight the boss-phase ramp) or a finite FLARE popped from the e.flares
-// pool (distinct from the legacy e.flareAmmo) that spoofs an inbound player missile. Boss e.flares is 0
-// -> the boss never flares (break-turns only), exactly per spec.
+/* reaction to being locked or shot at (fighters + boss): the pure evadeDecision picks a break-turn —
+   via _jinkT, so no turnRate write fights the boss-phase ramp — or a flare from the finite e.flares pool */
 function applyEvade(e, dt) {
-  if (e._evadeBreakT > 0) e._evadeBreakT -= dt;   // tick the observable break-turn timer
-  // threat: player lock-progress on THIS enemy + distance to the nearest inbound player missile
+  if (e._evadeBreakT > 0) e._evadeBreakT -= dt;
   const lockProgress = (player.lockedTarget === e) ? 1 : (player.lockTarget === e ? (player.lockProgress || 0) : 0);
   let missileDist = Infinity;
   for (let i = 0; i < missiles.length; i++) {
@@ -1870,63 +1723,55 @@ function applyEvade(e, dt) {
   e._evadeLast = res.state.lastEvade;
   e.flares = res.state.flares;
   if (res.action === 'break') {
-    e._evadeBreakT = EVADE.breakDur;                      // break-turn active for ~1.5s (boost = EVADE.breakTurnMul)
-    e.orbitSign = -e.orbitSign;                           // swing the break the other way
-    e._jinkT = Math.max(e._jinkT || 0, EVADE.breakDur);   // drive the engine's hard lateral break + turnMul
+    e._evadeBreakT = EVADE.breakDur;
+    e.orbitSign = -e.orbitSign;
+    e._jinkT = Math.max(e._jinkT || 0, EVADE.breakDur);
   } else if (res.action === 'flare') {
-    // pop a visible flare burst — mirrors the player flare fx (same ASSET geo/mat, owner:'enemy' so
-    // combat.js updateMissiles spoofs player missiles off it and updateFlares owns its lifecycle).
+    // owner:'enemy' lets combat.js spoof player missiles off it
     for (let i = 0; i < 3; i++) {
       const m = new THREE.Mesh(ASSET.flareGeo, ASSET.flareMat); m.position.copy(e.group.position); scene.add(m);
       flares.push({ mesh: m, vel: new THREE.Vector3(rand(-60, 60), rand(-30, -90), rand(-60, 60)), life: 3, owner: 'enemy' });
     }
   }
 }
-// === end F4 ===
-// === F2 enemy-formations: follower slot-steering (hooked ONCE at the top of updateEnemy) =============
-// A formation FOLLOWER (e.formation set by the spawn path) holds a leader-relative slot until the player
-// closes to engage range or the leader dies (pure formationBreak, core.js) — then it drops e.formation and
-// falls through to normal AI forever. The LEADER carries no e.formation, so it flies normal AI untouched.
-// Returns true only while actively holding: the caller early-returns, so the normal-AI steering + fire are
-// skipped, but the marker/ring/hit-flash housekeeping updateEnemy runs after movement is done HERE instead.
+/* formation FOLLOWER (e.formation; leaders have none) holds a leader-relative slot until formationBreak,
+   then flies normal AI for good. Returns true while holding — it then runs updateEnemy's post-movement
+   housekeeping (marker/ring/hit-flash) itself. */
 function applyFormationSteer(e, dt) {
   const f = e.formation;
-  if (!f) return false;                                     // leader / non-formation enemy -> normal AI
+  if (!f) return false;
   const leader = f.leaderRef;
   const leaderAlive = !!(leader && leader.alive && leader.group);
   const distToPlayer = e.group.position.distanceTo(player.group.position);
   if (formationBreak(distToPlayer, leaderAlive, FORMATIONS[f.type])) {
-    e.formation = null;                                     // BREAK: revert to normal AI permanently
+    e.formation = null;
     return false;
   }
-  // world slot = leaderPos + right*offset.x - forward*offset.z  (offset.z is "behind" the leader)
-  const lf = fwdQ(leader.logicQuat, t3);                    // t3 = leader forward (world)
-  const right = t5.copy(lf).cross(UPV);                     // t5 = leader right
+  // slot = leaderPos + right*offset.x - forward*offset.z (offset.z is "behind" the leader)
+  const lf = fwdQ(leader.logicQuat, t3);
+  const right = t5.copy(lf).cross(UPV);
   if (right.lengthSq() < 1e-6) right.set(1, 0, 0); else right.normalize();
   const off = f.offset;
   const slot = t4.copy(leader.group.position).addScaledVector(right, off.x).addScaledVector(lf, -off.z);
-  // steer toward the slot with the file's idioms: dirToQuat -> rotateTowards -> forward*speed
-  const toSlot = t1.copy(slot).sub(e.group.position);       // t1 = to-slot vector
+  const toSlot = t1.copy(slot).sub(e.group.position);
   const gap = toSlot.length();
   const desired = toSlot.multiplyScalar(1 / Math.max(gap, 0.001));
   dirToQuat(desired, q1);
-  e.logicQuat.rotateTowards(q1, e.turnRate * 1.5 * dt);     // followers are a touch more agile to hold station
-  const nf = fwdQ(e.logicQuat, t2);                         // t2 = new forward
-  e.bank = damp(e.bank, 0, 4, dt);                          // wings-level formation cruise
+  e.logicQuat.rotateTowards(q1, e.turnRate * 1.5 * dt);     // a touch more agile to hold station
+  const nf = fwdQ(e.logicQuat, t2);
+  e.bank = damp(e.bank, 0, 4, dt);                          // wings level
   q2.setFromAxisAngle(ZAX, e.bank);
   e.group.quaternion.copy(e.logicQuat).multiply(q2);
   const cruise = leader.speed || 200;
-  const tgt = clamp(cruise + gap * 0.9 - 30, 140, 420);     // close the gap, settle near leader speed on station
+  const tgt = clamp(cruise + gap * 0.9 - 30, 140, 420);     // close the gap, settle near leader speed
   e.speed = lerp(e.speed, tgt, dt * 3);
   e.vel.copy(nf).multiplyScalar(e.speed);
   e.group.position.addScaledVector(e.vel, dt);
   e.isInCloud = inCloud(e.group.position);
-  // ---- housekeeping updateEnemy normally runs AFTER movement (markers/ring/hit-flash) must still tick ----
   if (e.group.userData.ring) e.group.userData.ring.rotation.z += dt * 2;
   tickHitFlash(e, dt, 0.14);
   animEngines(e.group, 0.7);
   updateMarker(e);
-  e.aimingPlayer = false;                                   // a follower holding station is not a gun threat
+  e.aimingPlayer = false;
   return true;
 }
-// === end F2 ===

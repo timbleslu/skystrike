@@ -1,13 +1,9 @@
-/* SKYSTRIKE — split from ui.js (god-file refactor). Global scope; load order among ui-*.js irrelevant, but all must load after deps and before controls.js/main.js. */
-/* ui-settings.js: best/settings persistence, applyLang i18n binding, motion, hud scale, arena cleanup. */
 
 function updateBest() {
   const a = g('go_best'); if (a) a.textContent = bestScore.toLocaleString();
   const b = g('hangarBest'); if (b) { b.style.display = bestScore > 0 ? 'block' : 'none'; const v = g('hangarBestVal'); if (v) v.textContent = bestScore.toLocaleString(); }
 }
-// refresh the persistent SP balance shown in the hangar header (call after any SP spend)
 function updateSpHud() { const v = g('hangarSpVal'); if (v) v.textContent = spBalance().toLocaleString(); }
-// best score survives reloads when the file is opened locally (storage may be blocked in some sandboxes).
 // NOT loadHealed: this is a bare scalar (parseInt + monotonic max-into-bestScore), not a JSON blob with
 // default-filling — the loadHealed key-heal shape does not apply, so it stays hand-rolled by design.
 function loadBest() {
@@ -16,35 +12,30 @@ function loadBest() {
 function saveBest() {
   try { store.set('skystrike_best', String(bestScore)); } catch (e) {}
 }
-// player settings (volume, toggles, last loadout) persist across reloads when storage is available
 function loadSettings() {
   try {
     const s = JSON.parse(store.get('skystrike_settings') || '{}');
-    loadSettingsFold(s);   // fold the SETTINGS registry (prefs.js): parse+clamp+set every accepted row — the 38 if-lines that used to live here
+    loadSettingsFold(s);
     // --- bespoke rows kept hand-rolled (device reads / relocalize side effects — don't force the table) ---
     if (s.lang === 'EN' || s.lang === 'ZH' || s.lang === 'KO') LANG = s.lang;   // language picker: relocalize (applyLang) is caller-driven, not a plain apply chain
     if (typeof s.hudScale === 'number') hudScale = Math.max(0.65, Math.min(1.6, s.hudScale));
     else if ('ontouchstart' in window) hudScale = 0.8;   // touch default is a device read ('ontouchstart' in window)
     if (typeof s.uiScale === 'number') uiScale = Math.max(0.5, Math.min(1.6, s.uiScale));
-    else if ('ontouchstart' in window) uiScale = 0.65;   // menus default dense on touch (one level below desktop) so more fits
-    if (typeof s.special2Id === 'string' || s.special2Id === null) special2Id = s.special2Id;   // feature #3: equipped SLOT-2 special (validated against the unlocked pool at equip/launch time)
+    else if ('ontouchstart' in window) uiScale = 0.65;
+    if (typeof s.special2Id === 'string' || s.special2Id === null) special2Id = s.special2Id;
     // F11: re-resolve the gfx tier from the persisted setting + resize the shadow map. The ordering
     // invariant (refreshGfxTier BEFORE applyGfxQuality) is now encoded once in the SETTINGS 'gfx' row's
     // apply chain; run it unconditionally here (independent of whether gfxQuality was in the blob).
     runSettingApply('gfx');
   } catch (e) {}
 }
-// retranslate all static DOM text + re-render dynamic panels for the current LANG
 function setTxt(id, str) { const e = g(id); if (e) e.textContent = str; }
-// HUD speed/altitude unit labels reflect the chosen unit system. Called from applyLang (lang change /
-// load) and from the Units toggle's onChange so labels flip live. Numeric readouts convert in ui-hud.js
 // updateDom; the unit abbreviations (MPH/KPH/FT/M) are intentionally latin in both languages.
 function applyUnitLabels() {
   setTxt('lblSpd', t(unitSystem === 'metric' ? 'hud.kph' : 'hud.mph'));
   setTxt('lblAlt', t(unitSystem === 'metric' ? 'hud.metres' : 'hud.ft'));
 }
 function applyLang() {
-  // language-select / onboarding screens
   setTxt('langTagline', t('lang.tagline')); setTxt('langBegin', t('lang.begin'));
   setTxt('obTitle', t('onboard.title')); setTxt('obSub', t('onboard.sub'));
   setTxt('obFlightH', t('onboard.flight')); setTxt('obFlightK', t('onboard.flightKeys'));
@@ -52,13 +43,11 @@ function applyLang() {
   setTxt('obViewH', t('onboard.view')); setTxt('obViewK', t('onboard.viewKeys'));
   setTxt('obTouch', t('onboard.touch')); setTxt('obMore', t('onboard.more'));
   setTxt('tutSkip', t('tut.skip'));
-  if (typeof tutorial !== 'undefined' && tutorial.active && !tutorial.done) renderTutorial();   // retranslate live tutorial hint
+  if (typeof tutorial !== 'undefined' && tutorial.active && !tutorial.done) renderTutorial();
   setTxt('obContinue', t('onboard.continue'));
-  // hangar
   setTxt('hangarSub', t('hangar.sub')); setTxt('hangarBestLbl', t('hangar.best'));
   setTxt('lblDiff', t('hangar.difficulty')); setTxt('lblEnv', t('hangar.environment'));
   setTxt('rbTitle', t('hangar.rivalBoard'));
-  // mode-choice + endless-setup screens (pre-launch reflow)
   setTxt('modeTitle', t('mode.title'));
   setTxt('modeEndlessName', t('mode.endless')); setTxt('modeEndlessDesc', t('mode.endlessDesc'));
   setTxt('modeOperationName', t('mode.operation')); setTxt('modeOperationDesc', t('mode.operationDesc'));
@@ -66,47 +55,40 @@ function applyLang() {
   setTxt('endlessTitle', t('mode.endless'));
   setTxt('endlessBack', '◀ ' + t('common.back'));
   setTxt('endlessStart', '▶ ' + t('mode.start'));
-  refreshLaunchSub();   // the hangar CTA now reads "SELECT <jet>" (label fully owned by refreshLaunchSub)
+  refreshLaunchSub();
   setTxt('manualBtn', t('hangar.manualBtn'));
   setTxt('hangarSpLbl', t('meta.sp')); setTxt('metaBtn', t('meta.btn'));
-  if (typeof refreshDailyEntry === 'function') refreshDailyEntry();   // daily entry label/note follow language + play-state
-  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();   // F8 weekly: entry label/modifiers follow language
-  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: boss-rush entry label/note follow language + unlock state
+  if (typeof refreshDailyEntry === 'function') refreshDailyEntry();
+  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
   setTxt('lblCallsign', t('pilot.callsign')); setTxt('lblEmblem', t('pilot.emblem'));
   const ci = g('callsignInput'); if (ci) ci.placeholder = t('pilot.placeholder');
   setTxt('dbtn0', t('diff.ROOKIE')); setTxt('dbtn1', t('diff.VETERAN')); setTxt('dbtn2', t('diff.ACE'));
   setTxt('tbtn0', t('tod.DAY')); setTxt('tbtn1', t('tod.DUSK')); setTxt('tbtn2', t('tod.NIGHT'));
   setTxt('diffdesc', t('diff.desc' + DIFFS[difficulty].key));
-  // hangar inline controls (3 lines)
   setTxt('hangarCtl1', t('hangar.controls1')); setTxt('hangarCtl2', t('hangar.controls2')); setTxt('hangarCtl3', t('hangar.controls3'));
-  // game over labels
   setTxt('goLblScore', t('go.score')); setTxt('goLblWave', t('go.wave')); setTxt('goLblBest', t('go.best'));
   setTxt('goLblKills', t('go.kills')); setTxt('goLblAcc', t('go.accuracy')); setTxt('goLblMsl', t('go.missiles')); setTxt('goLblTime', t('go.time'));
   setTxt('goLblSp', t('meta.spEarned')); setTxt('goLblSpTotal', t('meta.banked'));
   setTxt('goLblGrade', t('grade.title'));
   setTxt('goLblStars', t('stars.title'));
   setTxt('redeploy', t('go.redeploy')); setTxt('goHangar', t('go.hangar'));
-  // meta-progression screen labels
   setTxt('metaTitle', t('meta.title')); setTxt('metaSub', t('meta.sub')); setTxt('metaSpLbl', t('meta.sp'));
   setTxt('metaTab_perks', t('meta.tabPerks')); setTxt('metaTab_ach', t('meta.tabAch'));
   setTxt('metaClose', t('meta.back')); setTxt('metaHint', t('meta.hint'));
-  // tech tree shell
   setTxt('rplab', t('tech.researchPoints'));
   setTxt('techHeadTitle', t('tech.title')); setTxt('techHeadSub', t('tech.sub'));
   document.querySelectorAll('.tech-tab').forEach(b => { b.textContent = b.dataset.tab === 'armory' ? t('tech.tabArmory') : t('tech.tabTech'); });
   setTxt('techDeploy', t('tech.deploy'));
   setTxt('techhint', techTab === 'armory' ? t('tech.hintArmory') : t('tech.hintTree'));
-  renderDraftBar();   // FRONTIER DRAFT: localize the pin readout + reroll button on language switch
-  // wing picker
+  renderDraftBar();
   setTxt('wpTitle', t('wing.title')); setTxt('wpSub', t('wing.sub'));
   setTxt('wpCancel', t('wing.cancel'));
-  // hud panel labels
   setTxt('lblHp', t('hud.hp')); setTxt('lblShd', t('hud.shd')); setTxt('lblThr', t('hud.thr'));
   if (el.abIndicator) el.abIndicator.textContent = t('hud.ab');
   setTxt('lblScore', t('hud.score')); setTxt('lblRd', t('hud.rd')); { const lw = g('lblWave'); if (lw) putText(lw, t('hud.wave')); } setTxt('lblCombo', t('hud.combo'));
   applyUnitLabels();
   setTxt('lblGun', t('hud.gun')); setTxt('lblFlares', t('hud.flares')); setTxt('lblMsl', t('hud.msl'));
-  // manual
   setTxt('manTitle', t('manual.title')); setTxt('manSub', t('manual.sub'));
   setTxt('manualClose', t('manual.resume')); setTxt('manualAbort', t('manual.abort'));
   setTxt('manH_Flight', t('manual.hFlight')); setTxt('manH_Combat', t('manual.hCombat'));
@@ -117,14 +99,12 @@ function applyLang() {
   setTxt('manH_Sorties', t('manual.hSorties')); setTxt('manH_Special', t('manual.hSpecial')); setTxt('manH_Missions', t('manual.hMissions'));
   setTxt('manTab_guide', t('manual.tabGuide')); setTxt('manTab_systems', t('manual.tabSystems'));
   setTxt('manTab_tactics', t('manual.tabTactics')); setTxt('manTab_settings', t('manual.tabSettings'));
-  // settings labels
   setTxt('lblLang', t('set.language')); setTxt('lblSens', t('set.sensitivity'));
   setTxt('lblVol', t('set.volume')); setTxt('lblInvert', t('set.invert')); setTxt('lblMouseFlight', t('set.mouseFlight'));
   setTxt('lblAutoLock', t('set.autoLock')); setTxt('lblWingman', t('set.wingman'));
   setTxt('lblRival', t('set.rival')); setTxt('lblGroundWar', t('set.groundWar'));
   setTxt('lblGunLead', t('set.gunLead')); setTxt('lblAimAssist', t('set.aimAssist')); setTxt('lblAimStrength', t('set.aimStrength')); setTxt('lblMute', t('set.mute'));
   setTxt('setLangEN', t('set.langEN')); setTxt('setLangZH', t('set.langZH')); setTxt('setLangKO', t('set.langKO'));
-  // mobile control settings labels + segmented button captions
   setTxt('lblControlScheme', t('set.controlScheme'));
   setTxt('lblMobileControl', t('set.mobileControl')); setTxt('lblAggression', t('set.aggression'));
   setTxt('lblMotion', t('set.motionSensor'));
@@ -147,11 +127,10 @@ function applyLang() {
   setTxt('ssetTab_controls', t('set.tab.controls'));
   setTxt('ssetTab_audio', t('set.tab.audio'));
   setTxt('ssetTab_game', t('set.tab.game'));
-  // settings-redesign: grouped section sub-headers within each subtab
   setTxt('ssecAppearance', t('set.sec.appearance')); setTxt('ssecReadout', t('set.sec.readout'));
   setTxt('ssecSteering', t('set.sec.steering')); setTxt('ssecTouch', t('set.sec.touch')); setTxt('ssecMotion', t('set.sec.motion'));
   setTxt('ssecMix', t('set.sec.mix')); setTxt('ssecAim', t('set.sec.aim')); setTxt('ssecModes', t('set.sec.modes')); setTxt('ssecDev', t('set.sec.dev'));
-  const sizeKeys = ['set.hudXs', 'set.hudSmall', 'set.hudNormal', 'set.hudLarge', 'set.hudXl'];   // HUD + UI size dropdowns share the XS..XL labels
+  const sizeKeys = ['set.hudXs', 'set.hudSmall', 'set.hudNormal', 'set.hudLarge', 'set.hudXl'];
   ['setHudScale', 'setUiScale'].forEach(id => { const sel = g(id); if (sel && sel.options.length >= 5) sizeKeys.forEach((k, i) => { sel.options[i].textContent = t(k); }); });
   setTxt('setEnableMotion', t('set.enableMotion')); setTxt('setRecenter', t('set.recenter'));
   const segTxt = (sel, key) => { const b = document.querySelector(sel); if (b) b.textContent = t(key); };
@@ -162,30 +141,25 @@ function applyLang() {
   segTxt('#gfxQualityTog [data-gq="auto"]', 'set.gfxAuto'); segTxt('#gfxQualityTog [data-gq="low"]', 'set.gfxLow'); segTxt('#gfxQualityTog [data-gq="medium"]', 'set.gfxMedium'); segTxt('#gfxQualityTog [data-gq="high"]', 'set.gfxHigh');
   segTxt('#unitsTog [data-un="imperial"]', 'set.unitsImperial'); segTxt('#unitsTog [data-un="metric"]', 'set.unitsMetric'); setTxt('lblUnits', t('set.units'));
   document.querySelectorAll('.langbtn').forEach(b => b.classList.toggle('on', b.dataset.lang === LANG));
-  // in-flight HUD warnings, hint bar, pause button (canvas labels are localized at draw time)
   setTxt('w_pull', t('hud.pullUp')); setTxt('w_missile', t('hud.missileAlert')); setTxt('w_drone', t('hud.droneSwarm'));
   setTxt('w_highg', t('hud.highG')); setTxt('w_stealth', t('hud.stealthActive')); { const wl = g('w_lock'); if (wl) putText(wl, t('hud.targetLocked')); }   // updateDom's guarded-write cache owns this node
   setTxt('wingStatus', t('hud.escort'));
   setTxt('hint', t('hud.hint')); setTxt('btnPause', t('hud.pause'));
-  // touch buttons
   setTxt('tb-gun', t('touch.gun')); setTxt('tb-msl', t('touch.msl')); setTxt('tb-flr', t('touch.flr')); setTxt('tb-spc', t('touch.spc'));
   setTxt('tb-thr-lbl', t('touch.thr')); setTxt('tb-cam', t('touch.cam')); setTxt('tb-lck', t('touch.lck'));
   setTxt('tb-aws', t('touch.aws')); setTxt('tb-ars', t('touch.ars')); setTxt('tb-ajm', t('touch.ajm'));
-  setTxt('tb-weng', t('touch.weng')); setTxt('tb-wcov', t('touch.wcov')); setTxt('tb-wrgp', t('touch.wrgp'));   // F3 wingman-wheel: order touch buttons
-  // flight manual body (HTML content)
+  setTxt('tb-weng', t('touch.weng')); setTxt('tb-wcov', t('touch.wcov')); setTxt('tb-wrgp', t('touch.wrgp'));
   const setHTML = (id, key) => { const e = g(id); if (e) e.innerHTML = t(key); };
   setHTML('manUL_Flight', 'manBody.flight'); setHTML('manUL_Combat', 'manBody.combat'); setHTML('manP_Lock', 'manBody.lock');
   setHTML('manUL_Stats', 'manBody.stats'); setHTML('manUL_Hud', 'manBody.hud'); setHTML('manUL_Wingman', 'manBody.wingman');
   setHTML('manUL_Enemies', 'manBody.enemies'); setHTML('manP_Tech', 'manBody.tech');
   setHTML('manUL_Sorties', 'manBody.sorties'); setHTML('manUL_Special', 'manBody.special'); setHTML('manUL_Missions', 'manBody.missions');
-  // re-render dynamic panels that bake text in
   if (player && choosingUpgrade) { techTab === 'armory' ? renderArmory() : renderTechTree(false); }
   if (typeof selectedJet === 'number') renderJetCard(selectedJet);
   renderKillBoard();
   updateSpHud();
   if (g('meta') && g('meta').classList.contains('show')) renderMetaScreen();
 }
-// generic segmented toggle: data-<attr> buttons, getter()/setter(v) on a global, optional onChange.
 function bindSeg(containerId, attr, getter, setter, onChange) {
   const box = g(containerId);
   if (!box) return;
@@ -200,7 +174,6 @@ function bindSeg(containerId, attr, getter, setter, onChange) {
     });
   });
 }
-// reflect current control-setting state into the Settings widgets (on open / after load).
 function syncControlSettingsUI() {
   const mark = (id, attr, val) => { const box = g(id); if (box) box.querySelectorAll('.segbtn').forEach(b => b.classList.toggle('on', b.dataset[attr] === val)); };
   mark('controlSchemeTog', 'cs', controlScheme);
@@ -211,10 +184,9 @@ function syncControlSettingsUI() {
   mark('unitsTog', 'un', unitSystem);
   const sh = g('setHaptics'); if (sh) sh.checked = haptics;
   const sbo = g('setBtnOpacity'); if (sbo) sbo.value = Math.round(buttonOpacity * 100);
-  const smf = g('setMouseFlight');   // F7: desktop mouse-pointer flight toggle (bound once)
+  const smf = g('setMouseFlight');
   if (smf) { smf.checked = mouseFlight; if (!smf._bound) { smf._bound = true; smf.addEventListener('change', () => { mouseFlight = smf.checked; if (typeof audio !== 'undefined' && audio.on) audio.ui(); saveSettings(); }); } }
 }
-// Enable-Motion flow: request permission from this user gesture; fall back to Touch on deny/unsupported.
 function enableMotionFlow() {
   const note = g('motionNote'), txt = g('motionNoteTxt');
   if (typeof requestMotionPermission !== 'function' || typeof motionSupported !== 'function' || !motionSupported()) {
@@ -260,7 +232,6 @@ function installMotionStatus() {
   };
 }
 function applyHudScale() {
-  // HUD size: in-flight HUD only — DOM panels via the CSS var + canvas HUD via hudK(). Menus are driven by applyUiScale().
   const h = g('hud');
   if (h) h.style.setProperty('--hud-scale', String(hudScale));
   if (typeof applyButtonStyle === 'function') applyButtonStyle();
@@ -288,18 +259,18 @@ function clearArenaEntities() {
   const lists = [bullets, missiles, flares, loots];
   for (let l = 0; l < lists.length; l++) for (let i = 0; i < lists[l].length; i++) scene.remove(lists[l][i].mesh);
   for (let i = 0; i < particles.length; i++) releaseParticle(particles[i].mesh);   // pooled sprites stay warm for the next arena
-  for (let i = 0; i < decoys.length; i++) despawnObject(decoys[i].mesh);   // per-decoy holo material clones
+  for (let i = 0; i < decoys.length; i++) despawnObject(decoys[i].mesh);
   clearWingmen();
   enemies.length = bullets.length = missiles.length = flares.length = loots.length = particles.length = decoys.length = 0;
   pendingSpawns.length = 0; BPOOL.length = 0; hitMarkers.length = 0; dmgNumbers.length = 0;
-  if (typeof clearAllies === 'function') clearAllies();   // campaign overhaul: friendly convoy/outpost + in-flight bombs
-  if (typeof campaignEnd !== 'undefined') campaignEnd = null;   // never carry an outro beat into another arena
+  if (typeof clearAllies === 'function') clearAllies();
+  if (typeof campaignEnd !== 'undefined') campaignEnd = null;
   if (typeof hideOutroStamp === 'function') hideOutroStamp();
   if (typeof hideMissionIntro === 'function') hideMissionIntro();
 }
 function clearArena() {
   clearArenaEntities();
-  if (typeof clearGroundObjects === 'function') clearGroundObjects();   // Track B: free per-arena InstancedMesh ground scatter (shared templates spared)
+  if (typeof clearGroundObjects === 'function') clearGroundObjects();
   if (player && player.group) { scene.remove(player.group); disposeGroup(player.group); }
   player = null;
   if (h2d) h2d.clearRect(0, 0, W, H);
@@ -314,23 +285,22 @@ function clearArena() {
   const up = g('upgrade'); if (up) up.classList.remove('show');
 }
 function returnToHangar() {
-  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();   // leaving flight for the hangar → silence the engine hum (also covers abortMission, which routes here)
+  if (typeof audio !== 'undefined' && audio.stopEngine) audio.stopEngine();
   clearArena();
-  // Operations campaign: tear down any active operation run + hide its navigation overlays
   campaignMode = false; campaignPlayerOpId = null; campaignOpId = null; campaignLevelIdx = -1; opSector = null;
-  hideAllScreens();   // hide every overlay panel (modeChoice/endlessSetup/campaign-nav/gameover) + touch controls (nav.js)
+  hideAllScreens();
   makePlatform();
-  if (typeof buildGroundObjects === 'function') buildGroundObjects();   // Track B: re-scatter ground objects for the hangar view (tier-gated)
+  if (typeof buildGroundObjects === 'function') buildGroundObjects();
   camMode = 0;
   camera.position.set(0, 6, 42); camera.lookAt(0, 2, 0);
   state = 'hangar'; paused = false;
   if (clock) clock.getDelta();
-  showScreen('hangar');   // show the hangar (remove 'hide') + state='hangar' + hide touch controls + track currentScreen (nav.js)
-  hangarPreview.clear(); _previewJetIdx = -1;   // enter hangar fresh: no lingering unowned preview, reset drag orientation + zoom
+  showScreen('hangar');
+  hangarPreview.clear(); _previewJetIdx = -1;
   selectJet(selectedJet);
   updateBest();
   renderKillBoard();
-  refreshDailyEntry();   // daily button label/play-state can change after a run — keep it current
-  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();   // F8 weekly: best/modifiers can change after a run — keep it current
-  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();   // F15: unlock/best-time can change after a run
+  refreshDailyEntry();
+  if (typeof refreshWeeklyEntry === 'function') refreshWeeklyEntry();
+  if (typeof refreshBossRushEntry === 'function') refreshBossRushEntry();
 }

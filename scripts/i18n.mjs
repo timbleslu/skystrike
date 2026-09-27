@@ -71,13 +71,11 @@ if (cmd === 'get') {
     if (extra.length) { bad++; console.log(L + ' extra (' + extra.length + '): ' + extra.join(' ')); }
     if (ph.length) { bad++; console.log(L + ' placeholder mismatch: ' + ph.join(' ')); }
   }
-  // unused: a key is "used" if its literal appears in js/ or index.html, or it starts with a string prefix the code
-  // concatenates ('op.' + id …) — dynamic keys are therefore never flagged (conservative).
   const src = fs.readdirSync(path.join(ROOT, 'js')).filter(f => f.endsWith('.js'))
     .map(f => fs.readFileSync(path.join(ROOT, 'js', f), 'utf8')).join('\n') + fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const lits = new Set([...src.matchAll(/['"`]([A-Za-z0-9_.\-]+)['"`]/g)].map(m => m[1]));
   const pre = [...src.matchAll(/['"`]([A-Za-z0-9_.\-]+)['"`]\s*\+/g), ...src.matchAll(/`([A-Za-z0-9_.\-]+)\$\{/g)].map(m => m[1]).filter(p => p.length > 2 && /[.\-_]/.test(p));
-  const suf = [...lits].filter(x => x.startsWith('.') && x.length > 2);   // e.g. nameKey.replace('.name', '.blurb')
+  const suf = [...lits].filter(x => x.startsWith('.') && x.length > 2);
   const unused = strKeys('EN').filter(k => !lits.has(k) && !pre.some(p => k.startsWith(p)) && !suf.some(x => k.endsWith(x)));
   if (unused.length) console.log('possibly unused EN keys (' + unused.length + '): ' + unused.join(' '));
   console.log(bad ? 'i18n check: FAIL' : 'i18n check: OK (' + strKeys('EN').length + ' keys, EN/ZH/KO in parity)');

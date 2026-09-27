@@ -1,6 +1,4 @@
-/* SKYSTRIKE — storage.js: single persistence seam.
-   Wraps localStorage today; swap these internals for Capacitor Preferences on iOS
-   (WKWebView localStorage is evictable under storage pressure). Loaded first. */
+/* SKYSTRIKE — storage.js: the only localStorage access. Swap for Capacitor Preferences on iOS (WKWebView localStorage is evictable). */
 
 const store = {
   get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },

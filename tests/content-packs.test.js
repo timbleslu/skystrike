@@ -1,6 +1,4 @@
 // CF content-factory — validatePack / applyContentPacks / weeklyEffectsFor / weeklyWavePattern /
-// the formationSlots template branch, PLUS the shipped js/content-packs.js candidates: every
-// shipped pack must validate, and every shipped pack modifier must have EN+ZH+KO i18n entries.
 const assert = require('assert');
 const {
   FORMATIONS, formationSlots, WEEKLY_MODIFIERS, weeklyModifiers,
@@ -11,7 +9,6 @@ const { CONTENT_PACKS } = require('../js/content-packs.js');
 const baseIds = WEEKLY_MODIFIERS.map(m => m.id);
 const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
 
-// ===== shipped packs: every candidate validates + merges cleanly =====
 {
   const forms = freshForms();
   const rt = applyContentPacks(CONTENT_PACKS, forms, WEEKLY_MODIFIERS);
@@ -23,7 +20,6 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   assert.strictEqual(rt.wavePatterns.length, 2, 'both wave patterns collected');
 }
 
-// ===== validatePack: malformed / impossible candidates are rejected =====
 {
   const forms = freshForms();
   const bad = (over) => Object.assign({ id: 'bad-pack', version: 1, formations: {}, modifiers: [], waves: [] }, over);
@@ -47,11 +43,9 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   assert.ok(!v(bad({ waves: [{ id: 'w', pattern: [{ n: 99 }] }] })).ok, 'wave count over WAVE_COUNT_CAP rejected');
   assert.ok(!v(bad({ waves: [{ id: 'w', pattern: [{ n: 4, formation: 'ghost' }] }] })).ok, 'unknown wave formation ref rejected');
   assert.ok(!v(bad({ waves: [{ id: 'w', pattern: [] }] })).ok, 'empty wave pattern rejected');
-  // packs are self-contained: a wave row may reference a formation defined in the SAME pack
   assert.ok(v(bad({ formations: { ring: { spacing: 200, engageRange: 1200, slots: [{ x: 1, z: 1 }] } }, waves: [{ id: 'w', pattern: [{ n: 4, formation: 'ring' }] }] })).ok, 'same-pack formation ref accepted');
 }
 
-// ===== applyContentPacks: all-or-nothing per pack + duplicate pack ids =====
 {
   const forms = freshForms();
   const good = { id: 'ok-pack', version: 1, formations: { ring: { spacing: 200, engageRange: 1200, slots: [{ x: 1, z: 1 }] } }, modifiers: [], waves: [] };
@@ -64,11 +58,10 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   assert.strictEqual(rt.modPool.length, WEEKLY_MODIFIERS.length, 'no modifiers leak from a rejected pack');
 }
 
-// ===== formationSlots: template branch (pack formations), base generators untouched =====
 {
   const forms = freshForms();
   applyContentPacks(CONTENT_PACKS, forms, WEEKLY_MODIFIERS);
-  FORMATIONS.diamond = forms.diamond;   // graft the merged entry onto the shared table for the test
+  FORMATIONS.diamond = forms.diamond;
   const s4 = formationSlots('diamond', 4, FORMATIONS.diamond.spacing);
   assert.deepStrictEqual(s4, [{ x: 0, z: 0 }, { x: 200, z: 200 }, { x: -200, z: 200 }, { x: 0, z: 400 }], '4-ship diamond = leader + exact scaled template');
   const s8 = formationSlots('diamond', 8, 200);
@@ -79,7 +72,6 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   assert.strictEqual(formationSlots('vee', 6, 100).length, 6, 'base generators untouched');
 }
 
-// ===== weeklyEffectsFor: merge rules =====
 {
   assert.deepStrictEqual(weeklyEffectsFor(['noFlares', 'heavyWing'], WEEKLY_MODIFIERS), { flares: 0, turnMul: 0.6 });
   const pool = WEEKLY_MODIFIERS.concat([{ id: 'aceSeason', effects: { extraAces: 2 } }, { id: 'lastFlare', effects: { flares: 1 } }]);
@@ -88,7 +80,6 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   assert.deepStrictEqual(weeklyEffectsFor([], pool), {}, 'no ids → no effects');
 }
 
-// ===== weeklyModifiers: extended-pool draw stays deterministic; default arg = base table =====
 {
   const pool = WEEKLY_MODIFIERS.concat([{ id: 'fogBank', effects: { lockWeather: 'fog' } }]);
   const a = weeklyModifiers(12345, pool), b = weeklyModifiers(12345, pool);
@@ -99,7 +90,6 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   weeklyModifiers(777).forEach(m => assert.ok(baseIds.indexOf(m.id) >= 0, 'no pool arg → base table (regression)'));
 }
 
-// ===== weeklyWavePattern: deterministic pick, null when none =====
 {
   assert.strictEqual(weeklyWavePattern(42, []), null);
   assert.strictEqual(weeklyWavePattern(42, null), null);
@@ -108,7 +98,6 @@ const freshForms = () => JSON.parse(JSON.stringify(FORMATIONS));
   assert.ok(pats.indexOf(weeklyWavePattern(42, pats)) >= 0, 'pick comes from the shipped patterns');
 }
 
-// ===== i18n: every shipped pack modifier has name + desc in EN + ZH + KO =====
 {
   const I18N = require('./lib/i18n.js').loadI18N();
   for (const pk of CONTENT_PACKS) for (const m of (pk.modifiers || [])) {

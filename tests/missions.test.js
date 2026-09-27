@@ -1,10 +1,9 @@
 'use strict';
 const assert = require('assert');
-const { MISSIONS, MISSION_TYPES, missionForSector, startMission, missionKill, tickMission } = require('../js/missions.js');
+const { MISSIONS, missionForSector, startMission, missionKill, tickMission } = require('../js/missions.js');
 
-// ===== sector -> mission mapping (deterministic) =====
 assert.strictEqual(missionForSector('FURBALL'), 'sweep');
-assert.strictEqual(missionForSector('SWEEP'), 'sweep');   // multi-phase dogfight phase type maps explicitly
+assert.strictEqual(missionForSector('SWEEP'), 'sweep');
 assert.strictEqual(missionForSector('RECON'), 'recon');
 assert.strictEqual(missionForSector('STEALTH'), 'stealth');
 assert.strictEqual(missionForSector('INTERCEPT'), 'intercept');
@@ -15,7 +14,6 @@ assert.strictEqual(missionForSector('ELITE'), 'none');
 assert.strictEqual(missionForSector('FINAL'), 'boss');
 assert.strictEqual(missionForSector('DEPOT'), 'none');
 
-// ===== startMission builds correct target/timer/params per type =====
 const sw = startMission('sweep', 12);
 assert.strictEqual(sw.target, 10, 'sweep target caps at 10');
 assert.strictEqual(sw.status, 'active');
@@ -35,64 +33,58 @@ assert.strictEqual(def.params.assetHp, 100);
 const stk = startMission('strike', 5);
 assert.strictEqual(stk.params.siteUp, true);
 
-// ===== intercept.winFail: won when progress>=target before timer; failed on timeout =====
-let m = startMission('intercept', 9);   // target 4
-m.params; // intercept tracks via _missionTarget on enemies
+let m = startMission('intercept', 9);
+m.params;
 for (let k = 0; k < 4; k++) missionKill(m, { _missionTarget: true });
 tickMission(m, 0.016);
 assert.strictEqual(m.status, 'won', 'intercept won when all targets down before timer');
 
-let m2 = startMission('intercept', 1);  // target 3, timer 46
-missionKill(m2, { _missionTarget: true });  // only 1 of 3
-tickMission(m2, 100);                        // blow past the timer
+let m2 = startMission('intercept', 1);
+missionKill(m2, { _missionTarget: true });
+tickMission(m2, 100);
 assert.strictEqual(m2.status, 'failed', 'intercept failed when timer hits 0');
 
-// non-target kills do not credit intercept
 let m3 = startMission('intercept', 1);
 missionKill(m3, { _missionTarget: false });
 tickMission(m3, 0.016);
 assert.strictEqual(m3.progress, 0, 'intercept ignores non-target kills');
 
-// ===== sweep.winFail: won when progress>=target =====
-let sm = startMission('sweep', 2);   // target 5
+let sm = startMission('sweep', 2);
 for (let k = 0; k < 5; k++) missionKill(sm, {});
 tickMission(sm, 0.016);
 assert.strictEqual(sm.status, 'won', 'sweep won when wave cleared');
 
-// ===== escort.winFail (campaign overhaul): convoy drives a route; judged on DELIVERIES, not a map-edge exit =====
-let em = startMission('escort', 5);   // convoy 4, must deliver 3
+let em = startMission('escort', 5);
 em.params.spawnedAll = true;
-em.params.enRoute = 1; em.params.delivered = 1;   // two trucks destroyed -> at most 2 can arrive
+em.params.enRoute = 1; em.params.delivered = 1;
 tickMission(em, 0.016);
 assert.strictEqual(em.status, 'failed', 'escort failed once the convoy can no longer deliver the required 3');
 assert.strictEqual(em.failReason, 'convoyLost', 'escort fail carries a debrief reason');
 
-let emOk = startMission('escort', 5); // losing exactly one (3 still rolling) is within tolerance
+let emOk = startMission('escort', 5);
 emOk.params.spawnedAll = true; emOk.params.enRoute = 3;
 tickMission(emOk, 0.016);
 assert.strictEqual(emOk.status, 'active', 'escort still active after losing only one unit (convoy still en route)');
 
-let emWait = startMission('escort', 5);   // nothing judged until the whole convoy is on the road
+let emWait = startMission('escort', 5);
 emWait.params.enRoute = 0;
 tickMission(emWait, 0.016);
 assert.strictEqual(emWait.status, 'active', 'escort is not judged before the convoy has spawned');
 
 let em2 = startMission('escort', 5);
-em2.params.spawnedAll = true; em2.params.enRoute = 0; em2.params.delivered = 4;   // every truck arrived
+em2.params.spawnedAll = true; em2.params.enRoute = 0; em2.params.delivered = 4;
 tickMission(em2, 0.016);
 assert.strictEqual(em2.status, 'won', 'escort won once the convoy has delivered');
 
-// ===== defend.winFail: won when timer elapses with asset alive; failed when asset dead =====
-let dm = startMission('defend', 1);   // timer 52
-tickMission(dm, 100);                 // survive the hold
+let dm = startMission('defend', 1);
+tickMission(dm, 100);
 assert.strictEqual(dm.status, 'won', 'defend won when hold timer elapses');
 
 let dm2 = startMission('defend', 1);
-dm2.params.assetHp = 0;               // asset destroyed
+dm2.params.assetHp = 0;
 tickMission(dm2, 0.016);
 assert.strictEqual(dm2.status, 'failed', 'defend failed when asset hp <= 0');
 
-// ===== strike.winFail: won when site destroyed =====
 let km = startMission('strike', 5);
 tickMission(km, 0.016);
 assert.strictEqual(km.status, 'active', 'strike active while site stands');
@@ -100,12 +92,11 @@ km.params.siteUp = false;
 tickMission(km, 0.016);
 assert.strictEqual(km.status, 'won', 'strike won when site flattened');
 
-// a resolved mission ignores further ticks/kills (status latches)
 let lm = startMission('sweep', 2);
 for (let k = 0; k < 5; k++) missionKill(lm, {});
-tickMission(lm, 0.016);              // -> won
+tickMission(lm, 0.016);
 const before = lm.progress;
-missionKill(lm, {});                 // ignored once resolved
+missionKill(lm, {});
 assert.strictEqual(lm.progress, before, 'resolved mission ignores further kills');
 
 console.log('ok - missions: sector mapping, startMission params, win/fail per type, kill crediting');

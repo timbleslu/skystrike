@@ -3,25 +3,20 @@
    Usage: node scripts/verify-manualbtn.mjs   (requires playwright devDep) */
 import { launchGame, bootToHangar } from './lib/boot.mjs';
 
-// short viewport so the hangar content overflows and is genuinely scrollable
 const { page, port, close } = await launchGame({ viewport: { width: 480, height: 560 } });
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));
 page.on('console', m => { if (m.type() === 'error') console.error('CONSOLE ERROR:', m.text()); });
-// past the language/onboard gate → hangar; onboarding auto-starts a tutorial flight, so land
-// deterministically back in the real hangar menu
 await bootToHangar(page, { port, continueWait: 500, returnToHangar: true, returnWait: 500 });
 
 const fails = [];
 const rectOf = (id) => page.evaluate((i) => { const e = document.getElementById(i); if (!e) return null; const r = e.getBoundingClientRect(); return { top: r.top, right: r.right, w: r.width, h: r.height, hidden: e.classList.contains('mb-hide') || r.width === 0 }; }, id);
 const vw = await page.evaluate(() => innerWidth);
 
-// 1) visible in hangar, pinned top-right
 let r = await rectOf('manualBtn');
 if (!r || r.hidden) fails.push('manualBtn hidden in hangar');
 else { if (r.top > 40) fails.push(`manualBtn not at top in hangar (top=${r.top.toFixed(1)})`); if (vw - r.right > 40) fails.push(`manualBtn not at right in hangar (gap=${(vw - r.right).toFixed(1)})`); }
 const topInHangar = r ? r.top : null;
 
-// 2) scroll the hangar — button must NOT move (the bug: it scrolled with content)
 const scrolled = await page.evaluate(() => { const h = document.getElementById('hangar'); h.scrollTop = 99999; return h.scrollTop; });
 await page.waitForTimeout(200);
 const r2 = await rectOf('manualBtn');
@@ -29,7 +24,6 @@ if (scrolled <= 0) console.log('NOTE: hangar did not scroll at this viewport (co
 if (r2 && topInHangar != null && Math.abs(r2.top - topInHangar) > 2) fails.push(`manualBtn DRIFTED on hangar scroll: ${topInHangar.toFixed(1)} -> ${r2.top.toFixed(1)} (scrollTop=${scrolled})`);
 await page.screenshot({ path: 'manualbtn-hangar-scrolled.png' });
 
-// 3) persists on a menu overlay (operations select, z-73) — still top-right, still visible
 await page.evaluate(() => { document.getElementById('hangar').scrollTop = 0; if (typeof openOperationsSelect === 'function') { opMode = true; openOperationsSelect(); } });
 await page.waitForTimeout(300);
 const r3 = await rectOf('opsSelect');
@@ -38,7 +32,6 @@ if (r3 && !r3.hidden) { if (!rb3 || rb3.hidden) fails.push('manualBtn hidden on 
 else console.log('NOTE: operations-select did not open; skipping menu-persist check');
 await page.screenshot({ path: 'manualbtn-ops-menu.png' });
 
-// 4) hidden in flight
 await page.evaluate(() => { if (typeof openOperationsSelect === 'function') { const ov = document.getElementById('opsSelect'); if (ov) ov.classList.remove('show'); } opMode = false; startGame(selectedJet); });
 await page.waitForTimeout(900);
 const r4 = await rectOf('manualBtn');

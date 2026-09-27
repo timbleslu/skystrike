@@ -1,21 +1,17 @@
 'use strict';
 // F2 enemy formations — pure geometry + break logic (js/core.js). Non-boss fighter waves of >=3 spawn as
-// a formation with a leader (slot 0, normal AI) + slot-holding followers that break to normal AI once the
-// player closes to engage range or the leader dies. Imported from the REAL implementation (no mirror copy).
 const assert = require('assert');
 const { FORMATIONS, formationSlots, formationBreak } = require('../js/core.js');
 
 const TYPES = ['vee', 'wall', 'echelon', 'pincer'];
 const EPS = 1e-9;
 
-// ===== FORMATIONS table: the 4 types, each with spacing + engage-range config =====
 for (const t of TYPES) {
   assert.ok(FORMATIONS[t], t + ' present in FORMATIONS');
   assert.ok(FORMATIONS[t].spacing > 0, t + ' has a positive spacing');
   assert.ok(FORMATIONS[t].engageRange > 0, t + ' has an engage-range config');
 }
 
-// ===== slot count == n for EVERY type, across odd + even sizes; slot 0 is always the leader at the origin =====
 for (const t of TYPES) {
   for (let n = 1; n <= 12; n++) {
     const s = formationSlots(t, n, 100);
@@ -25,7 +21,6 @@ for (const t of TYPES) {
   }
 }
 
-// ===== vee: mirror-symmetry about the leader axis — every +x slot has a matching -x slot at the same z =====
 for (const n of [3, 4, 5, 6, 7, 8]) {
   const s = formationSlots('vee', n, 120);
   let sumX = 0; for (const p of s) sumX += p.x;
@@ -38,7 +33,6 @@ for (const n of [3, 4, 5, 6, 7, 8]) {
   }
 }
 
-// ===== wall: abreast line — every slot shares the leader's forward position (same z), spread both sides =====
 {
   const s = formationSlots('wall', 6, 150);
   for (const p of s) assert.ok(Math.abs(p.z - s[0].z) < EPS, 'wall: all slots on the same abreast line (equal z)');
@@ -46,7 +40,6 @@ for (const n of [3, 4, 5, 6, 7, 8]) {
   assert.ok(xs.some(x => x > 0) && xs.some(x => x < 0), 'wall spreads to BOTH sides of the leader');
 }
 
-// ===== echelon: strictly monotonic diagonal — x and z both strictly increase down the line =====
 {
   const s = formationSlots('echelon', 6, 130);
   for (let i = 1; i < s.length; i++) {
@@ -55,7 +48,6 @@ for (const n of [3, 4, 5, 6, 7, 8]) {
   }
 }
 
-// ===== pincer: two groups on OPPOSITE flanks, balanced, with a clear central gap (no follower on the axis) =====
 {
   const spacing = 140;
   const s = formationSlots('pincer', 7, spacing);
@@ -66,7 +58,6 @@ for (const n of [3, 4, 5, 6, 7, 8]) {
   for (const p of foll) assert.ok(Math.abs(p.x) >= spacing, 'pincer keeps a clear central gap (no follower near the axis)');
 }
 
-// ===== spacing scales offsets linearly — 2x spacing yields exactly 2x every offset, for every type =====
 for (const t of TYPES) {
   const a = formationSlots(t, 6, 100);
   const b = formationSlots(t, 6, 200);
@@ -76,9 +67,8 @@ for (const t of TYPES) {
   }
 }
 
-// ===== formationBreak: true when the player is in engage range OR the leader is dead; false otherwise =====
 {
-  const cfg = FORMATIONS.vee;   // engageRange = 1200
+  const cfg = FORMATIONS.vee;
   assert.strictEqual(formationBreak(3000, true, cfg), false, 'far + leader alive -> hold');
   assert.strictEqual(formationBreak(cfg.engageRange + 1, true, cfg), false, 'just outside engage range -> hold');
   assert.strictEqual(formationBreak(cfg.engageRange, true, cfg), true, 'AT engage range -> break');

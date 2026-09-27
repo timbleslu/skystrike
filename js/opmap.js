@@ -1,21 +1,8 @@
-/* SKYSTRIKE — opmap.js: the OPERATIONS campaign data table + level plans. Loaded after meta.js. */
-let opSector = null;    // currently-flying sector type (string) or null
+/* SKYSTRIKE — opmap.js: the OPERATIONS campaign data + level plans. Schema: docs/level-authoring.md.
+   Meta is keyed on `${opId}.${id}` — ids are stable and MUST NOT be renumbered. */
+let opSector = null;    // currently-flying sector type or null
 
-/* ---- OPERATIONS table ----
-   The fixed campaign as DATA: hand-authored level rows with i18n KEYS for all user-facing text
-   (strings live in js/lang/*.js). Boss levels (`type:'FINAL'`, `isBoss:true`) carry a 3-phase `boss`
-   descriptor. Meta is keyed on `${opId}.${id}` — ids are stable and MUST NOT be renumbered. */
 const OPERATIONS = [
-  /* Every level is a SCRIPTED sequence of 2–3 varied objective beats
-     (`objectives`), each with its own air/ground budget, radio lines (`say`: [[speaker, key], …] → i18n
-     'comms.<key>') and timed mid-phase `events` (reinforcements / bomb runs / taunts at `at` seconds).
-     Speakers: ovl = OVERLORD (AWACS) · hq = command · wing = your wingman · ally = the unit you protect ·
-     enemy = intercepted chatter · boss = the operation's ace. ESCORT phases pick `escort:'truck'|'transport'`
-     (ground convoy / escorted aircraft), DEFEND phases `asset:'outpost'|'ship'`; `label` names the ally
-     ('ally.name.<label>'). FINAL levels open with an approach fight, then a BOSS phase spawns the ace.
-     The top-level `spawn` row still carries the level's fixed weather/tod (and a legacy budget the Node
-     tests read); `type` stays the level's headline type (map icon + star defaults). waves:1 everywhere —
-     the objective sequence IS the level. */
   {
     id: 'ironVeil', biome: 'tropical', nameKey: 'op.ironVeil.name', theaterKey: 'op.ironVeil.theater', loreKey: 'op.ironVeil.lore',
     levels: [
@@ -279,9 +266,7 @@ const OPERATIONS = [
   },
 ];
 
-// PURE: build the spawn plan for a level row. Reads the level's hand-authored `spawn` budget
-// verbatim and adds the typed-mission descriptor + boss flag.
-// Returns a NEW object; the level row is never mutated.
+// Pure; returns a new object, the level row is never mutated. `mission` is the first phase's verb.
 function levelPlan(lvl) {
   const s = lvl.spawn || {};
   const plan = {
@@ -292,35 +277,22 @@ function levelPlan(lvl) {
     mission: sectorMission(lvl.type),
     boss: lvl.type === 'FINAL',
   };
-  // multi-phase objective sequence: pass the authored queue through so
-  // startSectorMission walks it phase-by-phase. `mission` above stays the FIRST phase's verb.
   if (Array.isArray(lvl.objectives) && lvl.objectives.length) plan.objectives = lvl.objectives;
   return plan;
 }
-// i18n key for a level's mission-card / briefing blurb. Derived from the regular
-// nameKey ('op.<id>.l<N>.name' -> '.blurb') so every level exposes one without 25 duplicate fields;
-// an explicit lvl.missionBlurbKey overrides. Pure.
+// Mission-card blurb key: explicit lvl.missionBlurbKey, else nameKey with '.name' → '.blurb'.
 function levelBlurbKey(lvl) {
   if (!lvl) return null;
   if (lvl.missionBlurbKey) return lvl.missionBlurbKey;
   return lvl.nameKey ? lvl.nameKey.replace(/\.name$/, '.blurb') : null;
 }
-// sector type -> mission type for the typed-mission layer (missions.js). Pure + deterministic.
-// ESCORT/DEFEND are first-class objective sectors; ELITE is a no-objective elite-ace furball.
-function sectorMission(type) {
-  if (type === 'FURBALL') return 'sweep';
-  if (type === 'INTERCEPT') return 'intercept';
-  if (type === 'STRIKE') return 'strike';
-  if (type === 'ESCORT') return 'escort';
-  if (type === 'DEFEND') return 'defend';
-  if (type === 'RECON') return 'recon';
-  if (type === 'STEALTH') return 'stealth';
-  if (type === 'ELITE') return 'none';
-  if (type === 'DEPOT') return 'none';
-  return 'boss';   // FINAL
-}
+// Sector type → typed-mission verb (missions.js); anything else (FINAL) is 'boss'.
+const SECTOR_MISSION = {
+  FURBALL: 'sweep', INTERCEPT: 'intercept', STRIKE: 'strike', ESCORT: 'escort', DEFEND: 'defend',
+  RECON: 'recon', STEALTH: 'stealth', ELITE: 'none', DEPOT: 'none',
+};
+function sectorMission(type) { return SECTOR_MISSION[type] || 'boss'; }
 
-/* CommonJS export for Node tests — inert in the browser. */
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { OPERATIONS, levelPlan, levelBlurbKey, sectorMission };
 }

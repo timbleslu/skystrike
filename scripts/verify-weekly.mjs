@@ -9,11 +9,8 @@ import { launchGame, bootToHangar } from './lib/boot.mjs';
 const { page, port, close } = await launchGame({ viewport: { width: 1280, height: 800 } });
 const pageErrs = [];
 page.on('pageerror', e => pageErrs.push('PAGEERR ' + e.message));
-// drive past the first-run language gate (langSelect → onboard → hangar); the onboarding auto-starts a
-// tutorial sortie, so land back in the hangar (the weekly entry point requires state === 'hangar').
 await bootToHangar(page, { port, gotoWait: 1400, continueWait: 700, returnToHangar: true, returnWait: 400 });
 
-// ===== Phase 1: hangar weekly card renders this week's 2 modifier NAMES (resolved) =====
 const card = await page.evaluate(() => {
   const out = [];
   const ok = (name, cond) => out.push({ name, pass: !!cond });
@@ -32,13 +29,9 @@ const card = await page.evaluate(() => {
 });
 await page.screenshot({ path: 'weekly-check-card.png' });
 
-// ===== Phase 2: launch via the real entry path; both modifiers must take effect in live globals =====
 await page.evaluate(() => {
   if (typeof startWeekly === 'function') startWeekly();
-  if (typeof player !== 'undefined' && player) { player.hp = 1e9; player.invuln = 999; }   // survive the check window regardless of the modifier difficulty
-  // headless rAF is heavily throttled (GPU stalls), so the natural 2.6s wave timer won't fire in a
-  // short wait; call nextWave() directly to spawn wave 1 — the SAME per-wave code path (and stormFront
-  // weather-lock guard) the game loop runs.
+  if (typeof player !== 'undefined' && player) { player.hp = 1e9; player.invuln = 999; }
   if (typeof nextWave === 'function') { try { nextWave(); } catch (e) {} }
 });
 await page.waitForTimeout(500);
@@ -46,8 +39,6 @@ const live = await page.evaluate(() => {
   const out = [];
   const ok = (name, cond) => out.push({ name, pass: !!cond });
   const wk = weeklyThisWeek();
-  // effect predicate per modifier id — matches whatever the CURRENT week's seed picked from the
-  // pack-EXTENDED pool (CF content-factory: base 5 + iron-skies pack; _weeklyAces is a COUNT now)
   const EFFECT = {
     stormFront:  () => typeof weather !== 'undefined' && weather.type === 'storm',
     noFlares:    () => player.maxFlares === 0 && player.flares === 0,
@@ -55,7 +46,7 @@ const live = await page.evaluate(() => {
     doubleAces:  () => player._weeklyAces >= 1,
     heavyWing:   () => player.turnMul > 0 && player.turnMul < 1,
     fogBank:     () => typeof weather !== 'undefined' && weather.type === 'fog',
-    lastFlare:   () => player.maxFlares <= 1 && player.flares <= 1,   // MIN-merge: a harsher co-draw (noFlares) may take it to 0
+    lastFlare:   () => player.maxFlares <= 1 && player.flares <= 1,
     oneShot:     () => player.maxMissiles <= 1 && player.missiles <= 1,
     aceSeason:   () => player._weeklyAces >= 2,
   };
@@ -68,7 +59,6 @@ const live = await page.evaluate(() => {
 
 await close();
 
-// ---- report ----
 const all = [...card.out, ...live.out];
 console.log('WEEK ' + card.weekId + ' — modifiers: ' + card.mods.join(', ') + '  (' + card.names.join(' · ') + ')');
 console.log('live globals: ' + JSON.stringify({ weather: live.weatherType, maxFlares: live.maxFlares, maxMissiles: live.maxMissiles, turnMul: live.turnMul, doubleAces: live.aces }));

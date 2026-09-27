@@ -35,7 +35,6 @@
       <div><span class="lab" id="lblFlares">Flares</span><b id="flares">10</b></div>
       <div><span class="lab" id="lblMsl">Msl</span><b id="missiles">30</b></div>
     </div>
-    <!-- F1 gun-heat gauge, anchored IN the gun/ammo cluster (was a free-floating canvas bar mid-right) -->
     <div id="heatBar" class="heatbar" aria-hidden="true"><span class="lab" id="lblHeat">GUN HEAT</span><div class="heat-track"><i id="heatFill"></i><i class="heat-rearm"></i></div></div>
     <div id="awacsHud" class="awacs-hud" style="display:none">
       <span class="awacs-chip"><span id="awacsLblStrike"></span><b id="awacsUsesStrike">×1</b><i id="awacsCostStrike">30s</i></span>
@@ -51,12 +50,10 @@
 
   <div id="btnPause" onclick="toggleManual()">&#9881; PAUSE &middot; SETTINGS</div>
   
-  <!-- T1 SURVIVAL warnings: big, centred, interrupt everything -->
   <div id="warns-survival">
     <div id="w_pull" class="warn red warn--survival">&#9888; PULL UP &#9888;</div>
     <div id="w_missile" class="warn orange warn--survival">&#9650; MISSILE ALERT &#9650;</div>
   </div>
-  <!-- T2 STATUS warnings: slim chips under the top panels, yield to survival -->
   <div id="warns-status">
     <div id="w_drone" class="warn red warn--status">&#9888; DRONE SWARM &#9888;</div>
     <div id="w_highg" class="warn cyan warn--status">HIGH-G PULL</div>
@@ -71,7 +68,6 @@
     <div class="mcard-blurb" id="missionCardBlurb"></div>
     <div class="mcard-hint" id="missionCardHint"></div>
   </div></div>
-  <!-- campaign overhaul: radio comms (callsign + typewriter line), cinematic title card, outcome stamp -->
   <div id="comms" data-tone="info" aria-live="polite"><div class="cm-head"><span class="cm-dot"></span><span id="commsWho"></span></div><div id="commsText"></div></div>
   <div id="missionIntro" aria-hidden="true"><div class="mi-bar mi-top"></div><div class="mi-bar mi-bot"></div>
     <div class="mi-copy"><div class="mi-op" id="miOp"></div><div class="mi-num" id="miNum"></div><div class="mi-name" id="miName"></div><div class="mi-cond" id="miCond"></div></div></div>
@@ -108,15 +104,8 @@
 <div id="flash" class="overlay"></div>
 <div id="crt" class="overlay"></div>
 
-<!-- GLOBAL persistent Controls & Manual / Settings overlay button. Body-level (NOT inside any screen) so it
-     stays pinned to the viewport top-right across EVERY menu and never scrolls with a scroll container — the old
-     in-#hangar copy was trapped by #hangar's backdrop-filter containing block and scrolled away. Visibility is
-     driven each frame by syncManualBtn() (ui-hangar.js): shown on all menus, hidden in flight/gameover. -->
 <button id="manualBtn" class="ghostbtn manual-cta manual-fixed mb-hide">&#9881; CONTROLS &amp; MANUAL</button>
-<!-- Global version tag: body-level so it pins to the viewport bottom-right (rides scroll) on the language-select
-     screen and every menu; visibility toggled with the gear by syncManualBtn(). -->
 <div id="versionTag" class="version-tag mb-hide">Version 1.9</div>
-<!-- v1.3 flight-to-flight loading curtain: opaque overlay covering the arena swap so no stale mission frame shows -->
 <div id="loadingScreen" class="loading-screen" aria-hidden="true">
   <div class="loading-spinner"></div>
   <div id="loadingLabel" class="loading-label">DEPLOYING</div>
@@ -124,9 +113,7 @@
 
 <div id="hangar">
   <div class="hwrap">
-    <!-- UX pass: compact LEFT-aligned masthead (the right side stays clear for the fixed #manualBtn gear) -->
     <div class="hmast"><h1>SKYSTRIKE<span>ACE PROTOCOL</span></h1></div>
-    <!-- status bar: screen sub + pilot identity (callsign + emblem) + SP/best chips on ONE row -->
     <div class="hbar">
       <p id="hangarSub" class="sub">// SELECT YOUR AIRCRAFT //</p>
       <div id="pilotPanel">
@@ -142,15 +129,12 @@
       </div>
     </div>
 
-    <!-- HERO ZONE (§5c): the chosen aircraft is the centerpiece — desktop: preview | data columns in one card -->
     <div id="carousel">
       <button id="jetPrev" class="navarrow" aria-label="Previous aircraft">&#10094;</button>
       <div id="jetStage"><div id="jetCard" class="card cardbig"></div></div>
       <button id="jetNext" class="navarrow" aria-label="Next aircraft">&#10095;</button>
     </div>
 
-    <!-- CTA bar: jet counter/dots + THE primary action (SELECT <jet> → mode choice). Sticky to the viewport
-         bottom on single-column layouts so the CTA is always one tap away without scrolling. -->
     <div class="hangar-ctabar">
       <div id="jetNav">
         <span id="jetCounter"></span>
@@ -159,7 +143,6 @@
       <button id="launch">SELECT<span id="launchSub" class="btn-sub"></span></button>
     </div>
 
-    <!-- F7: CONTROLS & MANUAL moved out to the body-level global #manualBtn overlay (top of file). -->
     <div class="hbtns hbtns-secondary">
       <button id="metaBtn" class="ghostbtn">&#9650; COMMAND &amp; PROGRESSION</button>
       <button id="dailyBtn" class="ghostbtn">&#9670; DAILY CHALLENGE</button>
@@ -170,7 +153,6 @@
     <div id="weeklyNote" class="controls"><span id="weeklyNoteTxt"></span></div>
     <div id="bossRushNote" class="controls"></div>
 
-    <!-- RIVAL BOARD demoted to a slim flavour strip at the very bottom -->
     <div id="rivalBoard"><div id="rbTitle" class="rb-title">RIVAL KILL BOARD</div><div id="rbList"></div></div>
     <div class="controls">
       <span id="hangarCtl1"></span><br>
@@ -183,8 +165,6 @@
 <div id="gameover">
   <div class="gowrap">
     <div class="go-core ui-dense">
-    <!-- UX pass debrief hierarchy: outcome headline → grade → objectives (Ops) → ONE stats grid → SP → actions.
-         (The old separate PERFORMANCE block repeated kills/accuracy/waves from the stats row — removed.) -->
     <h1>MISSION FAILED</h1>
     <div id="go_pilot" class="gopilot"></div>
     <div id="go_grade" class="gograde"><span class="grade-title" id="goLblGrade">MISSION RATING</span><span class="grade-letter">C</span><span class="grade-bonus">SP BONUS x1.00</span></div>
@@ -243,7 +223,6 @@
   </div>
 </div>
 
-<!-- Pre-launch reflow: SELECT <jet> -> mode-choice -> (Endless -> endless-setup -> START) | (Operation -> operations-select) -->
 <div id="modeChoice">
   <div class="cmp-box">
     <div class="cmp-title" id="modeTitle">SELECT MODE</div>
@@ -295,8 +274,6 @@
   </div>
 </div>
 
-<!-- Operations campaign (campaign overhaul 2026-09): theater board -> dossier -> sortie map -> flight plan -> debriefs.
-     One visual system ("sortie board"): each operation's tactical chart is the hero, cards dock around it. -->
 <div id="opsSelect" class="cw-screen">
   <div class="cw-frame">
     <header class="cw-head"><button id="opsBack" class="cw-back">&#9664; BACK</button><h2 class="cw-title" id="opsTitle">OPERATIONS</h2><div class="cw-head-meta" id="opsMeta"></div></header>
@@ -479,8 +456,6 @@
     </div>
     </div>
     <div class="mtab" data-tab="settings">
-    <!-- ===== SETTINGS PANEL REDESIGN ===== grouped sections, switch toggles, touch-friendly rows.
-         Every control ID/class is preserved — this is information-architecture + restyle only. -->
     <div class="mgrid">
       <section class="mset settings-redesign">
         <h3 id="manH_Settings">Settings</h3>
@@ -613,7 +588,6 @@
         <option value="KO">한국어 🇰🇷</option>
       </select>
     </div>
-    <!-- version readout on the language-select screen; text is synced from #versionTag (single source) in initOnboarding -->
     <p id="langVersion" class="ls-version">Version 1.9</p>
   </div>
 </div>
@@ -622,7 +596,6 @@
   <div class="obwrap">
     <h2 id="obTitle" class="ob-h2">CONTROLS</h2>
     <p id="obSub" class="ob-sub2">// PRE-FLIGHT BRIEF //</p>
-    <!-- §5b: one consolidated card, one primary action, generous negative space -->
     <div class="ob-onecard">
       <div class="ob-grid">
         <div class="ob-card"><h3 id="obFlightH">FLIGHT</h3><p id="obFlightK"></p></div>
@@ -636,7 +609,6 @@
   </div>
 </div>
 
-<!-- first-run guided tutorial (F5): non-blocking HUD overlay; only #tutSkip is interactive -->
 <div id="tutorial">
   <div id="tutArrow"></div>
   <div id="tutCard">

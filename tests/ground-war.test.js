@@ -2,7 +2,6 @@
 const assert = require('assert');
 const { reqSatisfied } = require('../js/core.js');   // real tech-tree prereq predicate — no mirror
 
-// ---- mirrors of js/main.js ground-war pure helpers ----
 function groundSpawnsAllowed(wave, on) { return !!on && wave >= 2; }
 function isStrikeWave(wave, on) { return !!on && wave >= 5 && wave % 5 === 0 && wave % 4 !== 0; }
 
@@ -19,16 +18,15 @@ assert.strictEqual(isStrikeWave(10, false), false, 'toggle off = no strike waves
 
 console.log('ok - ground spawn gating and strike cadence');
 
-// reqSatisfied is imported from js/core.js (top of file) — the REAL impl, not a mirror.
 const byId = {
   core: { id: 'core' },
   agm1: { id: 'agm1', req: 'core', ground: true },
   rkt1: { id: 'rkt1', req: 'agm1', ground: true },
-  xyz:  { id: 'xyz',  req: 'rkt1' },              // hypothetical non-ground node chained on ground
+  xyz:  { id: 'xyz',  req: 'rkt1' },
   a:    { id: 'a',    req: 'core' },
   b:    { id: 'b',    req: 'core' },
-  or:   { id: 'or',   req: ['a', 'b'] },          // OR-gate: either parent unlocks
-  and:  { id: 'and',  reqAll: ['a', 'b'] },       // AND-gate: both parents required
+  or:   { id: 'or',   req: ['a', 'b'] },
+  and:  { id: 'and',  reqAll: ['a', 'b'] },
   mix:  { id: 'mix',  req: ['a'], reqAll: ['b'] },
 };
 const owns = id => id === 'core';
@@ -39,7 +37,6 @@ assert.strictEqual(reqSatisfied(byId.xyz, () => false, byId, false), false, 'byp
 
 console.log('ok - reqSatisfied bypasses hidden ground nodes');
 
-// ---- OR / AND gate semantics ----
 const ownsA = id => id === 'a';
 const ownsAB = id => id === 'a' || id === 'b';
 assert.strictEqual(reqSatisfied(byId.or, ownsA, byId, true), true, 'OR-gate: one parent is enough');

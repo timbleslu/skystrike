@@ -11,7 +11,7 @@
 import { launchGame, bootToHangar } from './lib/boot.mjs';
 
 const KILL_EVERY = 1.2, SIM_CAP = 900, DT = 1 / 30;
-const ONLY = process.argv[2] || null, ONLY_MODE = process.argv[3] || null;   // single-level debug run
+const ONLY = process.argv[2] || null, ONLY_MODE = process.argv[3] || null;
 const { page, port, close } = await launchGame({ viewport: { width: 640, height: 400 } });
 const errs = [];
 page.on('pageerror', e => errs.push('PAGEERR ' + e.message));
@@ -20,8 +20,8 @@ await bootToHangar(page, { port, returnToHangar: true });
 await page.evaluate(() => {
   devUnlockLevels = true; window.__sw0 = startWingman;
   tutorial.active = false; tutorial.done = true;
-  window.animate = function () {};   // stop the rAF loop; the bot steps the sim itself
-  window.__step = function (dt) {    // animate()'s 'playing' branch, minus render
+  window.animate = function () {};
+  window.__step = function (dt) {
     readFlightInput(); updateWeather(dt); if (!(campaignEnd && campaignEnd.frozen)) updatePlayer(dt);
     for (let i = 0; i < enemies.length; i++) { const e = enemies[i]; if (!e.alive) continue; tickEnemyStatus(e, dt); if (e.alive) updateEnemy(e, dt); }
     updateWingmen(dt); updateBullets(dt, 1); updateMissiles(dt, 1); updateFlares(dt); updateDecoys(dt); updateLoot(dt); updateParticles(dt);
@@ -46,7 +46,7 @@ for (const { L, mode, want } of runs) {
     window.campaignLevelComplete = function () { outcome = outcome || 'COMPLETE'; return origComplete.apply(this, arguments); };
     window.campaignLevelFailed = function () { outcome = outcome || 'FAILED'; return origFail.apply(this, arguments); };
     if (state !== 'hangar') returnToHangar();
-    startWingman = mode === 'passive' ? false : __sw0;   // a passive run must not have a wingman doing the defending
+    startWingman = mode === 'passive' ? false : __sw0;
     launchLevel(L.op, L.idx);
     let simT = 0, killCd = 3;
     while (simT < SIM_CAP && !outcome) {

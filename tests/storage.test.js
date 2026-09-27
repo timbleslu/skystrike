@@ -3,7 +3,6 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-// storage.js is the single persistence seam: no other game file may touch localStorage directly
 const jsDir = path.join(__dirname, '..', 'js');
 for (const f of fs.readdirSync(jsDir)) {
   if (!f.endsWith('.js') || f === 'storage.js') continue;

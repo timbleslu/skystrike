@@ -1,22 +1,19 @@
-/* SKYSTRIKE — engine.js: synthesized audio engine, three.js scene/world setup, terrain, shared assets & visual-effect spawners. Loaded after i18n.js. */
 
-/* ---------------- audio engine (fully synthesized) ---------------- */
 // Per-jet engine timbre table: baseAdd shifts the idle pitch, ratio scales the 2nd oscillator,
 // lpAdd opens/closes the filter for brighter vs throatier tones.
-// Jets grouped by character: twin-whine (hi ratio), heavy (lo base), agile (mid/bright).
 const JET_ENG_PARAMS = {
-  'FT-1':   { baseAdd:  0, ratio: 1.50, lpAdd:   0 },   // baseline
-  'F-22':   { baseAdd: -6, ratio: 1.48, lpAdd: -30 },   // deep stealth growl
-  'SU-57':  { baseAdd: 10, ratio: 1.62, lpAdd:  40 },   // twin-whine nacelles
-  'J-20':   { baseAdd:  4, ratio: 1.58, lpAdd:  20 },   // twin-whine canard
-  'F-35':   { baseAdd: -4, ratio: 1.44, lpAdd: -20 },   // single fat engine, duller
-  'EFT':    { baseAdd:  8, ratio: 1.60, lpAdd:  30 },   // Typhoon twin scream
-  'RAFALE': { baseAdd:  6, ratio: 1.56, lpAdd:  20 },   // Rafale snappy
-  'TEJAS':  { baseAdd: -2, ratio: 1.45, lpAdd: -10 },   // light single, quieter
-  'FA18':   { baseAdd:  2, ratio: 1.52, lpAdd:  10 },   // Hornet mid-growl
-  'J-36':   { baseAdd:-10, ratio: 1.40, lpAdd: -50 },   // flying wing, buried exhaust, deep
-  'F-47':   { baseAdd:-12, ratio: 1.38, lpAdd: -60 },   // 6th-gen ultra-deep
-  'J-50':   { baseAdd:  3, ratio: 1.54, lpAdd:  10 },   // lambda wing, slight whine
+  'FT-1':   { baseAdd:  0, ratio: 1.50, lpAdd:   0 },
+  'F-22':   { baseAdd: -6, ratio: 1.48, lpAdd: -30 },
+  'SU-57':  { baseAdd: 10, ratio: 1.62, lpAdd:  40 },
+  'J-20':   { baseAdd:  4, ratio: 1.58, lpAdd:  20 },
+  'F-35':   { baseAdd: -4, ratio: 1.44, lpAdd: -20 },
+  'EFT':    { baseAdd:  8, ratio: 1.60, lpAdd:  30 },
+  'RAFALE': { baseAdd:  6, ratio: 1.56, lpAdd:  20 },
+  'TEJAS':  { baseAdd: -2, ratio: 1.45, lpAdd: -10 },
+  'FA18':   { baseAdd:  2, ratio: 1.52, lpAdd:  10 },
+  'J-36':   { baseAdd:-10, ratio: 1.40, lpAdd: -50 },
+  'F-47':   { baseAdd:-12, ratio: 1.38, lpAdd: -60 },
+  'J-50':   { baseAdd:  3, ratio: 1.54, lpAdd:  10 },
 };
 class AudioEngine {
   constructor() { this.on = false; }
@@ -68,11 +65,9 @@ class AudioEngine {
     this.eO2.frequency.setTargetAtTime(f * p.ratio, t, 0.2);
     this.eLP.frequency.setTargetAtTime(240 + p.lpAdd + thr * 480 + sf * 220, t, 0.2);
   }
-  // Rising sweep (300→1600 Hz, 0.32s) then a held locked tone (1800 Hz, 0.18s) — fires ONCE on lock edge.
   lockTone() {
     if (!this.on) return;
     const ctx = this.ctx, now = ctx.currentTime;
-    // sweep: sine rising 300→1600
     const os = ctx.createOscillator(), gs = ctx.createGain();
     os.type = 'sine'; os.frequency.setValueAtTime(300, now);
     os.frequency.exponentialRampToValueAtTime(1600, now + 0.30);
@@ -80,7 +75,6 @@ class AudioEngine {
     gs.gain.linearRampToValueAtTime(0.13, now + 0.005);
     gs.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
     os.connect(gs); gs.connect(this.master); os.start(now); os.stop(now + 0.35);
-    // locked tone: steady 1800 Hz sine, short attack/release
     const ol = ctx.createOscillator(), gl = ctx.createGain();
     ol.type = 'sine'; ol.frequency.value = 1800;
     gl.gain.setValueAtTime(0.0001, now + 0.28);
@@ -88,13 +82,10 @@ class AudioEngine {
     gl.gain.exponentialRampToValueAtTime(0.0001, now + 0.46);
     ol.connect(gl); gl.connect(this.master); ol.start(now + 0.28); ol.stop(now + 0.50);
   }
-  // Crunch burst (filtered noise) + descending engine fade (saw 160→30 Hz) — fires on player kill.
   killSfx() {
     if (!this.on) return;
     const ctx = this.ctx, now = ctx.currentTime;
-    // crunch: bandpass noise burst (harsh metallic)
     this.burst(0.18, 0.28, 'bandpass', 1800, 400);
-    // descending engine fade: sawtooth 160→30 Hz
     const od = ctx.createOscillator(), gd = ctx.createGain();
     od.type = 'sawtooth'; od.frequency.setValueAtTime(160, now);
     od.frequency.exponentialRampToValueAtTime(30, now + 0.45);
@@ -132,55 +123,41 @@ class AudioEngine {
   ui()       { this.blip(560, 0.05, 'square', 0.09, 880); }
   flare()    { this.burst(0.3, 0.18, 'highpass', 900, 2200); }
   power()    { this.blip(280, 0.35, 'sawtooth', 0.16, 920); }
-  ping()     { this.blip(1046, 0.09, 'sine', 0.12, 1568); }   // F1: short rising chime — waypoint checkoff one-shot
-  radio()    { this.burst(0.07, 0.07, 'bandpass', 2600, 1700); this.blip(1320, 0.05, 'square', 0.035, 1050); }   // campaign comms: squelch-break click as a transmission opens
-  stamp(win) { if (win) { this.blip(392, 0.22, 'triangle', 0.14, 392); this.blip(523, 0.5, 'triangle', 0.12, 523); } else { this.blip(220, 0.5, 'sawtooth', 0.10, 110); } }   // outro stamp sting
+  ping()     { this.blip(1046, 0.09, 'sine', 0.12, 1568); }
+  radio()    { this.burst(0.07, 0.07, 'bandpass', 2600, 1700); this.blip(1320, 0.05, 'square', 0.035, 1050); }
+  stamp(win) { if (win) { this.blip(392, 0.22, 'triangle', 0.14, 392); this.blip(523, 0.5, 'triangle', 0.12, 523); } else { this.blip(220, 0.5, 'sawtooth', 0.10, 110); } }
   hurt()     { this.burst(0.25, 0.3, 'lowpass', 700, 120); }
 
-  /* ---- weather audio (storm rain bed + thunder). All nodes feed this.master, so the master
-     gain (muted ? 0 : volume) and live setMaster() volume/mute changes apply automatically. ---- */
-  // Lazily build ONE persistent looping rain voice: white noise → lowpass → bandpass → rainGain.
-  // A slow LFO sways the lowpass cutoff so the bed gently breathes instead of reading as flat static.
   // Built once and kept alive (an ambience like the engine voice) — gated by gain in setRain(), never
   // re-created, so it can't leak voices over a long session.
   _ensureRainBed() {
     if (!this.on || this.rainGain) return;
     const ctx = this.ctx;
-    this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;   // silent until setRain(true)
-    const n = this.noise();                                          // looping 2s noise buffer source
+    this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
+    const n = this.noise();
     const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';  lp.frequency.value = 1400; lp.Q.value = 0.4;
     const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 0.5;
-    // LFO: ±320 Hz sway on the lowpass cutoff, ~0.13 Hz (≈7.5s period) — slow weather "gusts".
     const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.13;
     const lfoGain = ctx.createGain(); lfoGain.gain.value = 320;
     lfo.connect(lfoGain); lfoGain.connect(lp.frequency); lfo.start();
     n.connect(lp); lp.connect(bp); bp.connect(this.rainGain); this.rainGain.connect(this.master);
   }
-  // Duck the rain bed on/off. active=true builds the bed (first storm frame) + ramps it up; false
-  // ramps to silence. setTargetAtTime gives a smooth ~0.5s fade so storm enter/exit isn't a hard cut.
   setRain(active) {
-    if (!this.on || active === this._rainOn) return;   // called every frame from tickWeather — only act on edges
+    if (!this.on || active === this._rainOn) return;
     this._rainOn = active;
     if (active) this._ensureRainBed();
     if (!this.rainGain) return;
     const t = this.ctx.currentTime;
     this.rainGain.gain.setTargetAtTime(active ? 0.06 : 0, t, 0.5);
   }
-  // Per-frame gate for the rain bed: audible ONLY while actively flying a storm. Paused, menus
-  // (state !== 'playing'), and non-storm weather all duck it to silence. muted/volume are handled
-  // upstream by master, so this only owns the storm/pause/menu condition. Called from updateWeather.
   tickWeather() {
     if (!this.on) return;
     this.setRain(weather.type === 'storm' && state === 'playing' && !paused);
   }
-  // One-shot thunder on a lightning flash. intensity in [0..1] scales loudness + crack sharpness.
-  // Two voices: a low rumble (lowpass noise + a sub-bass sine drop) and, after a short intensity-
-  // shortened delay (closer strike = sooner + sharper), a brighter crack burst. All nodes self-stop.
   thunder(intensity) {
     if (!this.on) return;
     const ctx = this.ctx, now = ctx.currentTime;
     const k = Math.max(0, Math.min(1, intensity || 0));
-    // --- low rumble: filtered noise rolling off over ~1.4s ---
     const rs = this.noise(), rg = ctx.createGain(), rf = ctx.createBiquadFilter();
     rf.type = 'lowpass'; rf.frequency.setValueAtTime(420, now);
     rf.frequency.exponentialRampToValueAtTime(90, now + 1.3);
@@ -189,7 +166,6 @@ class AudioEngine {
     rg.gain.exponentialRampToValueAtTime(0.0001, now + 1.4);
     rs.connect(rf); rf.connect(rg); rg.connect(this.master);
     setTimeout(() => { try { rs.stop(); } catch (e) {} }, 1500);
-    // --- sub-bass body: sine dropping 70→30 Hz under the rumble ---
     const ob = ctx.createOscillator(), gb = ctx.createGain();
     ob.type = 'sine'; ob.frequency.setValueAtTime(70, now);
     ob.frequency.exponentialRampToValueAtTime(30, now + 0.9);
@@ -197,12 +173,11 @@ class AudioEngine {
     gb.gain.linearRampToValueAtTime(0.10 + 0.18 * k, now + 0.04);
     gb.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
     ob.connect(gb); gb.connect(this.master); ob.start(now); ob.stop(now + 1.05);
-    // --- crack: brighter, shorter noise burst, delayed (far strike = later/duller, near = sooner/sharper) ---
-    const delay = 0.12 + (1 - k) * 0.5;            // 0.12s (near) … 0.62s (far)
+    const delay = 0.12 + (1 - k) * 0.5;
     const cStart = now + delay;
     const cs = this.noise(), cg = ctx.createGain(), cf = ctx.createBiquadFilter();
     cf.type = 'bandpass'; cf.Q.value = 0.7;
-    cf.frequency.setValueAtTime(1200 + 2200 * k, cStart);   // sharper (higher) when intense
+    cf.frequency.setValueAtTime(1200 + 2200 * k, cStart);
     cf.frequency.exponentialRampToValueAtTime(400, cStart + 0.35);
     cg.gain.setValueAtTime(0.0001, cStart);
     cg.gain.linearRampToValueAtTime(0.06 + 0.26 * k, cStart + 0.006);
@@ -213,12 +188,9 @@ class AudioEngine {
 }
 const audio = new AudioEngine();
 
-/* ---------------- terrain ---------------- */
-function terrainH(x, z) { return terrainHeight(x, z); }   // pure noise heightfield lives in core.js
+function terrainH(x, z) { return terrainHeight(x, z); }
 
-/* ---------------- scene setup ---------------- */
 function initThree() {
-  // filmic pipeline: managed colors, sRGB output, ACES tone mapping, physically-scaled lights
   THREE.ColorManagement.enabled = true;
 
   scene = new THREE.Scene();
@@ -241,14 +213,13 @@ function initThree() {
   hemiLight = new THREE.HemisphereLight(0x9fc0ff, 0x21303f, 0.65); scene.add(hemiLight);
   sun = new THREE.DirectionalLight(0xfff0d6, 1.2);
   sun.position.set(0.5, 1.0, 0.35).multiplyScalar(2000); scene.add(sun);
-  // one tight shadow frustum that updateSunRig keeps centred on the player
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.left = sun.shadow.camera.bottom = -650;
   sun.shadow.camera.right = sun.shadow.camera.top = 650;
   sun.shadow.camera.near = 50; sun.shadow.camera.far = 6000;
   sun.shadow.bias = -0.0001; sun.shadow.normalBias = 2.5;
-  refreshGfxTier(); applyGfxQuality();   // F11: pick render tier + size the shadow map for it (low = cheaper shadows)
+  refreshGfxTier(); applyGfxQuality();
   scene.add(sun.target);
   const rim = new THREE.DirectionalLight(0x77a8ff, 0.55);
   rim.position.set(-0.5, 0.35, -0.9).multiplyScalar(2000); scene.add(rim); rimLight = rim;
@@ -258,7 +229,7 @@ function initThree() {
   applyTimeOfDay(timeOfDay);
 
   makePlatform();
-  buildGroundObjects();   // Track B: tier-gated InstancedMesh ground scatter (Low → no-op)
+  buildGroundObjects();
 
   const hc = document.getElementById('h2d');
   h2d = hc.getContext('2d'); hc.width = W; hc.height = H;
@@ -276,12 +247,6 @@ function onResize() {
   if(isTouchEnabled) initTouchControls();
 }
 
-/* ---------------- HDR bloom post-process (High tier) ----------------
-   High renders the scene into a 4×MSAA half-float target (three skips tone mapping for render targets, so
-   the buffer holds LINEAR HDR — explosions, afterburners, tracers, sun glint and the sun itself go past
-   1.0). A soft-knee bright pass feeds a 5-level separable-Gaussian mip chain; the composite adds the
-   blurred glow back and ONLY THEN applies ACES + sRGB (the tonemapping/colorspace chunks), so the grade is
-   identical to the direct path. Low/Medium (and WebGL1) skip all of this and render straight to screen. */
 let postFX = null;
 const BLOOM = { threshold: 0.92, knee: 0.45, strength: 0.62, levels: 5 };
 function makePostPass(frag, uniforms) {
@@ -304,7 +269,6 @@ function buildPostFX() {
     '  float soft = clamp(br - threshold + knee, 0.0, 2.0 * knee); soft = soft * soft / (4.0 * knee + 1e-4);',
     '  gl_FragColor = vec4(c * max(soft, br - threshold) / max(br, 1e-4), 1.0);',
     '}'].join('\n'), { src: { value: null }, threshold: { value: BLOOM.threshold }, knee: { value: BLOOM.knee } });
-  // 9-tap Gaussian done as 5 bilinear fetches along `dir` (texel-scaled)
   P.blur = makePostPass([
     'uniform sampler2D src; uniform vec2 dir; varying vec2 vUv;',
     'void main(){',
@@ -338,7 +302,7 @@ function sizePostFX() {
   const w = Math.max(1, _pfxSize.x), h = Math.max(1, _pfxSize.y);
   postFX.rt.setSize(w, h);
   for (let i = 0; i < BLOOM.levels; i++) {
-    const d = 2 << i;   // 1/2 … 1/32 resolution
+    const d = 2 << i;
     postFX.mips[i].setSize(Math.max(1, Math.round(w / d)), Math.max(1, Math.round(h / d)));
     postFX.tmps[i].setSize(Math.max(1, Math.round(w / d)), Math.max(1, Math.round(h / d)));
   }
@@ -365,18 +329,13 @@ function renderFrame() {
   postPass(P.bright, P.mips[0]);
   for (let i = 0; i < BLOOM.levels; i++) {
     const m = P.mips[i], tmp = P.tmps[i];
-    if (i > 0) { P.blur.uniforms.src.value = P.mips[i - 1].texture; P.blur.uniforms.dir.value.set(0, 0); postPass(P.blur, m); }   // downsample
+    if (i > 0) { P.blur.uniforms.src.value = P.mips[i - 1].texture; P.blur.uniforms.dir.value.set(0, 0); postPass(P.blur, m); }
     P.blur.uniforms.src.value = m.texture; P.blur.uniforms.dir.value.set(1 / m.width, 0); postPass(P.blur, tmp);
     P.blur.uniforms.src.value = tmp.texture; P.blur.uniforms.dir.value.set(0, 1 / m.height); postPass(P.blur, m);
   }
   postPass(P.composite, null);
 }
 
-// F11 mobile perf — apply the resolved gfxTier to the sun shadow (resolution + frustum depth). VISUAL-ONLY:
-// no light direction, scene contents, or gameplay change — just a cheaper shadow pass on lower tiers. Idempotent
-// (safe to call on every settings change). Disposing the existing shadow.map forces Three to reallocate it at the
-// new mapSize on the next render; the far plane shrink also tightens depth precision for the closer mid-range view.
-// Track B §6.1: 3-branch lookup — shadow map low 1024 / med 2048 / high 2048; far low 3000 / med 4500 / high 6000.
 const GFX_SHADOW = {
   low:    { map: 1024, far: 3000 },
   medium: { map: 2048, far: 4500 },
@@ -389,21 +348,15 @@ function applyGfxQuality() {
   if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }   // force realloc at the new resolution
   sun.shadow.camera.far = s.far;
   sun.shadow.camera.updateProjectionMatrix();
-  applyEnvTier();   // drive the rest of the per-tier environment (terrain detail, sea variant, ground objects, fog baseline)
+  applyEnvTier();
 }
 
-// Track B — the per-tier ENVIRONMENT orchestrator. Idempotent; safe to call repeatedly (boot + every
-// settings change). Rebuilds the terrain visual displacement, swaps the sea shader to the tier variant,
-// (re)builds/tears down ground objects, and re-applies the weather so the fog tier baseline updates. A
-// tier change mid-session may show a one-frame hitch during rebuild (acceptable, matches the shadow-map
-// realloc hitch). Guarded so it's a no-op until the scene exists (initThree calls applyGfxQuality before
-// the meshes are built — buildTerrain/buildScenery handle the first build with the live tier themselves).
 function applyEnvTier() {
   if (!scene || !terrainMesh || !seaMesh) return;   // first boot: meshes not built yet (no-op; built tier-aware)
   retuneTerrain();
   retuneSea();
   buildGroundObjects();
-  applyWeather(weather.type);   // refresh fog tier baseline
+  applyWeather(weather.type);
 }
 
 function buildSky() {
@@ -422,12 +375,9 @@ function buildSky() {
       '  vec3 d = normalize(vP);',
       '  float h = d.y;',
       '  vec3 c = h>0.0 ? mix(hor,top,pow(h,0.55)) : mix(hor,bot,pow(-h,0.7));',
-      // atmospheric scatter: tight warm glow at the sun + a broad sky-wide tint
       '  float s = max(dot(d, sunDir), 0.0);',
       '  c += sunCol * (pow(s, 20.0) * 0.5 + pow(s, 3.0) * 0.16) * scatter;',
-      // dense haze band hugging the horizon
       '  c += hor * pow(1.0 - abs(h), 6.0) * 0.18;',
-      // blue-noise-ish dither so the smooth gradient never bands
       '  c += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 160.0;',
       '  gl_FragColor = vec4(c, 1.0);',
       '  #include <tonemapping_fragment>',
@@ -443,9 +393,7 @@ function buildSky() {
 
 let terrainMesh;
 const TERRAIN_SIZE = 26000;
-let arenaBiome = 'temperate';   // BIOMES id the terrain/sea/scatter are currently painted for
-// Which biome this arena should wear: the flying operation's authored biome, else temperate (Endless,
-// Daily, Weekly, Boss Rush, hangar).
+let arenaBiome = 'temperate';
 function arenaBiomeId() {
   if (campaignMode && campaignOpId) {
     const op = OPERATIONS.find(o => o.id === campaignOpId);
@@ -453,14 +401,12 @@ function arenaBiomeId() {
   }
   return 'temperate';
 }
-// Repaint terrain + sea for the arena's biome if it changed. Cheap no-op otherwise. Called from
-// buildGroundObjects (every arena build path runs through it) so scatter, ground and water always agree.
 function syncArenaBiome() {
   const id = arenaBiomeId();
   if (id === arenaBiome) return;
   arenaBiome = id;
   if (terrainMesh) paintTerrain(terrainMesh.geometry, biomeFor(id));
-  if (seaMat) applyTimeOfDay(timeOfDay);   // re-pushes the biome-tinted sea colours
+  if (seaMat) applyTimeOfDay(timeOfDay);
 }
 // Build the displaced+coloured terrain geometry for a tier cfg (Track B §2). terrainH is the SOLE
 // gameplay/shadow base and is NEVER scaled per tier; cfg.detailAmp adds a tier-only VISUAL displacement
@@ -476,10 +422,8 @@ function buildTerrainGeo(cfg) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const baseH = terrainH(x, z);
-    const h = baseH + (detail ? terrainDetailH(x, z, cfg) : 0);   // visual relief layered on the gameplay base
+    const h = baseH + (detail ? terrainDetailH(x, z, cfg) : 0);
     pos.setY(i, h);
-    // analytic normal via central differences — include the detail gradient on Med/High so lighting
-    // matches the visible relief (4 extra terrainDetailH samples per vertex, one-time build cost).
     let dhx, dhz;
     if (detail) {
       dhx = (terrainH(x + E, z) + terrainDetailH(x + E, z, cfg) - terrainH(x - E, z) - terrainDetailH(x - E, z, cfg)) / (2 * E);
@@ -495,9 +439,6 @@ function buildTerrainGeo(cfg) {
   paintTerrain(geo, biomeFor(arenaBiome));
   return geo;
 }
-/* Per-vertex biome colouring — the broad height bands (low→mid→high). Visual only; rerun on a biome
-   change without rebuilding positions. Beaches, bare rock and snow are resolved PER PIXEL in the terrain
-   shader (terrainU) so their edges stay crisp instead of zig-zagging along the ~65-unit vertex grid. */
 const _tc = { low: new THREE.Color(), mid: new THREE.Color(), high: new THREE.Color() };
 const terrainU = { sandCol: { value: new THREE.Color() }, rockCol: { value: new THREE.Color() }, snowCol: { value: new THREE.Color() }, snowLine: { value: 99999 } };
 function paintTerrain(geo, B) {
@@ -511,7 +452,7 @@ function paintTerrain(geo, B) {
   const ss = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i), h = pos.getY(i);
-    const n1 = valueNoise2(x * 0.004 + 1.3, z * 0.004 - 2.9);   // band patchiness
+    const n1 = valueNoise2(x * 0.004 + 1.3, z * 0.004 - 2.9);
     c.copy(_tc.low).lerp(_tc.mid, ss(30, 330, h + n1 * 70));
     c.lerp(_tc.high, ss(330, 640, h + n1 * 90));
     const j = 1 + n1 * 0.06;
@@ -519,15 +460,12 @@ function paintTerrain(geo, B) {
   }
   col.needsUpdate = true;
 }
-let terrainTierBuilt = null;   // which tier the live terrain geometry was built for (idempotency guard)
+let terrainTierBuilt = null;
 function terrainCfg() { return TERRAIN_TIER[gfxTier] || TERRAIN_TIER.low; }
 function buildTerrain() {
-  // smooth-shaded indexed grid: analytic normals from the terrainH gradient,
-  // per-vertex height/slope colouring, shader-level fbm albedo detail
   const geo = buildTerrainGeo(terrainCfg());
   terrainTierBuilt = gfxTier;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.95 });
-  // two-scale world-space noise breaks up the per-vertex colour bands into ground texture
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, terrainU);   // shared uniform objects → biome swaps need no recompile
     sh.vertexShader = sh.vertexShader
@@ -547,9 +485,9 @@ function buildTerrain() {
         '#include <color_fragment>',
         '{',
         '  float camD   = length(cameraPosition - vWPos);',
-        '  float macro  = tfbm(vWPos.xz * 0.0014);',   // broad vegetation/soil patches
-        '  float detail = tfbm(vWPos.xz * 0.035);',    // mid-scale ground breakup
-        '  float micro  = tnoise(vWPos.xz * 0.3) * (1.0 - smoothstep(300.0, 1500.0, camD));',   // fine grain up close only (no far shimmer)
+        '  float macro  = tfbm(vWPos.xz * 0.0014);',
+        '  float detail = tfbm(vWPos.xz * 0.035);',
+        '  float micro  = tnoise(vWPos.xz * 0.3) * (1.0 - smoothstep(300.0, 1500.0, camD));',
         '  float edgeN  = tfbm(vWPos.xz * 0.012) - 0.5;',
         '  float slope  = 1.0 - normalize(vWNrm).y;',
         '  diffuseColor.rgb = mix(diffuseColor.rgb, rockCol * (0.85 + detail * 0.3), smoothstep(0.10, 0.30, slope + edgeN * 0.08) * 0.85);',
@@ -564,12 +502,9 @@ function buildTerrain() {
   };
   terrainMesh = new THREE.Mesh(geo, mat);
   terrainMesh.receiveShadow = true;
-  terrainMesh.castShadow = true;   // ridgelines throw real shadows into the valleys
+  terrainMesh.castShadow = true;
   scene.add(terrainMesh);
 }
-// Track B — rebuild the terrain geometry for the current tier (SEG + visual detail). Idempotent: no-op
-// if the live geometry already matches gfxTier. Keeps the same mesh + material (only the geometry swaps),
-// disposing the replaced geometry. Called from applyEnvTier on tier change.
 function retuneTerrain() {
   if (!terrainMesh) return;
   if (terrainTierBuilt === gfxTier) return;
@@ -579,7 +514,6 @@ function retuneTerrain() {
   terrainTierBuilt = gfxTier;
 }
 
-/* fbm-eroded puff texture — soft radial falloff with noisy edges, baked once */
 let CLOUDTEX = null;
 function cloudPuffTex() {
   if (CLOUDTEX) return CLOUDTEX;
@@ -607,9 +541,6 @@ function cloudPuffTex() {
   return CLOUDTEX;
 }
 
-/* volumetric-style cloud banks: clusters of softly-lit billboard puffs.
-   Top puffs tint toward the sun, bottoms toward the fog (retintClouds, per TOD).
-   updateClouds drifts the banks with the wind and slowly churns each puff. */
 function buildClouds() {
   const tex = cloudPuffTex();
   for (let i = 0; i < 30; i++) {
@@ -625,7 +556,7 @@ function buildClouds() {
       const s = rand(0.9, 1.7) * base;
       sp.scale.set(s * rand(1.1, 1.5), s * rand(0.55, 0.75), 1);
       sp.renderOrder = 2;
-      sp.userData.shade = clamp(sp.position.y / base + 0.5, 0, 1);   // 0 = belly, 1 = sunlit crown
+      sp.userData.shade = clamp(sp.position.y / base + 0.5, 0, 1);
       sp.userData.spin = rand(-0.02, 0.02);
       g.add(sp);
     }
@@ -634,7 +565,6 @@ function buildClouds() {
     scene.add(g); clouds.push(g);
   }
 }
-/* re-light every puff for the active time of day (called from applyTimeOfDay) */
 function retintClouds(T) {
   const lit = new THREE.Color(0xffffff).lerp(new THREE.Color(T.disc), 0.3).multiplyScalar(1 - T.stars * 0.55);
   const shade = new THREE.Color(T.fog).lerp(lit, 0.38);
@@ -647,7 +577,6 @@ function retintClouds(T) {
     }
   }
 }
-/* slow wind drift (wrapping across the map) + per-puff churn */
 function updateClouds(dt) {
   for (let i = 0; i < clouds.length; i++) {
     const g = clouds[i];
@@ -663,11 +592,7 @@ function inCloud(pos) {
 }
 
 let seaMesh, seaMat, seaTierBuilt = null;
-const SEA_SIZE = 70000, SEA_LEVEL_Y = -10;   // sea plane size + its world Y (foam mask references this)
-// Coastline mask, built ONCE from the gameplay heightfield over the terrain extent (outside it is open
-// ocean): G = shallow shelf depth (0 at -170 → 1 at/above the shore), R = land nearby. G's gradient tints water
-// turquoise over sandbanks, and its top isoline (depth ≲ 8) is the surf line (foam, High only) — deriving
-// foam from the gradient keeps the surf crisp even though a texel spans ~50 units. Sampled in the sea fragment shader, no per-frame
+const SEA_SIZE = 70000, SEA_LEVEL_Y = -10;
 // CPU. Cached + userData.shared so disposeGroup and tier swaps never free it.
 let FOAMMASK = null;
 function foamMaskTex() {
@@ -678,13 +603,11 @@ function foamMaskTex() {
   const land = new Float32Array(S * S), tmp = new Float32Array(S * S), B = 2;
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
     const wx = (i / (S - 1) - 0.5) * TERRAIN_SIZE, wz = (j / (S - 1) - 0.5) * TERRAIN_SIZE;
-    const h = terrainH(wx, wz) - SEA_LEVEL_Y;   // height relative to the sea surface
+    const h = terrainH(wx, wz) - SEA_LEVEL_Y;
     const sh = h >= 0 ? 1 : clamp(1 + h / 170, 0, 1);
     img.data[(j * S + i) * 4 + 1] = sh * 255;
     land[j * S + i] = h >= 0 ? 1 : 0;
   }
-  // R = land within ~2 texels / ~100 units (separable box blur). Gates the surf line to real shores, so the edges of
-  // submerged sandbanks far out at sea don't draw floating foam.
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) { let a = 0; for (let d = -B; d <= B; d++) a += land[j * S + clamp(i + d, 0, S - 1)]; tmp[j * S + i] = a; }
   for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
     let a = 0; for (let d = -B; d <= B; d++) a += tmp[clamp(j + d, 0, S - 1) * S + i];
@@ -697,18 +620,11 @@ function foamMaskTex() {
   FOAMMASK.userData.shared = true;
   return FOAMMASK;
 }
-// Swell components shared by the vertex displacement and the per-pixel normal: [kx, kz, amp, speed].
 const SEA_WAVES = [
-  [0.0015, 0, 4.2, 0.8], [0, 0.0021, 3.2, -0.6], [0.0034, 0.0034, 1.9, 1.4],   // base (all tiers)
-  [0.0026, -0.0026, 1.4, 1.0],                                               // +1 cross-wave (medium)
-  [0.0052, 0, 0.8, -1.7], [0, 0.0061, 0.7, 1.9],                              // +2 (high)
+  [0.0015, 0, 4.2, 0.8], [0, 0.0021, 3.2, -0.6], [0.0034, 0.0034, 1.9, 1.4],
+  [0.0026, -0.0026, 1.4, 1.0],
+  [0.0052, 0, 0.8, -1.7], [0, 0.0061, 0.7, 1.9],
 ];
-// Build the sea ShaderMaterial for a tier cfg. Feature richness is baked into the GLSL at build time (one
-// program per tier, still ONE draw call). Medium/High shade from an ANALYTIC per-pixel swell gradient +
-// ripple octaves (the old interpolated vertex normals across ~270-unit quads faceted the sun glint into
-// blocks); Low keeps the vertex normal. Water = fresnel blend of the depth-tinted body colour and the sky
-// it reflects (horizon→zenith by the reflected ray), plus a sharp HDR sun glint that feeds the bloom.
-// Uses the scene fog (FogExp2 chunks) so the sea fades exactly like the terrain in every weather.
 // The fragment MUST end with #include <tonemapping_fragment> then #include <colorspace_fragment>.
 function buildSeaMat(cfg) {
   const waveOct = cfg.waveOct, normOct = cfg.normOct, foam = cfg.foam, reflect = cfg.reflect;
@@ -726,7 +642,7 @@ function buildSeaMat(cfg) {
     'vec2 waveGrad(vec2 p){ return ' + gTerms + '; }',
     'void main(){',
     '  vec3 p = position;',
-    '  vec2 muv = p.xz / maskSize + 0.5;',   // swell dies down over the shelves so it never floods low beaches
+    '  vec2 muv = p.xz / maskSize + 0.5;',
     vtf ? '  float sh = (muv.x > 0.0 && muv.x < 1.0 && muv.y > 0.0 && muv.y < 1.0) ? texture2D(coastMask, muv).g : 0.0;'
         : '  float sh = 0.0;',   // no vertex texture units (rare old WebGL1) → undamped swell
     '  float damp = 1.0 - 0.85 * sh * sh;',
@@ -748,7 +664,7 @@ function buildSeaMat(cfg) {
     'void main(){',
     '  vec3 V = normalize(cameraPosition - vPos);',
     '  float dist = length(cameraPosition - vPos);',
-    '  float near = 1.0 - smoothstep(250.0, 2600.0, dist);',   // ripples + glint sharpness fade out before they alias
+    '  float near = 1.0 - smoothstep(250.0, 2600.0, dist);',
     '  vec2 muv = vPos.xz / maskSize + 0.5;',
     '  vec4 mk = (muv.x > 0.0 && muv.x < 1.0 && muv.y > 0.0 && muv.y < 1.0) ? texture2D(coastMask, muv) : vec4(0.0);',
     perPixel ? '  vec2 g = waveGrad(vPos.xz) * 11.0 * (1.0 - 0.85 * mk.g * mk.g); vec3 N = vec3(-g.x, 1.0, -g.y);' : '  vec3 N = vNrm;',
@@ -760,14 +676,14 @@ function buildSeaMat(cfg) {
     '  vec3 R = reflect(-V, N);',
     '  vec3 sky = mix(horCol, skyTop, pow(clamp(R.y, 0.0, 1.0), 0.6));',
     '  float shelf = mk.g * mk.g;',
-    '  vec3 body = mix(deepCol, shallowCol, shelf * (0.35 + 0.65 * cosT));',   // shallows show through when looking down
+    '  vec3 body = mix(deepCol, shallowCol, shelf * (0.35 + 0.65 * cosT));',
     '  vec3 col = mix(body, sky, fres * ' + (reflect ? '0.95' : '0.8') + ');',
     '  float rv = max(dot(R, sunDir), 0.0);',
     '  float sharp = mix(90.0, ' + (reflect ? '700.0' : '400.0') + ', near);',
     '  col += sunCol * (pow(rv, sharp) * mix(1.2, ' + (reflect ? '7.0' : '4.0') + ', near) + pow(rv, 48.0) * 0.22) * smoothstep(-0.05, 0.12, sunDir.y);',
     (foam ? '  float surf = smoothstep(0.962, 0.988, mk.g) * (1.0 - smoothstep(0.994, 1.0, mk.g)) * smoothstep(0.15, 0.6, mk.r);' : ''),
     (foam ? '  float foamA = surf * (0.5 + 0.5*sin(time*1.7 + vPos.x*0.03 + vPos.z*0.021)) * (0.6 + 0.4*sin(vPos.x*0.11 - vPos.z*0.07));' : ''),
-    (foam ? '  col = mix(col, mix(horCol * 1.4, vec3(0.9, 0.94, 0.96), smoothstep(-0.05, 0.3, sunDir.y)), clamp(foamA, 0.0, 0.8));' : ''),   // foam dims with the light at dusk/night
+    (foam ? '  col = mix(col, mix(horCol * 1.4, vec3(0.9, 0.94, 0.96), smoothstep(-0.05, 0.3, sunDir.y)), clamp(foamA, 0.0, 0.8));' : ''),
     '  gl_FragColor = vec4(col, 1.0);',
     '  #include <fog_fragment>',
     '  #include <tonemapping_fragment>',
@@ -790,7 +706,6 @@ function buildSeaMat(cfg) {
 function seaCfg() { return SEA_TIER[gfxTier] || SEA_TIER.low; }
 function seaGeoFor(cfg) { const g = new THREE.PlaneGeometry(SEA_SIZE, SEA_SIZE, cfg.seg, cfg.seg); g.rotateX(-Math.PI / 2); return g; }
 function buildScenery() {
-  // animated open water: GPU swell + fresnel + sun glint, fading into the fog with distance
   const cfg = seaCfg();
   seaMat = buildSeaMat(cfg);
   seaTierBuilt = gfxTier;
@@ -808,10 +723,6 @@ function buildScenery() {
   const halo2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffe6a0, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.32, depthWrite: false, depthTest: false }));
   halo2.scale.setScalar(9000); halo2.position.copy(halo.position); scene.add(halo2); haloB = halo2;
 }
-// Track B — rebuild the sea geometry + shader for the current tier (SEG + wave/normal/reflect/foam
-// features). Idempotent: no-op if already built for gfxTier. Disposes the replaced (non-shared) geo +
-// material; the foam-mask texture is userData.shared so it survives. Re-applies TOD so the fresh material
-// picks up the live sun/fog uniforms. Called from applyEnvTier on tier change.
 function retuneSea() {
   if (!seaMesh) return;
   if (seaTierBuilt === gfxTier) return;
@@ -821,9 +732,9 @@ function retuneSea() {
   seaMesh.geometry = seaGeoFor(cfg);
   seaMesh.material = seaMat;
   if (oldGeo && oldGeo.dispose) oldGeo.dispose();
-  if (oldMat && oldMat.dispose) oldMat.dispose();   // replaced program (foam mask is shared, spared)
+  if (oldMat && oldMat.dispose) oldMat.dispose();
   seaTierBuilt = gfxTier;
-  applyTimeOfDay(timeOfDay);   // re-push live sun/fog/TOD uniforms onto the fresh material
+  applyTimeOfDay(timeOfDay);
 }
 function applyTimeOfDay(tod) {
   timeOfDay = clamp(tod, 0, 2);
@@ -832,7 +743,7 @@ function applyTimeOfDay(tod) {
     skyMat.uniforms.top.value.setHex(T.top); skyMat.uniforms.hor.value.setHex(T.hor); skyMat.uniforms.bot.value.setHex(T.bot);
     skyMat.uniforms.sunDir.value.set(0.5, T.sunY, 0.35).normalize();
     skyMat.uniforms.sunCol.value.setHex(T.disc);
-    skyMat.uniforms.scatter.value = 1.15 - T.stars * 0.8;   // strong by day/dusk, faint under stars
+    skyMat.uniforms.scatter.value = 1.15 - T.stars * 0.8;
   }
   if (seaMat) {
     const B = biomeFor(arenaBiome);
@@ -840,7 +751,6 @@ function applyTimeOfDay(tod) {
     seaMat.uniforms.sunCol.value.setHex(T.disc);
     seaMat.uniforms.horCol.value.setHex(T.hor);
     seaMat.uniforms.skyTop.value.setHex(T.top);
-    // water body = biome sea colour dimmed by the time of day's light level
     seaMat.uniforms.deepCol.value.setHex(B.sea).multiplyScalar(T.seaK);
     seaMat.uniforms.shallowCol.value.setHex(B.shallow).multiplyScalar(T.seaK);
   }
@@ -855,15 +765,10 @@ function applyTimeOfDay(tod) {
   const f = 1 - T.stars * 0.8;
   if (haloA) { haloA.position.copy(sun.position).setLength(17000); haloA.material.opacity = 0.6 * f; }
   if (haloB) { haloB.position.copy(sun.position).setLength(17000); haloB.material.opacity = 0.32 * f; }
-  applyWeather(weather.type);   // re-apply the weather overlay on the new TOD baseline (also refreshes the night radar factor)
-  buildEnvMap();                // env captures the (possibly storm-dimmed) sky
+  applyWeather(weather.type);
+  buildEnvMap();
 }
 
-/* Apply a weather condition: copy its modifiers into `weather` (folding the night radar factor
-   via resolveWeather) and drive the visuals through the existing TOD/fog/cloud pipeline. Sibling
-   of applyTimeOfDay; reads the current timeOfDay. IDEMPOTENT — visuals are recomputed from the
-   TOD baseline each call (no accumulation). Does NOT rebuild the env map: pair with applyTimeOfDay
-   when a fresh sky env is wanted (e.g. sector start). */
 function applyWeather(type) {
   const m = resolveWeather(type, timeOfDay);
   weather.type = m.type;
@@ -874,17 +779,15 @@ function applyWeather(type) {
   const T = TODS[timeOfDay];
   const storm = weather.type === 'storm';
   if (scene && scene.fog) {
-    // tier-aware density: clear scales by tier (Low ~28 / Med ~34 / High ~38 km), storm/fog hit a fixed
-    // dramatic density (~6 km / ~3 km) at every tier. fogDensityFor (core.js) owns the table.
     scene.fog.density = fogDensityFor(gfxTier, weather.type);
     const fc = new THREE.Color(T.fog);
-    if (storm) fc.lerp(new THREE.Color(0x23262c), 0.55);   // desaturated slate overcast
+    if (storm) fc.lerp(new THREE.Color(0x23262c), 0.55);
     scene.fog.color.copy(fc);
     if (scene.background && scene.background.copy) scene.background.copy(fc);
   }
   if (skyMat) skyMat.uniforms.scatter.value = (1.15 - T.stars * 0.8) * (storm ? 0.5 : 1);
-  retintClouds(T);   // reset every puff to the TOD baseline...
-  if (storm) {        // ...then darken + desaturate them into a low overcast
+  retintClouds(T);
+  if (storm) {
     const grey = new THREE.Color(0x3a3f47);
     for (let i = 0; i < clouds.length; i++) {
       const kids = clouds[i].children;
@@ -893,95 +796,74 @@ function applyWeather(type) {
   }
 }
 
-/* ---------------- weather FX overlay (storm rain + lightning) — drawn to the #h2d 2D canvas
-   (z-30: above the WebGL world, below the #hud DOM). Gameplay multipliers live in core.js WEATHER;
-   this block is the screen-space JUICE: an angled rain streak field + randomized lightning. ---------- */
-// Thunder crack for a storm lightning flash; intensity in [0..1] scales loudness + crack sharpness.
-// thunder() is a no-op until audio.on and routes through master, so muted/volume apply.
 function onLightningFlash(intensity) { audio.thunder(intensity); }
 
-// Rain streak field. Capped particle count (perf-budgeted); halved on the low gfx tier; OFF entirely
-// when the player asked for reduced motion. Coords are normalized [0,1) so a resize needs no rebuild.
-const RAIN_MAX = 240;                 // hard cap (PC); low tier uses RAIN_MAX/2
-let _rain = null;                     // [{x,y,len,spd,a}] lazily built on first storm frame
-const _rainAngle = 0.18;              // slight slant (rad-ish, applied as an x-shear per unit fall)
+const RAIN_MAX = 240;
+let _rain = null;
+const _rainAngle = 0.18;
 function _buildRain(n) {
   const a = new Array(n);
   for (let i = 0; i < n; i++) a[i] = { x: Math.random(), y: Math.random(), len: 0.02 + Math.random() * 0.05, spd: 0.9 + Math.random() * 0.9, };
   return a;
 }
-// Advance rain + draw it (and a faint storm darken wash) onto the supplied 2D ctx. Called from the
-// game loop AFTER drawHUD's clearRect/world but BEFORE the DOM HUD paints (h2d sits under #hud).
 function drawWeatherOverlay(ctx, dt) {
   if (!ctx || weather.type !== 'storm') return;
   if (prefersReducedMotion()) return;
   const cap = gfxTier === 'low' ? (RAIN_MAX >> 1) : RAIN_MAX;
   if (!_rain || _rain.length !== cap) _rain = _buildRain(cap);
   ctx.save();
-  ctx.fillStyle = 'rgba(60,66,78,0.10)';   // thin slate wash so the rain reads against bright sky
+  ctx.fillStyle = 'rgba(60,66,78,0.10)';
   ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = 'rgba(200,215,235,0.55)';
-  ctx.lineWidth = Math.max(1, W / 1280);   // hairline streaks, scaled to resolution
-  ctx.globalAlpha = 0.33;                   // one path → one alpha (a per-drop value would only apply the last)
+  ctx.lineWidth = Math.max(1, W / 1280);
+  ctx.globalAlpha = 0.33;
   ctx.beginPath();
   for (let i = 0; i < _rain.length; i++) {
     const p = _rain[i];
-    p.y += p.spd * dt * 1.35;              // fall
-    p.x += p.spd * dt * _rainAngle;        // drift sideways for the slant
+    p.y += p.spd * dt * 1.35;
+    p.x += p.spd * dt * _rainAngle;
     if (p.y > 1) { p.y -= 1.05; p.x = Math.random(); }
     if (p.x > 1) p.x -= 1;
     const sx = p.x * W, sy = p.y * H;
     ctx.moveTo(sx, sy);
-    ctx.lineTo(sx - _rainAngle * p.len * H, sy + p.len * H);   // streak down + back along the slant
+    ctx.lineTo(sx - _rainAngle * p.len * H, sy + p.len * H);
   }
   ctx.stroke();
   ctx.restore();
 }
 
-let _lightT = 5;   // seconds until the next storm lightning flash
-/* Per-frame weather tick: fade enemy tracers under fog/storm (harder to see), and fire the occasional
-   storm lightning flash with RANDOM intensity (rendered by the empFlash screen-flash channel + thunder). */
+let _lightT = 5;
 function updateWeather(dt) {
   // enemy tracers are fog:false, so dim them by hand under fog/storm — incoming fire is harder to spot
   if (ASSET.ebulletMat) ASSET.ebulletMat.opacity = weather.type === 'fog' ? 0.5 : weather.type === 'storm' ? 0.65 : 0.98;
   if (weather.type === 'storm') {
     _lightT -= dt;
     if (_lightT <= 0) {
-      const intensity = 0.18 + Math.random() * 0.62;   // 0.18..0.80 randomized flash strength
+      const intensity = 0.18 + Math.random() * 0.62;
       empFlash = Math.max(empFlash, intensity);
       onLightningFlash(intensity);
-      _lightT = 4 + Math.random() * 11;   // randomized ~4–15s interval
+      _lightT = 4 + Math.random() * 11;
     }
   }
 }
 
-/* ---------------- ground objects (Track B §4) ---------------- */
-// InstancedMesh ground scatter: rocks / trees / village buildings + draped roads. Each set = one
-// InstancedMesh = one draw call. Templates (geo + mat) are built ONCE, cached + tagged userData.shared so
-// disposeGroup (and arena teardown) spare them; only the per-arena groundObjGroup (InstancedMesh wrappers,
-// instance buffers, the road strip) is freed. Low → nothing. Placement is deterministic from weatherSeed
-// via the pure planGroundObjects (core.js); colours come from the arena biome through per-instance
-// instanceColor on WHITE shared materials. Props sit on the VISIBLE surface (surfaceH), not the gameplay one.
 let groundObjGroup = null;
 const GOBJ_TPL = {};
 function groundObjTemplates() {
   if (GOBJ_TPL.rockGeo) return GOBJ_TPL;
   const shared = (o) => { o.userData.shared = true; return o; };
   const white = (extra) => shared(new THREE.MeshStandardMaterial(Object.assign({ color: 0xffffff, roughness: 0.9, metalness: 0, flatShading: true }, extra)));
-  // rock: low-poly icosa blob, lightly displaced, sunk a little so it never hovers
   const rg = new THREE.IcosahedronGeometry(8, 1);
   { const p = rg.attributes.position; for (let i = 0; i < p.count; i++) { const s = 0.8 + 0.4 * Math.abs(Math.sin(p.getX(i) * 1.7 + p.getY(i) * 2.3 + p.getZ(i) * 1.1)); p.setXYZ(i, p.getX(i) * s, p.getY(i) * s * 0.7 - 2, p.getZ(i) * s); } rg.computeVertexNormals(); }
   GOBJ_TPL.rockGeo = shared(rg);
-  GOBJ_TPL.mat = white();   // one white lit material for rocks/trunks/canopies/walls/roofs (instanceColor tints)
+  GOBJ_TPL.mat = white();
   const tg = new THREE.CylinderGeometry(1.0, 1.5, 12, 5); tg.translate(0, 6, 0);
   GOBJ_TPL.trunkGeo = shared(tg);
-  // conifer: two stacked cones; broadleaf: a squashed low-poly crown
   const c1 = new THREE.ConeGeometry(7.5, 16, 7); c1.translate(0, 17, 0);
   const c2 = new THREE.ConeGeometry(5.2, 12, 7); c2.translate(0, 26, 0);
   GOBJ_TPL.coniferGeo = shared(mergeGeos([c1, c2]));
   const bl = new THREE.IcosahedronGeometry(9, 0); bl.scale(1, 0.8, 1); bl.translate(0, 17, 0);
   GOBJ_TPL.broadleafGeo = shared(bl);
-  // building: unit walls box (base on y=0) + separate gable / flat roof so walls and roofs tint independently
   const walls = new THREE.BoxGeometry(16, 12, 16); walls.translate(0, 6, 0);
   GOBJ_TPL.wallGeo = shared(walls);
   const gable = new THREE.CylinderGeometry(0, 12.4, 7, 4, 1); gable.rotateY(Math.PI / 4); gable.scale(1, 1, 1); gable.translate(0, 15.5, 0);
@@ -997,7 +879,6 @@ function surfaceH(x, z) {
   const cfg = (typeof TERRAIN_TIER !== 'undefined' && TERRAIN_TIER[terrainTierBuilt || gfxTier]) || null;
   return terrainH(x, z) + (cfg ? terrainDetailH(x, z, cfg) : 0);
 }
-// One InstancedMesh from placements; `each(o, i, s)` may set s = {sx,sy,sz} scale and return a colour hex.
 const _gobjM4 = new THREE.Matrix4(), _gobjQ = new THREE.Quaternion(), _gobjP = new THREE.Vector3(), _gobjS = new THREE.Vector3(), _gobjC = new THREE.Color();
 function makeInstanced(geo, mat, list, cast, each) {
   const im = new THREE.InstancedMesh(geo, mat, list.length);
@@ -1018,10 +899,7 @@ function makeInstanced(geo, mat, list, cast, each) {
   im.castShadow = !!cast; im.receiveShadow = true;
   return im;
 }
-// deterministic per-instance jitter in [0,1) from the placement coords (no RNG state to thread through)
 const _gj = (o, k) => { const v = Math.sin(o.x * 12.9898 + o.z * 78.233 + k * 37.719) * 43758.5453; return v - Math.floor(v); };
-// Draped roads: one merged ribbon geometry for every road record, sampled every 30 units along its heading
-// and lifted onto the visible surface; stretches over water, up steep faces or onto high ground are skipped.
 function buildRoadGeo(roads) {
   const pos = [], idx = []; const HALF = 11, STEP = 30, LEN = 900;
   for (const r of roads) {
@@ -1045,9 +923,8 @@ function buildRoadGeo(roads) {
   return g;
 }
 // (Re)build the per-arena ground objects for the current tier + biome. Idempotent — clears any existing
-// group first. Low → leaves the scene empty. High casts shadows; Medium receives but does not cast.
 function buildGroundObjects() {
-  syncArenaBiome();   // every arena build path runs through here → ground, water and scatter agree
+  syncArenaBiome();
   clearGroundObjects();
   if (!scene || gfxTier === 'low') return;
   const B = biomeFor(arenaBiome);
@@ -1055,7 +932,7 @@ function buildGroundObjects() {
   const plan = planGroundObjects(seed, gfxTier, terrainH, B);
   if (!plan.length) return;
   const tpl = groundObjTemplates();
-  const cast = gfxTier === 'high';   // §6.1: ground objects cast shadows only on High
+  const cast = gfxTier === 'high';
   const rocks = [], trees = [], blds = [], roads = [];
   for (const o of plan) {
     o.y = surfaceH(o.x, o.z);
@@ -1071,7 +948,6 @@ function buildGroundObjects() {
       (o, i, s) => { tall(o, i, s); return shade(B.canopy, o, 3, 0.22); }));
   }
   if (blds.length) {
-    // footprint + storeys vary per house; a few tall blocks near each village's dense core
     const dims = (o, i, s) => {
       const w = 0.8 + _gj(o, 4) * 0.7, tallB = _gj(o, 5) > 0.9 ? 1.8 + _gj(o, 6) * 1.6 : 0.8 + _gj(o, 6) * 0.6;
       s.sx = w * (0.8 + _gj(o, 7) * 0.5); s.sz = w; s.sy = tallB;
@@ -1085,9 +961,6 @@ function buildGroundObjects() {
   }
   scene.add(groundObjGroup);
 }
-// Tear down the per-arena ground objects. disposeGroup spares the userData.shared templates (geo+mats),
-// so only the InstancedMesh wrappers + instance buffers + road strip are freed — the shared geometry /
-// material count stays stable across repeated arena start/teardown cycles (§4.5). Idempotent.
 function clearGroundObjects() {
   if (!groundObjGroup) return;
   if (scene) scene.remove(groundObjGroup);
@@ -1096,9 +969,6 @@ function clearGroundObjects() {
   groundObjGroup = null;
 }
 
-/* Keep the sun rig centred on the action each frame: the shadow frustum tracks the
-   player, while the disc + halos stay pinned to the camera so the sun never drifts
-   as the player ranges across the map. Called once per frame from animate(). */
 function updateSunRig() {
   if (!sun) return;
   const T = TODS[timeOfDay];
@@ -1111,8 +981,6 @@ function updateSunRig() {
   if (haloB) haloB.position.copy(camera.position).addScaledVector(t1, 17000);
 }
 
-/* Low-res PMREM of the sky dome → scene.environment, so metallic surfaces (jets,
-   missiles, sea foam) pick up real sky reflections. Rebuilt on time-of-day change. */
 let envRT = null;
 function buildEnvMap() {
   if (!renderer || !skyMat) return;
@@ -1122,10 +990,9 @@ function buildEnvMap() {
   if (envRT) envRT.dispose();
   envRT = pm.fromScene(es, 0.04);
   scene.environment = envRT.texture;
-  pm.dispose(); geo.dispose();   // capture sphere was leaked on every TOD change
+  pm.dispose(); geo.dispose();
 }
 
-/* soft blob shadow that pins the player to the deck during low-level flight */
 let playerShadow = null;
 function makePlayerShadow() {
   playerShadow = new THREE.Mesh(new THREE.CircleGeometry(13, 20),
@@ -1136,7 +1003,7 @@ function updatePlayerShadow() {
   if (!playerShadow) makePlayerShadow();
   if (!player || !player.group || state !== 'playing') { playerShadow.visible = false; return; }
   const p = player.group.position;
-  const gh = Math.max(terrainH(p.x, p.z), SEA_LEVEL_Y);   // shadow falls on terrain or the sea surface
+  const gh = Math.max(terrainH(p.x, p.z), SEA_LEVEL_Y);
   const agl = p.y - gh;
   if (agl > 700 || agl < 0) { playerShadow.visible = false; return; }
   playerShadow.visible = true;
@@ -1160,11 +1027,8 @@ function makePlatform() {
   scene.add(platform);
 }
 
-/* ---------------- shared assets ---------------- */
 const ASSET = {};
 
-/* merge same-attribute BufferGeometries into one non-indexed geometry so a
-   multi-part model (missile hull + fins + nose) renders as a single draw call */
 function mergeGeos(geos) {
   const parts = geos.map(g => { const ng = g.index ? g.toNonIndexed() : g; if (ng !== g) g.dispose(); return ng; });
   let n = 0; for (const g of parts) n += g.attributes.position.count;
@@ -1180,20 +1044,16 @@ function mergeGeos(geos) {
   return out;
 }
 
-/* swept missile fin: extruded trapezoid in the (radial, chord) plane, radiating +X.
-   rootR = radial start, span = radial extent, chord = root chord, at z station zF. */
 function missileFinGeo(rootR, span, chord, sweep, zF) {
   const sh = new THREE.Shape();
   sh.moveTo(0, 0); sh.lineTo(span, sweep); sh.lineTo(span, sweep + chord * 0.32); sh.lineTo(0, chord); sh.closePath();
   const g = new THREE.ExtrudeGeometry(sh, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2, steps: 1, curveSegments: 4 });
-  g.translate(0, 0, -0.06); g.rotateX(Math.PI / 2);   // shape-y (chord) -> +Z, thickness -> Y
+  g.translate(0, 0, -0.06); g.rotateX(Math.PI / 2);
   g.translate(rootR, 0, zF);
   return g;
 }
 
 function buildAssets() {
-  // tracer rounds: crossed gradient-streak quads oriented along velocity (see updateBullets).
-  // Head (hot end) sits at -Z to match dirToQuat's forward convention.
   {
     const L = 26, Wd = 3.4, pos = [], uvs = [], idx = [];
     for (let ax = 0; ax < 2; ax++) {
@@ -1212,8 +1072,6 @@ function buildAssets() {
   ASSET.bulletMat = new THREE.MeshBasicMaterial({ map: tracerTex(), color: 0xffe9a0, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   ASSET.ebulletMat = new THREE.MeshBasicMaterial({ map: tracerTex(), color: 0xff6a50, fog: false, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
-  // ---- missile: slender high-poly airframe, nose toward -Z (tip z=-12, exhaust z=+12) ----
-  // hull (one merged draw call): ogive nose, body tube, boattail, 4 tail fins + 4 canards
   {
     const R = 1.05, prof = [];
     for (let i = 0; i <= 20; i++) { const t = i / 20; prof.push(new THREE.Vector2(Math.max(0.001, R * Math.pow(t, 0.62)), -5.5 * (1 - t))); }
@@ -1228,20 +1086,16 @@ function buildAssets() {
       const c = missileFinGeo(0.85, 1.35, 1.5, 0.95, -5.4); c.rotateZ(a); fins.push(c);
     }
     ASSET.missileHullGeo = mergeGeos([nose, body, tail].concat(fins));
-    // trim (second draw call): seeker tip, two accent paint bands, exhaust disc
     const seeker = new THREE.SphereGeometry(0.36, 14, 10); seeker.translate(0, 0, -11.75);
     const band1 = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); band1.rotateX(Math.PI / 2); band1.translate(0, 0, -5.6);
     const band2 = new THREE.CylinderGeometry(R + 0.045, R + 0.045, 0.55, 24, 1, true); band2.rotateX(Math.PI / 2); band2.translate(0, 0, 6.6);
     const exDisc = new THREE.CircleGeometry(0.62, 16); exDisc.translate(0, 0, 11.22);
     ASSET.missileTrimGeo = mergeGeos([seeker, band1, band2, exDisc]);
   }
-  // matte/metallic hulls — subtle cool-grey (player) vs darker warm-grey (enemy) tint, NO neon emissive
   ASSET.missileMatPlayer = new THREE.MeshStandardMaterial({ color: 0xc6ccd2, metalness: 0.6, roughness: 0.5, envMapIntensity: 1.1 });
   ASSET.missileMatEnemy  = new THREE.MeshStandardMaterial({ color: 0x4a4640, metalness: 0.55, roughness: 0.6, envMapIntensity: 1.0 });
-  // trim/seeker/bands: plain matte paint accents
   ASSET.missileTrimPlayer = new THREE.MeshStandardMaterial({ color: 0x20262c, metalness: 0.45, roughness: 0.5 });
   ASSET.missileTrimEnemy  = new THREE.MeshStandardMaterial({ color: 0x241a14, metalness: 0.45, roughness: 0.55 });
-  // small constant rear thruster flame — warm, soft, additive (NOT a big plume); reuses the fire texture
   ASSET.mslExhaust    = new THREE.SpriteMaterial({ map: fireTex(), color: 0xffb267, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.8, depthWrite: false, fog: false });
   // every missile shares these — tag so disposeGroup (boss/tip-missile teardown) never frees them
   [ASSET.missileHullGeo, ASSET.missileTrimGeo].forEach(g => { g.userData.shared = true; });
@@ -1250,27 +1104,20 @@ function buildAssets() {
   ASSET.flareGeo = new THREE.SphereGeometry(3.2, 5, 4);
   ASSET.flareMat = new THREE.MeshBasicMaterial({ color: 0xffb33a, fog: false });
   ASSET.sparkGeo = new THREE.BoxGeometry(0.9, 0.9, 6);
-  // debris: a jagged low-poly shard (not a cube), charred dark-grey
   ASSET.fragGeo = new THREE.TetrahedronGeometry(2.1, 0); ASSET.fragGeo.scale(1, 0.55, 1.6);
   ASSET.fragMat = new THREE.MeshStandardMaterial({ color: 0x2e2b28, metalness: 0.35, roughness: 0.75, flatShading: true });
-  // shockwave rings: shared geometry (they only vary in material opacity + scale) — tagged so no
-  // despawn path frees them
   ASSET.ringGeo = new THREE.RingGeometry(2, 3.6, 30); ASSET.ringGeo.userData.shared = true;
   ASSET.bigRingGeo = new THREE.RingGeometry(4, 7, 40); ASSET.bigRingGeo.userData.shared = true;
   ASSET.lootGeo = new THREE.OctahedronGeometry(8, 0);
   ASSET.lootMat = new THREE.MeshStandardMaterial({ color: 0x33ffcc, emissive: 0x119977, emissiveIntensity: 1.0, flatShading: true });
   ASSET.lootMat.userData.shared = true;   // every drop shares it (drops are detached, never disposed)
-  // supply-crate building blocks
   ASSET.crateBoxGeo = new THREE.BoxGeometry(16, 16, 16);
   ASSET.crateEdgeGeo = new THREE.EdgesGeometry(ASSET.crateBoxGeo);
   ASSET.crateRingGeo = new THREE.TorusGeometry(15, 1.1, 8, 24);
   ASSET.crateBeamGeo = new THREE.CylinderGeometry(3, 3, 900, 6, 1, true);
-  loadJetModels();   // preload glTF hero models (async; swaps in when ready)
+  loadJetModels();
 }
 
-/* assemble a flight-ready missile from the shared assets: matte/metallic hull +
-   matte trim accents + a SMALL warm rear thruster flame (no neon halo). Everything
-   is shared, so teardown is plain scene.remove — nothing per-instance to dispose. */
 function buildMissileMesh(enemy) {
   const g = new THREE.Group();
   g.add(new THREE.Mesh(ASSET.missileHullGeo, enemy ? ASSET.missileMatEnemy : ASSET.missileMatPlayer));
@@ -1281,7 +1128,6 @@ function buildMissileMesh(enemy) {
   return g;
 }
 
-/* radial glow sprite texture (shared) */
 let GLOWTEX = null;
 function glowTex() {
   if (GLOWTEX) return GLOWTEX;
@@ -1295,8 +1141,6 @@ function glowTex() {
   x.fillStyle = grd; x.fillRect(0, 0, 64, 64);
   GLOWTEX = new THREE.CanvasTexture(c); return GLOWTEX;
 }
-/* anamorphic tracer streak: hot round head fading down a tapering tail.
-   Near-white core so the material color tints the falloff, not the peak. */
 let TRACERTEX = null;
 function tracerTex() {
   if (TRACERTEX) return TRACERTEX;
@@ -1304,9 +1148,9 @@ function tracerTex() {
   const x = c.getContext('2d'), img = x.createImageData(W2, H2);
   for (let j = 0; j < H2; j++) for (let i = 0; i < W2; i++) {
     const u = i / (W2 - 1), v = j / (H2 - 1);
-    const head = Math.exp(-Math.pow(u * 4.2, 2));                       // bright bulb at u=0
-    const tail = Math.pow(Math.max(0, 1 - u), 1.6) * 0.85;              // long falling tail
-    const lat = Math.exp(-Math.pow((v - 0.5) * (3.4 + u * 5.0), 2));    // narrows toward the tail
+    const head = Math.exp(-Math.pow(u * 4.2, 2));
+    const tail = Math.pow(Math.max(0, 1 - u), 1.6) * 0.85;
+    const lat = Math.exp(-Math.pow((v - 0.5) * (3.4 + u * 5.0), 2));
     const e = clamp((head + tail) * lat, 0, 1);
     const k = (j * W2 + i) * 4;
     img.data[k]     = 255 * Math.min(1, e * 1.25);
@@ -1317,7 +1161,6 @@ function tracerTex() {
   x.putImageData(img, 0, 0);
   TRACERTEX = new THREE.CanvasTexture(c); return TRACERTEX;
 }
-/* fiery blast texture: noisy radial heat ramp (white core → orange → red edge) */
 let FIRETEX = null;
 function fireTex() {
   if (FIRETEX) return FIRETEX;
@@ -1373,13 +1216,11 @@ function particleSpark(color) {
   s.material.color.setHex(color); s.material.opacity = 1;
   return s;
 }
-// detach an expired particle's mesh; pooled ones return to their free list (debris/rings are just removed)
 function releaseParticle(mesh) {
   scene.remove(mesh);
   const k = mesh.userData.pool;
   if (k) (PARTICLE_POOL[k] || (PARTICLE_POOL[k] = [])).push(mesh);
 }
-// `sz` scales the puff (default 1); debris embers pass a small one so near-camera fragments stay sparks.
 function spawnTrail(pos, color, op, sz) {
   if (particles.length > 540) return;
   const k = sz || 1;
@@ -1387,22 +1228,17 @@ function spawnTrail(pos, color, op, sz) {
   m.position.copy(pos); m.scale.setScalar(rand(6, 10) * k); scene.add(m);
   particles.push({ mesh: m, vel: null, life: 0.85 * k, max: 0.85 * k, type: 'trail', grow: 9 * k });
 }
-// camera-facing expanding ring. `k` = final scale (ability pulses keep the big default; an explosion's
-// blast front passes a small one so it reads as a crisp ring, not a screen-filling disc), `op` = peak opacity.
 function spawnShockwave(pos, k, op) {
   const ring = new THREE.Mesh(ASSET.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: op || 0.85, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
   ring.position.copy(pos); ring.lookAt(camera.position); scene.add(ring);
   particles.push({ mesh: ring, vel: null, life: 0.6, max: 0.6, type: 'ring', ringK: k, ringOp: op });
 }
-/* thin white/grey missile contrail — a single small low-opacity smoke puff, no glowing core.
-   `color` tints the smoke (subtle cool-/warm-grey per side), never neon. */
 function spawnMissileTrail(pos, color) {
   if (particles.length > 620) return;
   const puff = particleSprite(cloudPuffTex(), false, true, color || 0xdfe2e6, 0.26, rand(0, TWO_PI));
   puff.position.copy(pos); puff.scale.setScalar(rand(4, 7)); scene.add(puff);
   particles.push({ mesh: puff, vel: new THREE.Vector3(rand(-2, 2), rand(-1, 2), rand(-2, 2)), life: rand(0.7, 1.1), max: 1.1, type: 'smoke', grow: 16, rot: rand(-1.2, 1.2) });
 }
-/* floating supply crate: glowing box, wire edges, spin ring, beacon glow + sky beam */
 function buildCrate() {
   const grp = new THREE.Group();
   const box = new THREE.Mesh(ASSET.crateBoxGeo, new THREE.MeshStandardMaterial({ color: 0x0a3a33, emissive: 0x17e8a0, emissiveIntensity: 0.95, metalness: 0.35, roughness: 0.5 }));
@@ -1434,12 +1270,6 @@ function disposeGroup(group) {
   });
 }
 
-/* --------------------------------------------------------------------------
-   Render-layer despawn seam. The render layer (engine.js) owns the THREE object
-   lifecycle: scene removal + GPU disposal + (for bullets) pooling. Gameplay marks
-   an entity dead and calls one of these — it must NOT reach into scene.remove /
-   disposeGroup / mutate THREE materials directly. Synchronous (this frame). --- */
-
 /* Full enemy despawn: drop the body group from the scene, free its per-instance
    GPU resources (disposeGroup spares userData.shared), and remove the radar
    marker WITHOUT disposing it (marker geo/mat is shared/cached). */
@@ -1449,7 +1279,6 @@ function despawnEnemy(e) {
   if (e.marker) scene.remove(e.marker);   // marker geometry/material may be shared — never dispose it
 }
 
-/* Despawn a plain THREE group we own (e.g. a downed wingman): remove + dispose. */
 function despawnObject(obj) {
   if (!obj) return;
   scene.remove(obj); disposeGroup(obj);
@@ -1461,9 +1290,6 @@ function detachFromScene(obj) {
   if (obj) scene.remove(obj);
 }
 
-/* Holographic decoy look (Tejas): make a freshly-built jet group translucent +
-   self-lit. This is a pure RENDER concern (a visual effect on per-instance
-   materials at build time), so the render layer owns the THREE material poke. */
 function holoTint(group) {
   if (!group) return;
   group.traverse(o => {
